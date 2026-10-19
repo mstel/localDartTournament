@@ -399,6 +399,7 @@ jobs:
           )
           gh release upload "$RELEASE_TAG" \
             release-assets/dart-turnier-android.apk \
+            release-assets/dart-turnier-windows-x64.zip \
             release-assets/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
