@@ -7,10 +7,10 @@ passt, erzeugt versionsgekennzeichnete Pakete samt
 `data/update-manifest.json`. Der GitHub-Release wird erst veröffentlicht,
 wenn Analyse, Tests und alle drei Plattform-Builds erfolgreich waren.
 
-Aktuell enthält ein Desktop-Release die Windows-x64-, Linux-x64- und
-Linux-ARM64-Pakete sowie eine `SHA256SUMS`-Datei zur Integritätsprüfung. Ein
-Android-APK wird erst hinzugefügt, sobald der private Release-Keystore sicher
-in der Ziel-Repository-Umgebung eingerichtet ist.
+Ein Release enthält die Windows-x64-, Linux-x64- und Linux-ARM64-Pakete, ein
+signiertes Android-APK sowie eine `SHA256SUMS`-Datei zur Integritätsprüfung.
+Android-Signatur und Neuinstallation sind in
+[`android-releases.md`](android-releases.md) beschrieben.
 macOS und iOS benötigen zusätzlich eigene Signierungs- und
 Provisionierungskonfiguration. Zertifikate, Profile und Zugangsdaten gehören
 ausschließlich in eine geschützte Release-Umgebung und niemals ins Repository.

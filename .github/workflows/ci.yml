@@ -9,6 +9,12 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to add the Android APK to
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -16,6 +22,7 @@ permissions:
 jobs:
   build:
     name: Analyze and test
+    if: github.event_name != 'workflow_dispatch'
     runs-on: windows-2022
     steps:
       - name: Checkout repository
@@ -47,6 +54,7 @@ jobs:
 
   desktop-windows-x64:
     name: Desktop Windows 2022 x64
+    if: github.event_name != 'workflow_dispatch'
     runs-on: windows-2022
     steps:
       - name: Checkout repository
@@ -92,6 +100,7 @@ jobs:
 
   desktop-linux-x64:
     name: Desktop Linux Ubuntu 22.04 x64
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
@@ -140,6 +149,7 @@ jobs:
 
   desktop-linux-arm64:
     name: Desktop Linux Ubuntu 22.04 ARM64
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Checkout repository
@@ -187,6 +197,89 @@ jobs:
           path: dart-turnier-linux-arm64.tar.gz
           if-no-files-found: error
 
+  android-apk:
+    name: Signed Android APK
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+
+      - name: Verify release tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]; then
+            echo "Unsupported Android release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          package_version="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '\r')"
+          if [[ "$RELEASE_TAG" != "v$package_version" ]]; then
+            echo "Release tag $RELEASE_TAG does not match pubspec.yaml ($package_version)." >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.p12
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=app/upload-keystore.p12
+          EOF
+
+      - name: Build signed Android APK
+        run: flutter build apk --release
+
+      - name: Verify APK signature
+        run: |
+          set -euo pipefail
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$build_tools/apksigner" verify --verbose build/app/outputs/flutter-apk/app-release.apk
+          cp build/app/outputs/flutter-apk/app-release.apk dart-turnier-android.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dart-turnier-android.apk
+          if-no-files-found: error
+
   release:
     name: Publish GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -195,6 +288,7 @@ jobs:
       - desktop-windows-x64
       - desktop-linux-x64
       - desktop-linux-arm64
+      - android-apk
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -220,4 +314,45 @@ jobs:
             release-assets/windows-x64/dart-turnier-windows-x64.zip
             release-assets/linux-x64/dart-turnier-linux-x64.tar.gz
             release-assets/linux-arm64/dart-turnier-linux-arm64.tar.gz
+            release-assets/android-apk/dart-turnier-android.apk
             release-assets/SHA256SUMS
+
+  attach-android-apk:
+    name: Add Android APK to existing release
+    if: github.event_name == 'workflow_dispatch'
+    needs:
+      - android-apk
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download signed APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: android-apk
+
+      - name: Download current release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
+
+      - name: Update APK and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          cp android-apk/dart-turnier-android.apk release-assets/dart-turnier-android.apk
+          (
+            cd release-assets
+            find . -type f ! -name SHA256SUMS -print0 |
+              sort -z |
+              xargs -0 sha256sum > SHA256SUMS
+          )
+          gh release upload "$RELEASE_TAG" \
+            release-assets/dart-turnier-android.apk \
+            release-assets/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
