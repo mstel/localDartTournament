@@ -204,6 +204,13 @@ jobs:
         with:
           path: release-assets
 
+      - name: Create SHA256SUMS
+        run: |
+          cd release-assets
+          while IFS= read -r file; do
+            sha256sum "$file" | awk -v name="$(basename "$file")" '{ print $1 "  " name }'
+          done < <(find . -type f ! -name SHA256SUMS | sort) > SHA256SUMS
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -213,3 +220,4 @@ jobs:
             release-assets/windows-x64/dart-turnier-windows-x64.zip
             release-assets/linux-x64/dart-turnier-linux-x64.tar.gz
             release-assets/linux-arm64/dart-turnier-linux-arm64.tar.gz
+            release-assets/SHA256SUMS
