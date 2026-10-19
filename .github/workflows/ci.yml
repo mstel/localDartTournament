@@ -73,14 +73,35 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify manually selected release
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+\+\d+$') {
+            throw "Unsupported release tag: $env:RELEASE_TAG"
+          }
+          $packageVersion = (Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$').Matches.Groups[1].Value.Trim()
+          if ($env:RELEASE_TAG -ne "v$packageVersion") {
+            throw "Release tag $env:RELEASE_TAG does not match pubspec.yaml ($packageVersion)."
+          }
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release $env:RELEASE_TAG does not exist."
+          }
+
       - name: Build Windows x64
         run: flutter build windows --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
 
       - name: Package Windows update
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          $releaseTag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { '${{ inputs.release_tag }}' } else { $env:GITHUB_REF_NAME }
+          $releaseTag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:RELEASE_TAG } else { $env:GITHUB_REF_NAME }
           if ($releaseTag -notmatch '^v\d+\.\d+\.\d+\+\d+$') {
             throw "Unsupported release tag: $releaseTag"
           }
