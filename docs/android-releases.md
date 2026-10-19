@@ -6,9 +6,9 @@ signierte Android-Pakete. Das Android-APK heißt `dart-turnier-android.apk`;
 seine Prüfsumme ist in `SHA256SUMS` enthalten.
 
 Für ein bestehendes GitHub-Release kann der Android-Workflow manuell mit dessen
-Tag gestartet werden. Er baut den APK aus genau diesem Tag und ergänzt das
-Asset sowie die aktualisierte Prüfsummendatei, ohne Desktop-Assets neu zu
-veröffentlichen.
+Tag gestartet werden. Er baut Windows und Android aus genau diesem Tag für das
+konfigurierte Supabase-Projekt und aktualisiert beide Assets samt
+Prüfsummendatei, ohne Linux-Pakete neu zu veröffentlichen.
 
 ## Voraussetzungen für einen späteren Release
 
@@ -25,9 +25,11 @@ veröffentlichen.
   Veröffentlichte Tags verwenden das Format `vX.Y.Z+N`; das APK-Asset heißt
   `dart-turnier-android.apk`.
 - Der Android-Build verwendet die Supabase-Konfiguration aus dem Ziel-Repository
-  und nicht die des früheren Repositories. Mit derselben Supabase-URL und
-  demselben Konto bleiben dort gespeicherte Daten erreichbar; lokale Anmeldung
-  kann nach der Neuinstallation erneut erforderlich sein.
+  (`pwqpcrzbmaxywcdotkbq`) und nicht die des früheren Repositories. Der
+  Publishable-Key wird aus der Actions-Variable `SUPABASE_PUBLISHABLE_KEY`
+  eingelesen. Mit derselben Supabase-URL und demselben Konto bleiben die dort
+  gespeicherten Daten erreichbar; lokale Anmeldung kann nach einer
+  Neuinstallation erneut erforderlich sein.
 - Vor einer Installation ein externes Backup erstellen. Android muss die
   APK-Signatur, Asset-Größe und SHA-256-Prüfsumme prüfen.
 

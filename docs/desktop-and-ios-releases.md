@@ -11,6 +11,8 @@ Ein Release enthält die Windows-x64-, Linux-x64- und Linux-ARM64-Pakete, ein
 signiertes Android-APK sowie eine `SHA256SUMS`-Datei zur Integritätsprüfung.
 Android-Signatur und Neuinstallation sind in
 [`android-releases.md`](android-releases.md) beschrieben.
+Release-Builds verbinden sich mit dem eigenen Supabase-Projekt und verwenden
+die Actions-Variable `SUPABASE_PUBLISHABLE_KEY`.
 macOS und iOS benötigen zusätzlich eigene Signierungs- und
 Provisionierungskonfiguration. Zertifikate, Profile und Zugangsdaten gehören
 ausschließlich in eine geschützte Release-Umgebung und niemals ins Repository.

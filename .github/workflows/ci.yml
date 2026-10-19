@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing release tag to add the Android APK to
+        description: Existing release tag to rebuild for this Supabase project
         required: true
         type: string
 
@@ -54,11 +54,15 @@ jobs:
 
   desktop-windows-x64:
     name: Desktop Windows 2022 x64
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' || inputs.release_tag != ''
     runs-on: windows-2022
+    env:
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -70,13 +74,17 @@ jobs:
         run: flutter pub get
 
       - name: Build Windows x64
-        run: flutter build windows --release
+        run: flutter build windows --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
 
       - name: Package Windows update
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: |
-          $tagVersion = $env:GITHUB_REF_NAME.Substring(1)
+          $releaseTag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { '${{ inputs.release_tag }}' } else { $env:GITHUB_REF_NAME }
+          if ($releaseTag -notmatch '^v\d+\.\d+\.\d+\+\d+$') {
+            throw "Unsupported release tag: $releaseTag"
+          }
+          $tagVersion = $releaseTag.Substring(1)
           $version, $build = $tagVersion.Split('+')
           $bundle = 'build/windows/x64/runner/Release'
           New-Item -ItemType Directory -Force "$bundle/data" | Out-Null
@@ -91,7 +99,7 @@ jobs:
           Compress-Archive -Path "$bundle/*" -DestinationPath 'dart-turnier-windows-x64.zip' -Force
 
       - name: Upload Windows update
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: windows-x64
@@ -102,6 +110,8 @@ jobs:
     name: Desktop Linux Ubuntu 22.04 x64
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-22.04
+    env:
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -122,7 +132,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Linux x64
-        run: flutter build linux --release
+        run: flutter build linux --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
 
       - name: Verify Linux x64 architecture
         run: file build/linux/x64/release/bundle/dart_tournament_manager | grep -Eq 'x86-64|x86_64'
@@ -151,6 +161,8 @@ jobs:
     name: Desktop Linux Ubuntu 22.04 ARM64
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-22.04-arm
+    env:
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -172,7 +184,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Linux ARM64
-        run: flutter build linux --release
+        run: flutter build linux --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
 
       - name: Verify Linux ARM64 architecture
         run: file build/linux/arm64/release/bundle/dart_tournament_manager | grep -Eq 'aarch64|ARM64'
@@ -203,6 +215,8 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: read
+    env:
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Check out release source
         uses: actions/checkout@v4
@@ -267,7 +281,7 @@ jobs:
           EOF
 
       - name: Build signed Android APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
 
       - name: Verify APK signature
         run: |
@@ -320,16 +334,23 @@ jobs:
             release-assets/android-apk/dart-turnier-android.apk
             release-assets/SHA256SUMS
 
-  attach-android-apk:
-    name: Add Android APK to existing release
+  attach-release-packages:
+    name: Update Windows and Android assets on existing release
     if: github.event_name == 'workflow_dispatch'
     needs:
+      - desktop-windows-x64
       - android-apk
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
-      - name: Download signed APK
+      - name: Download Windows package
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-x64
+          path: windows-x64
+
+      - name: Download signed Android APK
         uses: actions/download-artifact@v4
         with:
           name: android-apk
@@ -341,13 +362,14 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
 
-      - name: Update APK and checksums
+      - name: Update packages and checksums
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           cp android-apk/dart-turnier-android.apk release-assets/dart-turnier-android.apk
+          cp windows-x64/dart-turnier-windows-x64.zip release-assets/dart-turnier-windows-x64.zip
           (
             cd release-assets
             find . -type f ! -name SHA256SUMS -print0 |
