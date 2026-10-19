@@ -3,9 +3,10 @@
 Der Workflow `.github/workflows/ci.yml` prüft Analyse und vollständige Tests
 sowie Desktop-Builds für Windows 2022 x64, Ubuntu 22.04 x64 und Ubuntu
 22.04 ARM64. Ein Tag `vX.Y.Z+N`, der exakt zur `version` in `pubspec.yaml`
-passt, erzeugt versionsgekennzeichnete Pakete samt
-`data/update-manifest.json`. Der GitHub-Release wird erst veröffentlicht,
-wenn Analyse, Tests und alle drei Plattform-Builds erfolgreich waren.
+passt, erzeugt versionsgekennzeichnete Desktop-Pakete samt
+`data/update-manifest.json` und ein signiertes Android-APK. Der GitHub-Release
+wird erst veröffentlicht, wenn Analyse, Tests und alle Plattform-Builds
+erfolgreich waren.
 
 Ein Release enthält die Windows-x64-, Linux-x64- und Linux-ARM64-Pakete, ein
 signiertes Android-APK sowie eine `SHA256SUMS`-Datei zur Integritätsprüfung.
