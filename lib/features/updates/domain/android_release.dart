@@ -11,7 +11,7 @@ class AndroidRelease {
     this.isPrerelease = false,
     this.platform = UpdatePlatform.android,
   });
-  static const repository = 'ProfGans/DartTunier';
+  static const repository = 'mstel/localDartTournament';
   final String version;
   final int build;
   final Uri url;

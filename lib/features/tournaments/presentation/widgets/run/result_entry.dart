@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../domain/tournament_models.dart';
+import '../../../domain/set_result_validation.dart';
 import '../../models/match_result.dart';
 import 'set_result_dialog.dart';
 import 'best_performance_editor.dart';
@@ -180,10 +182,10 @@ class _ResultDialogState extends State<ResultDialog> {
     _bestPerformances = [...widget.match.bestPerformances];
     _recordBestPerformances = _bestPerformances.isNotEmpty;
     _homeLegsController = TextEditingController(
-      text: widget.match.homeLegs?.toString() ?? '',
+      text: widget.match.homeLegs?.toString() ?? '0',
     );
     _awayLegsController = TextEditingController(
-      text: widget.match.awayLegs?.toString() ?? '',
+      text: widget.match.awayLegs?.toString() ?? '0',
     );
   }
 
@@ -197,28 +199,24 @@ class _ResultDialogState extends State<ResultDialog> {
   void _save() {
     final homeLegs = int.tryParse(_homeLegsController.text);
     final awayLegs = int.tryParse(_awayLegsController.text);
-    if (homeLegs == null || awayLegs == null || homeLegs < 0 || awayLegs < 0) {
+    if (homeLegs == null ||
+        awayLegs == null ||
+        !isValidLegResult(
+          widget.format,
+          homeLegs: homeLegs,
+          awayLegs: awayLegs,
+        )) {
+      setState(
+        () => _error =
+            'Das Ergebnis muss zum Spielformat passen; pro Seite sind höchstens ${widget.format.bestOfLegs ~/ 2 + 1} Legs möglich.',
+      );
       return;
     }
-    final draw = homeLegs == awayLegs;
-    final format = widget.format;
-    if (draw &&
-        (widget.match.isDecider ||
-            !format.allowsDraws ||
-            homeLegs * 2 != format.bestOfLegs)) {
+    if (widget.match.isDecider && homeLegs == awayLegs) {
       setState(
         () => _error =
             'Unentschieden nur bei gerader Leg-Zahl und vollständig gespieltem Match. Entscheidungsspiele benötigen einen Sieger.',
       );
-      return;
-    }
-    if (format.allowsDraws &&
-        !widget.match.isDecider &&
-        !draw &&
-        ((homeLegs > awayLegs ? homeLegs : awayLegs) !=
-                format.bestOfLegs ~/ 2 + 1 ||
-            homeLegs + awayLegs > format.bestOfLegs)) {
-      setState(() => _error = 'Ergebnis passt nicht zur gewählten Leg-Zahl.');
       return;
     }
 
@@ -275,6 +273,12 @@ class _ResultDialogState extends State<ResultDialog> {
                     key: const ValueKey('home-legs-field'),
                     controller: _homeLegsController,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      _ScoreLimitInputFormatter(
+                        widget.format.bestOfLegs ~/ 2 + 1,
+                      ),
+                    ],
+                    onSubmitted: (_) => _save(),
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
                       labelText: widget.match.homePlayer?.name ?? 'offen',
@@ -287,6 +291,12 @@ class _ResultDialogState extends State<ResultDialog> {
                     key: const ValueKey('away-legs-field'),
                     controller: _awayLegsController,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      _ScoreLimitInputFormatter(
+                        widget.format.bestOfLegs ~/ 2 + 1,
+                      ),
+                    ],
+                    onSubmitted: (_) => _save(),
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
                       labelText: widget.match.awayPlayer?.name ?? 'offen',
@@ -337,6 +347,22 @@ class _ResultDialogState extends State<ResultDialog> {
         FilledButton(onPressed: _save, child: const Text('Speichern')),
       ],
     );
+  }
+}
+
+class _ScoreLimitInputFormatter extends TextInputFormatter {
+  const _ScoreLimitInputFormatter(this.maximum);
+
+  final int maximum;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) return newValue;
+    final value = int.tryParse(newValue.text);
+    return value != null && value <= maximum ? newValue : oldValue;
   }
 }
 

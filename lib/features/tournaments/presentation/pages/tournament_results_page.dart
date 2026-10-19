@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/tournament_models.dart';
 import '../../data/tournament_storage.dart';
+import '../../../league/domain/league_match.dart';
+import '../../../rankings/application/tournament_match_elo_service.dart';
+import '../../../rankings/domain/local_elo_calculator.dart';
 import '../../../statistics/domain/best_performance.dart';
 import '../widgets/run/best_performance_editor.dart';
 import 'challonge_archive_page.dart';
@@ -16,10 +19,17 @@ import '../widgets/results/tournament_results_statistics.dart';
 import '../widgets/results/tournament_ranking_changes_section.dart';
 import '../widgets/tournament_export_dialog.dart';
 
-class TournamentResultsPage extends StatelessWidget {
+class TournamentResultsPage extends StatefulWidget {
   const TournamentResultsPage({super.key, required this.tournament});
 
   final CreatedTournament tournament;
+
+  @override
+  State<TournamentResultsPage> createState() => _TournamentResultsPageState();
+}
+
+class _TournamentResultsPageState extends State<TournamentResultsPage> {
+  CreatedTournament get tournament => widget.tournament;
 
   @override
   Widget build(BuildContext context) {
@@ -77,55 +87,29 @@ class TournamentResultsPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     const Text('Turnier abgeschlossen'),
-                    if (tournament.importedArchive == null) ...[
-                      Builder(
-                        builder: (context) {
-                          final summary = TournamentTiming.durationSummary(
-                            tournament,
-                          );
-                          if (summary == null || summary.playedMatches == 0) {
-                            return const SizedBox.shrink();
-                          }
-                          String formatDur(Duration d) =>
-                              d.inHours > 0
-                                  ? '${d.inHours}h ${d.inMinutes % 60}m'
-                                  : '${d.inMinutes}m';
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colorScheme.surface.withValues(
-                                  alpha: 0.6,
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.schedule,
-                                    size: 16,
-                                    color: colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Dauer: ${formatDur(summary.totalDuration)} · ${summary.playedMatches} ${summary.playedMatches == 1 ? "Match" : "Matches"}${summary.averageMatchDuration != null ? " · Ø ${formatDur(summary.averageMatchDuration!)} / Match" : ""}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                    const SizedBox(height: 8),
+                    Text('Art: ${_tournamentTypeLabel(tournament)}'),
+                    Builder(
+                      builder: (context) {
+                        final summary = TournamentTiming.durationSummary(
+                          tournament,
+                        );
+                        String formatDur(Duration d) => d.inHours > 0
+                            ? '${d.inHours}h ${d.inMinutes % 60}m'
+                            : '${d.inMinutes}m';
+                        final duration =
+                            summary == null || summary.playedMatches == 0
+                            ? 'Dauer: nicht erfasst'
+                            : 'Dauer: ${formatDur(summary.totalDuration)} · '
+                                  '${summary.playedMatches} ${summary.playedMatches == 1 ? "Match" : "Matches"}'
+                                  '${summary.averageMatchDuration != null ? " · Ø ${formatDur(summary.averageMatchDuration!)} / Match" : ""}';
+                        return Text(
+                          duration,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        );
+                      },
+                    ),
                     if (tournament.stages.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(
@@ -254,12 +238,13 @@ class TournamentResultsPage extends StatelessWidget {
     );
   }
 
-  void _openMatches(BuildContext context) {
-    Navigator.of(context).push(
+  Future<void> _openMatches(BuildContext context) async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => TournamentMatchesPage(tournament: tournament),
       ),
     );
+    if (mounted) setState(() {});
   }
 }
 
@@ -481,7 +466,7 @@ class _TournamentPlayerListPage extends StatelessWidget {
   );
 }
 
-class TournamentPlayerResultsPage extends StatelessWidget {
+class TournamentPlayerResultsPage extends StatefulWidget {
   const TournamentPlayerResultsPage({
     super.key,
     required this.tournament,
@@ -492,25 +477,35 @@ class TournamentPlayerResultsPage extends StatelessWidget {
   final TournamentPlayer player;
 
   @override
+  State<TournamentPlayerResultsPage> createState() =>
+      _TournamentPlayerResultsPageState();
+}
+
+class _TournamentPlayerResultsPageState
+    extends State<TournamentPlayerResultsPage> {
+  late final Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges =
+      _loadTournamentEloChanges(widget.tournament);
+
+  @override
   Widget build(BuildContext context) {
-    final matches = _resultMatches(tournament)
+    final matches = _resultMatches(widget.tournament)
         .where(
           (entry) =>
-              entry.match.homePlayer?.name == player.name ||
-              entry.match.awayPlayer?.name == player.name,
+              entry.match.homePlayer?.name == widget.player.name ||
+              entry.match.awayPlayer?.name == widget.player.name,
         )
         .toList();
     final played = matches.where((entry) => entry.match.hasResult).toList();
     final wins = played
-        .where((entry) => entry.match.winner?.name == player.name)
+        .where((entry) => entry.match.winner?.name == widget.player.name)
         .length;
     return Scaffold(
-      appBar: AppBar(title: Text(player.name)),
+      appBar: AppBar(title: Text(widget.player.name)),
       body: AdaptiveContentList(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Ergebnisse von ${player.name}',
+            'Ergebnisse von ${widget.player.name}',
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -518,18 +513,34 @@ class TournamentPlayerResultsPage extends StatelessWidget {
           const SizedBox(height: 8),
           Text('$wins Siege aus ${played.length} gewerteten Begegnungen'),
           const SizedBox(height: 16),
-          if (matches.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Für diesen Spieler liegen keine Begegnungen vor.'),
-              ),
-            )
-          else
-            ...matches.map(
-              (entry) =>
-                  _ResultMatchCard(entry: entry, highlightPlayer: player),
+          FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
+            future: _eloChanges,
+            builder: (context, snapshot) => Column(
+              children: [
+                if (snapshot.hasError) const _EloChangesLoadError(),
+                if (matches.isEmpty)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Für diesen Spieler liegen keine Begegnungen vor.',
+                      ),
+                    ),
+                  )
+                else
+                  for (final entry in matches)
+                    _ResultMatchCard(
+                      entry: entry,
+                      highlightPlayer: widget.player,
+                      eloChanges: _eloChangesForMatch(
+                        widget.tournament,
+                        entry.match,
+                        snapshot.data ?? const {},
+                      ),
+                    ),
+              ],
             ),
+          ),
         ],
       ),
     );
@@ -547,25 +558,41 @@ class TournamentMatchesPage extends StatefulWidget {
 
 class _TournamentMatchesPageState extends State<TournamentMatchesPage> {
   bool _saving = false;
+  late final Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges =
+      _loadTournamentEloChanges(widget.tournament);
 
   Future<void> _editBestPerformances(GroupMatch match) async {
     var items = [...match.bestPerformances];
     final result = await showDialog<List<BestPerformance>>(
       context: context,
-      builder: (context) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Bestleistungen erfassen'),
-        content: SizedBox(width: 460, child: SingleChildScrollView(
-          child: BestPerformanceEditor(
-            match: match,
-            initial: items,
-            onChanged: (value) { items = value; setDialogState(() {}); },
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Bestleistungen erfassen'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: BestPerformanceEditor(
+                match: match,
+                initial: items,
+                onChanged: (value) {
+                  items = value;
+                  setDialogState(() {});
+                },
+              ),
+            ),
           ),
-        )),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
-          FilledButton(onPressed: () => Navigator.pop(context, items), child: const Text('Speichern')),
-        ],
-      )),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, items),
+              child: const Text('Speichern'),
+            ),
+          ],
+        ),
+      ),
     );
     if (result == null || !mounted) return;
     setState(() => _saving = true);
@@ -574,7 +601,15 @@ class _TournamentMatchesPageState extends State<TournamentMatchesPage> {
       await TournamentStorage().saveTournament(widget.tournament);
       if (mounted) setState(() {});
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bestleistungen konnten nicht gespeichert werden: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Bestleistungen konnten nicht gespeichert werden: $error',
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -594,18 +629,34 @@ class _TournamentMatchesPageState extends State<TournamentMatchesPage> {
           ),
           const SizedBox(height: 12),
           if (_saving) const LinearProgressIndicator(),
-          if (matches.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Es wurden noch keine Begegnungen angelegt.'),
-              ),
-            )
-          else
-            ...matches.map((entry) => _ResultMatchCard(
-              entry: entry,
-              onEditBestPerformances: entry.match.hasResult ? () => _editBestPerformances(entry.match) : null,
-            )),
+          FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
+            future: _eloChanges,
+            builder: (context, snapshot) => Column(
+              children: [
+                if (snapshot.hasError) const _EloChangesLoadError(),
+                if (matches.isEmpty)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Es wurden noch keine Begegnungen angelegt.'),
+                    ),
+                  )
+                else
+                  for (final entry in matches)
+                    _ResultMatchCard(
+                      entry: entry,
+                      eloChanges: _eloChangesForMatch(
+                        widget.tournament,
+                        entry.match,
+                        snapshot.data ?? const {},
+                      ),
+                      onEditBestPerformances: entry.match.hasResult
+                          ? () => _editBestPerformances(entry.match)
+                          : null,
+                    ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -613,10 +664,16 @@ class _TournamentMatchesPageState extends State<TournamentMatchesPage> {
 }
 
 class _ResultMatchCard extends StatelessWidget {
-  const _ResultMatchCard({required this.entry, this.highlightPlayer, this.onEditBestPerformances});
+  const _ResultMatchCard({
+    required this.entry,
+    this.highlightPlayer,
+    this.eloChanges = const [],
+    this.onEditBestPerformances,
+  });
 
   final _ResultMatch entry;
   final TournamentPlayer? highlightPlayer;
+  final List<TournamentMatchEloChange> eloChanges;
   final VoidCallback? onEditBestPerformances;
 
   @override
@@ -648,6 +705,15 @@ class _ResultMatchCard extends StatelessWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
+            for (final change in eloChanges)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '${change.rankingName}: $home ${_formatEloDelta(change.homeDelta)} · '
+                  '$away ${_formatEloDelta(change.awayDelta)}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
             if (highlightHome || highlightAway)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -663,9 +729,11 @@ class _ResultMatchCard extends StatelessWidget {
                 child: TextButton.icon(
                   onPressed: onEditBestPerformances,
                   icon: const Icon(Icons.military_tech_outlined),
-                  label: Text(entry.match.bestPerformances.isEmpty
-                      ? 'Bestleistung erfassen'
-                      : 'Bestleistungen bearbeiten (${entry.match.bestPerformances.length})'),
+                  label: Text(
+                    entry.match.bestPerformances.isEmpty
+                        ? 'Bestleistung erfassen'
+                        : 'Bestleistungen bearbeiten (${entry.match.bestPerformances.length})',
+                  ),
                 ),
               ),
           ],
@@ -673,6 +741,52 @@ class _ResultMatchCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<Map<String, List<TournamentMatchEloChange>>> _loadTournamentEloChanges(
+  CreatedTournament tournament,
+) {
+  if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) {
+    return Future.value(const {});
+  }
+  return TournamentMatchEloService().calculate(tournament);
+}
+
+List<TournamentMatchEloChange> _eloChangesForMatch(
+  CreatedTournament tournament,
+  GroupMatch match,
+  Map<String, List<TournamentMatchEloChange>> changes,
+) {
+  final key = const LocalEloCalculator().matchKey(tournament, match);
+  return key == null ? const [] : changes[key] ?? const [];
+}
+
+String _formatEloDelta(int? delta) {
+  if (delta == null) return '—';
+  return delta > 0 ? '+$delta Elo' : '$delta Elo';
+}
+
+class _EloChangesLoadError extends StatelessWidget {
+  const _EloChangesLoadError();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.only(bottom: 12),
+    child: Text('Ranglistenänderungen konnten nicht geladen werden.'),
+  );
+}
+
+String _tournamentTypeLabel(CreatedTournament tournament) {
+  if (tournament.leagueMatch != null) {
+    return tournament.leagueMatch!.variant == LeagueMatchVariant.adjusted
+        ? 'Angepasstes Liga-/Freundschaftsspiel'
+        : 'Traditionelles Ligaspiel';
+  }
+  if (tournament.importedArchive != null) return 'Challonge-Turnier';
+  if (tournament.countsForRanking && tournament.rankingIds.isNotEmpty) {
+    return 'Ranglistenturnier';
+  }
+  return 'Normales Turnier';
 }
 
 class _ResultMatch {

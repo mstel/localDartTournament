@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/adaptive_content.dart';
+import '../../../shared/utils/png_image_export.dart';
 import '../../rankings/domain/local_ranking.dart';
+import '../application/player_statistics_image_generator.dart';
 import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
 import 'widgets/structured_best_performances_view.dart';
@@ -21,33 +23,60 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
       _LocalPlayerStatisticsPageState();
 }
 
-class _LocalPlayerStatisticsPageState
-    extends State<LocalPlayerStatisticsPage> {
+class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
+  bool _exporting = false;
   late Future<
-    (
-      LocalPlayerStatistics,
-      List<LocalRanking>,
-      List<RankingPosition>,
-    )
+    (LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)
   >
   _future = _load();
 
-  Future<
-    (
-      LocalPlayerStatistics,
-      List<LocalRanking>,
-      List<RankingPosition>,
-    )
-  >
+  Future<(LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)>
   _load() async {
     const service = LocalStatisticsService();
-    final stats = await service.forPlayers(widget.profileIds, year: widget.year);
+    final stats = await service.forPlayers(
+      widget.profileIds,
+      year: widget.year,
+    );
     final rankings = await service.rankingsFor(widget.profileIds);
     final positions = await service.rankingPositionsFor(
       widget.profileIds,
       rankings,
     );
     return (stats, rankings, positions);
+  }
+
+  Future<void> _export(PlayerStatisticsImageOrientation orientation) async {
+    setState(() => _exporting = true);
+    try {
+      final colorScheme = Theme.of(context).colorScheme;
+      final stats = (await _future).$1;
+      if (!mounted) return;
+      final bytes = await const PlayerStatisticsImageGenerator().generatePng(
+        playerName: widget.name,
+        statistics: stats,
+        colorScheme: colorScheme,
+        orientation: orientation,
+      );
+      if (!mounted) return;
+      await exportPngImage(
+        context,
+        bytes: bytes,
+        fileName:
+            'spielerprofil-${widget.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}-${orientation.name}.png',
+        successMessage: 'Spielerprofil-Grafik erfolgreich exportiert.',
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Spielerprofil-Grafik fehlgeschlagen: $error'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   @override
@@ -58,143 +87,171 @@ class _LocalPlayerStatisticsPageState
             ? widget.name
             : '${widget.name} · Jahresrückblick ${widget.year}',
       ),
-    ),
-    body: FutureBuilder<
-      (
-        LocalPlayerStatistics,
-        List<LocalRanking>,
-        List<RankingPosition>,
-      )
-    >(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return AdaptiveContentList(
-            children: [
-              const Text('Statistiken konnten nicht geladen werden.'),
-              TextButton(
-                onPressed: () => setState(() => _future = _load()),
-                child: const Text('Erneut versuchen'),
-              ),
-            ],
-          );
-        }
-        final data = snapshot.data;
-        if (data == null) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final stats = data.$1;
-        final rankings = data.$2;
-        final positions = data.$3;
-        final performanceCounts = {
-          for (final type in BestPerformanceType.values)
-            type:
-                stats.bestPerformances.where((item) => item.type == type).length,
-        };
-        return AdaptiveContentList(
-          children: [
-            Text(widget.name, style: Theme.of(context).textTheme.headlineMedium),
-
-            // Fix Priority 3: Ranglisten-Mitgliedschaft mit Rangposition
-            if (rankings.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              for (final pos in positions)
-                _RankingPositionChip(position: pos),
-              if (positions.isEmpty)
-                Text(
-                  'Ist Mitglied in Rangliste${rankings.length == 1 ? '' : 'n'} '
-                  '${rankings.map((r) => r.name).join(', ')}',
-                ),
-            ],
-
-            const SizedBox(height: 16),
-            Text(
-              'Turniere & Spiele',
-              style: Theme.of(context).textTheme.titleLarge,
+      actions: [
+        PopupMenuButton<PlayerStatisticsImageOrientation>(
+          tooltip: 'Profilstatistik als Grafik exportieren',
+          enabled: !_exporting,
+          icon: _exporting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.image_outlined),
+          onSelected: _export,
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: PlayerStatisticsImageOrientation.portrait,
+              child: Text('Als Grafik exportieren · Hochformat'),
             ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _StatCard(label: 'Turniere', value: '${stats.tournaments}'),
-                _StatCard(label: 'Spiele', value: '${stats.matches}'),
-                _StatCard(label: 'Siege', value: '${stats.wins}'),
-                _StatCard(label: 'Niederlagen', value: '${stats.losses}'),
-                _StatCard(label: 'Unentschieden', value: '${stats.draws}'),
-                _StatCard(
-                  label: 'Siegquote',
-                  value: '${stats.matchWinRate.toStringAsFixed(1)} %',
-                ),
-                _StatCard(
-                  label: 'Erwartete Siegchance (Elo)',
-                  value: stats.expectedWinChance == null
-                      ? '—'
-                      : '${stats.expectedWinChance!.toStringAsFixed(1)} %',
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text('Legs & Sets', style: Theme.of(context).textTheme.titleLarge),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _StatCard(
-                  label: 'Legs gewonnen / verloren',
-                  value: '${stats.legsWon} / ${stats.legsLost}',
-                ),
-                _StatCard(
-                  label: 'Leg-Siegquote',
-                  value: '${stats.legWinRate.toStringAsFixed(1)} %',
-                ),
-                _StatCard(
-                  label: 'Sets gewonnen / verloren',
-                  value: '${stats.setsWon} / ${stats.setsLost}',
-                ),
-                _StatCard(
-                  label: 'Set-Siegquote',
-                  value: '${stats.setWinRate.toStringAsFixed(1)} %',
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Bestleistungen',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _StatCard(
-                  label: '170+ Aufnahmen',
-                  value:
-                      '${performanceCounts[BestPerformanceType.score170]}',
-                ),
-                _StatCard(
-                  label: '180+ Aufnahmen',
-                  value:
-                      '${performanceCounts[BestPerformanceType.score180]}',
-                ),
-                _StatCard(
-                  label: 'High Finish (100+)',
-                  value:
-                      '${performanceCounts[BestPerformanceType.highFinish]}',
-                ),
-                _StatCard(
-                  label: 'Shortlegs (≤18 Darts)',
-                  value:
-                      '${performanceCounts[BestPerformanceType.shortLeg]}',
-                ),
-              ],
-            ),
-            StructuredBestPerformancesView(
-              bestPerformances: stats.bestPerformances,
+            PopupMenuItem(
+              value: PlayerStatisticsImageOrientation.landscape,
+              child: Text('Als Grafik exportieren · Querformat'),
             ),
           ],
-        );
-      },
+        ),
+      ],
     ),
+    body:
+        FutureBuilder<
+          (LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)
+        >(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return AdaptiveContentList(
+                children: [
+                  const Text('Statistiken konnten nicht geladen werden.'),
+                  TextButton(
+                    onPressed: () => setState(() => _future = _load()),
+                    child: const Text('Erneut versuchen'),
+                  ),
+                ],
+              );
+            }
+            final data = snapshot.data;
+            if (data == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final stats = data.$1;
+            final rankings = data.$2;
+            final positions = data.$3;
+            final performanceCounts = {
+              for (final type in BestPerformanceType.values)
+                type: stats.bestPerformances
+                    .where((item) => item.type == type)
+                    .length,
+            };
+            return AdaptiveContentList(
+              children: [
+                Text(
+                  widget.name,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+
+                // Fix Priority 3: Ranglisten-Mitgliedschaft mit Rangposition
+                if (rankings.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  for (final pos in positions)
+                    _RankingPositionChip(position: pos),
+                  if (positions.isEmpty)
+                    Text(
+                      'Ist Mitglied in Rangliste${rankings.length == 1 ? '' : 'n'} '
+                      '${rankings.map((r) => r.name).join(', ')}',
+                    ),
+                ],
+
+                const SizedBox(height: 16),
+                Text(
+                  'Turniere & Spiele',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _StatCard(label: 'Turniere', value: '${stats.tournaments}'),
+                    _StatCard(label: 'Spiele', value: '${stats.matches}'),
+                    _StatCard(label: 'Siege', value: '${stats.wins}'),
+                    _StatCard(label: 'Niederlagen', value: '${stats.losses}'),
+                    _StatCard(label: 'Unentschieden', value: '${stats.draws}'),
+                    _StatCard(
+                      label: 'Siegquote',
+                      value: '${stats.matchWinRate.toStringAsFixed(1)} %',
+                    ),
+                    _StatCard(
+                      label: 'Erwartete Siegchance (Elo)',
+                      value: stats.expectedWinChance == null
+                          ? '—'
+                          : '${stats.expectedWinChance!.toStringAsFixed(1)} %',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Legs & Sets',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _StatCard(
+                      label: 'Legs gewonnen / verloren',
+                      value: '${stats.legsWon} / ${stats.legsLost}',
+                    ),
+                    _StatCard(
+                      label: 'Leg-Siegquote',
+                      value: '${stats.legWinRate.toStringAsFixed(1)} %',
+                    ),
+                    _StatCard(
+                      label: 'Sets gewonnen / verloren',
+                      value: '${stats.setsWon} / ${stats.setsLost}',
+                    ),
+                    _StatCard(
+                      label: 'Set-Siegquote',
+                      value: '${stats.setWinRate.toStringAsFixed(1)} %',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Bestleistungen',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _StatCard(
+                      label: '170+ Aufnahmen',
+                      value:
+                          '${performanceCounts[BestPerformanceType.score170]}',
+                    ),
+                    _StatCard(
+                      label: '180+ Aufnahmen',
+                      value:
+                          '${performanceCounts[BestPerformanceType.score180]}',
+                    ),
+                    _StatCard(
+                      label: 'High Finish (100+)',
+                      value:
+                          '${performanceCounts[BestPerformanceType.highFinish]}',
+                    ),
+                    _StatCard(
+                      label: 'Shortlegs (≤18 Darts)',
+                      value:
+                          '${performanceCounts[BestPerformanceType.shortLeg]}',
+                    ),
+                  ],
+                ),
+                StructuredBestPerformancesView(
+                  bestPerformances: stats.bestPerformances,
+                ),
+              ],
+            );
+          },
+        ),
   );
 }
 
@@ -212,7 +269,11 @@ class _RankingPositionChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.emoji_events_outlined, size: 18, color: theme.colorScheme.primary),
+          Icon(
+            Icons.emoji_events_outlined,
+            size: 18,
+            color: theme.colorScheme.primary,
+          ),
           const SizedBox(width: 6),
           Text.rich(
             TextSpan(

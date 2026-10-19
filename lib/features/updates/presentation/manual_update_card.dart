@@ -7,7 +7,7 @@ class ManualUpdateCard extends StatefulWidget {
   const ManualUpdateCard({super.key, this.openReleases});
 
   static final releasesUri = Uri.parse(
-    'https://github.com/ProfGans/DartTunier/releases',
+    'https://github.com/mstel/localDartTournament/releases',
   );
   final Future<bool> Function(Uri)? openReleases;
 

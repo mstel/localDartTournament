@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../domain/local_ranking.dart';
 import 'ranking_year_review_service.dart';
 
+enum RankingReviewImageOrientation { portrait, landscape }
+
 /// Generates a complete, high-resolution PNG graphic of the yearly review
 /// without clipping or truncating diagram bars or statistics.
 class RankingYearReviewImageGenerator {
@@ -13,14 +15,25 @@ class RankingYearReviewImageGenerator {
   Future<Uint8List> generatePng({
     required LocalRanking ranking,
     required RankingYearReview review,
+    RankingReviewImageOrientation orientation =
+        RankingReviewImageOrientation.portrait,
+    ColorScheme? colorScheme,
   }) async {
-    const double width = 1080.0;
-    const double padding = 48.0;
-    const double contentWidth = width - (padding * 2);
+    final width = orientation == RankingReviewImageOrientation.portrait
+        ? 1080.0
+        : 1920.0;
+    final padding = orientation == RankingReviewImageOrientation.portrait
+        ? 48.0
+        : 80.0;
+    final contentWidth = width - (padding * 2);
+    final colors =
+        colorScheme ?? ColorScheme.fromSeed(seedColor: const Color(0xFF356C8C));
 
     // Prepare leaderboard data
     final rows = review.players.entries.toList();
-    List<MapEntry<String, int>> leadersFor(int Function(RankingYearPlayerStats) metric) {
+    List<MapEntry<String, int>> leadersFor(
+      int Function(RankingYearPlayerStats) metric,
+    ) {
       return rows
           .where((r) => metric(r.value) > 0)
           .map((r) => MapEntry(r.key, metric(r.value)))
@@ -54,18 +67,21 @@ class RankingYearReviewImageGenerator {
     // Chart: ~500
     // Leaderboard cards: ceil(sections / 2) * ~260
     final rowsCount = (leaderboardSections.length / 2).ceil();
-    final double totalHeight = 140.0 + 220.0 + 500.0 + (rowsCount * 280.0) + 120.0;
+    final double totalHeight =
+        140.0 + 220.0 + 500.0 + (rowsCount * 280.0) + 120.0;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, width, totalHeight));
 
     // Paint background
-    final bgPaint = Paint()..color = const Color(0xFF142B3A);
+    final bgPaint = Paint()..color = colors.surface;
     canvas.drawRect(Rect.fromLTWH(0, 0, width, totalHeight), bgPaint);
 
-    final cardPaint = Paint()..color = const Color(0xFF1D3B4E);
-    final accentPaint = Paint()..color = const Color(0xFF70E0BA);
-    final trackPaint = Paint()..color = const Color(0xFF284F66);
+    final cardPaint = Paint()..color = colors.surfaceContainerHigh;
+    final accentPaint = Paint()..color = colors.primary;
+    final trackPaint = Paint()..color = colors.surfaceContainerHighest;
+    final foreground = colors.onSurface;
+    final muted = colors.onSurfaceVariant;
 
     double currentY = padding;
 
@@ -73,8 +89,8 @@ class RankingYearReviewImageGenerator {
     final titlePainter = TextPainter(
       text: TextSpan(
         text: ranking.name,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: foreground,
           fontSize: 38,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.5,
@@ -88,9 +104,10 @@ class RankingYearReviewImageGenerator {
     // Subtitle
     final subPainter = TextPainter(
       text: TextSpan(
-        text: 'Jahresrückblick ${review.year ?? "Gesamter Zeitraum"} · Statistiken & Ranglistenübersicht',
-        style: const TextStyle(
-          color: Color(0xFF70E0BA),
+        text:
+            'Jahresrückblick ${review.year ?? "Gesamter Zeitraum"} · Statistiken & Ranglistenübersicht',
+        style: TextStyle(
+          color: accentPaint.color,
           fontSize: 22,
           fontWeight: FontWeight.w600,
         ),
@@ -132,8 +149,8 @@ class RankingYearReviewImageGenerator {
       final valPainter = TextPainter(
         text: TextSpan(
           text: kpis[i].$2,
-          style: const TextStyle(
-            color: Color(0xFF70E0BA),
+          style: TextStyle(
+            color: colors.primary,
             fontSize: 28,
             fontWeight: FontWeight.w900,
           ),
@@ -146,8 +163,8 @@ class RankingYearReviewImageGenerator {
       final lblPainter = TextPainter(
         text: TextSpan(
           text: kpis[i].$1,
-          style: const TextStyle(
-            color: Color(0xFFB8CED8),
+          style: TextStyle(
+            color: muted,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -160,7 +177,10 @@ class RankingYearReviewImageGenerator {
     currentY += (2 * cardHeight) + cardGap + 36;
 
     // Monthly Chart Card
-    final maxMonth = review.monthlyTournaments.fold<int>(0, (a, b) => a > b ? a : b);
+    final maxMonth = review.monthlyTournaments.fold<int>(
+      0,
+      (a, b) => a > b ? a : b,
+    );
     const double chartCardHeight = 440.0;
     final chartCardRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(padding, currentY, contentWidth, chartCardHeight),
@@ -169,10 +189,10 @@ class RankingYearReviewImageGenerator {
     canvas.drawRRect(chartCardRect, cardPaint);
 
     final chartTitlePainter = TextPainter(
-      text: const TextSpan(
+      text: TextSpan(
         text: 'Turniere pro Monat',
         style: TextStyle(
-          color: Colors.white,
+          color: foreground,
           fontSize: 22,
           fontWeight: FontWeight.bold,
         ),
@@ -182,7 +202,20 @@ class RankingYearReviewImageGenerator {
     chartTitlePainter.paint(canvas, Offset(padding + 24, currentY + 20));
 
     double barY = currentY + 65.0;
-    const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mär',
+      'Apr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Dez',
+    ];
     final double maxTrackWidth = contentWidth - 160.0;
 
     for (var m = 0; m < 12; m++) {
@@ -190,7 +223,11 @@ class RankingYearReviewImageGenerator {
       final monthLabel = TextPainter(
         text: TextSpan(
           text: '${monthNames[m]}.',
-          style: const TextStyle(color: Color(0xFFB8CED8), fontSize: 15, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: muted,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: 50);
@@ -208,7 +245,12 @@ class RankingYearReviewImageGenerator {
       if (maxMonth > 0 && count > 0) {
         final fillWidth = (count / maxMonth) * maxTrackWidth;
         final fillRect = RRect.fromRectAndRadius(
-          Rect.fromLTWH(trackLeft, barY + 3, fillWidth.clamp(14.0, maxTrackWidth), 14),
+          Rect.fromLTWH(
+            trackLeft,
+            barY + 3,
+            fillWidth.clamp(14.0, maxTrackWidth),
+            14,
+          ),
           const Radius.circular(7),
         );
         canvas.drawRRect(fillRect, accentPaint);
@@ -219,7 +261,7 @@ class RankingYearReviewImageGenerator {
         text: TextSpan(
           text: '$count',
           style: TextStyle(
-            color: count > 0 ? Colors.white : const Color(0xFF6A8695),
+            color: count > 0 ? foreground : muted,
             fontSize: 15,
             fontWeight: FontWeight.bold,
           ),
@@ -254,8 +296,8 @@ class RankingYearReviewImageGenerator {
       final stPainter = TextPainter(
         text: TextSpan(
           text: section.$1,
-          style: const TextStyle(
-            color: Color(0xFF70E0BA),
+          style: TextStyle(
+            color: colors.primary,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -269,9 +311,9 @@ class RankingYearReviewImageGenerator {
       double itemY = y + 50.0;
       if (items.isEmpty) {
         final emptyPainter = TextPainter(
-          text: const TextSpan(
+          text: TextSpan(
             text: 'Keine Daten vorhanden',
-            style: TextStyle(color: Color(0xFF6A8695), fontSize: 14),
+            style: TextStyle(color: muted, fontSize: 14),
           ),
           textDirection: TextDirection.ltr,
         )..layout();
@@ -283,7 +325,11 @@ class RankingYearReviewImageGenerator {
           final rPainter = TextPainter(
             text: TextSpan(
               text: '${rank + 1}.',
-              style: const TextStyle(color: Color(0xFFB8CED8), fontSize: 15, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: muted,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             textDirection: TextDirection.ltr,
           )..layout(maxWidth: 30);
@@ -293,7 +339,11 @@ class RankingYearReviewImageGenerator {
           final nPainter = TextPainter(
             text: TextSpan(
               text: entry.key,
-              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                color: foreground,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             textDirection: TextDirection.ltr,
             maxLines: 1,
@@ -305,11 +355,18 @@ class RankingYearReviewImageGenerator {
           final cPainter = TextPainter(
             text: TextSpan(
               text: '${entry.value}',
-              style: const TextStyle(color: Color(0xFF70E0BA), fontSize: 15, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: colors.primary,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             textDirection: TextDirection.ltr,
           )..layout();
-          cPainter.paint(canvas, Offset(x + colWidth - 18 - cPainter.width, itemY));
+          cPainter.paint(
+            canvas,
+            Offset(x + colWidth - 18 - cPainter.width, itemY),
+          );
 
           itemY += 34.0;
         }
@@ -322,8 +379,9 @@ class RankingYearReviewImageGenerator {
     final now = DateTime.now();
     final footerPainter = TextPainter(
       text: TextSpan(
-        text: 'Dart Turnierverwaltung · Erstellt am ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}',
-        style: const TextStyle(color: Color(0xFF6A8695), fontSize: 14),
+        text:
+            'Dart Turnierverwaltung · Erstellt am ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}',
+        style: TextStyle(color: muted, fontSize: 14),
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: contentWidth);

@@ -1,4 +1,5 @@
 import '../../tournaments/data/app_database.dart';
+import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../domain/local_elo_calculator.dart';
 import '../domain/local_ranking.dart';
@@ -17,10 +18,14 @@ class TournamentMatchEloChange {
 }
 
 class TournamentMatchEloService {
-  TournamentMatchEloService({LocalAppDatabase? database})
-    : _database = database ?? LocalAppDatabase();
+  TournamentMatchEloService({
+    LocalAppDatabase? database,
+    TournamentStorage? tournamentStorage,
+  }) : _database = database ?? LocalAppDatabase(),
+       _tournamentStorage = tournamentStorage;
 
   final LocalAppDatabase _database;
+  final TournamentStorage? _tournamentStorage;
 
   Future<Map<String, List<TournamentMatchEloChange>>> calculate(
     CreatedTournament tournament,
@@ -44,6 +49,7 @@ class TournamentMatchEloService {
     for (final ranking in selectedRankings) {
       final snapshot = await LocalRankingEloService(
         database: _database,
+        tournamentStorage: _tournamentStorage,
       ).calculate(ranking);
       for (final stage in tournament.runStages) {
         final matches = switch (stage) {

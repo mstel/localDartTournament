@@ -315,24 +315,39 @@ class _TournamentDirectorDashboardState
       ],
       if (_actionError != null) Text(_actionError!),
       for (final notice in flowNotices)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.priority_high, color: Colors.amber.shade800, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  notice,
-                  style: TextStyle(
-                    color: Colors.amber.shade900,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+        Builder(
+          builder: (context) {
+            final colors = Theme.of(context).colorScheme;
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: colors.tertiaryContainer,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: colors.tertiary),
               ),
-            ],
-          ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.priority_high,
+                    color: colors.onTertiaryContainer,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      notice,
+                      style: TextStyle(
+                        color: colors.onTertiaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       if (waiting > 0)
         Text('$waiting Paarungen warten auf vorherige Ergebnisse.'),

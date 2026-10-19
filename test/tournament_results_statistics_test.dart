@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/results/tournament_results_statistics.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'support/recorded_match.dart';
 
@@ -34,6 +35,47 @@ class ResultsStatisticsPreview extends StatelessWidget {
 }
 
 void main() {
+  testWidgets('results statistics show zero and recorded best performances', (
+    tester,
+  ) async {
+    final tournament = resultsFixture();
+    final stage = tournament.runStages.single as KnockoutTournamentRunStage;
+    stage.matches.single.bestPerformances = const [
+      BestPerformance(
+        type: BestPerformanceType.score170,
+        playerName: 'Anna Musterfrau',
+        value: 170,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdaptiveContentList(
+            children: [TournamentResultsStatistics(tournament: tournament)],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bestleistungen'), findsOneWidget);
+    expect(find.text('170+'), findsOneWidget);
+    expect(find.text('180+'), findsOneWidget);
+    expect(find.text('High Finishes'), findsOneWidget);
+    expect(find.text('Shortlegs'), findsOneWidget);
+    final score170Card = find
+        .ancestor(of: find.text('170+'), matching: find.byType(Card))
+        .first;
+    expect(
+      find.descendant(of: score170Card, matching: find.text('1')),
+      findsOneWidget,
+    );
+    expect(find.text('0'), findsNWidgets(3));
+    expect(find.text('Anna Musterfrau · 170+'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('results show highlights and player statistics inline', (
     tester,
   ) async {

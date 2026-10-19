@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/set_result_validation.dart';
 import '../../models/match_result.dart';
@@ -6,7 +7,12 @@ import 'best_performance_editor.dart';
 import '../../../../statistics/domain/best_performance.dart';
 
 class SetResultDialog extends StatefulWidget {
-  const SetResultDialog({super.key, required this.match, required this.format, this.allowAdministration = true});
+  const SetResultDialog({
+    super.key,
+    required this.match,
+    required this.format,
+    this.allowAdministration = true,
+  });
   final bool allowAdministration;
   final GroupMatch match;
   final TournamentGameFormat format;
@@ -31,7 +37,7 @@ class _SetResultDialogState extends State<SetResultDialog> {
         widget.match.homeLegs,
         widget.match.awayLegs,
       ])
-        TextEditingController(text: value?.toString() ?? ''),
+        TextEditingController(text: value?.toString() ?? '0'),
     ];
   }
 
@@ -84,6 +90,11 @@ class _SetResultDialogState extends State<SetResultDialog> {
                 key: ValueKey('set-result-${start + i}'),
                 controller: fields[start + i],
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  _ScoreLimitInputFormatter(() => _maximumFor(start + i)),
+                ],
+                onTap: () => _selectDefaultZero(start + i),
+                onSubmitted: (_) => save(),
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
                   labelText: i == 0
@@ -97,6 +108,25 @@ class _SetResultDialogState extends State<SetResultDialog> {
       ),
     ],
   );
+
+  void _selectDefaultZero(int index) {
+    final controller = fields[index];
+    if (controller.text == '0') {
+      controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: controller.text.length,
+      );
+    }
+  }
+
+  int _maximumFor(int index) {
+    final setsToWin = widget.format.bestOfSets ~/ 2 + 1;
+    final legsToWin = widget.format.bestOfLegs ~/ 2 + 1;
+    if (index < 2) return setsToWin;
+    final wonSets = int.tryParse(fields[index - 2].text) ?? 0;
+    final lostSets = int.tryParse(fields[index == 2 ? 1 : 0].text) ?? 0;
+    return wonSets * legsToWin + lostSets * (legsToWin - 1);
+  }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
@@ -140,17 +170,19 @@ class _SetResultDialogState extends State<SetResultDialog> {
       ),
     ),
     actions: [
-      if (widget.allowAdministration && (widget.match.hasScore || widget.match.isAnnulled))
+      if (widget.allowAdministration &&
+          (widget.match.hasScore || widget.match.isAnnulled))
         TextButton(
           onPressed: () =>
               Navigator.of(context).pop(const MatchResult.cleared()),
           child: const Text('Ergebnis entfernen'),
         ),
-      if (widget.allowAdministration) TextButton(
-        onPressed: () =>
-            Navigator.of(context).pop(const MatchResult.annulled()),
-        child: const Text('Spiel annullieren'),
-      ),
+      if (widget.allowAdministration)
+        TextButton(
+          onPressed: () =>
+              Navigator.of(context).pop(const MatchResult.annulled()),
+          child: const Text('Spiel annullieren'),
+        ),
       TextButton(
         onPressed: () => Navigator.of(context).pop(),
         child: const Text('Abbrechen'),
@@ -158,4 +190,20 @@ class _SetResultDialogState extends State<SetResultDialog> {
       FilledButton(onPressed: save, child: const Text('Speichern')),
     ],
   );
+}
+
+class _ScoreLimitInputFormatter extends TextInputFormatter {
+  const _ScoreLimitInputFormatter(this.maximum);
+
+  final int Function() maximum;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) return newValue;
+    final value = int.tryParse(newValue.text);
+    return value != null && value <= maximum() ? newValue : oldValue;
+  }
 }

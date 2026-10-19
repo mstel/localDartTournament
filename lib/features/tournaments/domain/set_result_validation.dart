@@ -1,5 +1,22 @@
 import 'tournament_models.dart';
 
+/// A normal legs match ends as soon as a player reaches the legs-to-win
+/// threshold. Even formats may also end tied after every leg is played.
+bool isValidLegResult(
+  TournamentGameFormat format, {
+  required int homeLegs,
+  required int awayLegs,
+}) {
+  if (homeLegs < 0 || awayLegs < 0) return false;
+  final legsToWin = format.bestOfLegs ~/ 2 + 1;
+  if (homeLegs > legsToWin || awayLegs > legsToWin) return false;
+  if (homeLegs == awayLegs) {
+    return format.allowsDraws && homeLegs * 2 == format.bestOfLegs;
+  }
+  return (homeLegs == legsToWin && awayLegs < legsToWin) ||
+      (awayLegs == legsToWin && homeLegs < legsToWin);
+}
+
 /// Aggregate legs must be attainable from the reported set wins.
 bool isValidSetResult(
   TournamentGameFormat format, {

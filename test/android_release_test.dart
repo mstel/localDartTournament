@@ -14,7 +14,7 @@ void main() {
         'size': 1234,
         'digest': 'sha256:${'a' * 64}',
         'browser_download_url':
-            'https://github.com/ProfGans/DartTunier/releases/download/v1.0.0%2B$build/dart-turnier-android.apk',
+            'https://github.com/mstel/localDartTournament/releases/download/v1.0.0%2B$build/dart-turnier-android.apk',
       },
     ],
   };
@@ -96,7 +96,7 @@ void main() {
       },
       {
         'browser_download_url':
-            'http://github.com/ProfGans/DartTunier/releases/download/x/app.apk',
+            'http://github.com/mstel/localDartTournament/releases/download/x/app.apk',
       },
     ]) {
       final json = release(2);

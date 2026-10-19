@@ -6,11 +6,11 @@ class SupabaseAccountConfig {
 
   static const url = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://pwqpcrzbmaxywcdotkbq.supabase.co',
+    defaultValue: 'https://rcmmuljqwabqukhaqnea.supabase.co',
   );
   static const publishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
-    defaultValue: 'sb_publishable_mSckemRBbLVBzrZ0d0eD9w_hmFfLbWv',
+    defaultValue: 'sb_publishable_9K6wh1V094TpGkCCyJK9yw_oPcqgDTH',
   );
   static const anonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
@@ -39,15 +39,10 @@ class SupabaseAccountBootstrap {
       return;
     }
 
-    try {
-      await Supabase.initialize(
-        url: SupabaseAccountConfig.url,
-        publishableKey: SupabaseAccountConfig.anonKey,
-      );
-      _isInitialized = true;
-    } catch (e) {
-      _isInitialized = false;
-      debugPrint('Supabase initialisation failed: $e');
-    }
+    await Supabase.initialize(
+      url: SupabaseAccountConfig.url,
+      publishableKey: SupabaseAccountConfig.anonKey,
+    );
+    _isInitialized = true;
   }
 }

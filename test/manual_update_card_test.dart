@@ -82,7 +82,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         opened.toString(),
-        'https://github.com/ProfGans/DartTunier/releases',
+        'https://github.com/mstel/localDartTournament/releases',
       );
       expect(find.textContaining('Der Browser konnte nicht'), findsOneWidget);
       final copy = find.text('Link kopieren');

@@ -16,7 +16,11 @@ Termine sind UTC-Zeitpunkte und werden lokal im 24-Stunden-Format angezeigt. Kop
 
 Jedes Mitglied entscheidet selbst pro Termin: aus, zum Beginn, 15/30 Minuten, 1/2 Stunden, 1 Tag oder 1 Woche vorher. Die Erinnerung geht an die eigenen registrierten Android-Geräte. Beim Kopieren werden persönliche Erinnerungen nicht mitkopiert. Austritt aus der Community entfernt die Abonnements. Windows und andere Plattformen können Termine verwalten, der vorhandene Push-Empfänger unterstützt Android.
 
-`202610030003_community_calendar.sql` ist am 03.10.2026 in Supabase eingespielt. RLS schützt Termine, Vorlagen und persönliche Einstellungen; Push-Tokens und Zustellreservierungen bleiben serverseitig. Die Edge Function `calendar-reminders` ist bereitgestellt. Sie benötigt `FIREBASE_SERVICE_ACCOUNT_JSON` mit dem berechtigten Service-Account für `darttunier-6f866`. Dieses Secret fehlt zum Implementierungszeitpunkt weiterhin im Projekt. Private Schlüssel direkt in den Supabase Edge Function Secrets hinterlegen, niemals in Git oder in den App-Build.
+`202610030003_community_calendar.sql` ist am 03.10.2026 in Supabase eingespielt. RLS schützt Termine, Vorlagen und persönliche Einstellungen; Push-Tokens und Zustellreservierungen bleiben serverseitig. Die Edge Function `calendar-reminders` ist bereitgestellt. Sie benötigt `FIREBASE_SERVICE_ACCOUNT_JSON` mit dem berechtigten Service-Account des in App
+und Edge Function konfigurierten Firebase-Projekts. Dieses Secret fehlt zum
+Implementierungszeitpunkt weiterhin im Projekt. Private Schlüssel direkt in
+den Supabase Edge Function Secrets hinterlegen, niemals in Git oder in den
+App-Build.
 
 `calendar_reminder_schedule.sql` richtet einen minütlichen Cron-Job ein. Beim Einspielen wird `__PUBLIC_ANON_JWT__` durch den bestehenden öffentlichen Legacy-Anon-JWT dieses Projekts ersetzt, NICHT durch einen Service-Role-Schlüssel. Die Gateway-JWT-Prüfung bleibt aktiv. Zusätzlich prüft die Funktion den internen Scheduler-Schlüssel, der ausschließlich in der geschützten Datenbanktabelle liegt. Die automatische Freigabeprüfung lehnte das Abschalten der Gateway-Prüfung ab; die realisierte Lösung behält sie bei und erfüllt beide Authentifizierungsprüfungen.
 

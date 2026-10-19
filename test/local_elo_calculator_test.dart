@@ -88,6 +88,26 @@ void main() {
     },
   );
 
+  test('uses prior ranking history instead of resetting players to 1000', () {
+    final prior = tournament('prior', DateTime.utc(2026, 1), 'a', 'b');
+    final current = tournament('current', DateTime.utc(2026, 2), 'c', 'a');
+    final currentMatch =
+        (current.runStages.single as KnockoutTournamentRunStage).matches.single;
+    final snapshot = calculator.calculate(
+      players: const {'a': 'Anna', 'b': 'Ben', 'c': 'Chris'},
+      tournaments: [prior, current],
+      rankingId: 'season',
+      newPlayerK: 25,
+      normalPlayerK: 15,
+      matchesBeforeNormal: 1,
+    );
+
+    final delta =
+        snapshot.matchDeltas[calculator.matchKey(current, currentMatch)];
+    expect(delta?.home, 13);
+    expect(delta?.away, -8);
+  });
+
   test('does not expose deltas for an unassigned ranking tournament', () {
     final unassigned = tournament(
       'guest-match',

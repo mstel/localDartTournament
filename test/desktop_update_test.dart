@@ -13,7 +13,7 @@ AndroidRelease release(UpdatePlatform platform) => AndroidRelease(
   version: '1.0.0',
   build: 12,
   url: Uri.parse(
-    'https://github.com/ProfGans/DartTunier/releases/download/v1.0.0%2B12/${platform.assetName}',
+    'https://github.com/mstel/localDartTournament/releases/download/v1.0.0%2B12/${platform.assetName}',
   ),
   sha256: 'a' * 64,
   size: 100,

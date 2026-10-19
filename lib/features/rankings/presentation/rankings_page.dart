@@ -1,15 +1,11 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show listEquals;
-import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../application/ranking_year_review_image_generator.dart';
-import 'package:flutter/services.dart';
+import '../application/ranking_standings_image_generator.dart';
 
 import '../../../shared/widgets/adaptive_content.dart';
+import '../../../shared/utils/png_image_export.dart';
 import '../domain/local_elo_calculator.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
@@ -95,58 +91,28 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
   Future<void> _exportReview(
     LocalRanking ranking,
     RankingYearReview review,
+    RankingReviewImageOrientation orientation,
   ) async {
     setState(() => _exporting = true);
     try {
+      final colorScheme = Theme.of(context).colorScheme;
       const generator = RankingYearReviewImageGenerator();
       final pngBytes = await generator.generatePng(
         ranking: ranking,
         review: review,
+        orientation: orientation,
+        colorScheme: colorScheme,
       );
+      if (!mounted) return;
       final cleanName = ranking.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       final fileName =
-          'ranglisten-rueckblick-$cleanName-${review.year ?? "gesamt"}.png';
-
-      if (kIsWeb) {
-        final uri = Uri.dataFromBytes(pngBytes, mimeType: 'image/png');
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri);
-        }
-      } else if (Platform.isAndroid) {
-        try {
-          final saved = await const MethodChannel('dartturnier/backups')
-              .invokeMethod<bool>('export', {
-                'bytes': pngBytes,
-                'fileName': fileName,
-                'mimeType': 'image/png',
-              });
-          if (saved == false) return;
-        } catch (_) {
-          final tempDir = await getTemporaryDirectory();
-          final file = File('${tempDir.path}/$fileName');
-          await file.writeAsBytes(pngBytes, flush: true);
-          final uri = Uri.file(file.path);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri);
-          }
-        }
-      } else {
-        final location = await getSaveLocation(
-          suggestedName: fileName,
-          acceptedTypeGroups: [
-            const XTypeGroup(label: 'PNG-Grafik', extensions: ['png']),
-          ],
-        );
-        if (location == null) return;
-        await File(location.path).writeAsBytes(pngBytes, flush: true);
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Jahresrückblick erfolgreich als Grafik exportiert.'),
-          ),
-        );
-      }
+          'ranglisten-rueckblick-$cleanName-${review.year ?? "gesamt"}-${orientation.name}.png';
+      await exportPngImage(
+        context,
+        bytes: pngBytes,
+        fileName: fileName,
+        successMessage: 'Jahresrückblick erfolgreich als Grafik exportiert.',
+      );
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -287,30 +253,42 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: OutlinedButton.icon(
-                              onPressed: _exporting
-                                  ? null
-                                  : () => _exportReview(
-                                      _selectedRanking!,
-                                      review,
-                                    ),
-                              icon: _exporting
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: _exporting
+                                    ? null
+                                    : () => _exportReview(
+                                        _selectedRanking!,
+                                        review,
+                                        RankingReviewImageOrientation.portrait,
                                       ),
-                                    )
-                                  : const Icon(Icons.image_outlined),
-                              label: Text(
-                                _exporting
-                                    ? 'Grafik wird exportiert…'
-                                    : 'Rückblick als Grafik exportieren',
+                                icon: _exporting
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.stay_current_portrait),
+                                label: const Text('Hochformat exportieren'),
                               ),
-                            ),
+                              OutlinedButton.icon(
+                                onPressed: _exporting
+                                    ? null
+                                    : () => _exportReview(
+                                        _selectedRanking!,
+                                        review,
+                                        RankingReviewImageOrientation.landscape,
+                                      ),
+                                icon: const Icon(Icons.stay_current_landscape),
+                                label: const Text('Querformat exportieren'),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 16),
                           if (_year != null) ...[
@@ -1537,16 +1515,60 @@ class LocalRankingStandingsPage extends StatefulWidget {
 
 class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
   late Future<LocalEloSnapshot> _snapshot = _calculate();
+  bool _exporting = false;
 
   Future<LocalEloSnapshot> _calculate() => LocalRankingEloService(
     database: widget.database,
   ).calculate(widget.ranking);
+
+  Future<void> _export() async {
+    setState(() => _exporting = true);
+    try {
+      final colorScheme = Theme.of(context).colorScheme;
+      final snapshot = await _snapshot;
+      if (!mounted) return;
+      final bytes = await const RankingStandingsImageGenerator().generatePng(
+        ranking: widget.ranking,
+        snapshot: snapshot,
+        colorScheme: colorScheme,
+      );
+      if (!mounted) return;
+      await exportPngImage(
+        context,
+        bytes: bytes,
+        fileName: 'rangliste-${widget.ranking.id}.png',
+        successMessage: 'Ranglisten-Grafik erfolgreich exportiert.',
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ranglisten-Grafik fehlgeschlagen: $error'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(widget.ranking.name),
       actions: [
+        IconButton(
+          tooltip: 'Ranglisten-Grafik hochkant exportieren',
+          onPressed: _exporting ? null : _export,
+          icon: _exporting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.image_outlined),
+        ),
         IconButton(
           tooltip: 'Rangliste aktualisieren',
           onPressed: () => setState(() => _snapshot = _calculate()),
@@ -1651,16 +1673,70 @@ class LocalRankingSeriesStandingsPage extends StatefulWidget {
 class _LocalRankingSeriesStandingsPageState
     extends State<LocalRankingSeriesStandingsPage> {
   late Future<List<LocalSeriesEntry>> _entries = _calculate();
+  bool _exporting = false;
 
   Future<List<LocalSeriesEntry>> _calculate() => LocalRankingSeriesService(
     database: widget.database,
   ).calculate(widget.ranking);
+
+  Future<void> _export() async {
+    setState(() => _exporting = true);
+    try {
+      final colorScheme = Theme.of(context).colorScheme;
+      final entries = await _entries;
+      if (!mounted) return;
+      final rows = [
+        for (var index = 0; index < entries.length; index++)
+          RankingStandingImageRow(
+            name: '${index + 1}. ${entries[index].player.displayName}',
+            value: '${entries[index].points} Punkte',
+            details:
+                '${entries[index].participations} Teilnahmen · ${entries[index].setsWon} Sets · ${entries[index].bestPerformances} Bestleistungen',
+          ),
+      ];
+      final bytes = await const RankingStandingsImageGenerator().generateRows(
+        title: widget.ranking.name,
+        subtitle: 'Ranglistenstand · ${entries.length} Spieler',
+        rows: rows,
+        colorScheme: colorScheme,
+      );
+      if (!mounted) return;
+      await exportPngImage(
+        context,
+        bytes: bytes,
+        fileName: 'rangliste-${widget.ranking.id}.png',
+        successMessage: 'Ranglisten-Grafik erfolgreich exportiert.',
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ranglisten-Grafik fehlgeschlagen: $error'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(widget.ranking.name),
       actions: [
+        IconButton(
+          tooltip: 'Ranglisten-Grafik hochkant exportieren',
+          onPressed: _exporting ? null : _export,
+          icon: _exporting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.image_outlined),
+        ),
         IconButton(
           tooltip: 'Rangliste aktualisieren',
           onPressed: () => setState(() => _entries = _calculate()),
