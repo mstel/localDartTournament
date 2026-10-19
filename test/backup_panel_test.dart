@@ -12,10 +12,14 @@ import 'package:dart_tournament_manager/shared/persistence/storage_access.dart';
 class _Dialogs extends BackupFileDialogs {
   String? target;
   XFile? source;
+  int openCalls = 0;
   @override
   Future<String?> savePath() async => target;
   @override
-  Future<XFile?> open() async => source;
+  Future<XFile?> open() async {
+    openCalls++;
+    return source;
+  }
 }
 
 void main() {
@@ -55,18 +59,53 @@ void main() {
         ),
       ),
     );
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Backup exportieren'));
-      // Await filesystem work outside fake async time.
-      for (var i = 0; i < 100 && !await File(dialogs.target!).exists(); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    await tester.tap(find.text('Backup exportieren'));
+    await tester.pump();
+    expect(find.text('Exportieren'), findsOneWidget);
+    expect(
+      tester.widgetList<CheckboxListTile>(
+        find.byType(CheckboxListTile),
+      ).every((tile) => tile.value == true),
+      isTrue,
     );
+    await tester.tap(find.text('Exportieren'));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.textContaining('Backup gespeichert:'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
+    final listPosition = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    final savedMessage = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableText &&
+          (widget.data ?? '').contains('Backup gespeichert:'),
+    );
+    for (var i = 0; i < 100 && savedMessage.evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      listPosition.jumpTo(listPosition.maxScrollExtent);
+      await tester.pump();
+    }
+    expect(File(dialogs.target!).existsSync(), isTrue);
+    expect(savedMessage, findsOneWidget);
+    Future<void> waitUntilIdle() async {
+      for (
+        var i = 0;
+        i < 100 && find.byType(LinearProgressIndicator).evaluate().isNotEmpty;
+        i++
+      ) {
+        listPosition.jumpTo(listPosition.maxScrollExtent);
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+    }
+
+    await waitUntilIdle();
     dialogs.source = XFile(dialogs.target!);
     await tester.runAsync(
       () => storage.saveTournament(
@@ -78,22 +117,47 @@ void main() {
         ),
       ),
     );
+    final importTitle = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.text('Backup wiederherstellen'),
+    );
     Future<void> openPreview() async {
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Backup wiederherstellen'));
-        await Future<void>.delayed(const Duration(milliseconds: 150));
-      });
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.ensureVisible(find.text('Backup wiederherstellen'));
+      expect(find.text('Backup wiederherstellen').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('Backup wiederherstellen'));
+      for (
+        var i = 0;
+        i < 100 && importTitle.evaluate().isEmpty;
+        i++
+      ) {
+        await tester.pump(const Duration(milliseconds: 20));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
     }
 
+    listPosition.jumpTo(0);
+    await tester.pump();
     await openPreview();
-    expect(find.text('Backup wiederherstellen?'), findsOneWidget);
+    expect(dialogs.openCalls, 1);
+    expect(
+      importTitle,
+      findsOneWidget,
+      reason:
+          'Status: ${tester.widgetList<SelectableText>(find.byType(SelectableText)).map((text) => text.data).join(' | ')}; '
+          'busy: ${find.byType(LinearProgressIndicator).evaluate().isNotEmpty}; '
+          'open calls: ${dialogs.openCalls}',
+    );
     expect(find.textContaining('1 Turniere'), findsOneWidget);
     await tester.tap(find.text('Abbrechen'));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 50)),
     );
     await tester.pump(const Duration(milliseconds: 300));
+    listPosition.jumpTo(listPosition.maxScrollExtent);
+    await tester.pump();
+    await waitUntilIdle();
     expect(
       await tester.runAsync(
         () async => (await storage.loadTournaments()).length,
@@ -101,17 +165,31 @@ void main() {
       2,
     );
     await openPreview();
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Wiederherstellen'));
-      for (var i = 0; i < 100 && !StorageAccess.restartRequired.value; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 50)),
-    );
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.ensureVisible(find.text('Wiederherstellen'));
+    await tester.tap(find.text('Wiederherstellen'));
+    for (
+      var i = 0;
+      i < 100 && !StorageAccess.restartRequired.value;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
     expect(StorageAccess.restartRequired.value, isTrue);
+    for (
+      var i = 0;
+      i < 100 && find.textContaining('Bitte App neu starten.').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      listPosition.jumpTo(listPosition.maxScrollExtent);
+      await tester.pump();
+    }
     expect(find.textContaining('Bitte App neu starten.'), findsOneWidget);
   });
 }

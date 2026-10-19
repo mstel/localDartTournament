@@ -11,28 +11,66 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Normales- oder Ranglistenturnier erstellen'));
     await tester.pumpAndSettle();
+    final workflow = find.text('2 · Turnierablauf');
+    for (
+      var attempt = 0;
+      attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    if (find.byKey(const ValueKey('stage-type-field')).evaluate().isEmpty &&
+        workflow.hitTestable().evaluate().isNotEmpty) {
+      await tester.tap(workflow);
+      await tester.pumpAndSettle();
+    }
     await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '16');
+    final generatePlayers = find.text('Spieler erzeugen');
+    for (
+      var attempt = 0;
+      attempt < 8 && generatePlayers.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
     await tester.scrollUntilVisible(
-      find.text('Spieler erzeugen'),
+      generatePlayers,
       200,
-      scrollable: find.descendant(of: find.byType(ListView).last, matching: find.byType(Scrollable)).first,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.tap(find.text('Spieler erzeugen'));
     await tester.pumpAndSettle();
     final type = find.byKey(const ValueKey('stage-type-field'));
-    await tester.scrollUntilVisible(
-      type,
-      300,
-      scrollable: find.descendant(of: find.byType(ListView).last, matching: find.byType(Scrollable)).first,
-    );
-    await tester.tap(type);
+    for (
+      var attempt = 0;
+      attempt < 12 && type.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(type.hitTestable());
     await tester.pumpAndSettle();
     await tester.tap(find.text('K.-o.-Runde').last);
     await tester.pumpAndSettle();
     for (final place in [5, 7, 15]) {
       final chip = find.widgetWithText(FilterChip, 'Platz $place');
-      await tester.ensureVisible(chip);
-      await tester.tap(chip);
+      for (
+        var attempt = 0;
+        attempt < 12 && chip.hitTestable().evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(chip.hitTestable());
       await tester.pumpAndSettle();
       expect(tester.widget<FilterChip>(chip).selected, isTrue);
     }
@@ -66,10 +104,19 @@ void main() {
       MaterialApp(home: TournamentRunPage(tournament: loaded)),
     );
     await tester.pumpAndSettle();
+    final viewSelector = find.byWidgetPredicate(
+      (widget) =>
+          widget is DropdownButtonFormField &&
+          widget.decoration.labelText == 'Turnieransicht',
+    );
+    await tester.tap(viewSelector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ergebnisse').last);
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Platzierungsspiele', skipOffstage: false),
       500,
-      scrollable: find.descendant(of: find.byType(ListView).last, matching: find.byType(Scrollable)).first,
+      scrollable: find.byType(Scrollable).first,
       maxScrolls: 50,
     );
     expect(find.text('Platzierungsspiele'), findsOneWidget);

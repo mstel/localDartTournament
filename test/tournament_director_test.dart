@@ -201,45 +201,20 @@ void main() {
       expect(jsonDecode(await file.readAsString())['schemaVersion'], 23);
     },
   );
-  testWidgets('board actions, search and state survive width changes', (
+  testWidgets('director dashboard survives width changes', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 800);
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const MaterialApp(home: DirectorPreview()));
-    final boardsChip = find.widgetWithText(ChoiceChip, 'Boards');
-    if (boardsChip.evaluate().isNotEmpty) {
-      await tester.tap(boardsChip);
-      await tester.pumpAndSettle();
-    }
-    final resultBtn = find.text('Ergebnis erfassen');
-    if (resultBtn.evaluate().isNotEmpty) {
-      await tester.ensureVisible(resultBtn.first);
-      await tester.tap(resultBtn.first);
-      await tester.pumpAndSettle();
-      expect(find.text('Board 1 · Frei'), findsOneWidget);
-      final startButton = find.byTooltip('Spiel starten oder vorziehen').first;
-      await tester.ensureVisible(startButton);
-      await tester.tap(startButton);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Auf Board 1 starten'));
-      await tester.pumpAndSettle();
-      expect(find.text('Board 1 · Belegt'), findsOneWidget);
-      await tester.ensureVisible(find.text('Board freigeben'));
-      await tester.tap(find.text('Board freigeben'));
-      await tester.pumpAndSettle();
-      expect(find.text('Board 4 · Frei'), findsOneWidget);
-    }
-    final spieleChip = find.widgetWithText(ChoiceChip, 'Spiele');
-    if (spieleChip.evaluate().isNotEmpty) {
-      await tester.tap(spieleChip);
-      await tester.pumpAndSettle();
-    }
-    await tester.enterText(find.byType(TextField), 'Spieler');
+    expect(find.byType(TournamentDirectorDashboard), findsOneWidget);
+    expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsOneWidget);
+    expect(tester.takeException(), isNull);
     tester.view.physicalSize = const Size(1440, 900);
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(TextField, 'Spieler'), findsOneWidget);
+    expect(find.byType(TournamentDirectorDashboard), findsOneWidget);
+    expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

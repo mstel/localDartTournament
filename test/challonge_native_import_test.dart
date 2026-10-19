@@ -98,6 +98,12 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.byTooltip('Mit Challonge vergleichen'));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Prüfung mit eigener Turnierlogik'),
+        400,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Prüfung mit eigener Turnierlogik'), findsOneWidget);
       expect(tester.takeException(), isNull);
       tester.view.physicalSize = const Size(360, 800);

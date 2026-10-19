@@ -50,9 +50,9 @@ class _HomePageState extends State<HomePage> {
 
   void _openTournamentArea() => _open(const TournamentHomePage(), 1);
   void _openPlayersArea() => _open(const PlayersPage(), 2);
-  void _openSettings() => Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
-  );
+  void _openSettings() => Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
   Widget _shell(Widget page, int selected) => SportAppShell(
     destinations: _destinations,
     selected: selected,
@@ -302,34 +302,58 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                     child: const LinearProgressIndicator(),
                   ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Icon(Icons.sort, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Sortierung:',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    DropdownButton<TournamentSortOption>(
-                      value: _sortOption,
-                      underline: const SizedBox.shrink(),
-                      onChanged: (option) {
-                        if (option != null) {
-                          setState(() => _sortOption = option);
-                        }
-                      },
-                      items: [
-                        for (final opt in TournamentSortOption.values)
-                          DropdownMenuItem(
-                            value: opt,
-                            child: Text(opt.label),
-                          ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact =
+                        constraints.maxWidth < 520 ||
+                        MediaQuery.textScalerOf(context).scale(16) > 20;
+                    final label = Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      children: [
+                        const Icon(Icons.sort, size: 20),
+                        Text(
+                          'Sortierung:',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
                       ],
-                    ),
-                  ],
+                    );
+                    final dropdown = SizedBox(
+                      width: compact ? constraints.maxWidth : 260,
+                      child: DropdownButtonFormField<TournamentSortOption>(
+                        initialValue: _sortOption,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Sortierung',
+                        ),
+                        onChanged: (option) {
+                          if (option != null) {
+                            setState(() => _sortOption = option);
+                          }
+                        },
+                        items: [
+                          for (final opt in TournamentSortOption.values)
+                            DropdownMenuItem(
+                              value: opt,
+                              child: Text(opt.label),
+                            ),
+                        ],
+                      ),
+                    );
+                    return compact
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [label, dropdown],
+                          )
+                        : Row(
+                            children: [
+                              label,
+                              const SizedBox(width: 12),
+                              dropdown,
+                            ],
+                          );
+                  },
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -360,13 +384,17 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () async {
-                    await Navigator.of(context).push(MaterialPageRoute<void>(
-                      builder: (_) => const ChallongeLocalImportPage(),
-                    ));
+                    await Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ChallongeLocalImportPage(),
+                      ),
+                    );
                     _reloadTournaments();
                   },
                   icon: const Icon(Icons.sync_alt),
-                  label: const Text('Challonge-Turniere importieren / exportieren'),
+                  label: const Text(
+                    'Challonge-Turniere importieren / exportieren',
+                  ),
                 ),
                 const SizedBox(height: 20),
                 if (snapshot.connectionState == ConnectionState.waiting &&

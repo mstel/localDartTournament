@@ -40,7 +40,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: LeagueMatchPage(storage: storage)),
     );
-    expect(find.text('Neues Ligaspiel'), findsOneWidget);
+    expect(find.textContaining('Neues Ligaspiel'), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey('league-name')),
       'Vereinsliga · Spieltag 3',

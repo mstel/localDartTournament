@@ -1391,11 +1391,11 @@ class _TournamentSecondScreenViewState
                   style: const TextStyle(fontSize: 11, color: Colors.white54),
                 ),
               if (isPreferred)
-                const Row(
-                  mainAxisSize: MainAxisSize.min,
+                const Wrap(
+                  spacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Icon(Icons.priority_high, color: Colors.amber, size: 18),
-                    SizedBox(width: 2),
                     Text(
                       'Bevorzugt',
                       style: TextStyle(

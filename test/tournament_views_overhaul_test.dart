@@ -129,6 +129,10 @@ void main() {
         await tester.pumpAndSettle();
         final mode = find.byKey(const ValueKey('planner-mode-single_knockout'));
         await tester.ensureVisible(mode);
+        expect(tester.widget<CheckboxListTile>(mode).value, isFalse);
+        await tester.tap(mode);
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(mode).value, isTrue);
         await tester.tap(mode);
         await tester.pumpAndSettle();
         await tester.ensureVisible(forms);

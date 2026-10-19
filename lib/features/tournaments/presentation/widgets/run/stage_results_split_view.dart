@@ -311,10 +311,12 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             children: [
               const Icon(Icons.table_chart_outlined, size: 20),
               const SizedBox(width: 8),
-              Text(
-                'Tabellen & Zwischenstände',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'Tabellen & Zwischenstände',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],

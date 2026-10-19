@@ -160,18 +160,38 @@ void main() {
       );
       await tester.pumpWidget(page());
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('Beta-Updates einschließen'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
+      final channelTile = find.byType(SwitchListTile);
+      Future<void> revealChannelTile() async {
+        for (
+          var attempt = 0;
+          attempt < 20 && channelTile.hitTestable().evaluate().isEmpty;
+          attempt++
+        ) {
+          await tester.drag(
+            find.byType(ListView).first,
+            const Offset(0, -300),
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(channelTile.hitTestable(), findsOneWidget);
+      }
+
+      await revealChannelTile();
       expect(
         tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
         isFalse,
       );
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(find.text('Beta-Updates einschließen'));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Nach Updates suchen'), 200);
+      expect(
+        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        isTrue,
+      );
+      await tester.scrollUntilVisible(
+        find.text('Nach Updates suchen'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.ensureVisible(find.text('Nach Updates suchen'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Nach Updates suchen'));
@@ -199,18 +219,22 @@ void main() {
       await tester.pumpWidget(page());
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('Beta-Updates einschließen'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
+      await revealChannelTile();
       expect(
         tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
         isTrue,
       );
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(find.text('Beta-Updates einschließen'));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Nach Updates suchen'), 200);
+      expect(
+        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        isFalse,
+      );
+      await tester.scrollUntilVisible(
+        find.text('Nach Updates suchen'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.ensureVisible(find.text('Nach Updates suchen'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Nach Updates suchen'));

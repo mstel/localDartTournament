@@ -11,21 +11,42 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Normales- oder Ranglistenturnier erstellen'));
       await tester.pumpAndSettle();
+      final workflow = find.text('2 · Turnierablauf');
+      for (
+        var attempt = 0;
+        attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+        await tester.pumpAndSettle();
+      }
+      if (find.byKey(const ValueKey('stage-type-field')).evaluate().isEmpty &&
+          workflow.evaluate().isNotEmpty) {
+        await tester.tap(workflow);
+        await tester.pumpAndSettle();
+      }
       await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '4');
-      await tester.scrollUntilVisible(
-        find.text('Spieler erzeugen'),
-        200,
-        scrollable: find.descendant(of: find.byType(ListView).last, matching: find.byType(Scrollable)).first,
-      );
+      final generatePlayers = find.text('Spieler erzeugen');
+      for (
+        var attempt = 0;
+        attempt < 8 && generatePlayers.hitTestable().evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+        await tester.pumpAndSettle();
+      }
       await tester.tap(find.text('Spieler erzeugen'));
       await tester.pumpAndSettle();
       final type = find.byKey(const ValueKey('stage-type-field'));
-      await tester.scrollUntilVisible(
-        type,
-        300,
-        scrollable: find.descendant(of: find.byType(ListView).last, matching: find.byType(Scrollable)).first,
-      );
-      await tester.tap(type);
+      for (
+        var attempt = 0;
+        attempt < 12 && type.hitTestable().evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(type.hitTestable());
       await tester.pumpAndSettle();
       await tester.tap(find.text('Doppel-KO').last);
       await tester.pumpAndSettle();
@@ -51,7 +72,12 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('4 Niederlagen Bracket', skipOffstage: false),
         400,
-        scrollable: find.descendant(of: find.byType(ListView).last, matching: find.byType(Scrollable)).first,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView).last,
+              matching: find.byType(Scrollable),
+            )
+            .first,
         maxScrolls: 50,
       );
       expect(find.text('4 Niederlagen Bracket'), findsOneWidget);

@@ -1,8 +1,9 @@
 # Android-Updates in mstel/localDartTournament
 
 Die Update-Suche und der manuelle Release-Link der App zeigen auf
-`mstel/localDartTournament`. Aus diesem Repository wurden noch keine Tags oder
-Releases veröffentlicht; diese Übernahme erstellt ausdrücklich keinen Release.
+`mstel/localDartTournament`. Der aktuelle Release-Workflow veröffentlicht
+Desktop-Pakete. Android-APK-Releases sind deaktiviert, bis der private
+Keystore des Ziel-Repositories sicher eingerichtet ist.
 
 Der bisherige Release-Workflow wurde nicht übernommen: Er war an den Branch
 `Trainingsbetrieb-DCUH` gebunden und enthielt Build-Konfiguration für das
@@ -26,6 +27,7 @@ werden.
   bestehende App mit derselben Paket-ID und Signatur aktualisieren; die App
   prüft außerdem die höhere Buildnummer, Asset-Größe und SHA-256-Prüfsumme.
 
-Vor einem Release sind ein eigener GitHub-Actions-Workflow, die nötigen
-Repository-Secrets und ein Geräte-/Upgrade-Test einzurichten. Bis dahin
-veröffentlicht oder installiert diese Repository-Kopie keine neue Version.
+Für Android-Releases muss der bisherige Signaturschlüssel sicher in der
+geschützten Release-Umgebung eingerichtet und ein Geräte-/Upgrade-Test
+durchgeführt werden. Ohne diese Voraussetzungen darf kein Android-APK
+veröffentlicht werden.

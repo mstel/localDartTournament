@@ -4,7 +4,7 @@ import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/qualification_certainty.dart';
 import '../../../modes/swiss/swiss_engine.dart';
 
-class StandingsTable extends StatelessWidget {
+class StandingsTable extends StatefulWidget {
   const StandingsTable({
     super.key,
     required this.standings,
@@ -20,50 +20,77 @@ class StandingsTable extends StatelessWidget {
   final QualificationPlan? qualificationPlan;
   final List<String> tieBreakers;
 
+  @override
+  State<StandingsTable> createState() => _StandingsTableState();
+}
+
+class _StandingsTableState extends State<StandingsTable> {
+  final _horizontalController = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    super.dispose();
+  }
+
   bool _isFixedQualificationPlace(int place) {
-    final plan = qualificationPlan;
+    final plan = widget.qualificationPlan;
     if (plan == null) {
       return false;
     }
 
-    final fixedForGroup = groupNumber - 1 < plan.fixedByGroup.length
-        ? plan.fixedByGroup[groupNumber - 1]
+    final fixedForGroup = widget.groupNumber - 1 < plan.fixedByGroup.length
+        ? plan.fixedByGroup[widget.groupNumber - 1]
         : plan.fixedPerGroup;
     return place <= fixedForGroup;
   }
 
   bool _isBestOfCandidatePlace(int place) {
-    final plan = qualificationPlan;
+    final plan = widget.qualificationPlan;
     if (plan == null) {
       return false;
     }
 
     return plan.extraCount > 0 &&
         place == plan.extraRank &&
-        plan.extraGroups.contains(groupNumber);
+        plan.extraGroups.contains(widget.groupNumber);
   }
 
   bool _isSureQualification(PlayerStanding standing, int place) {
-    final plan = qualificationPlan;
+    final plan = widget.qualificationPlan;
     if (plan == null) return false;
-    final groupIndex = groupNumber - 1;
+    final groupIndex = widget.groupNumber - 1;
     final fixedPlaces = groupIndex >= 0 && groupIndex < plan.fixedByGroup.length
-        ? plan.fixedByGroup[groupIndex] : plan.fixedPerGroup;
+        ? plan.fixedByGroup[groupIndex]
+        : plan.fixedPerGroup;
     return const QualificationCertainty().isCertain(
-      standing: standing, place: place, fixedPlaces: fixedPlaces,
-      standings: standings, matches: group.matches, tieBreakers: tieBreakers,
+      standing: standing,
+      place: place,
+      fixedPlaces: fixedPlaces,
+      standings: widget.standings,
+      matches: widget.group.matches,
+      tieBreakers: widget.tieBreakers,
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final sureColor = isDarkMode ? const Color(0xFF144D34) : const Color(0xFF0B6B45);
-    final possibleColor = isDarkMode ? const Color(0xFF163828) : const Color(0xFFD6F5E3);
-    final bestOfColor = isDarkMode ? const Color(0xFF3B3216) : const Color(0xFFFFF1C2);
+    final sureColor = isDarkMode
+        ? const Color(0xFF144D34)
+        : const Color(0xFF0B6B45);
+    final possibleColor = isDarkMode
+        ? const Color(0xFF163828)
+        : const Color(0xFFD6F5E3);
+    final bestOfColor = isDarkMode
+        ? const Color(0xFF3B3216)
+        : const Color(0xFFFFF1C2);
 
     return Scrollbar(
+      controller: _horizontalController,
       thumbVisibility: true,
       child: SingleChildScrollView(
+        controller: _horizontalController,
         scrollDirection: Axis.horizontal,
         child: DataTable(
           columnSpacing: 16,
@@ -81,16 +108,17 @@ class StandingsTable extends StatelessWidget {
             const DataColumn(label: Text('Legs')),
             const DataColumn(label: Text('Diff')),
             const DataColumn(label: Text('Pkt')),
-            if (group.playType == 'swiss')
+            if (widget.group.playType == 'swiss')
               const DataColumn(
                 label: Tooltip(
-                  message: 'Summe der Punkte der gespielten Gegner; Freilose zählen nicht mit.',
+                  message:
+                      'Summe der Punkte der gespielten Gegner; Freilose zählen nicht mit.',
                   child: Text('Buchholz'),
                 ),
               ),
           ],
           rows: [
-            for (var index = 0; index < standings.length; index++)
+            for (var index = 0; index < widget.standings.length; index++)
               _buildRow(
                 context: context,
                 index: index,
@@ -114,7 +142,7 @@ class StandingsTable extends StatelessWidget {
     required Color bestOfColor,
   }) {
     final place = index + 1;
-    final standing = standings[index];
+    final standing = widget.standings[index];
     final isFixed = _isFixedQualificationPlace(place);
     final isSure = isFixed && _isSureQualification(standing, place);
     final isPossible = isFixed && !isSure;
@@ -130,32 +158,92 @@ class StandingsTable extends StatelessWidget {
       fontWeight = FontWeight.w600;
     } else if (isPossible) {
       rowColor = possibleColor;
-      cellTextColor = isDarkMode ? const Color(0xFFA7F3D0) : const Color(0xFF064E3B);
+      cellTextColor = isDarkMode
+          ? const Color(0xFFA7F3D0)
+          : const Color(0xFF064E3B);
       fontWeight = FontWeight.w500;
     } else if (isBestOf) {
       rowColor = bestOfColor;
-      cellTextColor = isDarkMode ? const Color(0xFFFDE68A) : const Color(0xFF78350F);
+      cellTextColor = isDarkMode
+          ? const Color(0xFFFDE68A)
+          : const Color(0xFF78350F);
       fontWeight = FontWeight.w500;
     }
 
     return DataRow(
       color: WidgetStateProperty.resolveWith((states) => rowColor),
       cells: [
-        DataCell(_StandingText('${index + 1}', textColor: cellTextColor, fontWeight: fontWeight)),
-        DataCell(_StandingText(standing.player.name, textColor: cellTextColor, fontWeight: fontWeight)),
-        DataCell(_StandingText('${standing.played}', textColor: cellTextColor, fontWeight: fontWeight)),
-        DataCell(_StandingText('${standing.wins}', textColor: cellTextColor, fontWeight: fontWeight)),
-        DataCell(_StandingText('${standing.draws}', textColor: cellTextColor, fontWeight: fontWeight)),
-        DataCell(_StandingText('${standing.losses}', textColor: cellTextColor, fontWeight: fontWeight)),
-        DataCell(_StandingText('${standing.legsFor}:${standing.legsAgainst}', textColor: cellTextColor, fontWeight: fontWeight)),
-        DataCell(_StandingText('${standing.legDifference}', textColor: cellTextColor, fontWeight: fontWeight)),
-        DataCell(_StandingText('${standing.points}', textColor: cellTextColor, fontWeight: fontWeight)),
-        if (group.playType == 'swiss')
-          DataCell(_StandingText(
-            '${SwissEngine.buchholz(group, standing.player, standings)}',
+        DataCell(
+          _StandingText(
+            '${index + 1}',
             textColor: cellTextColor,
             fontWeight: fontWeight,
-          )),
+          ),
+        ),
+        DataCell(
+          _StandingText(
+            standing.player.name,
+            textColor: cellTextColor,
+            fontWeight: fontWeight,
+          ),
+        ),
+        DataCell(
+          _StandingText(
+            '${standing.played}',
+            textColor: cellTextColor,
+            fontWeight: fontWeight,
+          ),
+        ),
+        DataCell(
+          _StandingText(
+            '${standing.wins}',
+            textColor: cellTextColor,
+            fontWeight: fontWeight,
+          ),
+        ),
+        DataCell(
+          _StandingText(
+            '${standing.draws}',
+            textColor: cellTextColor,
+            fontWeight: fontWeight,
+          ),
+        ),
+        DataCell(
+          _StandingText(
+            '${standing.losses}',
+            textColor: cellTextColor,
+            fontWeight: fontWeight,
+          ),
+        ),
+        DataCell(
+          _StandingText(
+            '${standing.legsFor}:${standing.legsAgainst}',
+            textColor: cellTextColor,
+            fontWeight: fontWeight,
+          ),
+        ),
+        DataCell(
+          _StandingText(
+            '${standing.legDifference}',
+            textColor: cellTextColor,
+            fontWeight: fontWeight,
+          ),
+        ),
+        DataCell(
+          _StandingText(
+            '${standing.points}',
+            textColor: cellTextColor,
+            fontWeight: fontWeight,
+          ),
+        ),
+        if (widget.group.playType == 'swiss')
+          DataCell(
+            _StandingText(
+              '${SwissEngine.buchholz(widget.group, standing.player, widget.standings)}',
+              textColor: cellTextColor,
+              fontWeight: fontWeight,
+            ),
+          ),
       ],
     );
   }
@@ -172,10 +260,7 @@ class _StandingText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: TextStyle(
-        color: textColor,
-        fontWeight: fontWeight,
-      ),
+      style: TextStyle(color: textColor, fontWeight: fontWeight),
     );
   }
 }

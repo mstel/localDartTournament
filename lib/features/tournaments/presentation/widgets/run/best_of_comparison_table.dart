@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../domain/tournament_models.dart';
 
-class BestOfComparisonTable extends StatelessWidget {
+class BestOfComparisonTable extends StatefulWidget {
   const BestOfComparisonTable({
     super.key,
     required this.stage,
@@ -12,8 +12,21 @@ class BestOfComparisonTable extends StatelessWidget {
   final GroupTournamentRunStage stage;
   final Map<TournamentGroup, List<PlayerStanding>> standingsByGroup;
 
+  @override
+  State<BestOfComparisonTable> createState() => _BestOfComparisonTableState();
+}
+
+class _BestOfComparisonTableState extends State<BestOfComparisonTable> {
+  final _horizontalController = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    super.dispose();
+  }
+
   int _compareCandidates(BestOfCandidate a, BestOfCandidate b) {
-    for (final tieBreaker in stage.tieBreakers) {
+    for (final tieBreaker in widget.stage.tieBreakers) {
       final comparison = switch (tieBreaker) {
         'points' => b.standing.points.compareTo(a.standing.points),
         'legDifference' => b.standing.legDifference.compareTo(
@@ -41,7 +54,7 @@ class BestOfComparisonTable extends StatelessWidget {
   }
 
   int _compareBestOfDeciders(BestOfCandidate a, BestOfCandidate b) {
-    for (final group in stage.groups) {
+    for (final group in widget.stage.groups) {
       for (final match in group.matches.where(
         (match) =>
             match.isDecider &&
@@ -70,31 +83,36 @@ class BestOfComparisonTable extends StatelessWidget {
 
   bool _allCandidateGroupsComplete(List<BestOfCandidate> candidates) {
     return candidates.every((candidate) {
-      final group = stage.groups[candidate.groupNumber - 1];
+      final group = widget.stage.groups[candidate.groupNumber - 1];
       return group.matches.every((match) => match.hasResult);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final plan = stage.qualificationPlan;
+    final plan = widget.stage.qualificationPlan;
     if (plan == null || plan.extraCount == 0 || plan.extraGroups.isEmpty) {
       return const SizedBox.shrink();
     }
 
     final candidates = <BestOfCandidate>[];
-    for (var groupIndex = 0; groupIndex < stage.groups.length; groupIndex++) {
+    for (
+      var groupIndex = 0;
+      groupIndex < widget.stage.groups.length;
+      groupIndex++
+    ) {
       final groupNumber = groupIndex + 1;
       if (!plan.extraGroups.contains(groupNumber)) {
         continue;
       }
 
-      final standings = standingsByGroup[stage.groups[groupIndex]] ?? const [];
+      final standings =
+          widget.standingsByGroup[widget.stage.groups[groupIndex]] ?? const [];
       final candidateIndex = plan.extraRank - 1;
       if (candidateIndex >= 0 && candidateIndex < standings.length) {
         candidates.add(
           BestOfCandidate(
-            groupName: stage.groups[groupIndex].name,
+            groupName: widget.stage.groups[groupIndex].name,
             groupNumber: groupNumber,
             place: plan.extraRank,
             standing: standings[candidateIndex],
@@ -133,8 +151,10 @@ class BestOfComparisonTable extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Scrollbar(
+            controller: _horizontalController,
             thumbVisibility: true,
             child: SingleChildScrollView(
+              controller: _horizontalController,
               scrollDirection: Axis.horizontal,
               child: DataTable(
                 columnSpacing: 16,
@@ -142,40 +162,40 @@ class BestOfComparisonTable extends StatelessWidget {
                 headingRowHeight: 34,
                 dataRowMinHeight: 38,
                 dataRowMaxHeight: 42,
-              columns: const [
-                DataColumn(label: Text('#')),
-                DataColumn(label: Text('Gruppe')),
-                DataColumn(label: Text('Spieler')),
-                DataColumn(label: Text('Pkt')),
-                DataColumn(label: Text('Legs')),
-                DataColumn(label: Text('Diff')),
-              ],
-              rows: [
-                for (var index = 0; index < candidates.length; index++)
-                  DataRow(
-                    color: WidgetStateProperty.resolveWith((states) {
-                      return index < plan.extraCount ? qualifiedColor : null;
-                    }),
-                    cells: [
-                      DataCell(Text('${index + 1}')),
-                      DataCell(Text(candidates[index].groupName)),
-                      DataCell(Text(candidates[index].standing.player.name)),
-                      DataCell(Text('${candidates[index].standing.points}')),
-                      DataCell(
-                        Text(
-                          '${candidates[index].standing.legsFor}:'
-                          '${candidates[index].standing.legsAgainst}',
+                columns: const [
+                  DataColumn(label: Text('#')),
+                  DataColumn(label: Text('Gruppe')),
+                  DataColumn(label: Text('Spieler')),
+                  DataColumn(label: Text('Pkt')),
+                  DataColumn(label: Text('Legs')),
+                  DataColumn(label: Text('Diff')),
+                ],
+                rows: [
+                  for (var index = 0; index < candidates.length; index++)
+                    DataRow(
+                      color: WidgetStateProperty.resolveWith((states) {
+                        return index < plan.extraCount ? qualifiedColor : null;
+                      }),
+                      cells: [
+                        DataCell(Text('${index + 1}')),
+                        DataCell(Text(candidates[index].groupName)),
+                        DataCell(Text(candidates[index].standing.player.name)),
+                        DataCell(Text('${candidates[index].standing.points}')),
+                        DataCell(
+                          Text(
+                            '${candidates[index].standing.legsFor}:'
+                            '${candidates[index].standing.legsAgainst}',
+                          ),
                         ),
-                      ),
-                      DataCell(
-                        Text('${candidates[index].standing.legDifference}'),
-                      ),
-                    ],
-                  ),
-              ],
+                        DataCell(
+                          Text('${candidates[index].standing.legDifference}'),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
         ],
       ),
     );

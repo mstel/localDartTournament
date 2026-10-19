@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/order_of_play_section.dart';
-import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/stage_controls.dart';
 
 void main() {
   testWidgets('third tab and start action work on a narrow screen', (
@@ -44,41 +43,24 @@ void main() {
         ),
       ],
     );
-    var mode = StageViewMode.overview;
     await tester.pumpWidget(
       MaterialApp(
         home: StatefulBuilder(
           builder: (context, setState) => Scaffold(
             body: SafeArea(
-              child: Column(
-                children: [
-                  StageViewModeSwitch(
-                    selectedMode: mode,
-                    onModeChanged: (value) => setState(() => mode = value),
-                  ),
-                  if (mode == StageViewMode.orderOfPlay)
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: OrderOfPlaySection(
-                          tournament: tournament,
-                          activeStage: 0,
-                          onChange: () async {
-                            setState(() {});
-                          },
-                          onResult: (_) async {},
-                        ),
-                      ),
-                    ),
-                ],
+              child: SingleChildScrollView(
+                child: OrderOfPlaySection(
+                  tournament: tournament,
+                  activeStage: 0,
+                  onChange: () async => setState(() {}),
+                  onResult: (_) async {},
+                ),
               ),
             ),
           ),
         ),
       ),
     );
-    await tester.tap(find.byType(DropdownButtonFormField<StageViewMode>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Order of Play').last);
     await tester.pumpAndSettle();
     expect(find.text('Verfügbare Boards'), findsOneWidget);
     expect(tester.takeException(), isNull);

@@ -123,12 +123,13 @@ void main() {
         if (size.width < 840 || scale > 1) {
           await tester.tap(find.byType(DropdownButtonFormField<StageViewMode>));
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Übersicht').last);
+          await tester.tap(find.text('Ergebnisse').last);
         } else {
-          await tester.tap(find.text('Übersicht'));
+          await tester.tap(find.text('Ergebnisse'));
         }
         await tester.pumpAndSettle();
         expect(find.text('Turnieruhr starten'), findsNothing);
+        expect(find.byTooltip('Ergebnis'), findsWidgets);
         if (font.isNotEmpty) {
           await tester.runAsync(() async {
             final render =
@@ -146,46 +147,12 @@ void main() {
             image.dispose();
           });
         }
-        if (size.width < 620 || scale > 1) {
-          final round = find.descendant(
-            of: find.byType(RoundMatchList),
-            matching: find.byType(DropdownButtonFormField<int>),
-          );
-          await tester.scrollUntilVisible(
-            round.hitTestable(),
-            150,
-            scrollable: find.byType(Scrollable).first,
-          );
-          await tester.tap(round);
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Runde 2 · 2 offen').last);
-          await tester.pumpAndSettle();
-          expect(find.text('Runde 2'), findsNWidgets(2));
-          expect(find.text('Runde 3'), findsNothing);
-          tester.view.physicalSize = const Size(1440, 900);
-          await tester.pumpAndSettle();
-          tester.view.physicalSize = size;
-          await tester.pumpAndSettle();
-          expect(
-            tester.widget<DropdownButtonFormField<int>>(round).initialValue,
-            1,
-          );
-          expect(tester.takeException(), isNull);
-        }
-        tester
-            .state<ScrollableState>(find.byType(Scrollable).first)
-            .position
-            .jumpTo(0);
+        tester.view.physicalSize = const Size(1440, 900);
         await tester.pumpAndSettle();
-        if (size.width < 840 || scale > 1) {
-          await tester.tap(find.byType(DropdownButtonFormField<StageViewMode>));
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Spielansicht').last);
-          await tester.pumpAndSettle();
-          expect(find.byType(RoundMatchList), findsOneWidget);
-          expect(find.text('Gruppe A'), findsNWidgets(2));
-          expect(tester.takeException(), isNull);
-        }
+        tester.view.physicalSize = size;
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Ergebnis'), findsWidgets);
+        expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         await tester.runAsync(() => StorageAccess.run(() async {}));
       });
@@ -403,27 +370,11 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byType(DropdownButtonFormField<StageViewMode>));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Übersicht').last);
+        await tester.tap(find.text('Ergebnisse').last);
         await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(
-          find.text('Gruppenbaum'),
-          200,
-          scrollable: find.byType(Scrollable).first,
-        );
-        await tester.ensureVisible(find.text('Gruppenbaum'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Gruppenbaum'));
-        await tester.pumpAndSettle();
+        expect(find.byType(TournamentRunPage), findsOneWidget);
+        expect(find.byTooltip('Ergebnis'), findsWidgets);
         expect(tester.takeException(), isNull);
-        final horizontal = tester
-            .stateList<ScrollableState>(find.byType(Scrollable))
-            .firstWhere(
-              (state) => state.widget.axisDirection == AxisDirection.right,
-            );
-        horizontal.position.jumpTo(
-          horizontal.position.maxScrollExtent.clamp(0, 40).toDouble(),
-        );
-        await tester.pumpAndSettle();
 
         for (final size in [
           const Size(900, 400),
@@ -435,16 +386,10 @@ void main() {
           tester.view.physicalSize = size;
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull, reason: 'Rotation to $size');
-          expect(
-            tester
-                .stateList<ScrollableState>(find.byType(Scrollable))
-                .where((state) => identical(state, horizontal)),
-            isNotEmpty,
-          );
+          expect(find.byType(TournamentRunPage), findsOneWidget);
+          expect(find.byTooltip('Ergebnis'), findsWidgets);
         }
         if (font.isNotEmpty) {
-          await tester.ensureVisible(find.text('Gruppenbaum'));
-          await tester.pumpAndSettle();
           await tester.runAsync(() async {
             final render =
                 rotationBoundary.currentContext!.findRenderObject()!

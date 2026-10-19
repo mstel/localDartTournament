@@ -1,4 +1,4 @@
-name: CI
+name: CI and release
 
 on:
   push:
@@ -10,9 +10,13 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: windows-latest
+    name: Analyze and test
+    runs-on: windows-2022
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,3 +35,178 @@ jobs:
 
       - name: Run tests
         run: flutter test
+
+      - name: Verify release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $packageVersion = (Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$').Matches.Groups[1].Value.Trim()
+          if ($env:GITHUB_REF_NAME -ne "v$packageVersion") {
+            throw "Release-Tag $env:GITHUB_REF_NAME stimmt nicht mit pubspec.yaml ($packageVersion) überein."
+          }
+
+  desktop-windows-x64:
+    name: Desktop Windows 2022 x64
+    runs-on: windows-2022
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows x64
+        run: flutter build windows --release
+
+      - name: Package Windows update
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tagVersion = $env:GITHUB_REF_NAME.Substring(1)
+          $version, $build = $tagVersion.Split('+')
+          $bundle = 'build/windows/x64/runner/Release'
+          New-Item -ItemType Directory -Force "$bundle/data" | Out-Null
+          $manifest = [ordered]@{
+            schemaVersion = 1
+            version = $version
+            build = [int]$build
+            platform = 'windows'
+            architecture = 'x64'
+          }
+          $manifest | ConvertTo-Json -Compress | Set-Content "$bundle/data/update-manifest.json" -Encoding utf8
+          Compress-Archive -Path "$bundle/*" -DestinationPath 'dart-turnier-windows-x64.zip' -Force
+
+      - name: Upload Windows update
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dart-turnier-windows-x64.zip
+          if-no-files-found: error
+
+  desktop-linux-x64:
+    name: Desktop Linux Ubuntu 22.04 x64
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Linux x64
+        run: flutter build linux --release
+
+      - name: Verify Linux x64 architecture
+        run: file build/linux/x64/release/bundle/dart_tournament_manager | grep -Eq 'x86-64|x86_64'
+
+      - name: Package Linux x64 update
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          version="${tag_version%%+*}"
+          build="${tag_version##*+}"
+          bundle="build/linux/x64/release/bundle"
+          mkdir -p "$bundle/data"
+          printf '{"schemaVersion":1,"version":"%s","build":%s,"platform":"linux","architecture":"x64"}\n' \
+            "$version" "$build" > "$bundle/data/update-manifest.json"
+          tar -czf dart-turnier-linux-x64.tar.gz -C "$bundle" .
+
+      - name: Upload Linux x64 update
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: dart-turnier-linux-x64.tar.gz
+          if-no-files-found: error
+
+  desktop-linux-arm64:
+    name: Desktop Linux Ubuntu 22.04 ARM64
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Linux ARM64
+        run: flutter build linux --release
+
+      - name: Verify Linux ARM64 architecture
+        run: file build/linux/arm64/release/bundle/dart_tournament_manager | grep -Eq 'aarch64|ARM64'
+
+      - name: Package Linux ARM64 update
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          version="${tag_version%%+*}"
+          build="${tag_version##*+}"
+          bundle="build/linux/arm64/release/bundle"
+          mkdir -p "$bundle/data"
+          printf '{"schemaVersion":1,"version":"%s","build":%s,"platform":"linux","architecture":"arm64"}\n' \
+            "$version" "$build" > "$bundle/data/update-manifest.json"
+          tar -czf dart-turnier-linux-arm64.tar.gz -C "$bundle" .
+
+      - name: Upload Linux ARM64 update
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: dart-turnier-linux-arm64.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build
+      - desktop-windows-x64
+      - desktop-linux-x64
+      - desktop-linux-arm64
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform packages
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release-assets/windows-x64/dart-turnier-windows-x64.zip
+            release-assets/linux-x64/dart-turnier-linux-x64.tar.gz
+            release-assets/linux-arm64/dart-turnier-linux-arm64.tar.gz
