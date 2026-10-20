@@ -18,6 +18,8 @@ class MatchResultTile extends StatelessWidget {
     this.tournament,
     this.originLabel,
     this.leadingLabel,
+    this.showRoundLabel = true,
+    this.compact = false,
   });
 
   final GroupMatch match;
@@ -26,6 +28,8 @@ class MatchResultTile extends StatelessWidget {
   final CreatedTournament? tournament;
   final String? originLabel;
   final String? leadingLabel;
+  final bool showRoundLabel;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -41,8 +45,11 @@ class MatchResultTile extends StatelessWidget {
       match: match,
       tournament: tournament,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        margin: EdgeInsets.only(bottom: compact ? 4 : 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 12,
+          vertical: compact ? 5 : 10,
+        ),
         decoration: BoxDecoration(
           color: colorScheme.surface,
           border: Border.all(color: colorScheme.outlineVariant),
@@ -50,25 +57,28 @@ class MatchResultTile extends StatelessWidget {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < 620 ||
+            if (constraints.maxWidth < (compact ? 420 : 620) ||
                 MediaQuery.textScalerOf(context).scale(16) > 24) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        roundLabel,
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                      if (originLabel != null)
-                        _MatchOriginChip(label: originLabel!),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
+                  if (showRoundLabel || originLabel != null) ...[
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (showRoundLabel)
+                          Text(
+                            roundLabel,
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
+                        if (originLabel != null)
+                          _MatchOriginChip(label: originLabel!),
+                      ],
+                    ),
+                    SizedBox(height: compact ? 4 : 8),
+                  ],
                   Text(
                     playerLabel(true),
                     style: Theme.of(context).textTheme.titleMedium,
@@ -109,14 +119,16 @@ class MatchResultTile extends StatelessWidget {
 
             return Row(
               children: [
-                SizedBox(
-                  width: leadingLabel == null ? 74 : 148,
-                  child: Text(
-                    roundLabel,
-                    style: Theme.of(context).textTheme.labelMedium,
+                if (showRoundLabel) ...[
+                  SizedBox(
+                    width: leadingLabel == null ? 74 : 148,
+                    child: Text(
+                      roundLabel,
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 if (originLabel != null) ...[
                   _MatchOriginChip(label: originLabel!),
                   const SizedBox(width: 8),

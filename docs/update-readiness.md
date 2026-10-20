@@ -30,7 +30,7 @@ Bootstrap, Feature-Ordner, Domain-Engines und Persistenz sind getrennt angelegt.
 ## Vor dem ersten automatischen Update noch erforderlich
 
 1. Festen Release-Kanal, Paketidentitäten und Signierung festlegen. Beispiel-Bundle-IDs vor Veröffentlichung kontrolliert ersetzen; Application-Support-Pfade dürfen dabei nicht ohne Migration wechseln.
-2. App-Version/Buildnummer bei Releases erhöhen (aktuell `1.0.0+2`). App-Version und Speicherschema getrennt behandeln.
+2. App-Version/Buildnummer bei Releases erhöhen (aktuell `1.0.4+4`). App-Version und Speicherschema getrennt behandeln.
 3. Updater lädt und prüft signierte Pakete, beendet die App nach abgeschlossenen Schreibvorgängen und ersetzt ausschließlich Installationsdateien. Benutzerverzeichnisse sind vom Löschen/Aufräumen ausgeschlossen.
 4. Installations-Upgrade und Rollback mit realen alten Spielständen auf jeder Zielplattform testen. Alte bereits veröffentlichte Binärdateien besitzen den neuen Versionsschutz und die Instanzsperre noch nicht und dürfen neue Daten nicht öffnen.
 

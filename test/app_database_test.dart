@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
 
+import 'package:sqlite3/sqlite3.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
@@ -54,9 +56,7 @@ void main() {
     );
 
     profiles = await database.loadPlayerProfiles();
-    final updated = profiles.singleWhere(
-      (profile) => profile.id == created.id,
-    );
+    final updated = profiles.singleWhere((profile) => profile.id == created.id);
     expect(updated.displayName, 'Max Power');
     expect(updated.city, 'Hamburg');
     expect(updated.dartsSetupJson, '24g Steeldart');
@@ -73,7 +73,9 @@ void main() {
     );
     addTearDown(() => directory.delete(recursive: true));
     final database = LocalAppDatabase(baseDirectory: directory);
-    final player = await database.createPlayerProfile(displayName: 'Vereinsdart');
+    final player = await database.createPlayerProfile(
+      displayName: 'Vereinsdart',
+    );
     const ranking = LocalRanking(
       id: 'dc-unzenberg-2026',
       name: 'DC Unzenberg 2026',
@@ -94,6 +96,53 @@ void main() {
 
     await database.deleteLocalRanking(ranking.id);
     expect(await database.loadRankingPlayerIds(ranking.id), isEmpty);
+  });
+
+  test('migrates existing rankings and persists their custom order', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'dart_local_rankings_order_migration_test_',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+
+    final file = File('${directory.path}/app_database.sqlite');
+    final oldDatabase = sqlite3.open(file.path);
+    oldDatabase.execute('''
+      CREATE TABLE local_rankings (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        ranking_type TEXT NOT NULL CHECK (ranking_type IN ('elo', 'series')),
+        config_json TEXT NOT NULL
+      )
+    ''');
+    for (final ranking in [
+      const LocalRanking(id: 'z', name: 'Z Rangliste', startRating: 1250),
+      const LocalRanking(id: 'a', name: 'A Rangliste', startRating: 1150),
+    ]) {
+      oldDatabase.execute('INSERT INTO local_rankings VALUES (?, ?, ?, ?)', [
+        ranking.id,
+        ranking.name,
+        ranking.type.name,
+        jsonEncode(ranking.toJson()),
+      ]);
+    }
+    oldDatabase.execute('PRAGMA user_version = 9');
+    oldDatabase.close();
+
+    final database = LocalAppDatabase(baseDirectory: directory);
+    var rankings = await database.loadLocalRankings();
+    expect(rankings.map((ranking) => ranking.name), [
+      'A Rangliste',
+      'Z Rangliste',
+    ]);
+    expect(rankings.map((ranking) => ranking.customOrder), [0, 1]);
+    expect(rankings.map((ranking) => ranking.startRating), [1150, 1250]);
+
+    await database.saveLocalRankingOrder(['z', 'a']);
+    rankings = await LocalAppDatabase(
+      baseDirectory: directory,
+    ).loadLocalRankings();
+    expect(rankings.map((ranking) => ranking.id), ['z', 'a']);
+    expect(rankings.map((ranking) => ranking.customOrder), [0, 1]);
   });
 
   test('keeps player profile id in tournament player json', () {

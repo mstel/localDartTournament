@@ -116,6 +116,12 @@ void main() {
         }
 
         await show('finder', const TournamentFormatPlannerDialog());
+        final boardsField = find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField &&
+              widget.decoration?.labelText == 'Anzahl Boards',
+        );
+        expect(tester.widget<TextField>(boardsField).controller?.text, '4');
         expect(
           find
               .byKey(const ValueKey('planner-mode-single_knockout'))
