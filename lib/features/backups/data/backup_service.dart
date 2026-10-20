@@ -66,24 +66,26 @@ class BackupService {
         return bytes;
       });
 
-  Future<void> exportTo(File destination, {Set<String>? categories}) =>
-      StorageAccess.run(() async {
-        // A save dialog must not be able to replace live stores or recovery files.
-        final parent = await destination.parent.resolveSymbolicLinks();
-        for (final store in files.values) {
-          await store.parent.create(recursive: true);
-          final root = await store.parent.resolveSymbolicLinks();
-          if (path.equals(root, parent) || path.isWithin(root, parent)) {
-            throw const FormatException(
-              'Bitte außerhalb des App-Datenordners speichern.',
-            );
-          }
-        }
-        final bytes = await exportBytes(categories: categories);
-        final temporary = File('${destination.path}.tmp');
-        await temporary.writeAsBytes(bytes, flush: true);
-        await temporary.rename(destination.path);
-      });
+  Future<void> exportTo(
+    File destination, {
+    Set<String>? categories,
+  }) => StorageAccess.run(() async {
+    // A save dialog must not be able to replace live stores or recovery files.
+    final parent = await destination.parent.resolveSymbolicLinks();
+    for (final store in files.values) {
+      await store.parent.create(recursive: true);
+      final root = await store.parent.resolveSymbolicLinks();
+      if (path.equals(root, parent) || path.isWithin(root, parent)) {
+        throw const FormatException(
+          'Bitte außerhalb des App-Datenordners speichern.',
+        );
+      }
+    }
+    final bytes = await exportBytes(categories: categories);
+    final temporary = File('${destination.path}.tmp');
+    await temporary.writeAsBytes(bytes, flush: true);
+    await temporary.rename(destination.path);
+  });
 
   Future<Map<String, Uint8List?>> _snapshot({
     bool consistentDatabase = false,
@@ -206,6 +208,18 @@ class BackupService {
         await file.writeAsBytes(entry.value!, flush: true);
         switch (entry.key) {
           case 'tournaments.json':
+            final recoveryProof = File(
+              '${files['tournaments.json']!.path}.v'
+              '${TournamentStorage.recoveryProofSchemaVersion}.bak',
+            );
+            if (await recoveryProof.exists()) {
+              if (await recoveryProof.length() > maximumBytes) {
+                throw const FormatException(
+                  'Die v22-Sicherung für den Turnierspeicher ist zu groß.',
+                );
+              }
+              await recoveryProof.copy('${file.path}.v22.bak');
+            }
             count = (await TournamentStorage(
               file: file,
             ).loadTournaments()).length;

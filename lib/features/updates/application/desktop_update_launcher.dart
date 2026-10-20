@@ -112,12 +112,55 @@ class DesktopUpdateLauncher {
     await temporary.rename(p.join(base.path, 'active.json'));
   }
 
-  static String windowsScript(String exe, String id, int parentPid) {
+  static String windowsScript(
+    String exe,
+    String id,
+    int parentPid, {
+    required String activeFile,
+    required String logFile,
+    required String originalExe,
+  }) {
     String quote(String value) => "'${value.replaceAll("'", "''")}'";
     return '''\$ErrorActionPreference = 'Stop'
+\$logFile = ${quote(logFile)}
+function Write-UpdateLog([string]\$message) {
+  try { Add-Content -LiteralPath \$logFile -Value "\$(Get-Date -Format o) \$message" -Encoding UTF8 } catch {}
+}
 \$parentProcess = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
-if (\$null -ne \$parentProcess) { if (-not \$parentProcess.WaitForExit(120000)) { throw 'App wurde nicht beendet.' } }
-Start-Process -FilePath ${quote(exe)} -WorkingDirectory ${quote(p.dirname(exe))} -ArgumentList '--desktop-update-activate=$id' -WindowStyle Normal
+if (\$null -ne \$parentProcess -and -not \$parentProcess.WaitForExit(120000)) {
+  Write-UpdateLog 'Die ursprüngliche App wurde nicht beendet; Update nicht gestartet.'
+  exit 1
+}
+try {
+  \$updatedProcess = Start-Process -FilePath ${quote(exe)} -WorkingDirectory ${quote(p.dirname(exe))} -ArgumentList '--desktop-update-activate=$id' -WindowStyle Normal -PassThru
+  \$deadline = [DateTime]::UtcNow.AddSeconds(120)
+  while ([DateTime]::UtcNow -lt \$deadline) {
+    if (Test-Path -LiteralPath ${quote(activeFile)}) {
+      try {
+        \$active = Get-Content -LiteralPath ${quote(activeFile)} -Raw | ConvertFrom-Json
+        if (\$active.schemaVersion -eq 1 -and \$active.id -eq ${quote(id)}) {
+          Write-UpdateLog 'Update wurde erfolgreich aktiviert.'
+          exit 0
+        }
+      } catch {}
+    }
+    if (\$updatedProcess.HasExited) { break }
+    Start-Sleep -Milliseconds 250
+  }
+  if (-not \$updatedProcess.HasExited) {
+    Stop-Process -Id \$updatedProcess.Id -Force
+    \$updatedProcess.WaitForExit(10000) | Out-Null
+  }
+  Write-UpdateLog 'Update wurde nicht aktiviert; starte die ursprüngliche App.'
+} catch {
+  Write-UpdateLog "Update-Start fehlgeschlagen: \$(\$_.Exception.Message)"
+}
+try {
+  Start-Process -FilePath ${quote(originalExe)} -WorkingDirectory ${quote(p.dirname(originalExe))} -ArgumentList '--desktop-update-original' -WindowStyle Normal | Out-Null
+  Write-UpdateLog 'Ursprüngliche App wurde als Fallback gestartet.'
+} catch {
+  Write-UpdateLog "Fallback-Start fehlgeschlagen: \$(\$_.Exception.Message)"
+}
 ''';
   }
 
@@ -151,9 +194,19 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
     final script = File(
       p.join(base.path, id, Platform.isWindows ? 'restart.ps1' : 'restart.sh'),
     );
+    final activeFile = p.join(base.path, 'active.json');
+    final logFile = p.join(base.path, id, 'restart.log');
+    final originalExe = Platform.resolvedExecutable;
     await script.writeAsString(
       Platform.isWindows
-          ? windowsScript(exe, id, pid)
+          ? windowsScript(
+              exe,
+              id,
+              pid,
+              activeFile: activeFile,
+              logFile: logFile,
+              originalExe: originalExe,
+            )
           : linuxScript(exe, id, pid, forwardedArgs: forwardedArgs),
       flush: true,
     );
@@ -165,7 +218,14 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
         'v1.0',
         'powershell.exe',
       );
-      final command = windowsScript(exe, id, pid);
+      final command = windowsScript(
+        exe,
+        id,
+        pid,
+        activeFile: activeFile,
+        logFile: logFile,
+        originalExe: originalExe,
+      );
       final encoded = base64Encode([
         for (final unit in command.codeUnits) ...[unit & 255, unit >> 8],
       ]);

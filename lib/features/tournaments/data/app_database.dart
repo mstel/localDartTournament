@@ -13,7 +13,7 @@ import '../../rankings/domain/local_ranking.dart';
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 9;
+  static const schemaVersion = 10;
 
   final Directory? _baseDirectory;
 
@@ -51,7 +51,8 @@ class LocalAppDatabase {
     try {
       return [
         for (final row in database.select(
-          'SELECT config_json FROM local_rankings ORDER BY name COLLATE NOCASE',
+          '''SELECT config_json FROM local_rankings
+             ORDER BY custom_order, name COLLATE NOCASE, id''',
         ))
           LocalRanking.fromJson(
             Map<String, Object?>.from(jsonDecode(row['config_json'] as String) as Map),
@@ -298,7 +299,11 @@ class LocalAppDatabase {
     try {
       final version = _currentSchemaVersion(database);
       if (version > schemaVersion) {
-        throw StateError('Datenbank stammt aus einer neueren App-Version.');
+        throw StateError(
+          'Lokale Datenbank-Version $version wird nicht unterstützt '
+          '(maximal $schemaVersion). Die Datei wurde nicht verändert. '
+          'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
+        );
       }
       if (version > 0 && version < schemaVersion) {
         final backup =
@@ -322,16 +327,31 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion > 0) {
-        final oldTables = database.select(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+      if (currentVersion == schemaVersion - 1) {
+        database.execute(
+          'ALTER TABLE local_rankings ADD COLUMN custom_order INTEGER NOT NULL DEFAULT 0',
         );
-        for (final row in oldTables) {
-          final name = (row['name'] as String).replaceAll('"', '""');
-          database.execute('DROP TABLE IF EXISTS "$name"');
+        final rankings = database.select(
+          'SELECT id FROM local_rankings ORDER BY name COLLATE NOCASE, id',
+        );
+        for (var index = 0; index < rankings.length; index++) {
+          database.execute(
+            'UPDATE local_rankings SET custom_order = ? WHERE id = ?',
+            [index, rankings[index]['id']],
+          );
         }
+      } else {
+        if (currentVersion > 0) {
+          final oldTables = database.select(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+          );
+          for (final row in oldTables) {
+            final name = (row['name'] as String).replaceAll('"', '""');
+            database.execute('DROP TABLE IF EXISTS "$name"');
+          }
+        }
+        _createSchema(database);
       }
-      _createSchema(database);
       database.execute('PRAGMA user_version = $schemaVersion');
       database.execute('COMMIT');
     } catch (_) {
@@ -366,7 +386,8 @@ class LocalAppDatabase {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE COLLATE NOCASE,
         ranking_type TEXT NOT NULL CHECK (ranking_type IN ('elo', 'series')),
-        config_json TEXT NOT NULL
+        config_json TEXT NOT NULL,
+        custom_order INTEGER NOT NULL DEFAULT 0
       );
 
       CREATE TABLE local_ranking_players (

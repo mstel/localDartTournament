@@ -1,8 +1,8 @@
 # Turnierspeicher: Schema und Migrationen
 
-Stand: 2026-10-13. Die führende Versionskonstante ist
+Stand: 2026-10-20. Die führende Versionskonstante ist
 `TournamentStorage._schemaVersion` in
-`lib/features/tournaments/data/tournament_storage.dart` (aktuell **22**).
+`lib/features/tournaments/data/tournament_storage.dart` (aktuell **23**).
 Änderungen an gespeicherten Turnierdaten müssen die Version dort, diese
 Chronik und die Migrations-/Backup-Tests gemeinsam aktualisieren. Ältere
 Speicherstände werden beim nächsten Schreiben auf die aktuelle Version
@@ -32,6 +32,18 @@ versionsgebundene Sicherung an. Höhere unbekannte Versionen werden abgelehnt.
 | 20 | Optionale Matchstarts von zugeordneten Boardgeräten | Funktion bleibt standardmäßig aus |
 | 21 | Spielerausstieg und Folgezustand | Kein Ausstieg für ältere Turniere |
 | 22 | Begrenzte Round-Robin-Konfiguration | Bestehende Etappen behalten ihre bisherige Konfiguration |
+| 23 | Kein eigenständiger JSON-Schemawechsel in der Release-Historie belegt | Bekannte Felder bleiben erhalten |
+
+Der veröffentlichte Tag `v1.0.3+3` setzte die Versionskonstante auf 24;
+`v1.0.4+4` setzte sie ohne passende JSON-Migration auf 23 zurück. Das ist
+kein Beleg, dass beliebige Version-24-Dokumente als Version 23 lesbar sind.
+Die eng begrenzte Recovery akzeptiert Version 24 nur, wenn die vollständige
+Datei nach Ausklammern ausschließlich des Wurzelfelds `schemaVersion`
+semantisch exakt mit der benachbarten `tournaments.json.v22.bak` übereinstimmt.
+Fehlt dieser Beleg, ist die Sicherung ungültig/zu groß oder weicht sie ab,
+bleibt das Dokument gesperrt und unverändert. Die Sicherungsdatei wird nie
+geändert. Beim späteren Speichern werden `.bak` und `.v24.bak` angelegt, bevor
+die aktuelle Version 23 geschrieben wird.
 
 Die markierten historischen Lücken sind absichtlich kenntlich gemacht und
 sollten bei einer Änderung dieser alten Formate nur anhand nachprüfbarer

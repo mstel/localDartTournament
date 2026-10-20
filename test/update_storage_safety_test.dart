@@ -5,6 +5,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 
 void main() {
   late Directory directory;
@@ -15,12 +16,21 @@ void main() {
   });
   tearDown(() => directory.delete(recursive: true));
 
-  for (final content in ['', '[]', '{broken', '{"schemaVersion":99,"tournaments":[]}', '{"schemaVersion":6,"tournaments":[null]}']) {
+  for (final content in [
+    '',
+    '[]',
+    '{broken',
+    '{"schemaVersion":99,"tournaments":[]}',
+    '{"schemaVersion":6,"tournaments":[null]}',
+  ]) {
     test('invalid or future document is never overwritten: $content', () async {
       await file.writeAsString(content);
       final storage = TournamentStorage(file: file);
       await expectLater(storage.loadTournaments(), throwsFormatException);
-      await expectLater(storage.saveTournament(_tournament()), throwsFormatException);
+      await expectLater(
+        storage.saveTournament(_tournament()),
+        throwsFormatException,
+      );
       expect(await file.readAsString(), content);
     });
   }
@@ -38,16 +48,140 @@ void main() {
     expect(jsonDecode(await file.readAsString())['custom'], 'keep');
   });
 
-  test('newer SQLite database is rejected without changing its schema', () async {
-    final path = '${directory.path}/app_database.sqlite';
-    final database = sqlite3.open(path);
-    database.execute('PRAGMA user_version = 99');
-    database.close();
-    await expectLater(LocalAppDatabase(baseDirectory: directory).loadPlayerProfiles(), throwsStateError);
-    final reopened = sqlite3.open(path);
-    expect(reopened.select('PRAGMA user_version').first.values.single, 99);
-    reopened.close();
+  test(
+    'unknown tournament version reports its version and remains untouched',
+    () async {
+      const content = '{"schemaVersion":24,"tournaments":[]}';
+      await file.writeAsString(content);
+      final storage = TournamentStorage(file: file);
+
+      try {
+        await storage.loadTournaments();
+        fail('A future storage version must not be interpreted as supported.');
+      } on FormatException catch (error) {
+        expect(error.message, contains('Version 24'));
+        expect(error.message, contains('v22.bak'));
+      }
+
+      await expectLater(
+        storage.saveTournament(_tournament()),
+        throwsFormatException,
+      );
+      expect(await file.readAsString(), content);
+    },
+  );
+
+  test(
+    'schema 24 is readable only when it exactly matches the v22 backup',
+    () async {
+      const current =
+          '{"schemaVersion":24,"tournaments":[],"cache":{"a":[1,true]},'
+          '"playerStatistics":{"total":7},"pending":{}}';
+      const proof =
+          '{"pending":{},"playerStatistics":{"total":7},'
+          '"cache":{"a":[1,true]},"tournaments":[],"schemaVersion":22}';
+      final proofFile = File('${file.path}.v22.bak');
+      await file.writeAsString(current);
+      await proofFile.writeAsString(proof);
+      final storage = TournamentStorage(file: file);
+
+      expect(await storage.loadTournaments(), isEmpty);
+      expect(await file.readAsString(), current);
+      expect(await proofFile.readAsString(), proof);
+
+      await storage.saveTournament(_tournament());
+
+      final migrated = jsonDecode(await file.readAsString());
+      expect(migrated['schemaVersion'], 23);
+      expect(migrated['cache'], {
+        'a': [1, true],
+      });
+      expect(migrated['playerStatistics'], {'total': 7});
+      expect(migrated['pending'], {});
+      expect(await File('${file.path}.v24.bak').readAsString(), current);
+      expect(await proofFile.readAsString(), proof);
+    },
+  );
+
+  test('schema 24 is rejected when its v22 proof is missing', () async {
+    const current = '{"schemaVersion":24,"tournaments":[]}';
+    await file.writeAsString(current);
+
+    await expectLater(
+      TournamentStorage(file: file).loadTournaments(),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('v22.bak fehlt'),
+        ),
+      ),
+    );
+
+    expect(await file.readAsString(), current);
+    expect(await File('${file.path}.v22.bak').exists(), isFalse);
   });
+
+  test('schema 24 is rejected when its v22 proof differs', () async {
+    const current = '{"schemaVersion":24,"tournaments":[],"pending":{}}';
+    const proof = '{"schemaVersion":22,"tournaments":[],"pending":{"x":1}}';
+    final proofFile = File('${file.path}.v22.bak');
+    await file.writeAsString(current);
+    await proofFile.writeAsString(proof);
+
+    await expectLater(
+      TournamentStorage(file: file).loadTournaments(),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('weicht vom Turnierspeicher ab'),
+        ),
+      ),
+    );
+
+    expect(await file.readAsString(), current);
+    expect(await proofFile.readAsString(), proof);
+  });
+
+  test('schema 24 is rejected when its v22 proof is invalid', () async {
+    const current = '{"schemaVersion":24,"tournaments":[]}';
+    const proof = '{broken';
+    final proofFile = File('${file.path}.v22.bak');
+    await file.writeAsString(current);
+    await proofFile.writeAsString(proof);
+
+    await expectLater(
+      TournamentStorage(file: file).loadTournaments(),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('enthält kein gültiges JSON'),
+        ),
+      ),
+    );
+
+    expect(await file.readAsString(), current);
+    expect(await proofFile.readAsString(), proof);
+  });
+
+  test(
+    'newer SQLite database is rejected without changing its schema',
+    () async {
+      final path = '${directory.path}/app_database.sqlite';
+      final database = sqlite3.open(path);
+      database.execute('PRAGMA user_version = 99');
+      database.close();
+      await expectLater(
+        LocalAppDatabase(baseDirectory: directory).loadPlayerProfiles(),
+        throwsStateError,
+      );
+      final reopened = sqlite3.open(path);
+      expect(reopened.select('PRAGMA user_version').first.values.single, 99);
+      reopened.close();
+    },
+  );
 
   test('SQLite migration creates a readable pre-migration backup', () async {
     final storage = LocalAppDatabase(baseDirectory: directory);
@@ -56,10 +190,103 @@ void main() {
     database.execute('PRAGMA user_version = 2');
     database.close();
     await storage.loadPlayerProfiles();
-    final backup = directory.listSync().whereType<File>().singleWhere((f) => f.path.endsWith('.bak'));
+    final backup = directory.listSync().whereType<File>().singleWhere(
+      (f) => f.path.endsWith('.bak'),
+    );
     final old = sqlite3.open(backup.path);
     expect(old.select('PRAGMA user_version').first.values.single, 2);
     old.close();
+  });
+
+  test('v9 to v10 migration keeps players, rankings and assignments', () async {
+    final path = '${directory.path}/app_database.sqlite';
+    final old = sqlite3.open(path);
+    old.execute('''
+      CREATE TABLE player_profiles (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        country TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        darts_setup_json TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1
+      );
+      CREATE TABLE local_rankings (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        ranking_type TEXT NOT NULL,
+        config_json TEXT NOT NULL
+      );
+      CREATE TABLE local_ranking_players (
+        ranking_id TEXT NOT NULL REFERENCES local_rankings(id) ON DELETE CASCADE,
+        player_profile_id TEXT NOT NULL REFERENCES player_profiles(id) ON DELETE CASCADE,
+        PRIMARY KEY (ranking_id, player_profile_id)
+      );
+      CREATE TABLE challonge_player_links (
+        source TEXT NOT NULL,
+        normalized_name TEXT NOT NULL,
+        challonge_name TEXT NOT NULL,
+        player_profile_id TEXT NOT NULL REFERENCES player_profiles(id) ON DELETE CASCADE,
+        PRIMARY KEY(source, normalized_name)
+      );
+      CREATE INDEX idx_player_profiles_display_name ON player_profiles(display_name);
+      PRAGMA user_version = 9;
+    ''');
+    old.execute('''INSERT INTO player_profiles(
+        id, display_name, created_at
+      ) VALUES ('player-1', 'Testspieler', '2026-01-01T00:00:00.000')''');
+    old.execute(
+      '''INSERT INTO local_rankings(id, name, ranking_type, config_json)
+         VALUES (?, ?, ?, ?)''',
+      [
+        'ranking-1',
+        'Vereinsrangliste',
+        'elo',
+        jsonEncode(
+          const LocalRanking(
+            id: 'ranking-1',
+            name: 'Vereinsrangliste',
+            startRating: 1200,
+          ).toJson(),
+        ),
+      ],
+    );
+    old.execute(
+      '''INSERT INTO local_ranking_players(ranking_id, player_profile_id)
+         VALUES ('ranking-1', 'player-1')''',
+    );
+    old.close();
+
+    final storage = LocalAppDatabase(baseDirectory: directory);
+    expect(
+      (await storage.loadPlayerProfiles()).single.displayName,
+      'Testspieler',
+    );
+    expect((await storage.loadLocalRankings()).single.startRating, 1200);
+    expect(await storage.loadRankingPlayerIds('ranking-1'), ['player-1']);
+
+    final migrated = sqlite3.open(path, mode: OpenMode.readOnly);
+    expect(migrated.select('PRAGMA user_version').single.values.single, 10);
+    expect(
+      migrated
+          .select('SELECT custom_order FROM local_rankings')
+          .single
+          .values
+          .single,
+      0,
+    );
+    migrated.close();
+
+    final backup = directory.listSync().whereType<File>().singleWhere(
+      (candidate) => candidate.path.contains('.v9.'),
+    );
+    final original = sqlite3.open(backup.path, mode: OpenMode.readOnly);
+    expect(original.select('PRAGMA user_version').single.values.single, 9);
+    expect(
+      original.select('SELECT id FROM player_profiles').single['id'],
+      'player-1',
+    );
+    original.close();
   });
 }
 
