@@ -42,7 +42,15 @@ void main() {
     await storage.saveTournament(_tournament());
     expect(await File('${file.path}.v1.bak').readAsString(), original);
     final first = await file.readAsString();
-    await storage.saveTournament(_tournament());
+    await storage.saveTournament(
+      CreatedTournament(
+        id: 'new-safety',
+        name: 'New safety',
+        players: const [],
+        stages: const [],
+        runStages: const [],
+      ),
+    );
     expect(await File('${file.path}.bak').readAsString(), first);
     expect(await File('${file.path}.v1.bak').readAsString(), original);
     expect(jsonDecode(await file.readAsString())['custom'], 'keep');
@@ -51,7 +59,7 @@ void main() {
   test(
     'unknown tournament version reports its version and remains untouched',
     () async {
-      const content = '{"schemaVersion":24,"tournaments":[]}';
+      const content = '{"schemaVersion":25,"tournaments":[]}';
       await file.writeAsString(content);
       final storage = TournamentStorage(file: file);
 
@@ -59,8 +67,8 @@ void main() {
         await storage.loadTournaments();
         fail('A future storage version must not be interpreted as supported.');
       } on FormatException catch (error) {
-        expect(error.message, contains('Version 24'));
-        expect(error.message, contains('v22.bak'));
+        expect(error.message, contains('Version 25'));
+        expect(error.message, contains('1 bis 24'));
       }
 
       await expectLater(
@@ -72,99 +80,53 @@ void main() {
   );
 
   test(
-    'schema 24 is readable only when it exactly matches the v22 backup',
+    'schema 24 documents from v1.0.3 remain readable and writable',
     () async {
-      const current =
-          '{"schemaVersion":24,"tournaments":[],"cache":{"a":[1,true]},'
-          '"playerStatistics":{"total":7},"pending":{}}';
-      const proof =
-          '{"pending":{},"playerStatistics":{"total":7},'
-          '"cache":{"a":[1,true]},"tournaments":[],"schemaVersion":22}';
-      final proofFile = File('${file.path}.v22.bak');
+      final legacyTournament = _tournament().toJson()
+        ..['countsForRanking'] = false
+        ..['rankingIds'] = ['ranking-1'];
+      final current = jsonEncode({
+        'schemaVersion': 24,
+        'tournaments': [legacyTournament],
+        'playerStatistics': {'total': 7},
+      });
       await file.writeAsString(current);
-      await proofFile.writeAsString(proof);
       final storage = TournamentStorage(file: file);
 
-      expect(await storage.loadTournaments(), isEmpty);
+      final loaded = await storage.loadTournaments();
+      expect(loaded.single.countsForRanking, isFalse);
+      expect(loaded.single.rankingIds, ['ranking-1']);
       expect(await file.readAsString(), current);
-      expect(await proofFile.readAsString(), proof);
 
-      await storage.saveTournament(_tournament());
+      await storage.saveTournament(
+        CreatedTournament(
+          id: 'new-schema-24-record',
+          name: 'New schema 24 record',
+          players: const [],
+          stages: const [],
+          runStages: const [],
+        ),
+      );
 
-      final migrated = jsonDecode(await file.readAsString());
-      expect(migrated['schemaVersion'], 23);
-      expect(migrated['cache'], {
-        'a': [1, true],
-      });
-      expect(migrated['playerStatistics'], {'total': 7});
-      expect(migrated['pending'], {});
-      expect(await File('${file.path}.v24.bak').readAsString(), current);
-      expect(await proofFile.readAsString(), proof);
+      final saved = jsonDecode(await file.readAsString());
+      expect(saved['schemaVersion'], 24);
+      expect(saved['playerStatistics'], {'total': 7});
+      expect((saved['tournaments'] as List).length, 2);
+      expect(
+        (saved['tournaments'] as List).singleWhere(
+          (item) => item['name'] == 'Safety',
+        )['countsForRanking'],
+        isFalse,
+      );
+      expect(
+        (saved['tournaments'] as List).singleWhere(
+          (item) => item['name'] == 'Safety',
+        )['rankingIds'],
+        ['ranking-1'],
+      );
+      expect(await File('${file.path}.bak').readAsString(), current);
     },
   );
-
-  test('schema 24 is rejected when its v22 proof is missing', () async {
-    const current = '{"schemaVersion":24,"tournaments":[]}';
-    await file.writeAsString(current);
-
-    await expectLater(
-      TournamentStorage(file: file).loadTournaments(),
-      throwsA(
-        isA<FormatException>().having(
-          (error) => error.message,
-          'message',
-          contains('v22.bak fehlt'),
-        ),
-      ),
-    );
-
-    expect(await file.readAsString(), current);
-    expect(await File('${file.path}.v22.bak').exists(), isFalse);
-  });
-
-  test('schema 24 is rejected when its v22 proof differs', () async {
-    const current = '{"schemaVersion":24,"tournaments":[],"pending":{}}';
-    const proof = '{"schemaVersion":22,"tournaments":[],"pending":{"x":1}}';
-    final proofFile = File('${file.path}.v22.bak');
-    await file.writeAsString(current);
-    await proofFile.writeAsString(proof);
-
-    await expectLater(
-      TournamentStorage(file: file).loadTournaments(),
-      throwsA(
-        isA<FormatException>().having(
-          (error) => error.message,
-          'message',
-          contains('weicht vom Turnierspeicher ab'),
-        ),
-      ),
-    );
-
-    expect(await file.readAsString(), current);
-    expect(await proofFile.readAsString(), proof);
-  });
-
-  test('schema 24 is rejected when its v22 proof is invalid', () async {
-    const current = '{"schemaVersion":24,"tournaments":[]}';
-    const proof = '{broken';
-    final proofFile = File('${file.path}.v22.bak');
-    await file.writeAsString(current);
-    await proofFile.writeAsString(proof);
-
-    await expectLater(
-      TournamentStorage(file: file).loadTournaments(),
-      throwsA(
-        isA<FormatException>().having(
-          (error) => error.message,
-          'message',
-          contains('enthält kein gültiges JSON'),
-        ),
-      ),
-    );
-
-    expect(await file.readAsString(), current);
-    expect(await proofFile.readAsString(), proof);
-  });
 
   test(
     'newer SQLite database is rejected without changing its schema',

@@ -2,7 +2,7 @@
 
 Stand: 2026-10-20. Die führende Versionskonstante ist
 `TournamentStorage._schemaVersion` in
-`lib/features/tournaments/data/tournament_storage.dart` (aktuell **23**).
+`lib/features/tournaments/data/tournament_storage.dart` (aktuell **24**).
 Änderungen an gespeicherten Turnierdaten müssen die Version dort, diese
 Chronik und die Migrations-/Backup-Tests gemeinsam aktualisieren. Ältere
 Speicherstände werden beim nächsten Schreiben auf die aktuelle Version
@@ -33,17 +33,17 @@ versionsgebundene Sicherung an. Höhere unbekannte Versionen werden abgelehnt.
 | 21 | Spielerausstieg und Folgezustand | Kein Ausstieg für ältere Turniere |
 | 22 | Begrenzte Round-Robin-Konfiguration | Bestehende Etappen behalten ihre bisherige Konfiguration |
 | 23 | Kein eigenständiger JSON-Schemawechsel in der Release-Historie belegt | Bekannte Felder bleiben erhalten |
+| 24 | In `v1.0.3+3` als Versionsstand verwendet; die Serialisierung enthält zusätzlich explizit `countsForRanking` | `v1.0.3+3` und spätere Leser kennen die Felder |
 
 Der veröffentlichte Tag `v1.0.3+3` setzte die Versionskonstante auf 24;
-`v1.0.4+4` setzte sie ohne passende JSON-Migration auf 23 zurück. Das ist
-kein Beleg, dass beliebige Version-24-Dokumente als Version 23 lesbar sind.
-Die eng begrenzte Recovery akzeptiert Version 24 nur, wenn die vollständige
-Datei nach Ausklammern ausschließlich des Wurzelfelds `schemaVersion`
-semantisch exakt mit der benachbarten `tournaments.json.v22.bak` übereinstimmt.
-Fehlt dieser Beleg, ist die Sicherung ungültig/zu groß oder weicht sie ab,
-bleibt das Dokument gesperrt und unverändert. Die Sicherungsdatei wird nie
-geändert. Beim späteren Speichern werden `.bak` und `.v24.bak` angelegt, bevor
-die aktuelle Version 23 geschrieben wird.
+`v1.0.4+4` senkte sie ohne eine entsprechende JSON-Migration auf 23 zurück.
+Das war eine Lesergrenzen-Regression, nicht ein belegter Schema-Rückschritt:
+`CreatedTournament`-Serialisierung blieb strukturell kompatibel; v1.0.3 schrieb
+`countsForRanking` explizit und die v1.0.5-Leser erhält dieses Feld. Die aktive
+Versionskonstante ist daher wieder 24. Schema-24-Dateien bleiben unter dieser
+Version erhalten; bei einem späteren Schreibvorgang wird die bisherige Datei
+zunächst als `.bak` gesichert. Die separate `.v22.bak` aus einem anderen
+Speicherpfad ist für die Schema-24-Kompatibilität nicht erforderlich.
 
 Die markierten historischen Lücken sind absichtlich kenntlich gemacht und
 sollten bei einer Änderung dieser alten Formate nur anhand nachprüfbarer

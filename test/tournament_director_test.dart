@@ -199,7 +199,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 23);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 24);
     },
   );
   testWidgets('director dashboard survives width changes', (
