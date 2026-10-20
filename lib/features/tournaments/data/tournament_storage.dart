@@ -13,10 +13,10 @@ class TournamentStorage {
   TournamentStorage({File? file}) : _file = file;
 
   final File? _file;
-  static const _schemaVersion = 23;
-  static const _recoverableSchemaVersion = 24;
-  static const recoveryProofSchemaVersion = 22;
-  static const _maximumRecoveryProofBytes = 128 * 1024 * 1024;
+  // v1.0.3 wrote this schema; v1.0.4 lowered the reader limit without a
+  // corresponding data-format change or migration.
+  static const _schemaVersion = 24;
+  static const _maximumDocumentBytes = 128 * 1024 * 1024;
 
   Future<T> _locked<T>(Future<T> Function() action) =>
       StorageAccess.run(action);
@@ -24,7 +24,7 @@ class TournamentStorage {
   Future<Map<String, dynamic>> _readDocument() async {
     final file = await _storageFile();
     if (!await file.exists()) return {};
-    if (await file.length() > _maximumRecoveryProofBytes) {
+    if (await file.length() > _maximumDocumentBytes) {
       throw const FormatException(
         'Turnierspeicher überschreitet die maximale Dateigröße. '
         'Die Originaldatei wurde nicht verändert.',
@@ -38,25 +38,13 @@ class TournamentStorage {
       throw const FormatException('Ungültiger Turnierspeicher');
     }
     final version = decoded['schemaVersion'] ?? 1;
-    if (version is! int || version < 1) {
+    if (version is! int || version < 1 || version > _schemaVersion) {
       throw FormatException(
         'Turnierspeicher-Version $version wird nicht unterstützt '
         '(unterstützt werden 1 bis $_schemaVersion). '
         'Die Datei wurde nicht verändert. '
         'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
       );
-    }
-    if (version > _schemaVersion) {
-      final recoveryFailure = version == _recoverableSchemaVersion
-          ? await _schema24RecoveryFailure(file, decoded)
-          : 'Es gibt keine belegte Migration für diese Version.';
-      if (recoveryFailure != null) {
-        throw FormatException(
-          'Turnierspeicher-Version $version wird nicht unterstützt '
-          '(aktuell $_schemaVersion). $recoveryFailure '
-          'Die Originaldatei wurde nicht verändert.',
-        );
-      }
     }
     final tournaments = decoded['tournaments'];
     if (tournaments != null &&
@@ -65,59 +53,6 @@ class TournamentStorage {
       throw const FormatException('Beschädigte Turnierliste');
     }
     return decoded;
-  }
-
-  Future<String?> _schema24RecoveryFailure(
-    File source,
-    Map<String, dynamic> document,
-  ) async {
-    final proof = File('${source.path}.v$recoveryProofSchemaVersion.bak');
-    if (!await proof.exists()) {
-      return 'Die passende Sicherung ${proof.uri.pathSegments.last} fehlt.';
-    }
-    try {
-      if (await proof.length() > _maximumRecoveryProofBytes) {
-        return 'Die Sicherung ${proof.uri.pathSegments.last} überschreitet '
-            'die maximale Vergleichsgröße.';
-      }
-      final decodedProof = jsonDecode(await proof.readAsString());
-      if (decodedProof is! Map<String, dynamic> ||
-          decodedProof['schemaVersion'] is! int ||
-          decodedProof['schemaVersion'] != recoveryProofSchemaVersion) {
-        return 'Die Sicherung ${proof.uri.pathSegments.last} ist ungültig '
-            'oder hat nicht Version $recoveryProofSchemaVersion.';
-      }
-      if (jsonEncode(_normalizeForRecoveryComparison(document)) !=
-          jsonEncode(_normalizeForRecoveryComparison(decodedProof))) {
-        return 'Die Sicherung ${proof.uri.pathSegments.last} weicht vom '
-            'Turnierspeicher ab.';
-      }
-      return null;
-    } on FormatException {
-      return 'Die Sicherung ${proof.uri.pathSegments.last} enthält kein '
-          'gültiges JSON.';
-    } on FileSystemException {
-      return 'Die Sicherung ${proof.uri.pathSegments.last} kann nicht '
-          'gelesen werden.';
-    }
-  }
-
-  Object? _normalizeForRecoveryComparison(Object? value, {bool root = true}) {
-    if (value is Map) {
-      final keys = value.keys.cast<String>().toList()..sort();
-      return {
-        for (final key in keys)
-          if (!root || key != 'schemaVersion')
-            key: _normalizeForRecoveryComparison(value[key], root: false),
-      };
-    }
-    if (value is List) {
-      return [
-        for (final item in value)
-          _normalizeForRecoveryComparison(item, root: false),
-      ];
-    }
-    return value;
   }
 
   Future<void> _writeDocument(Map<String, dynamic> document) async {

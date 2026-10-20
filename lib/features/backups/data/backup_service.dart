@@ -208,18 +208,6 @@ class BackupService {
         await file.writeAsBytes(entry.value!, flush: true);
         switch (entry.key) {
           case 'tournaments.json':
-            final recoveryProof = File(
-              '${files['tournaments.json']!.path}.v'
-              '${TournamentStorage.recoveryProofSchemaVersion}.bak',
-            );
-            if (await recoveryProof.exists()) {
-              if (await recoveryProof.length() > maximumBytes) {
-                throw const FormatException(
-                  'Die v22-Sicherung für den Turnierspeicher ist zu groß.',
-                );
-              }
-              await recoveryProof.copy('${file.path}.v22.bak');
-            }
             count = (await TournamentStorage(
               file: file,
             ).loadTournaments()).length;

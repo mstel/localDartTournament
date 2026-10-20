@@ -1,3 +1,21 @@
+# Dart Tournament Manager 1.0.6+7
+
+## Fehlerbehebung: Schema-24-Turnierdaten
+
+- Stellt die Unterstützung für Turnierspeicher-Schema 24 wieder her. Version
+  24 wurde von `v1.0.3+3` geschrieben; `v1.0.4+4` hatte lediglich die
+  akzeptierte Versionsgrenze auf 23 zurückgesetzt.
+- Erhält beim Laden und erneuten Speichern den expliziten
+  `countsForRanking`-Wert aus Schema-24-Datensätzen.
+- Benötigt für Schema 24 keine `.v22.bak` aus einem anderen AppData-Pfad.
+  Beim ersten späteren Speichern wird die vorhandene Turnierdatei wie üblich
+  als `.bak` gesichert.
+- Höhere unbekannte Speicherversionen bleiben geschützt und werden abgelehnt.
+
+Vor dem Update die vollständige Sicherung von
+`%APPDATA%\DartTournamentManager` aufbewahren. Keine Turnierdatei oder
+Sicherung löschen oder durch einen älteren Stand ersetzen.
+
 # Dart Tournament Manager 1.0.5+6
 
 ## Fehlerbehebungen
