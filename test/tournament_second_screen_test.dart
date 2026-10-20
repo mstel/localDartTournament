@@ -118,6 +118,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('priority notices show player names instead of profile IDs', (
+    tester,
+  ) async {
+    final anna = TournamentPlayer(
+      profileId: 'profile-anna-91',
+      name: 'Anna',
+      isGenerated: false,
+    );
+    final ben = TournamentPlayer(
+      profileId: 'profile-ben-37',
+      name: 'Ben',
+      isGenerated: false,
+    );
+    final caro = TournamentPlayer(
+      profileId: 'profile-caro-52',
+      name: 'Caro',
+      isGenerated: false,
+    );
+    final tournament = CreatedTournament(
+      name: 'TV-Namen-Test',
+      players: [anna, ben, caro],
+      stages: const [],
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppenphase',
+          groupPlayType: 'round_robin',
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: [anna, ben, caro],
+              matches: [
+                GroupMatch(homePlayer: anna, awayPlayer: ben, round: 1),
+                GroupMatch(homePlayer: anna, awayPlayer: caro, round: 2),
+              ],
+            ),
+          ],
+          qualificationPlan: null,
+          tieBreakers: defaultGroupTieBreakers,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(tournament: tournament),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Priorität: Anna'), findsOneWidget);
+    expect(find.textContaining('profile-anna-91'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('keeps preview visible when switching the right-side panel', (
     tester,
   ) async {

@@ -6,7 +6,6 @@ import '../../../domain/tournament_models.dart';
 enum StageViewMode {
   dashboard,
   results,
-  statistics,
   settings,
   director,
   overview,
@@ -176,11 +175,6 @@ class StageViewModeSwitch extends StatelessWidget {
           StageViewMode.results,
           'Ergebnisse',
           Icons.sports_score_outlined,
-        ),
-        const SportSection(
-          StageViewMode.statistics,
-          'Statistik',
-          Icons.bar_chart,
         ),
         if (canLead)
           const SportSection(

@@ -1,3 +1,31 @@
+# Dart Tournament Manager 1.0.7+8
+
+## Wiederhergestellte Funktionen und Kompatibilität
+
+- Stellt Ranglisten-Navigation, Spielernamen im TV-Modus, interaktive
+  Elo-Turnierpunkte, Turniersiege und Turnierquote im Profil sowie die
+  Dashboard-Übersicht wieder her.
+- Behebt die Ranglisten-Abwahl in laufenden Turnieren und verhindert
+  konkurrierende doppelte Speichervorgänge.
+- Unterstützt das historisch belegte Einstellungsformat Schema 3. Unbekannte
+  Formate bleiben abgelehnt; Laden allein verändert die Quelldatei nicht.
+- Unterstützt Turnierspeicher-Schema 24 und verbessert die
+  Aktivierungsbestätigung des Windows-Updaters samt Fallback.
+- Ergänzt Regressionstests für UI-Parität, Einstellungen, Gruppen-/Swiss-
+  Siegerregeln und den Windows-Update-Handoff.
+
+## Datensicherheit
+
+Vor dem Update die vollständige Sicherung von
+`%APPDATA%\DartTournamentManager` aufbewahren. Keine Turnierdatei oder
+Sicherung löschen oder durch einen älteren Stand ersetzen.
+
+Lokale Gerätebestände werden nicht automatisch zusammengeführt oder gegenseitig
+überschrieben. Bei unterschiedlichen Turnierzahlen jede Gerätesicherung
+getrennt behalten und den kanonischen Stand vor einem manuellen Abgleich
+bewusst festlegen. Unbekannte höhere Speicherformate bleiben geschützt und
+werden abgelehnt.
+
 # Dart Tournament Manager 1.0.6+7
 
 ## Fehlerbehebung: Schema-24-Turnierdaten

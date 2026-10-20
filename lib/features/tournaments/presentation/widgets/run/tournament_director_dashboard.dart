@@ -97,6 +97,74 @@ class _TournamentDirectorDashboardState
       ),
     ),
   );
+
+  Iterable<GroupMatch> _stageMatches(TournamentRunStage stage) sync* {
+    if (stage is GroupTournamentRunStage) {
+      for (final group in stage.groups) {
+        yield* group.matches;
+        yield* group.knockoutRounds.expand((round) => round);
+        yield* group.placementMatches;
+      }
+    } else if (stage is KnockoutTournamentRunStage) {
+      yield* stage.matches;
+      yield* stage.placementMatches;
+    }
+  }
+
+  Widget _stageProgressPanel(CreatedTournament tournament) => _box([
+    Text(
+      'Fortschritt nach Etappen',
+      style: Theme.of(context).textTheme.titleLarge,
+    ),
+    const SizedBox(height: 8),
+    for (final stage in tournament.runStages) ...[
+      Builder(
+        builder: (context) {
+          final matches = _stageMatches(
+            stage,
+          ).where((match) => match.hasPlayers).toList();
+          final completed = matches.where((match) => match.isResolved).length;
+          final progress = matches.isEmpty ? 0.0 : completed / matches.length;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('${stage.name} · $completed von ${matches.length}'),
+                const SizedBox(height: 4),
+                LinearProgressIndicator(value: progress),
+              ],
+            ),
+          );
+        },
+      ),
+    ],
+  ]);
+
+  Widget _bestPerformancePanel(CreatedTournament tournament) {
+    final performances = [
+      for (final stage in tournament.runStages)
+        for (final match in _stageMatches(stage)) ...match.bestPerformances,
+    ];
+    return _box([
+      Text('Bestleistungen', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 8),
+      if (performances.isEmpty)
+        const Text('Noch keine Bestleistungen erfasst.')
+      else
+        for (final performance in performances.take(8))
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.military_tech_outlined),
+            title: Text(
+              '${performance.label}${performance.value == null ? '' : ' · ${performance.value}'}',
+            ),
+            subtitle: Text(performance.playerName),
+          ),
+    ]);
+  }
+
   Widget _button(
     String label,
     VoidCallback? action, {
@@ -440,18 +508,40 @@ class _TournamentDirectorDashboardState
               ),
               const SizedBox(height: 12),
             ],
-            heroBoard,
-            const SizedBox(height: 12),
-            notices,
-            const SizedBox(height: 12),
-            status,
             if (wide)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [], // Boards and games UI removed for refactor
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        status,
+                        const SizedBox(height: 12),
+                        notices,
+                        const SizedBox(height: 12),
+                        _stageProgressPanel(t),
+                        const SizedBox(height: 12),
+                        _bestPerformancePanel(t),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 7, child: heroBoard),
+                ],
               )
-            else
-              const SizedBox.shrink(),
+            else ...[
+              heroBoard,
+              const SizedBox(height: 12),
+              notices,
+              const SizedBox(height: 12),
+              status,
+              const SizedBox(height: 12),
+              _stageProgressPanel(t),
+              const SizedBox(height: 12),
+              _bestPerformancePanel(t),
+            ],
           ],
         );
       },

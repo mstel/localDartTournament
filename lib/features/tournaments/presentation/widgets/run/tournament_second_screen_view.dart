@@ -1360,6 +1360,14 @@ class _TournamentSecondScreenViewState
       }
     }
 
+    final namesById = <String, String>{
+      for (final player in t.players) ...{
+        if (player.profileId != null) player.profileId!: player.name,
+        player.name: player.name,
+        for (final individual in player.individuals)
+          individual.profileId ?? individual.name: individual.name,
+      },
+    };
     final preferredPlayers = <String>{};
     String? priorityNotice;
     if (openCounts.isNotEmpty) {
@@ -1371,8 +1379,11 @@ class _TournamentSecondScreenViewState
               .where((entry) => entry.value == maxOpen)
               .map((entry) => entry.key),
         );
+        final preferredNames = preferredPlayers
+            .map((id) => namesById[id] ?? 'Spieler')
+            .toList();
         priorityNotice =
-            'Priorität: ${preferredPlayers.join(', ')} hat noch $maxOpen offene Partien (Schnitt: $minOpen). Bevorzugt aufrufen!';
+            'Priorität: ${preferredNames.join(', ')} hat noch $maxOpen offene Partien (Schnitt: $minOpen). Bevorzugt aufrufen!';
       }
     }
 
@@ -1392,8 +1403,14 @@ class _TournamentSecondScreenViewState
                   context,
                   matches[i],
                   isPreferred:
-                      preferredPlayers.contains(matches[i].homePlayer?.name) ||
-                      preferredPlayers.contains(matches[i].awayPlayer?.name),
+                      preferredPlayers.contains(
+                        matches[i].homePlayer?.profileId ??
+                            matches[i].homePlayer?.name,
+                      ) ||
+                      preferredPlayers.contains(
+                        matches[i].awayPlayer?.profileId ??
+                            matches[i].awayPlayer?.name,
+                      ),
                 ),
             ],
           );

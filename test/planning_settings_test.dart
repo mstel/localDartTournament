@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,40 @@ void main() {
       expect((await storage.load()).minutes501DoubleOut, 10);
       await file.writeAsString('{"schemaVersion":99,"parameters":{}}');
       await expectLater(storage.load(), throwsFormatException);
+      expect(await file.readAsString(), '{"schemaVersion":99,"parameters":{}}');
+    },
+  );
+
+  test(
+    'schema 3 settings load without rewriting and remain schema 3 on save',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'planning_settings_schema3_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/settings.json');
+      const original =
+          '{"schemaVersion":3,"parameters":{"minutes501DoubleOut":17,'
+          '"maximumSuggestions":7}}';
+      await file.writeAsString(original);
+
+      final storage = PlanningSettingsStorage(file: file);
+      final parameters = await storage.load();
+      expect(parameters.minutes501DoubleOut, 17);
+      expect(parameters.maximumSuggestions, 7);
+      expect(await file.readAsString(), original);
+
+      await storage.save(parameters);
+      final backup = File('${file.path}.bak');
+      expect(await backup.readAsString(), original);
+      final saved =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      expect(saved['schemaVersion'], 3);
+      final roundTripped = TournamentPlanningParameters.fromJson(
+        saved['parameters'] as Map<String, dynamic>,
+      );
+      expect(roundTripped.minutes501DoubleOut, 17);
+      expect(roundTripped.maximumSuggestions, 7);
     },
   );
 
