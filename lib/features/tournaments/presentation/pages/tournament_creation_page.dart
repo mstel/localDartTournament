@@ -9,6 +9,7 @@ class TournamentCreationPage extends StatefulWidget {
 
 class _TournamentCreationPageState extends State<TournamentCreationPage> {
   bool _showEntryChoices = true;
+  bool _cameFromFormatPlanner = false;
   bool _countsForRanking = false;
   final List<String> _localRankingIds = [];
   final _tournamentNameController = TextEditingController();
@@ -19,11 +20,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final _groupQualifierCountController = TextEditingController(text: '8');
   final _bestOfQualifierCountController = TextEditingController(text: '0');
   final _database = LocalAppDatabase();
-  late final Future<List<LocalRanking>> _localRankings =
-      _database.loadLocalRankings();
+  late final Future<List<LocalRanking>> _localRankings = _database
+      .loadLocalRankings();
   final Set<int> _selectedExtraGroups = {};
   final List<TournamentPlayer> _players = [];
-  int _plannedBoardCount = 1;
+  int _plannedBoardCount = 4;
   final List<TournamentStage> _stages = [];
   final List<String> _groupTieBreakers = List<String>.from(
     defaultGroupTieBreakers,
@@ -64,6 +65,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       : _lossLimitForStageType(_selectedStageType);
   String _selectedStageType = 'groups';
   String _knockoutSeedingMode = 'cross';
+  GroupPlayerAllocationMode _groupAllocationMode =
+      GroupPlayerAllocationMode.strengthLevels;
   bool _groupDrawOnStart = false;
   bool _knockoutDrawOnStart = false;
   bool _stageNameWasEdited = false;
@@ -1016,9 +1019,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         context: context,
         builder: (context) => PlayerProfilePickerDialog(
           profiles: profiles,
-          createPlayer: (name) => _database.createPlayerProfile(
-            displayName: name,
-          ),
+          createPlayer: (name) =>
+              _database.createPlayerProfile(displayName: name),
           selectedProfileIds: {
             for (final player in _players.expand((p) => p.individuals))
               if (player.profileId != null) player.profileId!,
@@ -1096,6 +1098,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   Future<void> _renamePlayer(int index) async {
+    if (_players[index].profileId != null || _players[index].isTeam) return;
     final newName = await showDialog<String>(
       context: context,
       builder: (context) => RenamePlayerDialog(player: _players[index]),
@@ -1111,6 +1114,82 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         isGenerated: false,
       );
     });
+  }
+
+  Future<void> _assignPlayerFromCatalog(int index) async {
+    final profiles = await _database.loadPlayerProfiles();
+    if (!mounted) return;
+    final assignedIds = _players
+        .asMap()
+        .entries
+        .where((entry) => entry.key != index)
+        .expand((entry) => entry.value.individuals)
+        .map((player) => player.profileId)
+        .whereType<String>()
+        .toSet();
+    final available = profiles
+        .where((profile) => !assignedIds.contains(profile.id))
+        .toList();
+    if (available.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Keine freien Spielerprofile vorhanden.')),
+      );
+      return;
+    }
+    final profile = await showDialog<PlayerProfile>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Spieler aus Katalog zuweisen'),
+        children: [
+          for (final candidate in available)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(candidate),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(candidate.displayName),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (profile == null || !mounted) return;
+    setState(() {
+      _players[index] = _players[index].copyWith(
+        name: profile.displayName,
+        profileId: profile.id,
+        isGenerated: false,
+      );
+    });
+  }
+
+  Future<Map<String, int>> _loadGroupRatings() async {
+    if (_players.every((player) => player.profileId == null)) {
+      return const {};
+    }
+    final rankings = (await _localRankings)
+        .where(
+          (ranking) =>
+              ranking.type == RankingType.elo &&
+              (_localRankingIds.isEmpty ||
+                  _localRankingIds.contains(ranking.id)),
+        )
+        .toList();
+    final ratingsByPlayer = <String, List<int>>{};
+    for (final ranking in rankings) {
+      final snapshot = await LocalRankingEloService(
+        database: _database,
+      ).calculate(ranking);
+      for (final entry in snapshot.entries) {
+        ratingsByPlayer.putIfAbsent(entry.id, () => []).add(entry.rating);
+      }
+    }
+    return {
+      for (final entry in ratingsByPlayer.entries)
+        entry.key:
+            (entry.value.reduce((sum, rating) => sum + rating) /
+                    entry.value.length)
+                .round(),
+    };
   }
 
   Widget _placementSelection() {
@@ -1407,6 +1486,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       builder: (_) => const TournamentFormatPlannerDialog(),
     );
     if (suggestion == null || !mounted) return;
+    _cameFromFormatPlanner = true;
     if (suggestion.configurations.isNotEmpty) {
       if (_players.isNotEmpty &&
           _players.length != suggestion.participantCount) {
@@ -1584,7 +1664,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ? 'Neues Turnier'
           : _tournamentNameController.text.trim();
       final stages = List<TournamentStage>.unmodifiable(_stages);
-      final runStages = _buildRunStages(stages);
+      final groupRatings =
+          _groupAllocationMode == GroupPlayerAllocationMode.random
+          ? const <String, int>{}
+          : await _loadGroupRatings();
+      final runStages = _buildRunStages(stages: stages, ratings: groupRatings);
       tournament = controller.createTournament(
         boardCount: _plannedBoardCount,
         countsForRanking: _countsForRanking,
@@ -1616,7 +1700,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     );
   }
 
-  List<TournamentRunStage> _buildRunStages([List<TournamentStage>? stages]) {
+  List<TournamentRunStage> _buildRunStages({
+    List<TournamentStage>? stages,
+    Map<String, int> ratings = const {},
+  }) {
     final sourceStages = stages ?? _stages;
     final runStages = <TournamentRunStage>[];
     var incomingPlayers = List<TournamentPlayer>.from(_players);
@@ -1629,11 +1716,18 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         stages: sourceStages,
       );
       if (stage.type == 'groups') {
-        final groupPlayers = _playersInStageOrder(
-          incomingPlayers,
-          stage.groupSlotOrder,
-          stage.groupSizes.fold<int>(0, (sum, size) => sum + size),
-        );
+        final groupPlayers = stage.groupSlotOrder.isNotEmpty
+            ? _playersInStageOrder(
+                incomingPlayers,
+                stage.groupSlotOrder,
+                stage.groupSizes.fold<int>(0, (sum, size) => sum + size),
+              )
+            : const GroupPlayerAllocationEngine().allocate(
+                players: incomingPlayers,
+                groupSizes: stage.groupSizes,
+                mode: _groupAllocationMode,
+                ratings: ratings,
+              );
         final groups = _buildTournamentGroupsForPlayers(
           stage,
           groupPlayers,
@@ -2011,9 +2105,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         appBar: AppBar(title: const Text('Turnier erstellen')),
         body: CreationEntryChoices(
           onLeague: () => Navigator.of(context).pushReplacement(
-            MaterialPageRoute<void>(
-              builder: (_) => const LeagueMatchPage(),
-            ),
+            MaterialPageRoute<void>(builder: (_) => const LeagueMatchPage()),
           ),
           onFind: _openFormatPlanner,
           onExpert: () => setState(() => _showEntryChoices = false),
@@ -2058,7 +2150,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             OutlinedButton.icon(
               onPressed: _openFormatPlanner,
               icon: const Icon(Icons.auto_awesome_outlined),
-              label: const Text('Passende Turnierform finden'),
+              label: const Text('Passende Turnierform'),
             ),
             const SizedBox(height: 24),
             ExpertSetupSection(
@@ -2077,54 +2169,60 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 ),
                 const SizedBox(height: 32),
                 SwitchListTile(
-                    title: const Text('Für Rangliste/n berücksichtigen'),
-                    subtitle: const Text(
-                      'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
-                    ),
-                    value: _countsForRanking,
-                    onChanged: (value) => setState(() {
-                      _countsForRanking = value;
-                      if (!value) _localRankingIds.clear();
-                    }),
+                  title: const Text('Für Rangliste/n berücksichtigen'),
+                  subtitle: const Text(
+                    'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
                   ),
-                  if (_countsForRanking)
-                    FutureBuilder<List<LocalRanking>>(
-                      future: _localRankings,
-                      builder: (context, snapshot) {
-                        final rankings = snapshot.data ?? const <LocalRanking>[];
-                        return Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Ranglisten auswählen', style: Theme.of(context).textTheme.titleMedium),
-                                if (snapshot.connectionState == ConnectionState.waiting)
-                                  const LinearProgressIndicator(),
-                                if (rankings.isEmpty)
-                                  const Padding(
-                                    padding: EdgeInsets.all(8),
-                                    child: Text('Lege zuerst eine Rangliste im Hauptmenü an.'),
+                  value: _countsForRanking,
+                  onChanged: (value) => setState(() {
+                    _countsForRanking = value;
+                    if (!value) _localRankingIds.clear();
+                  }),
+                ),
+                if (_countsForRanking)
+                  FutureBuilder<List<LocalRanking>>(
+                    future: _localRankings,
+                    builder: (context, snapshot) {
+                      final rankings = snapshot.data ?? const <LocalRanking>[];
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ranglisten auswählen',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting)
+                                const LinearProgressIndicator(),
+                              if (rankings.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Text(
+                                    'Lege zuerst eine Rangliste im Hauptmenü an.',
                                   ),
-                                for (final ranking in rankings)
-                                  CheckboxListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(ranking.name),
-                                    value: _localRankingIds.contains(ranking.id),
-                                    onChanged: (selected) => setState(() {
-                                      if (selected == true) {
-                                        _localRankingIds.add(ranking.id);
-                                      } else {
-                                        _localRankingIds.remove(ranking.id);
-                                      }
-                                    }),
-                                  ),
-                              ],
-                            ),
+                                ),
+                              for (final ranking in rankings)
+                                CheckboxListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(ranking.name),
+                                  value: _localRankingIds.contains(ranking.id),
+                                  onChanged: (selected) => setState(() {
+                                    if (selected == true) {
+                                      _localRankingIds.add(ranking.id);
+                                    } else {
+                                      _localRankingIds.remove(ranking.id);
+                                    }
+                                  }),
+                                ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
+                  ),
                 Text(
                   'Spieler',
                   style: textTheme.titleLarge?.copyWith(
@@ -2191,6 +2289,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 TeamParticipantList(
                   players: _players,
                   onRename: _renamePlayer,
+                  onAssignProfile: _assignPlayerFromCatalog,
+                  useCatalogAssignment: _cameFromFormatPlanner,
                   onRemove: _removePlayer,
                   onMerge: _mergePlayers,
                   onSplit: _splitTeam,
@@ -2409,6 +2509,36 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     summary:
                         'Spieltypen je Gruppe, Auslosung und Wiederholungen',
                     children: [
+                      DropdownButtonFormField<GroupPlayerAllocationMode>(
+                        key: const ValueKey('group-player-allocation'),
+                        isExpanded: true,
+                        initialValue: _groupAllocationMode,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Spieler auf Gruppen verteilen',
+                          prefixIcon: Icon(Icons.groups_2_outlined),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: GroupPlayerAllocationMode.strengthLevels,
+                            child: Text('Leistungsstufen trennen'),
+                          ),
+                          DropdownMenuItem(
+                            value: GroupPlayerAllocationMode.balanced,
+                            child: Text('Gleichstarke Gruppen'),
+                          ),
+                          DropdownMenuItem(
+                            value: GroupPlayerAllocationMode.random,
+                            child: Text('Zufall'),
+                          ),
+                        ],
+                        onChanged: (mode) {
+                          if (mode != null) {
+                            setState(() => _groupAllocationMode = mode);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
                       GroupPlayTypeSetup(
                         groupSizes: groupSizes,
                         playTypes: _playTypesForGroupSizes(groupSizes),

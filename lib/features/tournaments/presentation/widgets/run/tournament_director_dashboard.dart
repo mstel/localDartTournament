@@ -85,16 +85,6 @@ class _TournamentDirectorDashboardState
       ),
     ),
   );
-  Widget _button(
-    String label,
-    VoidCallback? action, {
-    IconData icon = Icons.arrow_forward,
-  }) => OutlinedButton.icon(
-    style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
-    onPressed: _busy ? null : action,
-    icon: Icon(icon),
-    label: Text(label),
-  );
   String _duration(Duration d) =>
       '${d.inHours} h ${d.inMinutes.remainder(60)} min';
   String _clock(DateTime t) =>
@@ -275,7 +265,6 @@ class _TournamentDirectorDashboardState
             '$completed von $totalGames Spielen fertig ($progressPct%)',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          Text('${active.length - completed} offen'),
           Text('${state.schedule.running.length} laufen gerade'),
           Text('${state.freeBoards.length} Boards frei'),
           Text(
@@ -302,17 +291,6 @@ class _TournamentDirectorDashboardState
         'Hinweise & Empfehlungen',
         style: Theme.of(context).textTheme.titleLarge,
       ),
-      if (widget.saveError != null) ...[
-        Text(
-          widget.saveError!,
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
-        ),
-        _button(
-          'Speichern erneut versuchen',
-          () => _act(widget.onChange),
-          icon: Icons.save_outlined,
-        ),
-      ],
       if (_actionError != null) Text(_actionError!),
       for (final notice in flowNotices)
         Builder(
@@ -322,16 +300,16 @@ class _TournamentDirectorDashboardState
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: colors.tertiaryContainer,
+                color: colors.secondaryContainer,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: colors.tertiary),
+                border: Border.all(color: colors.outlineVariant),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    Icons.priority_high,
-                    color: colors.onTertiaryContainer,
+                    Icons.info_outline,
+                    color: colors.onSecondaryContainer,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -339,8 +317,8 @@ class _TournamentDirectorDashboardState
                     child: Text(
                       notice,
                       style: TextStyle(
-                        color: colors.onTertiaryContainer,
-                        fontWeight: FontWeight.w700,
+                        color: colors.onSecondaryContainer,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -376,55 +354,71 @@ class _TournamentDirectorDashboardState
         final wide =
             constraints.maxWidth >= 1000 &&
             MediaQuery.textScalerOf(context).scale(16) <= 24;
+        final errorBanner = [
+          if (widget.saveError != null) ...[
+            Card(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.saveError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Speichern erneut versuchen'),
+                      onPressed: () => _act(widget.onChange),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ];
+        if (wide) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ...errorBanner,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [status, const SizedBox(height: 12), notices],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 7, child: heroBoard),
+                ],
+              ),
+            ],
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.saveError != null) ...[
-              Card(
-                color: Theme.of(context).colorScheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          widget.saveError!,
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onErrorContainer,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Speichern erneut versuchen'),
-                        onPressed: () => _act(widget.onChange),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
+            ...errorBanner,
             heroBoard,
             const SizedBox(height: 12),
             notices,
             const SizedBox(height: 12),
             status,
-            if (wide)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [], // Boards and games UI removed for refactor
-              )
-            else
-              const SizedBox.shrink(),
           ],
         );
       },

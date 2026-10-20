@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../../shared/widgets/adaptive_content.dart';
 import '../../../../statistics/domain/best_performance.dart';
-import '../../../../statistics/domain/tournament_player_statistics.dart';
-import '../../../../statistics/presentation/tournament_statistics_view.dart';
 import '../../../domain/tournament_models.dart';
 
 class TournamentResultsStatistics extends StatelessWidget {
@@ -11,9 +8,6 @@ class TournamentResultsStatistics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final players = const TournamentStatisticsCalculator().calculate([
-      tournament,
-    ]);
     final performances = [
       for (final stage in tournament.runStages)
         if (stage is KnockoutTournamentRunStage)
@@ -35,15 +29,29 @@ class TournamentResultsStatistics extends StatelessWidget {
       children: [
         Text('Bestleistungen', style: heading),
         const SizedBox(height: 8),
-        AdaptiveTileLayout(
-          minTileWidth: 190,
-          children: [
-            for (final type in BestPerformanceType.values)
-              _PerformanceCountCard(
-                type: type,
-                count: performances.where((item) => item.type == type).length,
-              ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 640 ? 4 : 2;
+            final spacing = 8.0;
+            final tileWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final type in BestPerformanceType.values)
+                  SizedBox(
+                    width: tileWidth,
+                    child: _PerformanceCountCard(
+                      type: type,
+                      count: performances
+                          .where((item) => item.type == type)
+                          .length,
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
         if (performances.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -57,16 +65,6 @@ class TournamentResultsStatistics extends StatelessWidget {
                   : Text('${performance.value}'),
             ),
         ],
-        const SizedBox(height: 20),
-        Text('Spielerstatistiken', style: heading),
-        const SizedBox(height: 12),
-        if (players.isEmpty)
-          const Text('Noch keine abgeschlossenen Begegnungen gespeichert.'),
-        AdaptiveTileLayout(
-          children: [
-            for (final player in players) TournamentStatisticsCard(row: player),
-          ],
-        ),
       ],
     );
   }
@@ -81,7 +79,7 @@ class _PerformanceCountCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

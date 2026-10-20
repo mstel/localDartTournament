@@ -380,7 +380,7 @@ class RankingYearReviewImageGenerator {
     final footerPainter = TextPainter(
       text: TextSpan(
         text:
-            'Dart Turnierverwaltung · Erstellt am ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}',
+            'DartTournamentPro · Erstellt am ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}',
         style: TextStyle(color: muted, fontSize: 14),
       ),
       textDirection: TextDirection.ltr,

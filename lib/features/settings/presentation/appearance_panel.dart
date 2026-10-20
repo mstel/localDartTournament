@@ -71,9 +71,9 @@ class _AppearancePanelState extends State<AppearancePanel> {
               if (bytes != null)
                 Image.memory(bytes, width: 56, height: 56, fit: BoxFit.contain)
               else
-                const Icon(
+                Icon(
                   Icons.sports_score,
-                  color: Color(0xFF70E0BA),
+                  color: Theme.of(context).colorScheme.primary,
                   size: 40,
                 ),
               FilledButton.icon(

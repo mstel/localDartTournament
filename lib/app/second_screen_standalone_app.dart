@@ -16,7 +16,7 @@ class SecondScreenStandaloneApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Dart Turnieranzeige (2. Bildschirm)',
+      title: 'DartTournamentPro · Zweitbildschirm',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
       theme: buildDartTournamentTheme(),

@@ -61,6 +61,8 @@ void main() {
     expect(snapshot.entries.every((player) => player.matches == 1), isTrue);
     expect(snapshot.history['a'], hasLength(1));
     expect(snapshot.history['a']!.single.opponentName, 'Ben');
+    expect(snapshot.history['a']!.single.tournamentId, 'ranked-match');
+    expect(snapshot.history['a']!.single.matchIndex, 0);
   });
 
   test(

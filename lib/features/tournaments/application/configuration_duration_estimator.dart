@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../../../tournament_workspace.dart' show ProductionTournamentRuntime;
 import '../domain/tournament_models.dart';
 import '../domain/tournament_format_planner.dart';
@@ -12,11 +14,15 @@ class ConfigurationEstimate {
     this.variableMatches, [
     this.matchEndSeconds = const [],
     this.waitMinutes = 0,
+    this.matchSlots = 0,
+    this.idleMinutes = 0,
   ]);
   final int minutes, totalMatches, minimumMatches;
   final bool variableMatches;
   final List<int> matchEndSeconds;
   final double waitMinutes;
+  final int matchSlots;
+  final double idleMinutes;
 }
 
 /// Uses an isolated production runtime; never mutates or saves the draft.
@@ -54,6 +60,8 @@ class ConfigurationDurationEstimator {
     final planner = TournamentFormatPlanner(parameters: parameters);
     var minutes = 0.0;
     var waitMinutes = 0.0;
+    var idleMinutes = 0.0;
+    var matchSlots = 0;
     final matchEndSeconds = <int>[];
     var totalMatches = 0;
     var minimumMatches = 0;
@@ -101,17 +109,41 @@ class ConfigurationDurationEstimator {
           boardCount: boards,
         );
         final slots = schedule.isEmpty ? 0 : schedule.last.block + 1;
+        matchSlots += slots;
         final matchMinutes = planner.estimatedMatchMinutes(config.gameFormat);
+        final assignmentsPerBlock = <int, int>{};
         for (final assignment in schedule) {
-          matchEndSeconds.add(
-            ((minutes + (assignment.block + 1) * matchMinutes) * 60).round(),
+          assignmentsPerBlock.update(
+            assignment.block,
+            (count) => count + 1,
+            ifAbsent: () => 1,
           );
         }
-        minutes += slots * planner.estimatedMatchMinutes(config.gameFormat);
+        var elapsedStageMinutes = 0.0;
+        for (var block = 0; block < slots; block++) {
+          final idle = (boards - (assignmentsPerBlock[block] ?? 0)).clamp(
+            0,
+            boards,
+          );
+          idleMinutes += idle * parameters.boardIdleMinutes;
+          for (
+            var match = 0;
+            match < (assignmentsPerBlock[block] ?? 0);
+            match++
+          ) {
+            matchEndSeconds.add(
+              ((minutes + elapsedStageMinutes + matchMinutes) * 60).round(),
+            );
+          }
+          elapsedStageMinutes +=
+              matchMinutes + idle * parameters.boardIdleMinutes;
+        }
+        minutes += elapsedStageMinutes;
         totalMatches += entries.where((e) => e.match.hasPlayers).length;
         continue;
       }
       var blocks = 0;
+      var elapsedStageMinutes = 0.0;
       while (runtime.hasOpen(stage)) {
         final all = runtime
             .matches(stage)
@@ -121,10 +153,16 @@ class ConfigurationDurationEstimator {
             .where((entry) => entry.match.hasPlayers && !entry.match.isResolved)
             .toList();
         if (stage is GroupTournamentRunStage) {
-          for (final group in stage.groups.where((g) => g.playType == 'swiss')) {
-            for (final match in group.matches.where((m) => m.hasPlayers && !m.isResolved && m.round > 1)) {
+          for (final group in stage.groups.where(
+            (g) => g.playType == 'swiss',
+          )) {
+            for (final match in group.matches.where(
+              (m) => m.hasPlayers && !m.isResolved && m.round > 1,
+            )) {
               if (swissRounds.add(match.round)) {
-                final reserve = parameters.value(PlanningParameter.swissRoundWaitMinutes);
+                final reserve = parameters.value(
+                  PlanningParameter.swissRoundWaitMinutes,
+                );
                 minutes += reserve;
                 waitMinutes += reserve;
               }
@@ -140,11 +178,12 @@ class ConfigurationDurationEstimator {
         );
         final batch = schedule.where((assignment) => assignment.block == 0);
         if (batch.isEmpty) return null;
+        final batchAssignments = batch.toList();
         for (final assignment in batch) {
           matchEndSeconds.add(
             ((minutes +
-                        (blocks + 1) *
-                            planner.estimatedMatchMinutes(config.gameFormat)) *
+                        elapsedStageMinutes +
+                        planner.estimatedMatchMinutes(config.gameFormat)) *
                     60)
                 .round(),
           );
@@ -159,9 +198,17 @@ class ConfigurationDurationEstimator {
           }
         }
         blocks++;
+        elapsedStageMinutes +=
+            planner.estimatedMatchMinutes(config.gameFormat) +
+            max(0, boards - batchAssignments.length) *
+                parameters.boardIdleMinutes;
+        idleMinutes +=
+            max(0, boards - batchAssignments.length) *
+            parameters.boardIdleMinutes;
+        matchSlots++;
         runtime.advance();
       }
-      minutes += blocks * planner.estimatedMatchMinutes(config.gameFormat);
+      minutes += elapsedStageMinutes;
     }
     return ConfigurationEstimate(
       (minutes - 1e-9).ceil(),
@@ -170,6 +217,8 @@ class ConfigurationDurationEstimator {
       variableMatches,
       matchEndSeconds..sort(),
       waitMinutes,
+      matchSlots,
+      idleMinutes,
     );
   }
 
@@ -197,7 +246,8 @@ class ConfigurationDurationEstimator {
       for (var i = 0; i < stage.groups.length; i++) {
         final group = stage.groups[i];
         final games = group.playType == 'swiss'
-            ? group.matches.map((m) => m.round).toSet().length - (group.players.length.isOdd ? 1 : 0)
+            ? group.matches.map((m) => m.round).toSet().length -
+                  (group.players.length.isOdd ? 1 : 0)
             : group.playType == 'round_robin'
             ? group.players
                   .map(

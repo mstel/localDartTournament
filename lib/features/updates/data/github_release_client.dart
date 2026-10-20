@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
@@ -5,30 +6,69 @@ import '../domain/android_release.dart';
 import '../domain/update_platform.dart';
 
 class GitHubReleaseClient {
+  GitHubReleaseClient({Uri? releasesUri})
+    : _releasesUri =
+          releasesUri ??
+          Uri.https(
+            'api.github.com',
+            '/repos/${AndroidRelease.repository}/releases',
+            {'per_page': '100'},
+          );
+
+  final Uri _releasesUri;
+
   Future<AndroidRelease?> check(
     int installedBuild, {
     bool includePrereleases = false,
     UpdatePlatform platform = UpdatePlatform.android,
   }) async {
+    Object? lastError;
+    StackTrace? lastStackTrace;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await _checkOnce(
+          installedBuild,
+          includePrereleases: includePrereleases,
+          platform: platform,
+        );
+      } on SocketException catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+      } on HttpException catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+      } on TimeoutException catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+      }
+      if (attempt == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+    }
+    Error.throwWithStackTrace(lastError!, lastStackTrace!);
+  }
+
+  Future<AndroidRelease?> _checkOnce(
+    int installedBuild, {
+    required bool includePrereleases,
+    required UpdatePlatform platform,
+  }) async {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await client.getUrl(
-        Uri.https(
-          'api.github.com',
-          '/repos/${AndroidRelease.repository}/releases',
-          {'per_page': '100'},
-        ),
-      );
-      request.headers.set('User-Agent', 'DartTournamentManager');
+      final request = await client.getUrl(_releasesUri);
+      request.persistentConnection = false;
+      request.headers.set('User-Agent', 'DartTournamentPro');
       request.headers.set('Accept', 'application/vnd.github+json');
       final response = await request.close().timeout(
         const Duration(seconds: 20),
       );
       if (response.statusCode != 200) {
-        throw HttpException(
-          'GitHub antwortet mit ${response.statusCode}. Bitte später erneut prüfen.',
-        );
+        final guidance =
+            response.statusCode == 403 || response.statusCode == 429
+            ? 'GitHub begrenzt die Update-Anfragen. Bitte später erneut prüfen.'
+            : 'GitHub antwortet mit ${response.statusCode}. Bitte später erneut prüfen.';
+        throw UpdateCheckException(guidance);
       }
       final bytes = <int>[];
       await for (final chunk in response.timeout(const Duration(seconds: 20))) {
@@ -117,4 +157,13 @@ class GitHubReleaseClient {
       if (await temporary.exists()) await temporary.delete();
     }
   }
+}
+
+class UpdateCheckException implements Exception {
+  const UpdateCheckException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

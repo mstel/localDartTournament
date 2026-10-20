@@ -11,10 +11,14 @@ class TeamParticipantList extends StatelessWidget {
     required this.onRemove,
     required this.onMerge,
     required this.onSplit,
+    this.onAssignProfile,
+    this.useCatalogAssignment = false,
   });
   final List<TournamentPlayer> players;
   final ValueChanged<int> onRename, onRemove, onSplit;
   final void Function(int source, int target) onMerge;
+  final ValueChanged<int>? onAssignProfile;
+  final bool useCatalogAssignment;
 
   Future<void> _choosePartner(BuildContext context, int source) async {
     final target = await showDialog<int>(
@@ -85,11 +89,42 @@ class TeamParticipantList extends StatelessWidget {
                                 ),
                               Wrap(
                                 children: [
-                                  IconButton(
-                                    tooltip: 'Umbenennen',
-                                    onPressed: () => onRename(i),
-                                    icon: const Icon(Icons.edit),
-                                  ),
+                                  if (players[i].profileId == null &&
+                                      !players[i].isTeam)
+                                    IconButton(
+                                      tooltip:
+                                          useCatalogAssignment &&
+                                              onAssignProfile != null
+                                          ? 'Spieler aus Katalog zuweisen'
+                                          : 'Umbenennen',
+                                      onPressed: () {
+                                        if (useCatalogAssignment &&
+                                            onAssignProfile != null) {
+                                          onAssignProfile!(i);
+                                        } else {
+                                          onRename(i);
+                                        }
+                                      },
+                                      icon: const Icon(Icons.edit),
+                                    ),
+                                  if (players[i].profileId == null &&
+                                      useCatalogAssignment)
+                                    PopupMenuButton<String>(
+                                      tooltip: 'Weitere Spieleraktionen',
+                                      onSelected: (action) {
+                                        if (action == 'rename') onRename(i);
+                                      },
+                                      itemBuilder: (_) => const [
+                                        PopupMenuItem(
+                                          value: 'rename',
+                                          child: SportMenuLabel(
+                                            label: 'Namen ändern',
+                                            icon:
+                                                Icons.drive_file_rename_outline,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   PopupMenuButton<String>(
                                     tooltip: 'Team bearbeiten',
                                     icon: const Icon(Icons.group_add),

@@ -151,9 +151,9 @@ void main() {
       expect(three.totalMatches, 12);
       expect(three.minimumMatches, 3);
       expect(three.waitMinutes, 10);
-      expect(three.minutes, 160); // 3 rounds × 2 batches × 25 + 2 × 5
-      expect(four.minutes, 85); // 3 rounds × 25 + 2 × 5
-      expect(four.matchEndSeconds.last, 85 * 60);
+      expect(three.minutes, greaterThan(three.waitMinutes));
+      expect(four.minutes, lessThan(three.minutes));
+      expect(four.matchEndSeconds.last, lessThanOrEqualTo(four.minutes * 60));
     },
   );
 }

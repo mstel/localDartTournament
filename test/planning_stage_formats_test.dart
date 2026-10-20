@@ -56,16 +56,15 @@ void main() {
       );
       for (final s in multi) {
         final d = s.duration!;
-        double minutes(TournamentGameFormat f) =>
-            (f.x01Score == 301 ? 8 : 10) *
-            PlanningDuration.estimatedMatchLegs(f);
-        expect(d.matchMinutes, minutes(s.stages.first.format));
-        expect(d.knockoutMatchMinutes, minutes(s.stages.last.format));
         expect(
-          d.totalMinutes,
-          (d.groupSlots * d.matchMinutes - 1e-9).ceil() +
-              (d.knockoutSlots * d.knockoutMatchMinutes - 1e-9).ceil(),
+          d.matchMinutes,
+          planner.estimatedMatchMinutes(s.stages.first.format),
         );
+        expect(
+          d.knockoutMatchMinutes,
+          planner.estimatedMatchMinutes(s.stages.last.format),
+        );
+        expect(d.totalMinutes, d.groupMinutes + d.knockoutMinutes);
         expect(s.stages.every((stage) => stage.format.doubleIn), isTrue);
       }
     },

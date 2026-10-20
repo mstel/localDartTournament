@@ -25,15 +25,24 @@ class PlanningSettingsStorage {
       final target = await _file();
       if (!await target.exists()) return const TournamentPlanningParameters();
       final json = jsonDecode(await target.readAsString());
+      final version = json is Map<String, dynamic>
+          ? json['schemaVersion']
+          : null;
       if (json is! Map<String, dynamic> ||
-          (json['schemaVersion'] != 1 && json['schemaVersion'] != 2) ||
+          (version != 1 && version != 2 && version != 3) ||
           json['parameters'] is! Map<String, dynamic>) {
         throw const FormatException('Unbekanntes Einstellungsformat');
       }
-      // Version 1 fixed leg counts are retired; retain all other parameters.
-      return TournamentPlanningParameters.fromJson(
+      final parameters = Map<String, dynamic>.from(
         json['parameters'] as Map<String, dynamic>,
       );
+      if (version != 3) {
+        _migrateDefault(parameters, 'minutes301DoubleOut', 8, 3);
+        _migrateDefault(parameters, 'minutes501DoubleOut', 10, 5);
+        _migrateDefault(parameters, 'minutes301SingleOut', 5, 2);
+        _migrateDefault(parameters, 'minutes501SingleOut', 7, 4);
+      }
+      return TournamentPlanningParameters.fromJson(parameters);
     });
   }
 
@@ -47,11 +56,22 @@ class PlanningSettingsStorage {
       }
       final temporary = File('${target.path}.tmp');
       await temporary.writeAsString(
-        jsonEncode({'schemaVersion': 2, 'parameters': parameters.toJson()}),
+        jsonEncode({'schemaVersion': 3, 'parameters': parameters.toJson()}),
         flush: true,
       );
       await temporary.rename(target.path);
       StorageAccess.markLocalDataChanged();
     });
+  }
+
+  void _migrateDefault(
+    Map<String, dynamic> parameters,
+    String key,
+    int previousDefault,
+    int currentDefault,
+  ) {
+    if (parameters[key] == previousDefault) {
+      parameters[key] = currentDefault;
+    }
   }
 }

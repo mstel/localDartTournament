@@ -9,6 +9,8 @@ void main() {
     const Size(360, 800),
     const Size(800, 600),
     const Size(1440, 900),
+    const Size(1920, 1080),
+    const Size(3840, 2160),
   ]) {
     testWidgets('fixed second-screen layout fits $size with large text', (
       tester,
@@ -38,12 +40,41 @@ void main() {
 
       expect(find.text('Zuletzt beendete Matches'), findsOneWidget);
       expect(find.text('170+'), findsOneWidget);
+      expect(find.text('1x geworfen · A'), findsOneWidget);
       expect(find.byTooltip('Schließen'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('next-stage preview marks only guaranteed qualifiers', (
+  testWidgets('compact TV view can switch between standings and forecast', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _tournament(),
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    final selector = find.byType(SegmentedButton<bool>);
+    expect(selector, findsOneWidget);
+    expect(tester.widget<SegmentedButton<bool>>(selector).selected, {false});
+    await tester.ensureVisible(find.text('Prognose'));
+    await tester.tap(find.text('Prognose'));
+    await tester.pump();
+    expect(tester.widget<SegmentedButton<bool>>(selector).selected, {true});
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('next-stage preview shows current qualifiers provisionally', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -70,12 +101,12 @@ void main() {
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
     expect(
-      find.textContaining('A\nGesetzt · Setzplatz vorläufig'),
+      find.textContaining('A\nAktuell weiter · Setzplatz vorläufig'),
       findsOneWidget,
     );
     expect(
-      find.textContaining('B\nGesetzt · Setzplatz vorläufig'),
-      findsNothing,
+      find.textContaining('B\nAktuell weiter · Setzplatz vorläufig'),
+      findsOneWidget,
     );
     expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
     expect(tester.takeException(), isNull);

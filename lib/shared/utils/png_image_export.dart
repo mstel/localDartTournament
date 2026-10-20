@@ -49,10 +49,7 @@ Future<void> exportPngImage(
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Grafikexport fehlgeschlagen: $error'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+        SnackBar(content: Text('Grafikexport fehlgeschlagen: $error')),
       );
     }
   }

@@ -81,7 +81,11 @@ class _TournamentRankingChangesSectionState
     final db = widget.database ?? LocalAppDatabase();
     final allRankings = await db.loadLocalRankings();
     final eloRankings = allRankings
-        .where((r) => r.type == RankingType.elo && (t.rankingIds.isEmpty || t.rankingIds.contains(r.id)))
+        .where(
+          (r) =>
+              r.type == RankingType.elo &&
+              (t.rankingIds.isEmpty || t.rankingIds.contains(r.id)),
+        )
         .toList();
 
     if (eloRankings.isEmpty) return const [];
@@ -95,7 +99,7 @@ class _TournamentRankingChangesSectionState
 
         for (final entry in snapshot.history.entries) {
           final items = entry.value
-              .where((item) => item.tournamentName == t.name)
+              .where((item) => item.tournamentId == t.id)
               .toList();
           if (items.isEmpty) continue;
 
@@ -104,10 +108,12 @@ class _TournamentRankingChangesSectionState
           final lastItem = items.last;
           final ratingBefore = firstItem.ratingAfter - firstItem.delta;
           final ratingAfter = lastItem.ratingAfter;
-          final playerName = snapshot.entries
-              .where((p) => p.id == entry.key)
-              .firstOrNull
-              ?.name ?? entry.key;
+          final playerName =
+              snapshot.entries
+                  .where((p) => p.id == entry.key)
+                  .firstOrNull
+                  ?.name ??
+              entry.key;
 
           result.add(
             _PlayerRankingDelta(
@@ -179,7 +185,9 @@ class _TournamentRankingChangesSectionState
               ScaleTransition(
                 scale: _scaleAnimation,
                 child: Card(
-                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                  color: theme.colorScheme.primaryContainer.withValues(
+                    alpha: 0.5,
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -187,7 +195,10 @@ class _TournamentRankingChangesSectionState
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.military_tech, color: Colors.amber),
+                            const Icon(
+                              Icons.military_tech,
+                              color: Colors.amber,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               'Liga-Auf- & Abstiege',
@@ -201,7 +212,10 @@ class _TournamentRankingChangesSectionState
                         for (final change in tierChanges)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
+                            child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 4,
                               children: [
                                 Icon(
                                   change.isPromotion
@@ -212,22 +226,23 @@ class _TournamentRankingChangesSectionState
                                       : Colors.red,
                                   size: 18,
                                 ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    change.playerName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                Text(
+                                  change.playerName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 _MiniTierBadge(tier: change.tierBefore),
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 6),
-                                  child: Icon(Icons.arrow_forward, size: 14),
-                                ),
+                                const Icon(Icons.arrow_forward, size: 14),
                                 _MiniTierBadge(tier: change.tierAfter),
-                                const SizedBox(width: 8),
                                 Text(
-                                  '${change.delta > 0 ? "+" : ""}${change.delta} Elo',
+                                  '${change.ratingBefore} → ${change.ratingAfter} Elo',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  '${change.delta > 0 ? "+" : ""}${change.delta}',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: change.delta > 0
@@ -260,39 +275,51 @@ class _TournamentRankingChangesSectionState
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.arrow_circle_up, color: Colors.green, size: 20),
+                              Icon(
+                                Icons.arrow_circle_up,
+                                color: Colors.green,
+                                size: 20,
+                              ),
                               SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   'Größter Punktezuwachs',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                           const Divider(height: 16),
                           if (topGains.isEmpty)
-                            const Text('Keine Punktegewinne', style: TextStyle(fontSize: 12))
+                            const Text(
+                              'Keine Punktegewinne',
+                              style: TextStyle(fontSize: 12),
+                            )
                           else
                             for (var i = 0; i < topGains.length; i++)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 3),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Text(
-                                        '${i + 1}. ${topGains[i].playerName}',
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                        overflow: TextOverflow.ellipsis,
+                                    Text(
+                                      '${i + 1}. ${topGains[i].playerName}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
                                       ),
                                     ),
                                     Text(
-                                      '+${topGains[i].delta}',
-                                      style: const TextStyle(
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
+                                      '${topGains[i].ratingBefore} → ${topGains[i].ratingAfter} Elo · +${topGains[i].delta}',
+                                      style: TextStyle(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ],
@@ -315,39 +342,51 @@ class _TournamentRankingChangesSectionState
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.arrow_circle_down, color: Colors.red, size: 20),
+                              Icon(
+                                Icons.arrow_circle_down,
+                                color: Colors.red,
+                                size: 20,
+                              ),
                               SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   'Größter Punkteverlust',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                           const Divider(height: 16),
                           if (topLosses.isEmpty)
-                            const Text('Keine Punkteverluste', style: TextStyle(fontSize: 12))
+                            const Text(
+                              'Keine Punkteverluste',
+                              style: TextStyle(fontSize: 12),
+                            )
                           else
                             for (var i = 0; i < topLosses.length; i++)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 3),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Text(
-                                        '${i + 1}. ${topLosses[i].playerName}',
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                        overflow: TextOverflow.ellipsis,
+                                    Text(
+                                      '${i + 1}. ${topLosses[i].playerName}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
                                       ),
                                     ),
                                     Text(
-                                      '${topLosses[i].delta}',
-                                      style: const TextStyle(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
+                                      '${topLosses[i].ratingBefore} → ${topLosses[i].ratingAfter} Elo · ${topLosses[i].delta}',
+                                      style: TextStyle(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ],

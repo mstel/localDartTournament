@@ -10,6 +10,8 @@ import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/qualification_certainty.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
+import '../../../application/group_advancement_forecast_service.dart';
+import '../../../domain/engines/group_advancement_forecast_engine.dart';
 import '../../../../statistics/domain/best_performance.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
@@ -35,14 +37,18 @@ class TournamentSecondScreenView extends StatefulWidget {
 class _TournamentSecondScreenViewState
     extends State<TournamentSecondScreenView> {
   bool _showNextStagePreview = false;
+  bool _showForecastInCompactLayout = false;
   Timer? _clockTimer;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
+  Future<Map<String, AdvancementChance>>? _advancementForecast;
+  late String _forecastFingerprint;
 
   @override
   void initState() {
     super.initState();
     _refreshEloChanges();
+    _refreshAdvancementForecast();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -55,6 +61,35 @@ class _TournamentSecondScreenViewState
     if (fingerprint != _eloInputFingerprint) {
       _refreshEloChanges(fingerprint: fingerprint);
     }
+    if (fingerprint != _forecastFingerprint) {
+      _refreshAdvancementForecast(fingerprint: fingerprint);
+    }
+  }
+
+  void _refreshAdvancementForecast({String? fingerprint}) {
+    _forecastFingerprint =
+        fingerprint ?? jsonEncode(widget.tournament.toJson());
+    _advancementForecast = null;
+  }
+
+  Future<Map<String, AdvancementChance>> _forecastFor(
+    GroupTournamentRunStage stage,
+  ) {
+    final cached = _advancementForecast;
+    if (cached != null) return cached;
+    final stages = widget.tournament.runStages;
+    if (stages.isEmpty) return Future.value(const {});
+    final activeIndex = widget.tournament.activeStageIndex.clamp(
+      0,
+      stages.length - 1,
+    );
+    if (_nextKnockoutStage(widget.tournament, activeIndex, stage) == null) {
+      return _advancementForecast = Future.value(const {});
+    }
+    return _advancementForecast = GroupAdvancementForecastService().calculate(
+      tournament: widget.tournament,
+      stage: stage,
+    );
   }
 
   void _refreshEloChanges({String? fingerprint}) {
@@ -122,9 +157,7 @@ class _TournamentSecondScreenViewState
 
     final viewWidget = Container(
       decoration: BoxDecoration(
-        color: widget.isStandaloneWindow
-            ? const Color(0xFF0D1318)
-            : theme.colorScheme.surfaceContainerHighest,
+        color: const Color(0xFF0D1318),
         borderRadius: BorderRadius.circular(widget.isStandaloneWindow ? 0 : 16),
       ),
       padding: EdgeInsets.all(widget.isStandaloneWindow ? 20 : 16),
@@ -268,12 +301,11 @@ class _TournamentSecondScreenViewState
                   expand: false,
                 ),
                 const SizedBox(height: 16),
-                _buildStandingsAndPreviewControl(
+                _buildCompactStandingsForecastControl(
                   context,
                   t,
                   activeIndex,
                   activeStage,
-                  expand: false,
                 ),
               ],
             ),
@@ -357,6 +389,58 @@ class _TournamentSecondScreenViewState
           ],
         );
       },
+    );
+  }
+
+  Widget _buildCompactStandingsForecastControl(
+    BuildContext context,
+    CreatedTournament t,
+    int activeIndex,
+    TournamentRunStage? activeStage,
+  ) {
+    if (activeStage is! GroupTournamentRunStage ||
+        _nextKnockoutStage(t, activeIndex, activeStage) == null) {
+      return _buildStandingsAndPreviewControl(
+        context,
+        t,
+        activeIndex,
+        activeStage,
+        expand: false,
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('Tabelle')),
+            ButtonSegment(value: true, label: Text('Prognose')),
+          ],
+          selected: {_showForecastInCompactLayout},
+          onSelectionChanged: (selection) {
+            if (selection.isNotEmpty) {
+              setState(() => _showForecastInCompactLayout = selection.first);
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        if (_showForecastInCompactLayout)
+          _buildKoPrognosisPanel(
+            context,
+            t,
+            activeIndex,
+            activeStage,
+            expand: false,
+          )
+        else
+          _buildStandingsAndPreviewControl(
+            context,
+            t,
+            activeIndex,
+            activeStage,
+            expand: false,
+          ),
+      ],
     );
   }
 
@@ -473,9 +557,9 @@ class _TournamentSecondScreenViewState
             t.runStages[stageIndex - 1] is GroupTournamentRunStage
         ? t.runStages[stageIndex - 1] as GroupTournamentRunStage
         : null;
-    final certainQualifiers = groupStage == null
+    final advancingPlayers = groupStage == null
         ? const <int, TournamentPlayer>{}
-        : _certainQualifierByInputIndex(groupStage);
+        : _currentAdvancerByInputIndex(groupStage);
     final config = stageIndex != null && stageIndex < t.stages.length
         ? t.stages[stageIndex]
         : null;
@@ -495,11 +579,11 @@ class _TournamentSecondScreenViewState
               (candidate.profileId != null &&
                   candidate.profileId == player.profileId),
         );
-        final guaranteed = playerIndex < 0
+        final advancing = playerIndex < 0
             ? null
-            : certainQualifiers[playerIndex];
-        if (guaranteed != null) {
-          return '${guaranteed.name}\nGesetzt · Setzplatz vorläufig';
+            : advancingPlayers[playerIndex];
+        if (advancing != null) {
+          return '${advancing.name}\nAktuell weiter · Setzplatz vorläufig';
         }
       }
       return 'Qualifikant offen';
@@ -516,30 +600,23 @@ class _TournamentSecondScreenViewState
             fontSize: 20,
           ),
         ),
-        if (certainQualifiers.isNotEmpty)
+        if (advancingPlayers.isNotEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 6),
             child: Text(
-              'Sicher qualifizierte Spieler sind markiert. Ihre Setzposition bleibt bis zum Abschluss der Etappe vorläufig.',
+              'Die aktuell weiterkommenden Spieler sind vorläufig in die Plätze eingetragen. Gleichstände werden nach den aktiven Tie-Break-Regeln sortiert.',
               style: TextStyle(color: Colors.white70),
             ),
           ),
-        if (certainQualifiers.isNotEmpty && !canShowSeedPositions)
+        if (advancingPlayers.isNotEmpty && !canShowSeedPositions)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final player in certainQualifiers.values)
-                  Chip(
-                    avatar: const Icon(
-                      Icons.check_circle,
-                      color: Color(0xFF86EFAC),
-                      size: 18,
-                    ),
-                    label: Text('${player.name} · sicher weiter'),
-                  ),
+                for (final player in advancingPlayers.values)
+                  Chip(label: Text('${player.name} · aktuell weiter')),
               ],
             ),
           ),
@@ -616,13 +693,14 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  Map<int, TournamentPlayer> _certainQualifierByInputIndex(
+  Map<int, TournamentPlayer> _currentAdvancerByInputIndex(
     GroupTournamentRunStage stage,
   ) {
     final plan = stage.qualificationPlan;
     if (plan == null) return const {};
 
-    final certainPlayers = <int, TournamentPlayer>{};
+    final advancingPlayers = <int, TournamentPlayer>{};
+    final extraCandidates = <({int groupIndex, PlayerStanding standing})>[];
     var inputIndex = 0;
     for (var groupIndex = 0; groupIndex < stage.groups.length; groupIndex++) {
       final group = stage.groups[groupIndex];
@@ -630,59 +708,56 @@ class _TournamentSecondScreenViewState
       final fixedPlaces = groupIndex < plan.fixedByGroup.length
           ? plan.fixedByGroup[groupIndex]
           : plan.fixedPerGroup;
-      if (group.playType == 'swiss' ||
-          group.matches.any((match) => match.isDecider)) {
-        inputIndex += fixedPlaces;
-        continue;
-      }
-      final unsupportedTieBreaker = stage.tieBreakers.indexWhere(
-        (rule) => !const {'points', 'legDifference', 'legsFor'}.contains(rule),
-      );
       for (var rank = 0; rank < min(fixedPlaces, standings.length); rank++) {
-        final standing = standings[rank];
-        if (unsupportedTieBreaker >= 0 &&
-            standings.any(
-              (other) =>
-                  other.player != standing.player &&
-                  _tiesOnTieBreakerPrefix(
-                    standing,
-                    other,
-                    stage.tieBreakers.take(unsupportedTieBreaker),
-                  ),
-            )) {
-          continue;
-        }
-        if (const QualificationCertainty().isCertain(
-          standing: standing,
-          place: rank + 1,
-          fixedPlaces: fixedPlaces,
-          standings: standings,
-          matches: group.matches,
-          tieBreakers: stage.tieBreakers,
-        )) {
-          certainPlayers[inputIndex + rank] = standing.player;
+        advancingPlayers[inputIndex + rank] = standings[rank].player;
+      }
+      if (plan.extraCount > 0 && plan.extraGroups.contains(groupIndex + 1)) {
+        final rankIndex = plan.extraRank - 1;
+        if (rankIndex >= 0 && rankIndex < standings.length) {
+          extraCandidates.add((
+            groupIndex: groupIndex,
+            standing: standings[rankIndex],
+          ));
         }
       }
       inputIndex += fixedPlaces;
     }
-    return certainPlayers;
+    extraCandidates.sort((a, b) {
+      final comparison = _compareStandings(
+        a.standing,
+        b.standing,
+        stage.tieBreakers,
+      );
+      return comparison != 0
+          ? comparison
+          : a.groupIndex.compareTo(b.groupIndex);
+    });
+    for (
+      var index = 0;
+      index < min(plan.extraCount, extraCandidates.length);
+      index++
+    ) {
+      advancingPlayers[inputIndex + index] =
+          extraCandidates[index].standing.player;
+    }
+    return advancingPlayers;
   }
 
-  bool _tiesOnTieBreakerPrefix(
-    PlayerStanding first,
-    PlayerStanding second,
-    Iterable<String> tieBreakers,
+  int _compareStandings(
+    PlayerStanding a,
+    PlayerStanding b,
+    List<String> tieBreakers,
   ) {
     for (final rule in tieBreakers) {
       final comparison = switch (rule) {
-        'points' => first.points.compareTo(second.points),
-        'legDifference' => first.legDifference.compareTo(second.legDifference),
-        'legsFor' => first.legsFor.compareTo(second.legsFor),
+        'points' => b.points.compareTo(a.points),
+        'legDifference' => b.legDifference.compareTo(a.legDifference),
+        'legsFor' => b.legsFor.compareTo(a.legsFor),
         _ => 0,
       };
-      if (comparison != 0) return false;
+      if (comparison != 0) return comparison;
     }
-    return true;
+    return a.player.name.compareTo(b.player.name);
   }
 
   Widget _buildBracketMatchPreview(
@@ -691,8 +766,8 @@ class _TournamentSecondScreenViewState
     required String awayLabel,
     required int matchNumber,
   }) {
-    final homeIsCertain = homeLabel.contains('Gesetzt');
-    final awayIsCertain = awayLabel.contains('Gesetzt');
+    final homeIsCertain = homeLabel.contains('Aktuell weiter');
+    final awayIsCertain = awayLabel.contains('Aktuell weiter');
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
@@ -981,7 +1056,7 @@ class _TournamentSecondScreenViewState
     final hasPrognosis =
         currentStage is GroupTournamentRunStage && koStage != null;
     final prognosisContent = hasPrognosis
-        ? _buildContenderPrognosisList(context, currentStage, koStage)
+        ? _buildContenderPrognosisList(context, currentStage)
         : (koStage != null
               ? _buildKnockoutRoundsPreview(context, koStage)
               : const Center(
@@ -1012,7 +1087,7 @@ class _TournamentSecondScreenViewState
               Flexible(
                 child: Text(
                   hasPrognosis
-                      ? 'KO-Prognose & Weiterkommen'
+                      ? 'Siegprognose & Weiterkommen'
                       : 'Turnierbaum Vorschau',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
@@ -1026,7 +1101,7 @@ class _TournamentSecondScreenViewState
           const SizedBox(height: 8),
           Text(
             hasPrognosis
-                ? 'Vorschau der K.-o.-Paarungen basierend auf aktuellen Tabellenständen und Siegesraten:'
+                ? 'Elo und historische Siegquoten simulieren die verbleibenden Gruppenspiele.'
                 : 'Turnierbaum der finalen Phase:',
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
@@ -1043,129 +1118,134 @@ class _TournamentSecondScreenViewState
   Widget _buildContenderPrognosisList(
     BuildContext context,
     GroupTournamentRunStage groupStage,
-    KnockoutTournamentRunStage koStage,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < groupStage.groups.length; i++)
-          Builder(
-            builder: (context) {
-              final group = groupStage.groups[i];
-              final standings = _calculateGroupStandings(
-                group,
-                groupStage.tieBreakers,
-              );
-              final fixedPlaces =
-                  groupStage.qualificationPlan?.fixedPerGroup ?? 2;
-              final evidence = standings.map((standing) {
-                if (standing.played == 0) return 1.0;
-                return (standing.wins + standing.draws * 0.5 + 0.5) /
-                    (standing.played + 1);
-              }).toList();
-              final totalEvidence = evidence.fold<double>(
-                0,
-                (sum, value) => sum + value,
-              );
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF101922),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${group.name} · KO-Siegchance nach Ergebnissen',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF70E0BA),
-                        fontSize: 13,
-                      ),
+    return FutureBuilder<Map<String, AdvancementChance>>(
+      future: _forecastFor(groupStage),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Text(
+            'Siegprognose konnte nicht berechnet werden: ${snapshot.error}',
+            style: const TextStyle(color: Colors.redAccent),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+        final forecast = snapshot.data!;
+        final plan = groupStage.qualificationPlan;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (
+              var groupIndex = 0;
+              groupIndex < groupStage.groups.length;
+              groupIndex++
+            )
+              Builder(
+                builder: (context) {
+                  final group = groupStage.groups[groupIndex];
+                  final standings = _calculateGroupStandings(
+                    group,
+                    groupStage.tieBreakers,
+                  );
+                  final fixedPlaces = plan == null
+                      ? 0
+                      : groupIndex < plan.fixedByGroup.length
+                      ? plan.fixedByGroup[groupIndex]
+                      : plan.fixedPerGroup;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF101922),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 6),
-                    for (var r = 0; r < standings.length; r++)
-                      Builder(
-                        builder: (context) {
-                          final standing = standings[r];
-                          final place = r + 1;
-                          final isCertain = const QualificationCertainty()
-                              .isCertain(
-                                standing: standing,
-                                place: place,
-                                fixedPlaces: fixedPlaces,
-                                standings: standings,
-                                matches: group.matches,
-                                tieBreakers: groupStage.tieBreakers,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          group.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF70E0BA),
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        for (var rank = 0; rank < standings.length; rank++)
+                          Builder(
+                            builder: (context) {
+                              final standing = standings[rank];
+                              final chance =
+                                  forecast[standing.player.profileId ??
+                                      standing.player.name] ??
+                                  const AdvancementChance(
+                                    groupWinProbability: 0,
+                                    advancementProbability: 0,
+                                  );
+                              final currentlyAdvancing = rank < fixedPlaces;
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      '${rank + 1}. ',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: currentlyAdvancing
+                                            ? const Color(0xFF86EFAC)
+                                            : Colors.white70,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        standing.player.name,
+                                        style: TextStyle(
+                                          fontWeight: currentlyAdvancing
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: Colors.white,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Tooltip(
+                                      message:
+                                          'Siegchance: ${chance.groupWinProbability.toStringAsFixed(1)} %\nWeiterkommen: ${chance.advancementProbability.toStringAsFixed(1)} %',
+                                      child: Text(
+                                        '${chance.groupWinProbability.toStringAsFixed(1)} % Sieg · '
+                                        '${chance.advancementProbability.toStringAsFixed(1)} % weiter',
+                                        textAlign: TextAlign.end,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: currentlyAdvancing
+                                              ? const Color(0xFF86EFAC)
+                                              : Colors.white70,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               );
-
-                          final probability = totalEvidence == 0
-                              ? 0.0
-                              : evidence[r] / totalEvidence * 100;
-
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Platz $place: ',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    standing.player.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isCertain
-                                        ? const Color(0xFF144D34)
-                                        : (probability >= 50
-                                              ? const Color(0xFF1D4E3A)
-                                              : const Color(0xFF4A3B18)),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    isCertain
-                                        ? 'Fest im KO'
-                                        : '${probability.toStringAsFixed(1)}% Siegchance',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: isCertain
-                                          ? const Color(0xFF86EFAC)
-                                          : (probability >= 50
-                                                ? Colors.white
-                                                : Colors.amber.shade200),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
-      ],
+                            },
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -1245,14 +1325,14 @@ class _TournamentSecondScreenViewState
     if (openCounts.isNotEmpty) {
       final maxOpen = openCounts.values.reduce(max);
       final minOpen = openCounts.values.reduce(min);
-      if (maxOpen >= 2 && maxOpen - minOpen >= 1) {
+      if (maxOpen >= 2 && maxOpen - minOpen >= 2) {
         preferredPlayers.addAll(
           openCounts.entries
               .where((entry) => entry.value == maxOpen)
               .map((entry) => entry.key),
         );
         priorityNotice =
-            'Priorität: ${preferredPlayers.join(', ')} hat noch $maxOpen offene Partien (Schnitt: $minOpen). Bevorzugt aufrufen!';
+            'Vorrang: ${preferredPlayers.join(', ')} hat mindestens zwei offene Partien mehr als andere Spieler ($maxOpen gegenüber $minOpen).';
       }
     }
 
@@ -1306,20 +1386,24 @@ class _TournamentSecondScreenViewState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF3E2D12),
-              border: Border.all(color: Colors.amber.shade700),
+              color: const Color(0xFF28251B),
+              border: Border.all(color: const Color(0xFF786A45)),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
-                const Icon(Icons.priority_high, size: 18, color: Colors.amber),
+                const Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: Color(0xFFD6C28C),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     priorityNotice,
                     style: const TextStyle(
-                      color: Colors.amberAccent,
-                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFE8D9AC),
+                      fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
                   ),
@@ -1351,7 +1435,7 @@ class _TournamentSecondScreenViewState
         color: const Color(0xFF14202B),
         border: Border.all(
           color: isPreferred
-              ? Colors.amber
+              ? const Color(0xFFB39A5A)
               : isRunning
               ? const Color(0xFF70E0BA)
               : const Color(0xFF263D52),
@@ -1395,12 +1479,16 @@ class _TournamentSecondScreenViewState
                   spacing: 2,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Icon(Icons.priority_high, color: Colors.amber, size: 18),
+                    Icon(
+                      Icons.info_outline,
+                      color: Color(0xFFD6C28C),
+                      size: 18,
+                    ),
                     Text(
                       'Bevorzugt',
                       style: TextStyle(
-                        color: Colors.amber,
-                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFE8D9AC),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -1620,6 +1708,28 @@ class _TournamentSecondScreenViewState
     final shortLegs = allPerformances
         .where((p) => p.type == BestPerformanceType.shortLeg)
         .toList();
+    String holderNames(Iterable<BestPerformance> performances) {
+      final names = performances
+          .map((performance) => performance.playerName.trim())
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .toList();
+      if (names.length <= 3) return names.join(', ');
+      return '${names.take(3).join(', ')} +${names.length - 3}';
+    }
+
+    final topFinish = highFinishes.isEmpty
+        ? null
+        : highFinishes.map((p) => p.value ?? 100).reduce(max);
+    final finishHolders = topFinish == null
+        ? ''
+        : holderNames(highFinishes.where((p) => (p.value ?? 100) == topFinish));
+    final bestShortleg = shortLegs.isEmpty
+        ? null
+        : shortLegs.map((p) => p.value ?? 18).reduce(min);
+    final shortlegHolders = bestShortleg == null
+        ? ''
+        : holderNames(shortLegs.where((p) => (p.value ?? 18) == bestShortleg));
 
     final breakdownContent = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1724,22 +1834,22 @@ class _TournamentSecondScreenViewState
                 children: [
                   _buildHighlightItem(
                     '170+',
-                    '${oneSeventies.length}x geworfen',
+                    '${oneSeventies.length}x geworfen${holderNames(oneSeventies).isEmpty ? '' : ' · ${holderNames(oneSeventies)}'}',
                   ),
                   _buildHighlightItem(
                     '180er',
-                    '${oneEighties.length}x geworfen',
+                    '${oneEighties.length}x geworfen${holderNames(oneEighties).isEmpty ? '' : ' · ${holderNames(oneEighties)}'}',
                   ),
                   _buildHighlightItem(
                     'High Finish',
-                    highFinishes.isNotEmpty
-                        ? '${highFinishes.map((p) => p.value ?? 100).reduce(max)} Punkte'
+                    topFinish != null
+                        ? '$topFinish Punkte${finishHolders.isEmpty ? '' : ' · $finishHolders'}'
                         : '–',
                   ),
                   _buildHighlightItem(
                     'Bestes Shortleg',
-                    shortLegs.isNotEmpty
-                        ? '${shortLegs.map((p) => p.value ?? 18).reduce(min)} Darts'
+                    bestShortleg != null
+                        ? '$bestShortleg Darts${shortlegHolders.isEmpty ? '' : ' · $shortlegHolders'}'
                         : '–',
                   ),
                 ],
@@ -1803,12 +1913,16 @@ class _TournamentSecondScreenViewState
           style: const TextStyle(fontSize: 12, color: Colors.white54),
         ),
         const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF70E0BA),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 240),
+          child: Text(
+            value,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF70E0BA),
+            ),
           ),
         ),
       ],

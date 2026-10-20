@@ -448,7 +448,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           ..clear()
           ..addAll(previousIds);
       });
+      return;
     }
+    if (!mounted) return;
+    final message = !countsForRanking
+        ? 'Turnier zählt für keine Rangliste.'
+        : rankingIds.isEmpty
+        ? 'Turnier berücksichtigt, aber keiner Rangliste zugeordnet.'
+        : 'Ranglisten-Zuordnung für ${rankingIds.length} Rangliste(n) gespeichert.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _editResult(GroupMatch match) async {
@@ -548,7 +558,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         SnackBar(
           content: const Text('Ergebnis gespeichert · Partie ist gespielt.'),
           duration: const Duration(seconds: 2),
-          backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
     }
@@ -2731,8 +2740,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                     if (!isViewingActiveStage &&
                         _viewStageIndex > _activeStageIndex &&
                         _stageViewMode != StageViewMode.orderOfPlay &&
-                        _stageViewMode != StageViewMode.director &&
-                        _stageViewMode != StageViewMode.statistics)
+                        _stageViewMode != StageViewMode.director)
                       const Padding(
                         padding: EdgeInsets.only(bottom: 12),
                         child: Text(
@@ -3154,10 +3162,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                             ),
                         ],
-                      )
-                    else if (_stageViewMode == StageViewMode.statistics)
-                      LiveTournamentStatisticsSection(
-                        tournament: widget.tournament,
                       )
                     else ...[
                       // Modus "Ergebnisse"

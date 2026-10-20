@@ -76,29 +76,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('results show highlights and player statistics inline', (
+  testWidgets('results hide inline player stats and total ranking', (
     tester,
   ) async {
     await tester.pumpWidget(
       MaterialApp(home: TournamentResultsPage(tournament: resultsFixture())),
     );
     await tester.pumpAndSettle();
+    expect(find.text('Spielerstatistiken'), findsNothing);
+    expect(find.text('Gesamtwertung'), findsNothing);
     await tester.scrollUntilVisible(
-      find.text('Spielerstatistiken'),
-      200,
+      find.text('Bestleistungen'),
+      250,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.scrollUntilVisible(
-      find.textContaining('Gewonnene / verlorene Legs').first,
-      150,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.textContaining('Gewonnene / verlorene Legs'), findsWidgets);
+    expect(find.text('Bestleistungen'), findsOneWidget);
     expect(find.byType(TournamentResultsPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
-    'manual results retain player stats without invented scorer highlights',
+    'manual results show zero best performances without inventing records',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -114,12 +111,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('1 Siege · 0 Unentschieden · 0 Niederlagen'),
-        150,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.textContaining('Average: '), findsNothing);
+      expect(find.text('Spielerstatistiken'), findsNothing);
+      expect(find.text('0'), findsNWidgets(4));
       expect(tester.takeException(), isNull);
     },
   );

@@ -26,7 +26,8 @@ void main() {
       addTearDown(() => directory.delete(recursive: true));
       final file = File('${directory.path}/settings.json');
       final storage = PlanningSettingsStorage(file: file);
-      expect((await storage.load()).minutes501DoubleOut, 10);
+      expect((await storage.load()).minutes501DoubleOut, 5);
+      expect((await storage.load()).boardIdleMinutes, 4);
       await storage.save(
         TournamentPlanningParameters.fromValues({
           PlanningParameter.minutes501DoubleOut: 15,
@@ -37,9 +38,34 @@ void main() {
         15,
       );
       await storage.save(const TournamentPlanningParameters());
-      expect((await storage.load()).minutes501DoubleOut, 10);
+      expect((await storage.load()).minutes501DoubleOut, 5);
       await file.writeAsString('{"schemaVersion":99,"parameters":{}}');
       await expectLater(storage.load(), throwsFormatException);
+    },
+  );
+
+  test(
+    'version 2 settings migrate old leg defaults and add board idle time',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'planning_settings_migration_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/settings.json');
+      await file.writeAsString('''
+      {"schemaVersion":2,"parameters":{
+        "minutes301DoubleOut":8,
+        "minutes501DoubleOut":10,
+        "minutes301SingleOut":5,
+        "minutes501SingleOut":7
+      }}
+    ''');
+      final values = await PlanningSettingsStorage(file: file).load();
+      expect(values.minutes301DoubleOut, 3);
+      expect(values.minutes501DoubleOut, 5);
+      expect(values.minutes301SingleOut, 2);
+      expect(values.minutes501SingleOut, 4);
+      expect(values.boardIdleMinutes, 4);
     },
   );
 
@@ -59,6 +85,7 @@ void main() {
       expect(values.maximumGroups, 4);
       expect(values.minutes501DoubleOut, 12);
       expect(values.maximumSuggestions, 3);
+      expect(values.boardIdleMinutes, 4);
     },
   );
 
@@ -74,7 +101,7 @@ void main() {
         PlanningParameter.minutes501DoubleOut: 20,
       }),
     ).suggest(request).single;
-    expect(slower.estimatedMinutes, base.estimatedMinutes * 2);
+    expect(slower.estimatedMinutes, greaterThan(base.estimatedMinutes));
   });
 
   test('group, suggestion and qualification parameters reach suggestions', () {

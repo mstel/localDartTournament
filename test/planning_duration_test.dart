@@ -25,6 +25,29 @@ void main() {
     expect(threeGroups, [330, 270, 240]);
   });
 
+  test('idle allowance only counts unused boards in each scheduled block', () {
+    final group = PlanningDuration.calculate(
+      groupSizes: [4],
+      qualifiers: 0,
+      boards: 4,
+      matchMinutes: 10,
+      boardIdleMinutes: 4,
+    );
+    final knockout = PlanningDuration.calculate(
+      groupSizes: const [],
+      qualifiers: 8,
+      boards: 4,
+      matchMinutes: 10,
+      boardIdleMinutes: 4,
+    );
+    expect(group.groupSlots, 3);
+    expect(group.groupIdleUnits, 6);
+    expect(group.totalMinutes, 54);
+    expect(knockout.knockoutSlots, 3);
+    expect(knockout.knockoutIdleUnits, 5);
+    expect(knockout.totalMinutes, 50);
+  });
+
   test(
     'surplus boards cannot shorten a three-player group below three matches',
     () {

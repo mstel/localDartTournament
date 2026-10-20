@@ -26,13 +26,16 @@ class _StorageSessionRootState extends State<StorageSessionRoot> {
     super.initState();
     if (!SupabaseAccountBootstrap.isInitialized) return;
     _accountId = _currentAccountId();
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((_) async {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      _,
+    ) async {
       final next = _currentAccountId();
       if (next == _accountId) return;
       try {
         await SupabaseWorkspaceSyncService.instance.activateAccount(next);
       } catch (error) {
-        SupabaseWorkspaceSyncService.status.value = 'Konto-Daten konnten noch nicht vorbereitet werden: $error';
+        SupabaseWorkspaceSyncService.status.value =
+            'Konto-Daten konnten noch nicht vorbereitet werden: $error';
       }
       if (!mounted) return;
       setState(() => _accountId = next);
@@ -41,11 +44,18 @@ class _StorageSessionRootState extends State<StorageSessionRoot> {
   }
 
   String? _currentAccountId() {
-    try { return Supabase.instance.client.auth.currentUser?.id; } catch (_) { return null; }
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
-  void dispose() { _authSubscription?.cancel(); super.dispose(); }
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -61,7 +71,7 @@ class _StorageSessionRootState extends State<StorageSessionRoot> {
       }
       return MaterialApp(
         home: Scaffold(
-          appBar: AppBar(title: const Text('Dart Turnierverwaltung')),
+          appBar: AppBar(title: const Text('DartTournamentPro')),
           body: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 600),

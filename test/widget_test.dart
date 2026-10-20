@@ -82,12 +82,12 @@ void main() {
     );
     if (selector.evaluate().isNotEmpty) {
       await tester.tap(selector);
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text('Dashboard').last);
     } else {
       await tester.tap(find.widgetWithText(ChoiceChip, 'Dashboard').first);
     }
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
   }
 
   Future<void> selectTournamentResults(WidgetTester tester) async {
@@ -149,12 +149,25 @@ void main() {
     );
     if (selector.evaluate().isNotEmpty) {
       await tester.tap(selector);
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text(stageName).last);
     } else {
       await tester.tap(find.text(stageName).last);
     }
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
+  }
+
+  Future<void> pumpUntilTournamentRunPage(WidgetTester tester) async {
+    final runPage = find.byType(TournamentRunPage);
+    for (
+      var attempt = 0;
+      attempt < 50 && runPage.evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(runPage, findsOneWidget);
   }
 
   testWidgets('creates a knockout-only tournament', (tester) async {
@@ -261,7 +274,7 @@ void main() {
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
     await tester.tap(find.widgetWithText(FilledButton, 'Turnier anlegen'));
-    await tester.pumpAndSettle();
+    await pumpUntilTournamentRunPage(tester);
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(find.text('Neues Turnier · KO pur'), findsOneWidget);
@@ -1018,7 +1031,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Turnier anlegen'));
-    await tester.pumpAndSettle();
+    await pumpUntilTournamentRunPage(tester);
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -1090,7 +1103,7 @@ void main() {
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
     await tester.tap(find.widgetWithText(FilledButton, 'Turnier anlegen'));
-    await tester.pumpAndSettle();
+    await pumpUntilTournamentRunPage(tester);
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -1361,7 +1374,7 @@ void main() {
   testWidgets('opens tournament creation and manages players', (tester) async {
     await tester.pumpWidget(const DartTournamentApp());
 
-    expect(find.text('Dart Turnierverwaltung'), findsWidgets);
+    expect(find.text('DartTournamentPro'), findsWidgets);
     expect(find.text('Turniere'), findsWidgets);
     await tester.scrollUntilVisible(
       find.text('Ranglisten'),
@@ -1600,7 +1613,7 @@ void main() {
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
     await tester.tap(find.text('Turnier anlegen'));
-    await tester.pumpAndSettle();
+    await pumpUntilTournamentRunPage(tester);
     await selectTournamentDashboard(tester);
 
     expect(find.text('Neues Turnier · Vorrunde'), findsOneWidget);

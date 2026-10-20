@@ -24,7 +24,7 @@ class _HomePageState extends State<HomePage> {
       () => _open(const PlayersPage(), 2),
     ),
     SportDestination(
-      'Statistik',
+      'Statistiken',
       Icons.bar_chart_outlined,
       () => _open(const PlayersPage(statisticsOnly: true), 3),
     ),
@@ -68,7 +68,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) => _shell(
     Scaffold(
       appBar: AppBar(
-        title: const Text('Dart Turnierverwaltung'),
+        title: const Text('DartTournamentPro'),
         actions: [
           IconButton(
             onPressed: _openSettings,
@@ -95,7 +95,7 @@ class _HomePageState extends State<HomePage> {
                 onTap: _openPlayersArea,
               ),
               SportMenuAction(
-                label: 'Statistik',
+                label: 'Statistiken',
                 icon: Icons.bar_chart_outlined,
                 onTap: () => _open(const PlayersPage(statisticsOnly: true), 3),
               ),

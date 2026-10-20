@@ -116,10 +116,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Grafikexport fehlgeschlagen: $error'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+          SnackBar(content: Text('Grafikexport fehlgeschlagen: $error')),
         );
       }
     } finally {
@@ -484,6 +481,15 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                 value: '${stats.tournaments}',
                               ),
                               _StatMiniCard(
+                                label: 'Turniersiege',
+                                value: '${stats.tournamentWins}',
+                              ),
+                              _StatMiniCard(
+                                label: 'Turniersiegchance %',
+                                value:
+                                    '${stats.tournamentWinRate.toStringAsFixed(1)} %',
+                              ),
+                              _StatMiniCard(
                                 label: 'Spiele',
                                 value: '${stats.matches}',
                               ),
@@ -504,6 +510,11 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                 label: 'Leg-Siegquote',
                                 value:
                                     '${stats.legWinRate.toStringAsFixed(1)} %',
+                              ),
+                              _StatMiniCard(
+                                label: '170+ Aufnahmen',
+                                value:
+                                    '${performanceCounts[BestPerformanceType.score170]}',
                               ),
                               _StatMiniCard(
                                 label: '180+ Aufnahmen',
@@ -699,6 +710,53 @@ class _ReviewLeaders extends StatelessWidget {
               ],
             ),
           ),
+          if (ranked.isNotEmpty)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: Text(title),
+                    content: SizedBox(
+                      width: 560,
+                      height: 560,
+                      child: ListView.builder(
+                        itemCount: ranked.length,
+                        itemBuilder: (context, index) => ListTile(
+                          leading: CircleAvatar(child: Text('${index + 1}')),
+                          title: Text(ranked[index].key),
+                          trailing: Text('${metric(ranked[index].value)}'),
+                          onTap: () {
+                            final profileId = profileIds[ranked[index].key];
+                            Navigator.of(dialogContext).pop();
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => LocalPlayerStatisticsPage(
+                                  name: ranked[index].key,
+                                  profileIds: profileId == null
+                                      ? const <String>{}
+                                      : {profileId},
+                                  year: year,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text('Schließen'),
+                      ),
+                    ],
+                  ),
+                ),
+                icon: const Icon(Icons.list),
+                label: const Text('Alle anzeigen'),
+              ),
+            ),
         ],
       ),
     );
@@ -1503,10 +1561,12 @@ class LocalRankingStandingsPage extends StatefulWidget {
     super.key,
     required this.database,
     required this.ranking,
+    this.tournamentStorage,
   });
 
   final LocalAppDatabase database;
   final LocalRanking ranking;
+  final TournamentStorage? tournamentStorage;
 
   @override
   State<LocalRankingStandingsPage> createState() =>
@@ -1519,6 +1579,7 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
 
   Future<LocalEloSnapshot> _calculate() => LocalRankingEloService(
     database: widget.database,
+    tournamentStorage: widget.tournamentStorage,
   ).calculate(widget.ranking);
 
   Future<void> _export() async {
@@ -1542,10 +1603,7 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ranglisten-Grafik fehlgeschlagen: $error'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+          SnackBar(content: Text('Ranglisten-Grafik fehlgeschlagen: $error')),
         );
       }
     } finally {
@@ -1581,78 +1639,280 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
       builder: (context, snapshot) => AdaptiveContentList(
         padding: const EdgeInsets.all(20),
         children: [
-          Text(
-            'Aktueller Stand',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
           if (snapshot.connectionState == ConnectionState.waiting)
             const LinearProgressIndicator(),
           if (snapshot.hasError)
             Text(
               'Ranglistenstand konnte nicht berechnet werden: ${snapshot.error}',
             ),
-          if (snapshot.data case final entries?) ...[
-            const Text(
-              'Elo wird chronologisch aus abgeschlossenen Turnierspielen berechnet. Nur zugewiesene Spieler und für diese Rangliste markierte Turniere zählen.',
-            ),
-            for (var i = 0; i < entries.entries.length; i++)
-              Card(
-                child: ListTile(
-                  leading: CircleAvatar(child: Text('${i + 1}')),
-                  title: Row(
-                    children: [
-                      Flexible(child: Text(entries.entries[i].name)),
-                      if (widget.ranking.enableTiers) ...[
-                        const SizedBox(width: 8),
-                        _TierBadge(
-                          tier: EloTier.fromElo(entries.entries[i].rating),
-                        ),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text(
-                    '${entries.entries[i].matches} gewertete Matches · ${entries.entries[i].wins} Siege · ${entries.entries[i].losses} Niederlagen',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${entries.entries[i].rating} Elo',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right, size: 20),
-                    ],
-                  ),
-                  onTap: () {
-                    final player = entries.entries[i];
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => PlayerEloHistoryPage(
-                          player: player,
-                          rankingName: widget.ranking.name,
-                          history: entries.history[player.id] ?? const [],
-                          enableTiers: widget.ranking.enableTiers,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            if (entries.entries.isEmpty)
-              const Card(
-                child: ListTile(
-                  title: Text('Noch keine gewerteten Ergebnisse.'),
-                  subtitle: Text(
-                    'Spieler zuweisen und ein Turnier für diese Rangliste markieren.',
-                  ),
-                ),
-              ),
-          ],
+          if (snapshot.data case final entries?)
+            LocalRankingEloViews(snapshot: entries, ranking: widget.ranking),
         ],
       ),
     ),
   );
+}
+
+class LocalRankingEloViews extends StatefulWidget {
+  const LocalRankingEloViews({
+    super.key,
+    required this.snapshot,
+    required this.ranking,
+  });
+
+  final LocalEloSnapshot snapshot;
+  final LocalRanking ranking;
+
+  @override
+  State<LocalRankingEloViews> createState() => _LocalRankingEloViewsState();
+}
+
+class _LocalRankingEloViewsState extends State<LocalRankingEloViews> {
+  bool _showTournamentHistory = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = widget.snapshot;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Ranglisten-Elo',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(
+              value: false,
+              label: Text('Aktueller Stand'),
+              icon: Icon(Icons.leaderboard_outlined),
+            ),
+            ButtonSegment(
+              value: true,
+              label: Text('Nach Turnieren'),
+              icon: Icon(Icons.history),
+            ),
+          ],
+          selected: {_showTournamentHistory},
+          onSelectionChanged: (selection) =>
+              setState(() => _showTournamentHistory = selection.single),
+        ),
+        const SizedBox(height: 12),
+        if (_showTournamentHistory)
+          _TournamentEloHistoryView(snapshot: entries)
+        else ...[
+          const Text(
+            'Elo wird chronologisch aus abgeschlossenen Turnierspielen berechnet. Nur zugewiesene Spieler und für diese Rangliste markierte Turniere zählen.',
+          ),
+          for (var i = 0; i < entries.entries.length; i++)
+            Card(
+              child: ListTile(
+                leading: CircleAvatar(child: Text('${i + 1}')),
+                title: Row(
+                  children: [
+                    Flexible(child: Text(entries.entries[i].name)),
+                    if (widget.ranking.enableTiers) ...[
+                      const SizedBox(width: 8),
+                      _TierBadge(
+                        tier: EloTier.fromElo(entries.entries[i].rating),
+                      ),
+                    ],
+                  ],
+                ),
+                subtitle: Text(
+                  '${entries.entries[i].matches} gewertete Matches · ${entries.entries[i].wins} Siege · ${entries.entries[i].losses} Niederlagen',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${entries.entries[i].rating} Elo',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right, size: 20),
+                  ],
+                ),
+                onTap: () {
+                  final player = entries.entries[i];
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => PlayerEloHistoryPage(
+                        player: player,
+                        rankingName: widget.ranking.name,
+                        history: entries.history[player.id] ?? const [],
+                        enableTiers: widget.ranking.enableTiers,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          if (entries.entries.isEmpty)
+            const Card(
+              child: ListTile(
+                title: Text('Noch keine gewerteten Ergebnisse.'),
+                subtitle: Text(
+                  'Spieler zuweisen und ein Turnier für diese Rangliste markieren.',
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TournamentEloHistoryGroup {
+  _TournamentEloHistoryGroup({
+    required this.id,
+    required this.name,
+    required this.players,
+  });
+
+  final String id;
+  final String name;
+  final Map<String, List<LocalEloHistoryItem>> players;
+
+  DateTime get latestMatch => players.values
+      .expand((items) => items)
+      .map((item) => item.playedAt)
+      .reduce((a, b) => a.isAfter(b) ? a : b);
+}
+
+class _TournamentEloHistoryView extends StatelessWidget {
+  const _TournamentEloHistoryView({required this.snapshot});
+
+  final LocalEloSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final names = {
+      for (final player in snapshot.entries) player.id: player.name,
+    };
+    final byTournament = <String, _TournamentEloHistoryGroup>{};
+    for (final playerHistory in snapshot.history.entries) {
+      for (final item in playerHistory.value) {
+        final group = byTournament.putIfAbsent(
+          item.tournamentId,
+          () => _TournamentEloHistoryGroup(
+            id: item.tournamentId,
+            name: item.tournamentName,
+            players: {},
+          ),
+        );
+        (group.players[playerHistory.key] ??= []).add(item);
+      }
+    }
+    final tournaments = byTournament.values.toList()
+      ..sort((a, b) => b.latestMatch.compareTo(a.latestMatch));
+
+    if (tournaments.isEmpty) {
+      return const Card(
+        child: ListTile(
+          title: Text('Noch keine gewerteten Turnierergebnisse.'),
+          subtitle: Text(
+            'Für die Rangliste markierte Turniere erscheinen hier nach ihren Begegnungen.',
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Turniere und Begegnungen werden aus derselben chronologischen Elo-Berechnung wie der aktuelle Stand übernommen.',
+        ),
+        for (final tournament in tournaments)
+          Card(
+            child: ExpansionTile(
+              key: PageStorageKey('ranking-tournament-${tournament.id}'),
+              title: Text(tournament.name),
+              subtitle: Text(
+                '${_historyDate(tournament.latestMatch)} · ${tournament.players.length} Spieler',
+              ),
+              children: [
+                for (final playerRow
+                    in tournament.players.entries.toList()..sort(
+                      (a, b) => (names[a.key] ?? a.key).compareTo(
+                        names[b.key] ?? b.key,
+                      ),
+                    ))
+                  _TournamentEloPlayerHistory(
+                    tournamentId: tournament.id,
+                    playerId: playerRow.key,
+                    playerName: names[playerRow.key] ?? playerRow.key,
+                    items: playerRow.value,
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _TournamentEloPlayerHistory extends StatelessWidget {
+  const _TournamentEloPlayerHistory({
+    required this.tournamentId,
+    required this.playerId,
+    required this.playerName,
+    required this.items,
+  });
+
+  final String tournamentId;
+  final String playerId;
+  final String playerName;
+  final List<LocalEloHistoryItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final ordered = items.toList()
+      ..sort((a, b) {
+        final date = a.playedAt.compareTo(b.playedAt);
+        return date == 0 ? a.matchIndex.compareTo(b.matchIndex) : date;
+      });
+    final before = ordered.first.ratingAfter - ordered.first.delta;
+    final after = ordered.last.ratingAfter;
+    final delta = ordered.fold<int>(0, (sum, item) => sum + item.delta);
+
+    return ExpansionTile(
+      key: PageStorageKey('ranking-tournament-$tournamentId-player-$playerId'),
+      title: Text(playerName),
+      subtitle: Text(
+        '$before → $after Elo · ${delta > 0 ? "+" : ""}$delta Elo',
+      ),
+      children: [
+        for (final item in ordered)
+          ListTile(
+            dense: true,
+            title: Text('${item.opponentName} · ${item.score}'),
+            subtitle: Text(
+              '${_historyDate(item.playedAt)} · ${item.ratingAfter} Elo danach',
+            ),
+            trailing: Text(
+              '${item.delta > 0 ? "+" : ""}${item.delta} Elo',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: item.delta > 0
+                    ? Colors.green
+                    : item.delta < 0
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+String _historyDate(DateTime date) {
+  final local = date.toLocal();
+  final day = local.day.toString().padLeft(2, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  return '$day.$month.${local.year}';
 }
 
 class LocalRankingSeriesStandingsPage extends StatefulWidget {
@@ -1710,10 +1970,7 @@ class _LocalRankingSeriesStandingsPageState
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ranglisten-Grafik fehlgeschlagen: $error'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+          SnackBar(content: Text('Ranglisten-Grafik fehlgeschlagen: $error')),
         );
       }
     } finally {
@@ -1945,7 +2202,6 @@ class PlayerEloHistoryPage extends StatelessWidget {
                   key: PageStorageKey(
                     'elo-group-${group.tournamentName}-${group.playedAt.toIso8601String()}',
                   ),
-                  initiallyExpanded: group == reversedGroups.first,
                   leading: CircleAvatar(
                     backgroundColor: group.totalDelta > 0
                         ? Colors.green.shade100
@@ -1966,9 +2222,17 @@ class PlayerEloHistoryPage extends StatelessWidget {
                       size: 20,
                     ),
                   ),
-                  title: Text(
-                    group.tournamentName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  title: Tooltip(
+                    message: group.matches
+                        .map(
+                          (match) =>
+                              '${match.opponentName}: ${match.ratingAfter - match.delta} → ${match.ratingAfter} Elo (${match.delta >= 0 ? "+" : ""}${match.delta})',
+                        )
+                        .join('\n'),
+                    child: Text(
+                      group.tournamentName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                   subtitle: Text(
                     '${group.playedAt.day}.${group.playedAt.month}.${group.playedAt.year} · ${group.wins} Siege · ${group.losses} Niederlagen${group.draws > 0 ? " · ${group.draws} Unentschieden" : ""}',

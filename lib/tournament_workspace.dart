@@ -39,7 +39,6 @@ import 'features/tournaments/presentation/widgets/creation/configuration_duratio
 import 'features/tournaments/presentation/widgets/creation/creation_entry_choices.dart';
 import 'features/tournaments/application/tournament_timing.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
-import 'features/statistics/presentation/live_tournament_statistics_section.dart';
 import 'features/statistics/presentation/tournament_match_statistics_page.dart';
 import 'features/tournaments/application/expanded_format_planner.dart';
 import 'features/tournaments/presentation/widgets/planning_suggestion_list.dart';
@@ -51,9 +50,11 @@ import 'features/tournaments/data/app_database.dart';
 import 'features/tournaments/data/tournament_storage.dart';
 import 'features/tournaments/domain/engines/tournament_engine.dart';
 import 'features/tournaments/domain/engines/group_bye_seeding.dart';
+import 'features/tournaments/domain/engines/group_player_allocation_engine.dart';
 import 'features/tournaments/domain/tournament_models.dart'
     hide defaultGroupTieBreakers, groupLabel;
 import 'features/tournaments/domain/tournament_format_planner.dart';
+import 'features/rankings/application/local_ranking_elo_service.dart';
 import 'features/tournaments/presentation/models/match_result.dart';
 import 'features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'features/tournaments/presentation/pages/challonge_local_import_page.dart';

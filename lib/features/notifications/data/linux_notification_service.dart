@@ -139,7 +139,7 @@ class LinuxNotificationService {
     );
     await units.create(recursive: true);
     await File(p.join(units.path, unit)).writeAsString('''[Unit]
-Description=Dart Turnier Benachrichtigungen
+Description=DartTournamentPro-Benachrichtigungen
 [Service]
 Type=simple
 ExecStart=/usr/bin/python3 ${systemdQuote(worker.path)} ${systemdQuote(config.path)}

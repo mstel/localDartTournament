@@ -150,7 +150,9 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
           _ => 'Import fehlgeschlagen: $error',
         };
         setState(() => _message = message);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Theme.of(context).colorScheme.error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
       }
     } finally { if (mounted) setState(() => _busy = false); }
   }

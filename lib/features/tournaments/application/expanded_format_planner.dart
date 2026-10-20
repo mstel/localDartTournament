@@ -64,7 +64,9 @@ class ExpandedFormatPlanner {
           ])
             if ((sets == 1 || legs >= 3) &&
                 (!request.lockLegsFormat || legs == request.bestOfLegs) &&
-                (request.lockLegsFormat || request.bestOfLegs <= 1 || legs >= (request.bestOfLegs >= 3 ? 3 : 1)))
+                (request.lockLegsFormat ||
+                    request.bestOfLegs <= 1 ||
+                    legs >= (request.bestOfLegs >= 3 ? 3 : 1)))
               TournamentGameFormat(
                 x01Score: score,
                 bestOfLegs: legs,
@@ -163,9 +165,9 @@ class ExpandedFormatPlanner {
           for (var i = 0; i < stages.length; i++) {
             final sample = estimates[i]!;
             minutes +=
-                (sample.minutes - sample.waitMinutes) /
-                planner.estimatedMatchMinutes(stages[i].gameFormat) *
-                planner.estimatedMatchMinutes(formats[i]) + sample.waitMinutes;
+                sample.matchSlots * planner.estimatedMatchMinutes(formats[i]) +
+                sample.idleMinutes +
+                sample.waitMinutes;
           }
           final configs = [
             for (var i = 0; i < stages.length; i++)
@@ -238,20 +240,28 @@ class ExpandedFormatPlanner {
           prefix.isEmpty ? request.manualQualifiers : null,
         )) {
           final mode = stage.type == 'groups'
-              ? (stage.groupRoundRobinRepeats.isNotEmpty && stage.groupRoundRobinRepeats.first == 2)
-                  ? 'groups:double_round_robin'
-                  : 'groups:${stage.groupMaxGamesPerPlayer.any((limit) => limit != null) ? 'limited_round_robin' : stage.groupPlayType}'
+              ? (stage.groupRoundRobinRepeats.isNotEmpty &&
+                        stage.groupRoundRobinRepeats.first == 2)
+                    ? 'groups:double_round_robin'
+                    : 'groups:${stage.groupMaxGamesPerPlayer.any((limit) => limit != null) ? 'limited_round_robin' : stage.groupPlayType}'
               : stage.type;
           final terminal = stage.qualifiedParticipantCount == 1;
-          final isPreferredFinal = terminal &&
+          final isPreferredFinal =
+              terminal &&
               request.preferredFinalStage != null &&
               ((request.preferredFinalStage == mode) ||
-                  (request.preferredFinalStage == 'single_knockout' && stage.type == 'single_knockout') ||
-                  (request.preferredFinalStage == 'double_knockout' && stage.type == 'double_knockout') ||
-                  (request.preferredFinalStage == 'triple_knockout' && stage.type == 'triple_knockout') ||
-                  (request.preferredFinalStage == 'kratzer' && stage.type == 'kratzer') ||
-                  (request.preferredFinalStage == 'groups:round_robin' && mode == 'groups:round_robin') ||
-                  (request.preferredFinalStage == 'groups:double_round_robin' && mode == 'groups:double_round_robin'));
+                  (request.preferredFinalStage == 'single_knockout' &&
+                      stage.type == 'single_knockout') ||
+                  (request.preferredFinalStage == 'double_knockout' &&
+                      stage.type == 'double_knockout') ||
+                  (request.preferredFinalStage == 'triple_knockout' &&
+                      stage.type == 'triple_knockout') ||
+                  (request.preferredFinalStage == 'kratzer' &&
+                      stage.type == 'kratzer') ||
+                  (request.preferredFinalStage == 'groups:round_robin' &&
+                      mode == 'groups:round_robin') ||
+                  (request.preferredFinalStage == 'groups:double_round_robin' &&
+                      mode == 'groups:double_round_robin'));
           if (request.enabledModes != null &&
               !request.enabledModes!.contains(mode) &&
               !isPreferredFinal) {
@@ -264,7 +274,9 @@ class ExpandedFormatPlanner {
               !path.any((s) => s.type == 'groups')) {
             continue;
           }
-          if (terminal && request.preferredFinalStage != null && !isPreferredFinal) {
+          if (terminal &&
+              request.preferredFinalStage != null &&
+              !isPreferredFinal) {
             continue;
           }
           final result = evaluate(path);
@@ -310,7 +322,9 @@ class ExpandedFormatPlanner {
     }
     final targets = {
       1,
-      if (manualQualifiers != null && manualQualifiers < n && manualQualifiers >= 1)
+      if (manualQualifiers != null &&
+          manualQualifiers < n &&
+          manualQualifiers >= 1)
         manualQualifiers
       else if (n >= 4)
         n ~/ 2,
@@ -372,7 +386,9 @@ class ExpandedFormatPlanner {
           } else {
             final fixed = List.generate(
               groups,
-              (i) => manualQualifiers ~/ groups + (i < manualQualifiers % groups ? 1 : 0),
+              (i) =>
+                  manualQualifiers ~/ groups +
+                  (i < manualQualifiers % groups ? 1 : 0),
             );
             if (fixed.first < sizes.last && fixed.last >= 1) {
               qualifierPlans = [(manualQualifiers, fixed)];
@@ -389,7 +405,9 @@ class ExpandedFormatPlanner {
           };
           qualifierPlans = [
             for (final perGroup in qualifierOptions)
-              if (perGroup < sizes.last && groups * perGroup < n && groups * perGroup >= 1)
+              if (perGroup < sizes.last &&
+                  groups * perGroup < n &&
+                  groups * perGroup >= 1)
                 (groups * perGroup, List.filled(groups, perGroup)),
           ];
         }
@@ -423,8 +441,13 @@ class ExpandedFormatPlanner {
             groupCount: groups,
             groupSizes: sizes,
             groupPlayType: isRoundRobinVariant ? 'round_robin' : play,
-            groupPlayTypes: List.filled(groups, isRoundRobinVariant ? 'round_robin' : play),
-            groupMaxGamesPerPlayer: play == 'limited_round_robin' ? List.filled(groups, 5) : const [],
+            groupPlayTypes: List.filled(
+              groups,
+              isRoundRobinVariant ? 'round_robin' : play,
+            ),
+            groupMaxGamesPerPlayer: play == 'limited_round_robin'
+                ? List.filled(groups, 5)
+                : const [],
             groupRoundRobinRepeats: List.filled(
               groups,
               play == 'swiss'

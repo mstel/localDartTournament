@@ -1,12 +1,19 @@
 enum PlanningParameter {
-  swissRoundWaitMinutes('Swiss-Zeitplanung', 'Reserve je Rundenwechsel (Warten / Auslosung)', 5, 0, 120),
+  swissRoundWaitMinutes(
+    'Swiss-Zeitplanung',
+    'Reserve je Rundenwechsel (Warten / Auslosung)',
+    5,
+    0,
+    120,
+  ),
   maximumGroups('Turnieraufbau', 'Maximale Gruppenzahl', 4, 1, 64),
   qualifiersPerGroup('Turnieraufbau', 'Qualifikation je Gruppe', 2, 1, 64),
   maximumSuggestions('Turnieraufbau', 'Anzahl Vorschläge', 3, 1, 64),
-  minutes301DoubleOut('Minuten pro Leg', '301 · Double Out', 8, 1, 120),
-  minutes501DoubleOut('Minuten pro Leg', '501 · Double Out', 10, 1, 120),
-  minutes301SingleOut('Minuten pro Leg', '301 · Single Out', 5, 1, 120),
-  minutes501SingleOut('Minuten pro Leg', '501 · Single Out', 7, 1, 120),
+  boardIdleMinutes('Board-Leerstand', 'Leerstand Minuten/Board', 4, 0, 120),
+  minutes301DoubleOut('Minuten pro Leg', '301 · Double Out', 3, 1, 120),
+  minutes501DoubleOut('Minuten pro Leg', '501 · Double Out', 5, 1, 120),
+  minutes301SingleOut('Minuten pro Leg', '301 · Single Out', 2, 1, 120),
+  minutes501SingleOut('Minuten pro Leg', '501 · Single Out', 4, 1, 120),
   fallbackSingleOutMinutes(
     'Minuten pro Leg',
     'Andere Punktzahlen · Single Out',
@@ -92,6 +99,7 @@ class TournamentPlanningParameters {
   int get maximumGroups => value(PlanningParameter.maximumGroups);
   int get qualifiersPerGroup => value(PlanningParameter.qualifiersPerGroup);
   int get maximumSuggestions => value(PlanningParameter.maximumSuggestions);
+  int get boardIdleMinutes => value(PlanningParameter.boardIdleMinutes);
   int get minutes301DoubleOut => value(PlanningParameter.minutes301DoubleOut);
   int get minutes501DoubleOut => value(PlanningParameter.minutes501DoubleOut);
   int get minutes301SingleOut => value(PlanningParameter.minutes301SingleOut);

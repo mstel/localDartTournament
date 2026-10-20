@@ -38,15 +38,26 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Wrap(spacing: 8, runSpacing: 4, children: [
-              for (var i = 0; i < _sections.length; i++)
-                ChoiceChip(
-                  label: Text(_sections[i]),
-                  avatar: Icon([Icons.storage, Icons.system_update_outlined, Icons.palette, Icons.settings_outlined][i]),
-                  selected: _selected == i,
-                  onSelected: (_) => setState(() => _selected = i),
-                ),
-            ]),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (var i = 0; i < _sections.length; i++)
+                  ChoiceChip(
+                    label: Text(_sections[i]),
+                    avatar: Icon(
+                      [
+                        Icons.storage,
+                        Icons.system_update_outlined,
+                        Icons.palette,
+                        Icons.settings_outlined,
+                      ][i],
+                    ),
+                    selected: _selected == i,
+                    onSelected: (_) => setState(() => _selected = i),
+                  ),
+              ],
+            ),
           ),
           Expanded(
             child: switch (_selected) {
@@ -86,7 +97,10 @@ class _AdministrationPanel extends StatelessWidget {
   Widget build(BuildContext context) => AdaptiveContentList(
     padding: const EdgeInsets.all(20),
     children: [
-      Text('Werkzeuge & Verwaltung', style: Theme.of(context).textTheme.headlineSmall),
+      Text(
+        'Werkzeuge & Verwaltung',
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
       const SizedBox(height: 16),
       const PushSenderMenu(),
       const PushDeviceMenu(),
@@ -94,14 +108,18 @@ class _AdministrationPanel extends StatelessWidget {
         child: ListTile(
           leading: const Icon(Icons.lightbulb_outline),
           title: const Text('Govee Licht-Hub'),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const GoveeHubPage())),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const GoveeHubPage())),
         ),
       ),
       Card(
         child: ListTile(
           leading: const Icon(Icons.science_outlined),
           title: const Text('Dev Tools'),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DevToolsPage())),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const DevToolsPage())),
         ),
       ),
       Card(
@@ -109,7 +127,9 @@ class _AdministrationPanel extends StatelessWidget {
           leading: const Icon(Icons.auto_awesome_outlined),
           title: const Text('Passende Turnierform'),
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const PlanningParametersPage()),
+            MaterialPageRoute<void>(
+              builder: (_) => const PlanningParametersPage(),
+            ),
           ),
         ),
       ),
@@ -353,7 +373,7 @@ class _PlanningParametersPanelState extends State<_PlanningParametersPanel> {
             icon: Icons.info_outline,
             children: [
               Text(
-                'Leg-Dauern sind Schätzwerte. Pro Match gilt der Mittelwert aus minimaler und maximaler Leg-Zahl: Bo3 = 2,5; Bo5 = 4; Bo101 = 76; Bo1 = 1 Leg. Bei Sets wird zusätzlich mit der mittleren Set-Zahl gerechnet. Double In verwendet die Double-Out-Dauer. Weniger Strafpunkte bedeuten eine bessere Platzierung. Spielerzahl, Boards, Zeitfenster, Punktzahl und Checkout werden weiterhin je Turniersuche festgelegt.',
+                'Leg-Dauern sind Schätzwerte. Die Standardwerte pro Leg sind 3 Minuten (301 Double Out), 5 Minuten (501 Double Out), 2 Minuten (301 Single Out) und 4 Minuten (501 Single Out). Pro Match gilt der Mittelwert aus minimaler und maximaler Leg-Zahl: Bo3 = 2,5; Bo5 = 4; Bo101 = 76; Bo1 = 1 Leg. Bei Sets wird zusätzlich mit der mittleren Set-Zahl gerechnet. Double In verwendet die Double-Out-Dauer. Die Leerstandsreserve wird pro ungenutztem Board und Spielblock addiert. KO-Runden werden nacheinander geplant. Weniger Strafpunkte bedeuten eine bessere Platzierung. Spielerzahl, Boards, Zeitfenster, Punktzahl und Checkout werden weiterhin je Turniersuche festgelegt.',
               ),
             ],
           ),

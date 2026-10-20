@@ -51,25 +51,19 @@ class PlayerStatisticsImageGenerator {
 
     final metrics = <(String, String)>[
       ('Turniere', '${statistics.tournaments}'),
+      ('Turniersiege', '${statistics.tournamentWins}'),
+      (
+        'Turniersiegchance %',
+        '${statistics.tournamentWinRate.toStringAsFixed(1)} %',
+      ),
       ('Spiele', '${statistics.matches}'),
       ('Siege', '${statistics.wins}'),
       ('Niederlagen', '${statistics.losses}'),
       ('Unentschieden', '${statistics.draws}'),
       ('Siegquote', '${statistics.matchWinRate.toStringAsFixed(1)} %'),
-      (
-        'Legs gewonnen / verloren',
-        '${statistics.legsWon} / ${statistics.legsLost}',
-      ),
-      (
-        'Sets gewonnen / verloren',
-        '${statistics.setsWon} / ${statistics.setsLost}',
-      ),
-      (
-        'Erwartete Elo-Siegchance',
-        statistics.expectedWinChance == null
-            ? '–'
-            : '${statistics.expectedWinChance!.toStringAsFixed(1)} %',
-      ),
+      ('Legs gewonnen', '${statistics.legsWon}'),
+      ('Legs verloren', '${statistics.legsLost}'),
+      ('Leg-Siegquote', '${statistics.legWinRate.toStringAsFixed(1)} %'),
     ];
     final columns = landscape ? 3 : 2;
     const gap = 16.0;
@@ -108,12 +102,17 @@ class PlayerStatisticsImageGenerator {
       );
     }
 
-    final statsEnd = padding + 128 + (metrics.length / columns).ceil() *
-        (cardHeight + gap);
+    final statsEnd =
+        padding + 128 + (metrics.length / columns).ceil() * (cardHeight + gap);
     final performanceTop = statsEnd + 28;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(padding, performanceTop, contentWidth, height - performanceTop - padding),
+        Rect.fromLTWH(
+          padding,
+          performanceTop,
+          contentWidth,
+          height - performanceTop - padding,
+        ),
         const Radius.circular(16),
       ),
       cardPaint,
@@ -141,7 +140,11 @@ class PlayerStatisticsImageGenerator {
       final rowHeight = landscape ? 42.0 : 46.0;
       final maxRows = ((height - performanceTop - padding - 76) / rowHeight)
           .floor();
-      for (var index = 0; index < performances.length && index < maxRows; index++) {
+      for (
+        var index = 0;
+        index < performances.length && index < maxRows;
+        index++
+      ) {
         final performance = performances[index];
         final typeLabel = _performanceLabel(performance.type);
         _text(

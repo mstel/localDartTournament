@@ -77,6 +77,11 @@ void main() {
         (await statistics.forPlayers({player.id})).bestPerformances,
         hasLength(1),
       );
+      final playerStats = await statistics.forPlayers({player.id});
+      expect(playerStats.tournamentWins, 1);
+      expect(playerStats.tournamentWinRate, 100);
+      expect(playerStats.legsWon, 2);
+      expect(playerStats.legsLost, 0);
 
       await storage.deleteTournament(tournament.id);
 

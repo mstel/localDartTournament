@@ -76,6 +76,8 @@ void main() {
     const Size(360, 800),
     const Size(800, 600),
     const Size(1440, 900),
+    const Size(1920, 1080),
+    const Size(3840, 2160),
   ]) {
     for (final scale in [1.0, 2.0]) {
       testWidgets('all director sections at $size text $scale', (tester) async {
@@ -201,9 +203,7 @@ void main() {
       expect(jsonDecode(await file.readAsString())['schemaVersion'], 23);
     },
   );
-  testWidgets('director dashboard survives width changes', (
-    tester,
-  ) async {
+  testWidgets('director dashboard survives width changes', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 800);
     addTearDown(tester.view.reset);

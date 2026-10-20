@@ -35,7 +35,12 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      for (final label in ['Turniere', 'Spieler', 'Statistik', 'Ranglisten']) {
+      for (final label in [
+        'Turniere',
+        'Spieler',
+        'Statistiken',
+        'Ranglisten',
+      ]) {
         expect(find.text(label), findsWidgets);
       }
       expect(tester.takeException(), isNull);

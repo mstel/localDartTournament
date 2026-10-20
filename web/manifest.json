@@ -1,11 +1,11 @@
 {
-    "name": "dart_tournament_manager",
-    "short_name": "dart_tournament_manager",
+    "name": "DartTournamentPro",
+    "short_name": "DartTournamentPro",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#121316",
+    "theme_color": "#D49B44",
+    "description": "DartTournamentPro – Dart-Turniere planen, spielen und auswerten.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

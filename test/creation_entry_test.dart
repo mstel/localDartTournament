@@ -57,7 +57,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(expert);
         await tester.pumpAndSettle();
-        expect(find.text('Passende Turnierform finden'), findsOneWidget);
+        expect(find.text('Passende Turnierform'), findsOneWidget);
         expect(expert, findsNothing);
         await tester.scrollUntilVisible(
           find.byKey(const ValueKey('tournament-name-field')),

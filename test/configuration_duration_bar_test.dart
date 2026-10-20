@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/creation/configuration_duration_bar.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/configuration_duration_estimator.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_planning_parameters.dart';
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
@@ -33,6 +34,24 @@ void main() {
         addTearDown(tester.view.reset);
         var boards = 1;
         final previewKey = GlobalKey();
+        const stages = [
+          TournamentStage(
+            name: 'Liga',
+            type: 'groups',
+            groupCount: 1,
+            groupSizes: [4],
+            gameFormat: TournamentGameFormat(bestOfLegs: 3),
+          ),
+        ];
+        String durationText(int boardCount) {
+          final estimate = const ConfigurationDurationEstimator().preview(
+            stages,
+            boardCount,
+            const TournamentPlanningParameters(),
+          )!;
+          return 'ca. ${estimate.minutes ~/ 60} h ${estimate.minutes % 60} min';
+        }
+
         await tester.pumpWidget(
           MaterialApp(
             home: StatefulBuilder(
@@ -46,15 +65,7 @@ void main() {
                     body: AdaptiveContentList(
                       children: [
                         ConfigurationDurationBar(
-                          stages: const [
-                            TournamentStage(
-                              name: 'Liga',
-                              type: 'groups',
-                              groupCount: 1,
-                              groupSizes: [4],
-                              gameFormat: TournamentGameFormat(bestOfLegs: 3),
-                            ),
-                          ],
+                          stages: stages,
                           boards: boards,
                           parameters: const TournamentPlanningParameters(),
                           onBoardsChanged: (value) =>
@@ -69,7 +80,7 @@ void main() {
           ),
         );
         await tester.pump(const Duration(milliseconds: 300));
-        expect(find.text('ca. 2 h 30 min'), findsOneWidget);
+        expect(find.text(durationText(boards)), findsOneWidget);
         expect(find.text('6 Spiele insgesamt'), findsOneWidget);
         expect(
           find.text('Garantiert mindestens 3 Spiele je Teilnehmer'),
@@ -82,7 +93,7 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         expect(boards, 2);
-        expect(find.text('ca. 1 h 15 min'), findsOneWidget);
+        expect(find.text(durationText(boards)), findsOneWidget);
         expect(tester.takeException(), isNull);
         if (previewFont.isNotEmpty) {
           await tester.runAsync(() async {

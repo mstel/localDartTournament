@@ -21,15 +21,15 @@ void main() {
     final before = group.toJson();
     final one = estimator.estimate([group], 1, parameters)!;
     final two = estimator.estimate([group], 2, parameters)!;
-    expect(one, 150);
-    expect(two, 75);
+    expect(one, 75);
+    expect(two, 38);
     expect(estimator.preview([group], 2, parameters)!.matchEndSeconds, [
+      750,
+      750,
       1500,
       1500,
-      3000,
-      3000,
-      4500,
-      4500,
+      2250,
+      2250,
     ]);
     expect(group.toJson(), before);
   });
@@ -42,8 +42,8 @@ void main() {
       ...group.toJson(),
       'groupRoundRobinRepeats': [2],
     });
-    expect(estimator.estimate([longer], 1, parameters), 240);
-    expect(estimator.estimate([repeat], 1, parameters), 300);
+    expect(estimator.estimate([longer], 1, parameters), 120);
+    expect(estimator.estimate([repeat], 1, parameters), 150);
     expect(estimator.preview([repeat], 1, parameters)!.minimumMatches, 6);
     expect(estimator.preview([repeat], 1, parameters)!.totalMatches, 12);
   });
@@ -56,21 +56,21 @@ void main() {
       knockoutByeCount: 1,
       gameFormat: TournamentGameFormat(bestOfLegs: 3),
     );
-    expect(estimator.estimate([ko], 4, parameters), 50);
+    expect(estimator.estimate([ko], 4, parameters), 49);
     expect(estimator.preview([ko], 4, parameters)!.totalMatches, 2);
     expect(estimator.preview([ko], 4, parameters)!.minimumMatches, 1);
     expect(estimator.preview([group, ko], 2, parameters)!.minimumMatches, 3);
     expect(estimator.preview([group, ko], 2, parameters)!.totalMatches, 8);
-    expect(estimator.estimate([group, ko], 2, parameters), 125);
+    expect(estimator.estimate([group, ko], 2, parameters), 71);
     expect(estimator.preview([group, ko], 2, parameters)!.matchEndSeconds, [
+      750,
+      750,
       1500,
       1500,
+      2250,
+      2250,
       3000,
-      3000,
-      4500,
-      4500,
-      6000,
-      7500,
+      3990,
     ]);
     expect(estimator.estimate([], 2, parameters), isNull);
   });

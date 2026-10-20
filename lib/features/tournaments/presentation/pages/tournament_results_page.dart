@@ -2,6 +2,7 @@ import '../../../../shared/widgets/sport_menu.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime;
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
+import '../../../rankings/presentation/rankings_page.dart';
 import '../../domain/engines/placement_engine.dart';
 import '../../domain/knockout_round_names.dart';
 import 'package:flutter/material.dart';
@@ -39,7 +40,6 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     }
     final summary = _TournamentResultSummary.fromTournament(tournament);
     final podium = summary.ranking.take(3).toList();
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -67,28 +67,41 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
         child: AdaptiveContentList(
           padding: const EdgeInsets.all(16),
           children: [
-            Card(
-              color: colorScheme.primaryContainer,
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF142B3A), Color(0xFF175C59)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.emoji_events,
-                      size: 52,
-                      color: colorScheme.primary,
-                    ),
-                    const SizedBox(height: 8),
                     Text(
                       tournament.name,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Turnier abgeschlossen',
+                      style: TextStyle(
+                        color: Color(0xFF70E0BA),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    const Text('Turnier abgeschlossen'),
-                    const SizedBox(height: 8),
-                    Text('Art: ${_tournamentTypeLabel(tournament)}'),
+                    Text(
+                      'Art: ${_tournamentTypeLabel(tournament)}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
                     Builder(
                       builder: (context) {
                         final summary = TournamentTiming.durationSummary(
@@ -106,7 +119,10 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                         return Text(
                           duration,
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
                         );
                       },
                     ),
@@ -120,17 +136,12 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                             )
                             .join('\n'),
                         textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white),
                       ),
                     ],
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () => TournamentExportDialog.show(context, tournament),
-              icon: const Icon(Icons.ios_share),
-              label: const Text('Turnier exportieren'),
             ),
             const SizedBox(height: 16),
             SportMenuGroup(
@@ -170,6 +181,14 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               ),
               TournamentRankingChangesSection(tournament: tournament),
             ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const RankingsPage()),
+              ),
+              icon: const Icon(Icons.leaderboard_outlined),
+              label: const Text('Rangliste öffnen'),
+            ),
             const SizedBox(height: 24),
             Text(
               'Turnierstatistik',
@@ -186,31 +205,10 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
             const SizedBox(height: 24),
             TournamentResultsStatistics(tournament: tournament),
             const SizedBox(height: 24),
-            Text(
-              'Gesamtwertung',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              summary.rankingHint,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: Column(
-                children: [
-                  for (var index = 0; index < summary.ranking.length; index++)
-                    _RankingRow(
-                      place: index + 1,
-                      stats: summary.ranking[index],
-                      maxLegs: summary.maxLegs,
-                      onTap: () =>
-                          _openPlayer(context, summary.ranking[index].player),
-                    ),
-                ],
-              ),
+            OutlinedButton.icon(
+              onPressed: () => TournamentExportDialog.show(context, tournament),
+              icon: const Icon(Icons.ios_share),
+              label: const Text('Turnier exportieren'),
             ),
           ],
         ),

@@ -42,7 +42,7 @@ class _DartTournamentAppState extends State<DartTournamentApp>
   Widget build(BuildContext context) => ValueListenableBuilder<ThemeMode>(
     valueListenable: AppThemeController.instance.themeModeNotifier,
     builder: (context, themeMode, _) => MaterialApp(
-      title: 'Dart Turnierverwaltung',
+      title: 'DartTournamentPro',
       scrollBehavior: const DartTournamentScrollBehavior(),
       themeMode: themeMode,
       theme: buildDartTournamentTheme(),

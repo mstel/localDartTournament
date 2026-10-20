@@ -70,7 +70,6 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Spielerprofil-Grafik fehlgeschlagen: $error'),
-            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -173,17 +172,19 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                     _StatCard(label: 'Turniere', value: '${stats.tournaments}'),
                     _StatCard(label: 'Spiele', value: '${stats.matches}'),
                     _StatCard(label: 'Siege', value: '${stats.wins}'),
-                    _StatCard(label: 'Niederlagen', value: '${stats.losses}'),
                     _StatCard(label: 'Unentschieden', value: '${stats.draws}'),
+                    _StatCard(label: 'Niederlagen', value: '${stats.losses}'),
+                    _StatCard(
+                      label: 'Turniersiege',
+                      value: '${stats.tournamentWins}',
+                    ),
+                    _StatCard(
+                      label: 'Turniersiegchance %',
+                      value: '${stats.tournamentWinRate.toStringAsFixed(1)} %',
+                    ),
                     _StatCard(
                       label: 'Siegquote',
                       value: '${stats.matchWinRate.toStringAsFixed(1)} %',
-                    ),
-                    _StatCard(
-                      label: 'Erwartete Siegchance (Elo)',
-                      value: stats.expectedWinChance == null
-                          ? '—'
-                          : '${stats.expectedWinChance!.toStringAsFixed(1)} %',
                     ),
                   ],
                 ),
@@ -197,20 +198,16 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   runSpacing: 12,
                   children: [
                     _StatCard(
-                      label: 'Legs gewonnen / verloren',
-                      value: '${stats.legsWon} / ${stats.legsLost}',
+                      label: 'Legs gewonnen',
+                      value: '${stats.legsWon}',
+                    ),
+                    _StatCard(
+                      label: 'Legs verloren',
+                      value: '${stats.legsLost}',
                     ),
                     _StatCard(
                       label: 'Leg-Siegquote',
                       value: '${stats.legWinRate.toStringAsFixed(1)} %',
-                    ),
-                    _StatCard(
-                      label: 'Sets gewonnen / verloren',
-                      value: '${stats.setsWon} / ${stats.setsLost}',
-                    ),
-                    _StatCard(
-                      label: 'Set-Siegquote',
-                      value: '${stats.setWinRate.toStringAsFixed(1)} %',
                     ),
                   ],
                 ),

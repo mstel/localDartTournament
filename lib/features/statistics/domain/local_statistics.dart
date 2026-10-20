@@ -13,20 +13,19 @@ class LocalPlayerStatistics {
     required this.wins,
     required this.losses,
     required this.draws,
+    required this.tournamentWins,
     required this.legsWon,
     required this.legsLost,
-    required this.setsWon,
-    required this.setsLost,
     required this.bestPerformances,
-    required this.expectedWinChance,
   });
-  final int tournaments, matches, wins, losses, draws;
-  final int legsWon, legsLost, setsWon, setsLost;
+  final int tournaments, matches, wins, losses, draws, tournamentWins;
+  final int legsWon, legsLost;
   final List<BestPerformance> bestPerformances;
-  final double? expectedWinChance;
   double get matchWinRate => matches == 0 ? 0 : wins * 100 / matches;
-  double get legWinRate => legsWon + legsLost == 0 ? 0 : legsWon * 100 / (legsWon + legsLost);
-  double get setWinRate => setsWon + setsLost == 0 ? 0 : setsWon * 100 / (setsWon + setsLost);
+  double get tournamentWinRate =>
+      tournaments == 0 ? 0 : tournamentWins * 100 / tournaments;
+  double get legWinRate =>
+      legsWon + legsLost == 0 ? 0 : legsWon * 100 / (legsWon + legsLost);
 }
 
 class LocalStatisticsService {
@@ -41,18 +40,27 @@ class LocalStatisticsService {
       for (final profile in localProfiles)
         profile.displayName.trim().toLowerCase(): profile.id,
     };
-    final tournaments = await (storage ?? TournamentStorage()).loadTournaments();
+    final tournaments = await (storage ?? TournamentStorage())
+        .loadTournaments();
     final playedTournamentIds = <String>{};
-    var matches = 0, wins = 0, losses = 0, draws = 0;
-    var legsWon = 0, legsLost = 0, setsWon = 0, setsLost = 0;
+    var matches = 0, wins = 0, losses = 0, draws = 0, tournamentWins = 0;
+    var legsWon = 0, legsLost = 0;
     final performances = <BestPerformance>[];
     for (final tournament in tournaments) {
       if (year != null) {
         final tDate = (tournament.finishedAt ?? tournament.createdAt).toLocal();
         if (tDate.year != year) continue;
       }
-      if (tournament.players.any((p) => p.profileId != null && ids.contains(p.profileId))) {
+      if (tournament.players.any(
+        (p) => p.profileId != null && ids.contains(p.profileId),
+      )) {
         playedTournamentIds.add(tournament.id);
+      }
+      if (tournament.players.any(
+            (p) => p.profileId != null && ids.contains(p.profileId),
+          ) &&
+          _tournamentWinner(tournament, ids) != null) {
+        tournamentWins++;
       }
       for (final match in _matches(tournament)) {
         if (!match.hasResult || match.withdrawalIgnored) continue;
@@ -73,11 +81,18 @@ class LocalStatisticsService {
         }
         legsWon += isHome ? match.homeLegs ?? 0 : match.awayLegs ?? 0;
         legsLost += isHome ? match.awayLegs ?? 0 : match.homeLegs ?? 0;
-        setsWon += isHome ? match.homeSets ?? 0 : match.awaySets ?? 0;
-        setsLost += isHome ? match.awaySets ?? 0 : match.homeSets ?? 0;
-        performances.addAll(match.bestPerformances.where((p) =>
-            (p.playerProfileId != null && ids.contains(p.playerProfileId)) ||
-            (p.playerProfileId == null && (isHome ? match.homePlayer?.name : match.awayPlayer?.name) == p.playerName)));
+        performances.addAll(
+          match.bestPerformances.where(
+            (p) =>
+                (p.playerProfileId != null &&
+                    ids.contains(p.playerProfileId)) ||
+                (p.playerProfileId == null &&
+                    (isHome
+                            ? match.homePlayer?.name
+                            : match.awayPlayer?.name) ==
+                        p.playerName),
+          ),
+        );
       }
       final archive = tournament.importedArchive;
       if (archive != null) {
@@ -87,45 +102,42 @@ class LocalStatisticsService {
               '${participant['id']}': participant['profileId'] as String,
           for (final participant in archive.participants)
             if (participant['profileId'] is String)
-              for (final alias in participant['groupPlayerIds'] as List? ?? const [])
+              for (final alias
+                  in participant['groupPlayerIds'] as List? ?? const [])
                 '$alias': participant['profileId'] as String,
         };
         final nameByChallongeId = <String, String>{
           for (final participant in archive.participants)
             '${participant['id']}': '${participant['name'] ?? ''}',
           for (final participant in archive.participants)
-            for (final alias in participant['groupPlayerIds'] as List? ?? const [])
+            for (final alias
+                in participant['groupPlayerIds'] as List? ?? const [])
               '$alias': '${participant['name'] ?? ''}',
         };
         for (final importedMatch in archive.matches) {
-          final rawPerformances = importedMatch['bestPerformances'] as List? ?? const [];
-          final challongeIds = ['${importedMatch['player1_id']}', '${importedMatch['player2_id']}'];
+          final rawPerformances =
+              importedMatch['bestPerformances'] as List? ?? const [];
+          final challongeIds = [
+            '${importedMatch['player1_id']}',
+            '${importedMatch['player2_id']}',
+          ];
           for (final raw in rawPerformances.whereType<Map>()) {
-            final performance = BestPerformance.fromJson(Map<String, dynamic>.from(raw));
+            final performance = BestPerformance.fromJson(
+              Map<String, dynamic>.from(raw),
+            );
             final matchingProfileIds = challongeIds
                 .where((id) => nameByChallongeId[id] == performance.playerName)
                 .map((id) => profileByChallongeId[id])
                 .whereType<String>()
                 .toList();
-            final profileId = performance.playerProfileId ??
+            final profileId =
+                performance.playerProfileId ??
                 (matchingProfileIds.isEmpty
                     ? profileByName[performance.playerName.trim().toLowerCase()]
                     : matchingProfileIds.first);
-            if (profileId != null && ids.contains(profileId)) performances.add(performance);
-          }
-        }
-      }
-    }
-    var expectedTotal = 0.0;
-    var expectedCount = 0;
-    final rankingIds = <String>{};
-    for (final id in ids) {
-      for (final ranking in await database.loadRankingsForPlayer(id)) {
-        if (ranking.type == RankingType.elo && rankingIds.add(ranking.id)) {
-          final snapshot = await LocalRankingEloService(database: database).calculate(ranking);
-          for (final item in snapshot.history[id] ?? const []) {
-            expectedTotal += item.expectedScore;
-            expectedCount++;
+            if (profileId != null && ids.contains(profileId)) {
+              performances.add(performance);
+            }
           }
         }
       }
@@ -136,18 +148,18 @@ class LocalStatisticsService {
       wins: wins,
       losses: losses,
       draws: draws,
+      tournamentWins: tournamentWins,
       legsWon: legsWon,
       legsLost: legsLost,
-      setsWon: setsWon,
-      setsLost: setsLost,
       bestPerformances: performances,
-      expectedWinChance: expectedCount == 0 ? null : expectedTotal * 100 / expectedCount,
     );
   }
 
   Future<List<LocalRanking>> rankingsFor(Set<String> playerIds) async {
     if (playerIds.isEmpty) return const [];
-    return (database ?? LocalAppDatabase()).loadRankingsForPlayer(playerIds.first);
+    return (database ?? LocalAppDatabase()).loadRankingsForPlayer(
+      playerIds.first,
+    );
   }
 
   /// Returns the position of [playerIds] in each of their rankings.
@@ -162,8 +174,9 @@ class LocalStatisticsService {
     for (final ranking in rankings) {
       try {
         if (ranking.type == RankingType.elo) {
-          final snapshot =
-              await LocalRankingEloService(database: db).calculate(ranking);
+          final snapshot = await LocalRankingEloService(
+            database: db,
+          ).calculate(ranking);
           final sorted = snapshot.entries; // already sorted by rating desc
           final pos = sorted.indexWhere((e) => playerIds.contains(e.id));
           if (pos >= 0) {
@@ -177,8 +190,9 @@ class LocalStatisticsService {
           }
         } else {
           // Series ranking – reuse LocalRankingSeriesService
-          final entries =
-              await LocalRankingSeriesService(database: db).calculate(ranking);
+          final entries = await LocalRankingSeriesService(
+            database: db,
+          ).calculate(ranking);
           final pos = entries.indexWhere(
             (e) => playerIds.contains(e.player.id),
           );
@@ -212,6 +226,46 @@ class LocalStatisticsService {
         }
       }
     }
+  }
+
+  String? _tournamentWinner(CreatedTournament tournament, Set<String> ids) {
+    GroupMatch? finalMatch;
+    for (final stage in tournament.runStages) {
+      if (stage is KnockoutTournamentRunStage &&
+          stage.rounds.isNotEmpty &&
+          stage.rounds.last.length == 1 &&
+          stage.rounds.last.single.hasResult) {
+        finalMatch = stage.rounds.last.single;
+      }
+    }
+    final winnerId = finalMatch?.winner?.profileId;
+    if (winnerId != null && ids.contains(winnerId)) return winnerId;
+
+    final lastStage = tournament.runStages.length - 1;
+    if (lastStage < 0 ||
+        !tournament.completedStageIndexes.contains(lastStage)) {
+      return null;
+    }
+    final wins = <String, int>{};
+    final legs = <String, int>{};
+    for (final match in _matches(tournament).toSet()) {
+      if (!match.hasResult || match.withdrawalIgnored) continue;
+      final winner = match.winner?.profileId;
+      if (winner == null || !ids.contains(winner)) continue;
+      wins.update(winner, (value) => value + 1, ifAbsent: () => 1);
+      final wonLegs = winner == match.homePlayer?.profileId
+          ? match.homeLegs ?? 0
+          : match.awayLegs ?? 0;
+      legs.update(winner, (value) => value + wonLegs, ifAbsent: () => wonLegs);
+    }
+    final candidates = wins.keys.toList()
+      ..sort((a, b) {
+        final byWins = wins[b]!.compareTo(wins[a]!);
+        if (byWins != 0) return byWins;
+        final byLegs = (legs[b] ?? 0).compareTo(legs[a] ?? 0);
+        return byLegs != 0 ? byLegs : a.compareTo(b);
+      });
+    return candidates.isEmpty ? null : candidates.first;
   }
 }
 
