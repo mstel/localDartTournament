@@ -13,7 +13,7 @@ import '../../rankings/domain/local_ranking.dart';
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 9;
+  static const schemaVersion = 10;
 
   final Directory? _baseDirectory;
 
@@ -51,26 +51,51 @@ class LocalAppDatabase {
     try {
       return [
         for (final row in database.select(
-          'SELECT config_json FROM local_rankings ORDER BY name COLLATE NOCASE',
+          '''SELECT config_json, custom_order FROM local_rankings
+             ORDER BY custom_order, name COLLATE NOCASE, id''',
         ))
           LocalRanking.fromJson(
-            Map<String, Object?>.from(jsonDecode(row['config_json'] as String) as Map),
-          ),
+            Map<String, Object?>.from(
+              jsonDecode(row['config_json'] as String) as Map,
+            ),
+          ).copyWith(customOrder: row['custom_order'] as int? ?? 0),
       ];
     } finally {
       database.close();
     }
   });
 
-  Future<void> saveLocalRanking(LocalRanking ranking) => StorageAccess.run(() async {
+  Future<void> saveLocalRanking(
+    LocalRanking ranking,
+  ) => StorageAccess.run(() async {
     final database = await _openDatabase();
     try {
+      final existing = database.select(
+        'SELECT custom_order FROM local_rankings WHERE id = ?',
+        [ranking.id],
+      );
+      final customOrder = existing.isNotEmpty
+          ? existing.first['custom_order'] as int
+          : database
+                    .select(
+                      'SELECT COALESCE(MAX(custom_order), -1) + 1 AS next_order FROM local_rankings',
+                    )
+                    .first['next_order']
+                as int;
       database.execute(
-        '''INSERT INTO local_rankings(id, name, ranking_type, config_json)
-           VALUES (?, ?, ?, ?)
+        '''INSERT INTO local_rankings(
+             id, name, ranking_type, config_json, custom_order
+           )
+           VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET name=excluded.name,
              ranking_type=excluded.ranking_type, config_json=excluded.config_json''',
-        [ranking.id, ranking.name.trim(), ranking.type.name, jsonEncode(ranking.toJson())],
+        [
+          ranking.id,
+          ranking.name.trim(),
+          ranking.type.name,
+          jsonEncode(ranking.toJson()),
+          customOrder,
+        ],
       );
       StorageAccess.markLocalDataChanged();
     } finally {
@@ -78,31 +103,71 @@ class LocalAppDatabase {
     }
   });
 
-  Future<void> deleteLocalRanking(String rankingId) => StorageAccess.run(() async {
+  Future<void> deleteLocalRanking(String rankingId) =>
+      StorageAccess.run(() async {
+        final database = await _openDatabase();
+        try {
+          database.execute('DELETE FROM local_rankings WHERE id = ?', [
+            rankingId,
+          ]);
+          StorageAccess.markLocalDataChanged();
+        } finally {
+          database.close();
+        }
+      });
+
+  Future<void> saveLocalRankingOrder(
+    List<String> rankingIds,
+  ) => StorageAccess.run(() async {
     final database = await _openDatabase();
     try {
-      database.execute('DELETE FROM local_rankings WHERE id = ?', [rankingId]);
+      final storedIds = {
+        for (final row in database.select('SELECT id FROM local_rankings'))
+          row['id'] as String,
+      };
+      if (storedIds.length != rankingIds.length ||
+          storedIds.length != rankingIds.toSet().length ||
+          !storedIds.containsAll(rankingIds)) {
+        throw ArgumentError(
+          'Die benutzerdefinierte Reihenfolge muss jede Rangliste genau einmal enthalten.',
+        );
+      }
+
+      database.execute('BEGIN');
+      try {
+        for (var index = 0; index < rankingIds.length; index++) {
+          database.execute(
+            'UPDATE local_rankings SET custom_order = ? WHERE id = ?',
+            [index, rankingIds[index]],
+          );
+        }
+        database.execute('COMMIT');
+      } catch (_) {
+        database.execute('ROLLBACK');
+        rethrow;
+      }
       StorageAccess.markLocalDataChanged();
     } finally {
       database.close();
     }
   });
 
-  Future<List<String>> loadRankingPlayerIds(String rankingId) =>
-      StorageAccess.run(() async {
-        final database = await _openDatabase();
-        try {
-          return [
-            for (final row in database.select(
-              'SELECT player_profile_id FROM local_ranking_players WHERE ranking_id = ? ORDER BY player_profile_id',
-              [rankingId],
-            ))
-              row['player_profile_id'] as String,
-          ];
-        } finally {
-          database.close();
-        }
-      });
+  Future<List<String>> loadRankingPlayerIds(
+    String rankingId,
+  ) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      return [
+        for (final row in database.select(
+          'SELECT player_profile_id FROM local_ranking_players WHERE ranking_id = ? ORDER BY player_profile_id',
+          [rankingId],
+        ))
+          row['player_profile_id'] as String,
+      ];
+    } finally {
+      database.close();
+    }
+  });
 
   Future<List<LocalRanking>> loadRankingsForPlayer(String playerId) =>
       StorageAccess.run(() async {
@@ -116,7 +181,9 @@ class LocalAppDatabase {
               [playerId],
             ))
               LocalRanking.fromJson(
-                Map<String, Object?>.from(jsonDecode(row['config_json'] as String) as Map),
+                Map<String, Object?>.from(
+                  jsonDecode(row['config_json'] as String) as Map,
+                ),
               ),
           ];
         } finally {
@@ -124,71 +191,95 @@ class LocalAppDatabase {
         }
       });
 
-  Future<void> setRankingPlayers(String rankingId, Iterable<String> playerIds) =>
-      StorageAccess.run(() async {
-        final database = await _openDatabase();
-        try {
-          database.execute('BEGIN');
-          try {
-            database.execute(
-              'DELETE FROM local_ranking_players WHERE ranking_id = ?',
-              [rankingId],
-            );
-            for (final playerId in playerIds.toSet()) {
-              database.execute(
-                '''INSERT INTO local_ranking_players(ranking_id, player_profile_id)
-                   SELECT ?, id FROM player_profiles WHERE id = ? AND is_active = 1''',
-                [rankingId, playerId],
-              );
-            }
-            database.execute('COMMIT');
-            StorageAccess.markLocalDataChanged();
-          } catch (_) {
-            database.execute('ROLLBACK');
-            rethrow;
-          }
-        } finally {
-          database.close();
-        }
-      });
-
-  Future<List<Map<String, Object?>>> loadChallongePlayerLinks({String source = 'challonge'}) =>
-      StorageAccess.run(() async {
-        final database = await _openDatabase();
-        try {
-          return [
-            for (final row in database.select(
-              'SELECT challonge_name, player_profile_id FROM challonge_player_links WHERE source = ? ORDER BY challonge_name COLLATE NOCASE',
-              [source],
-            ))
-              {'challongeName': row['challonge_name'], 'playerProfileId': row['player_profile_id']},
-          ];
-        } finally { database.close(); }
-      });
-
-  Future<void> saveChallongePlayerLink(String name, String playerId, {String source = 'challonge'}) =>
-      StorageAccess.run(() async {
-        final database = await _openDatabase();
-        try {
+  Future<void> setRankingPlayers(
+    String rankingId,
+    Iterable<String> playerIds,
+  ) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      database.execute('BEGIN');
+      try {
+        database.execute(
+          'DELETE FROM local_ranking_players WHERE ranking_id = ?',
+          [rankingId],
+        );
+        for (final playerId in playerIds.toSet()) {
           database.execute(
-            '''INSERT INTO challonge_player_links(source, normalized_name, challonge_name, player_profile_id)
+            '''INSERT INTO local_ranking_players(ranking_id, player_profile_id)
+                   SELECT ?, id FROM player_profiles WHERE id = ? AND is_active = 1''',
+            [rankingId, playerId],
+          );
+        }
+        database.execute('COMMIT');
+        StorageAccess.markLocalDataChanged();
+      } catch (_) {
+        database.execute('ROLLBACK');
+        rethrow;
+      }
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<List<Map<String, Object?>>> loadChallongePlayerLinks({
+    String source = 'challonge',
+  }) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      return [
+        for (final row in database.select(
+          'SELECT challonge_name, player_profile_id FROM challonge_player_links WHERE source = ? ORDER BY challonge_name COLLATE NOCASE',
+          [source],
+        ))
+          {
+            'challongeName': row['challonge_name'],
+            'playerProfileId': row['player_profile_id'],
+          },
+      ];
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<void> saveChallongePlayerLink(
+    String name,
+    String playerId, {
+    String source = 'challonge',
+  }) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      database.execute(
+        '''INSERT INTO challonge_player_links(source, normalized_name, challonge_name, player_profile_id)
                VALUES (?, ?, ?, ?)
                ON CONFLICT(source, normalized_name) DO UPDATE SET challonge_name=excluded.challonge_name, player_profile_id=excluded.player_profile_id''',
-            [source, name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' '), name.trim(), playerId],
-          );
-          StorageAccess.markLocalDataChanged();
-        } finally { database.close(); }
-      });
+        [
+          source,
+          name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' '),
+          name.trim(),
+          playerId,
+        ],
+      );
+      StorageAccess.markLocalDataChanged();
+    } finally {
+      database.close();
+    }
+  });
 
-  Future<void> deleteChallongePlayerLink(String name, {String source = 'challonge'}) =>
-      StorageAccess.run(() async {
-        final database = await _openDatabase();
-        try {
-          database.execute('DELETE FROM challonge_player_links WHERE source = ? AND normalized_name = ?',
-            [source, name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ')]);
-          StorageAccess.markLocalDataChanged();
-        } finally { database.close(); }
-      });
+  Future<void> deleteChallongePlayerLink(
+    String name, {
+    String source = 'challonge',
+  }) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      database.execute(
+        'DELETE FROM challonge_player_links WHERE source = ? AND normalized_name = ?',
+        [source, name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ')],
+      );
+      StorageAccess.markLocalDataChanged();
+    } finally {
+      database.close();
+    }
+  });
 
   Future<List<TournamentPlayer>> loadTournamentPlayers() async {
     return StorageAccess.run(() async {
@@ -298,7 +389,11 @@ class LocalAppDatabase {
     try {
       final version = _currentSchemaVersion(database);
       if (version > schemaVersion) {
-        throw StateError('Datenbank stammt aus einer neueren App-Version.');
+        throw StateError(
+          'Lokale Datenbank-Version $version wird nicht unterstützt '
+          '(maximal $schemaVersion). Die Datei wurde nicht verändert. '
+          'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
+        );
       }
       if (version > 0 && version < schemaVersion) {
         final backup =
@@ -322,16 +417,31 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion > 0) {
-        final oldTables = database.select(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+      if (currentVersion == schemaVersion - 1) {
+        database.execute(
+          'ALTER TABLE local_rankings ADD COLUMN custom_order INTEGER NOT NULL DEFAULT 0',
         );
-        for (final row in oldTables) {
-          final name = (row['name'] as String).replaceAll('"', '""');
-          database.execute('DROP TABLE IF EXISTS "$name"');
+        final rankings = database.select(
+          'SELECT id FROM local_rankings ORDER BY name COLLATE NOCASE, id',
+        );
+        for (var index = 0; index < rankings.length; index++) {
+          database.execute(
+            'UPDATE local_rankings SET custom_order = ? WHERE id = ?',
+            [index, rankings[index]['id']],
+          );
         }
+      } else {
+        if (currentVersion > 0) {
+          final oldTables = database.select(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+          );
+          for (final row in oldTables) {
+            final name = (row['name'] as String).replaceAll('"', '""');
+            database.execute('DROP TABLE IF EXISTS "$name"');
+          }
+        }
+        _createSchema(database);
       }
-      _createSchema(database);
       database.execute('PRAGMA user_version = $schemaVersion');
       database.execute('COMMIT');
     } catch (_) {
@@ -366,7 +476,8 @@ class LocalAppDatabase {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE COLLATE NOCASE,
         ranking_type TEXT NOT NULL CHECK (ranking_type IN ('elo', 'series')),
-        config_json TEXT NOT NULL
+        config_json TEXT NOT NULL,
+        custom_order INTEGER NOT NULL DEFAULT 0
       );
 
       CREATE TABLE local_ranking_players (
@@ -462,8 +573,10 @@ class PlayerProfile {
       if (nickname.trim().isNotEmpty) 'nickname': nickname.trim(),
       if (birthdate.trim().isNotEmpty) 'birthdate': birthdate.trim(),
       if (scoliaId.trim().isNotEmpty) 'scoliaId': scoliaId.trim(),
-      if (autodartsName.trim().isNotEmpty) 'autodartsName': autodartsName.trim(),
-      if (threeKDartsId.trim().isNotEmpty) 'threeKDartsId': threeKDartsId.trim(),
+      if (autodartsName.trim().isNotEmpty)
+        'autodartsName': autodartsName.trim(),
+      if (threeKDartsId.trim().isNotEmpty)
+        'threeKDartsId': threeKDartsId.trim(),
     });
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform, exit;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,23 @@ import 'app_theme.dart';
 import '../features/tournaments/data/tournament_storage.dart';
 import '../features/tournaments/domain/tournament_models.dart';
 import '../features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
+
+CreatedTournament? resolveSecondScreenTournament(
+  List<CreatedTournament> tournaments, {
+  String? tournamentId,
+}) {
+  if (tournamentId != null && tournamentId.isNotEmpty) {
+    for (final tournament in tournaments) {
+      if (tournament.id == tournamentId) return tournament;
+    }
+    return null;
+  }
+
+  for (final tournament in tournaments.reversed) {
+    if (tournament.finishedAt == null) return tournament;
+  }
+  return tournaments.isEmpty ? null : tournaments.last;
+}
 
 class SecondScreenStandaloneApp extends StatelessWidget {
   const SecondScreenStandaloneApp({super.key, this.tournamentId});
@@ -61,17 +79,10 @@ class _SecondScreenStandalonePageState
     try {
       final storage = TournamentStorage();
       final tournaments = await storage.loadTournaments();
-      CreatedTournament? matched;
-
-      if (widget.tournamentId != null && widget.tournamentId!.isNotEmpty) {
-        matched = tournaments
-            .where((t) => t.id == widget.tournamentId)
-            .firstOrNull;
-      }
-
-      matched ??=
-          tournaments.where((t) => t.finishedAt == null).lastOrNull ??
-          tournaments.lastOrNull;
+      final matched = resolveSecondScreenTournament(
+        tournaments,
+        tournamentId: widget.tournamentId,
+      );
 
       if (!mounted) return;
       setState(() {
@@ -107,6 +118,8 @@ class _SecondScreenStandalonePageState
     }
 
     if (_tournament == null) {
+      final requestedTournament =
+          widget.tournamentId != null && widget.tournamentId!.isNotEmpty;
       return Scaffold(
         backgroundColor: Colors.black,
         body: Center(
@@ -115,13 +128,17 @@ class _SecondScreenStandalonePageState
             children: [
               const Icon(Icons.tv_off, color: Colors.white38, size: 48),
               const SizedBox(height: 16),
-              const Text(
-                'Kein aktives Turnier gefunden.',
+              Text(
+                requestedTournament
+                    ? 'Das angeforderte Turnier wurde nicht gefunden.'
+                    : 'Kein aktives Turnier gefunden.',
                 style: TextStyle(color: Colors.white, fontSize: 18),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Starte oder wähle ein Turnier am Hauptbildschirm.',
+              Text(
+                requestedTournament
+                    ? 'Bitte öffne die Anzeige erneut aus dem gewünschten Turnier.'
+                    : 'Starte oder wähle ein Turnier am Hauptbildschirm.',
                 style: TextStyle(color: Colors.white54),
               ),
               const SizedBox(height: 16),
@@ -141,9 +158,17 @@ class _SecondScreenStandalonePageState
         child: TournamentSecondScreenView(
           tournament: _tournament!,
           isStandaloneWindow: true,
-          onClose: SystemNavigator.pop,
+          onClose: _closeStandaloneWindow,
         ),
       ),
     );
+  }
+
+  void _closeStandaloneWindow() {
+    if (Platform.isAndroid || Platform.isIOS) {
+      SystemNavigator.pop();
+    } else {
+      exit(0);
+    }
   }
 }

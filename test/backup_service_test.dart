@@ -118,6 +118,32 @@ void main() {
   );
 
   test(
+    'update backup validates schema 24 only with its matching v22 proof',
+    () async {
+      const current =
+          '{"schemaVersion":24,"tournaments":[],"cache":{"marker":"keep"}}';
+      const proof =
+          '{"schemaVersion":22,"tournaments":[],"cache":{"marker":"keep"}}';
+      final tournamentFile = service.files['tournaments.json']!;
+      final proofFile = File('${tournamentFile.path}.v22.bak');
+      await tournamentFile.writeAsString(current);
+      await proofFile.writeAsString(proof);
+
+      final bytes = await service.exportBytes();
+      final preview = await service.inspect(bytes);
+
+      expect(preview.tournaments, 0);
+      expect(await tournamentFile.readAsString(), current);
+      expect(await proofFile.readAsString(), proof);
+      final archive = jsonDecode(utf8.decode(bytes)) as Map;
+      final saved = base64Decode(
+        archive['files']['tournaments.json']['data'] as String,
+      );
+      expect(utf8.decode(saved), current);
+    },
+  );
+
+  test(
     'unknown versions, paths and checksums are rejected without writes',
     () async {
       await seed();

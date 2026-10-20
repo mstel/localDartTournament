@@ -6,6 +6,7 @@ import '../application/ranking_standings_image_generator.dart';
 
 import '../../../shared/widgets/adaptive_content.dart';
 import '../../../shared/utils/png_image_export.dart';
+import '../application/ranking_order.dart';
 import '../domain/local_elo_calculator.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
@@ -769,6 +770,7 @@ class _RankingsPageState extends State<RankingsPage> {
   late final LocalAppDatabase _database =
       widget._database ?? LocalAppDatabase();
   late Future<List<LocalRanking>> _rankings = _database.loadLocalRankings();
+  RankingSortMode _sortMode = RankingSortMode.alphabetical;
   bool _saving = false;
 
   Future<void> _create() async {
@@ -802,6 +804,37 @@ class _RankingsPageState extends State<RankingsPage> {
     if (updated == null) return;
     await _database.saveLocalRanking(updated);
     if (mounted) setState(() => _rankings = _database.loadLocalRankings());
+  }
+
+  Future<void> _moveRanking(
+    List<LocalRanking> orderedRankings,
+    int index,
+    int offset,
+  ) async {
+    final targetIndex = index + offset;
+    if (targetIndex < 0 || targetIndex >= orderedRankings.length) return;
+    final reordered = [...orderedRankings];
+    final moved = reordered.removeAt(index);
+    reordered.insert(targetIndex, moved);
+    setState(() => _saving = true);
+    try {
+      await _database.saveLocalRankingOrder(
+        reordered.map((ranking) => ranking.id).toList(),
+      );
+      if (mounted) setState(() => _rankings = _database.loadLocalRankings());
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Reihenfolge konnte nicht gespeichert werden: $error',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _assignTournaments(LocalRanking ranking) async {
@@ -873,83 +906,129 @@ class _RankingsPageState extends State<RankingsPage> {
     body: SafeArea(
       child: FutureBuilder<List<LocalRanking>>(
         future: _rankings,
-        builder: (context, snapshot) => AdaptiveContentList(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
-          children: [
-            Text(
-              'Ranglisten verwalten',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const Text(
-              'Ranglisten werden lokal geführt und im konto-bezogenen Supabase-Datenstand gesichert.',
-            ),
-            if (snapshot.connectionState == ConnectionState.waiting)
-              const LinearProgressIndicator(),
-            if (snapshot.hasError)
-              const Text('Ranglisten konnten nicht geladen werden.'),
-            if (snapshot.hasData && snapshot.data!.isEmpty)
-              const Card(
-                child: ListTile(title: Text('Noch keine Ranglisten angelegt.')),
+        builder: (context, snapshot) {
+          final rankings = sortRankings(
+            snapshot.data ?? const <LocalRanking>[],
+            _sortMode,
+          );
+          return AdaptiveContentList(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
+            children: [
+              Text(
+                'Ranglisten verwalten',
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-            for (final ranking in snapshot.data ?? const <LocalRanking>[])
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    ranking.type == RankingType.elo
-                        ? Icons.trending_up
-                        : Icons.emoji_events_outlined,
+              const Text(
+                'Ranglisten werden lokal geführt und im konto-bezogenen Supabase-Datenstand gesichert.',
+              ),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const LinearProgressIndicator(),
+              if (snapshot.hasError)
+                const Text('Ranglisten konnten nicht geladen werden.'),
+              DropdownButtonFormField<RankingSortMode>(
+                initialValue: _sortMode,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Sortierung',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final mode in RankingSortMode.values)
+                    DropdownMenuItem(value: mode, child: Text(mode.label)),
+                ],
+                onChanged: (mode) {
+                  if (mode != null) setState(() => _sortMode = mode);
+                },
+              ),
+              if (snapshot.hasData && snapshot.data!.isEmpty)
+                const Card(
+                  child: ListTile(
+                    title: Text('Noch keine Ranglisten angelegt.'),
                   ),
-                  title: Text(ranking.name),
-                  subtitle: Text(
-                    ranking.type == RankingType.elo
-                        ? 'Klassische Elo-Wertung · Start ${ranking.startRating}'
-                        : 'Turnierserie · Teilnahme, Sets, Platzierungen und Bestleistungen',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Fix 4.2: Einstellungen direkt zugänglich (statt nur im Menü)
-                      IconButton(
-                        tooltip: 'Einstellungen',
-                        icon: const Icon(Icons.settings_outlined),
-                        onPressed: () => _edit(ranking),
-                      ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Weitere Aktionen',
-                        onSelected: (value) {
-                          if (value == 'players') _assignPlayers(ranking);
-                          if (value == 'tournaments') {
-                            _assignTournaments(ranking);
-                          }
-                          if (value == 'table') _openRanking(ranking);
-                          if (value == 'delete') _delete(ranking);
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'players',
-                            child: Text('Spieler zuweisen'),
+                ),
+              for (var index = 0; index < rankings.length; index++)
+                Card(
+                  child: ListTile(
+                    key: ValueKey('ranking-${rankings[index].id}'),
+                    leading: Icon(
+                      rankings[index].type == RankingType.elo
+                          ? Icons.trending_up
+                          : Icons.emoji_events_outlined,
+                    ),
+                    title: Text(rankings[index].name),
+                    subtitle: Text(
+                      rankings[index].type == RankingType.elo
+                          ? 'Klassische Elo-Wertung · Start ${rankings[index].startRating}'
+                          : 'Turnierserie · Teilnahme, Sets, Platzierungen und Bestleistungen',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_sortMode == RankingSortMode.custom) ...[
+                          IconButton(
+                            tooltip: 'Nach oben verschieben',
+                            onPressed: _saving || index == 0
+                                ? null
+                                : () => _moveRanking(rankings, index, -1),
+                            icon: const Icon(Icons.arrow_upward),
                           ),
-                          PopupMenuItem(
-                            value: 'tournaments',
-                            child: Text('Turniere zuweisen'),
-                          ),
-                          PopupMenuItem(
-                            value: 'table',
-                            child: Text('Ranglistenstand öffnen'),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Rangliste löschen'),
+                          IconButton(
+                            tooltip: 'Nach unten verschieben',
+                            onPressed: _saving || index == rankings.length - 1
+                                ? null
+                                : () => _moveRanking(rankings, index, 1),
+                            icon: const Icon(Icons.arrow_downward),
                           ),
                         ],
-                      ),
-                    ],
+                        // Fix 4.2: Einstellungen direkt zugänglich (statt nur im Menü)
+                        IconButton(
+                          tooltip: 'Einstellungen',
+                          icon: const Icon(Icons.settings_outlined),
+                          onPressed: () => _edit(rankings[index]),
+                        ),
+                        PopupMenuButton<String>(
+                          tooltip: 'Weitere Aktionen',
+                          onSelected: (value) {
+                            if (value == 'players') {
+                              _assignPlayers(rankings[index]);
+                            }
+                            if (value == 'tournaments') {
+                              _assignTournaments(rankings[index]);
+                            }
+                            if (value == 'table') {
+                              _openRanking(rankings[index]);
+                            }
+                            if (value == 'delete') {
+                              _delete(rankings[index]);
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: 'players',
+                              child: Text('Spieler zuweisen'),
+                            ),
+                            PopupMenuItem(
+                              value: 'tournaments',
+                              child: Text('Turniere zuweisen'),
+                            ),
+                            PopupMenuItem(
+                              value: 'table',
+                              child: Text('Ranglistenstand öffnen'),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Rangliste löschen'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    onTap: () => _openRanking(rankings[index]),
                   ),
-                  onTap: () => _openRanking(ranking),
                 ),
-              ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     ),
   );
@@ -2068,6 +2147,7 @@ class PlayerEloHistoryPage extends StatelessWidget {
       : sorted;
   return (
     points: [
+      (label: 'Start', rating: ordered.first.ratingAfter - ordered.first.delta),
       for (final entry in visible)
         (
           label: isMonthly
@@ -2101,8 +2181,8 @@ class _EloTrajectoryPainter extends CustomPainter {
       size.width - padding * 2,
       size.height - padding * 2,
     );
-    final low = ratings.reduce(math.min).toDouble();
-    final high = ratings.reduce(math.max).toDouble();
+    final low = math.min(1000, ratings.reduce(math.min)).toDouble();
+    final high = math.max(1000, ratings.reduce(math.max)).toDouble();
     final range = math.max(high - low, 1);
     final gridPaint = Paint()
       ..color = gridColor
@@ -2128,6 +2208,14 @@ class _EloTrajectoryPainter extends CustomPainter {
       }
     }
     canvas.drawPath(path, linePaint);
+    canvas.drawCircle(
+      Offset(
+        plot.left,
+        plot.bottom - (ratings.first - low) / range * plot.height,
+      ),
+      4,
+      Paint()..color = color,
+    );
   }
 
   @override

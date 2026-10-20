@@ -29,6 +29,28 @@ void main() {
   );
   tearDown(() async => temp.delete(recursive: true));
 
+  Future<ProcessResult> runWindowsScript(String command) {
+    final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+    final shell = p.join(
+      systemRoot,
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    );
+    final encoded = base64Encode([
+      for (final unit in command.codeUnits) ...[unit & 255, unit >> 8],
+    ]);
+    return Process.run(shell, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-WindowStyle',
+      'Hidden',
+      '-EncodedCommand',
+      encoded,
+    ]).timeout(const Duration(seconds: 20));
+  }
+
   test(
     'desktop ABI selects the native package and excludes unsupported CPUs',
     () {
@@ -263,9 +285,15 @@ void main() {
       r"C:\O'Brien\$app\dart.exe",
       'build-12-123',
       4321,
+      activeFile: r"C:\App Data\updates\active.json",
+      logFile: r"C:\App Data\updates\restart.log",
+      originalExe: r"C:\O'Brien\old\dart.exe",
     );
     expect(windows, contains(r"'C:\O''Brien\$app\dart.exe'"));
     expect(windows, contains('WaitForExit(120000)'));
+    expect(windows, contains('Update wurde erfolgreich aktiviert.'));
+    expect(windows, contains("'--desktop-update-original'"));
+    expect(windows, contains(r"'C:\App Data\updates\active.json'"));
     final linux = DesktopUpdateLauncher.linuxScript(
       r"/home/O'Brien/$app/dart",
       'build-12-123',
@@ -274,4 +302,67 @@ void main() {
     expect(linux, contains(r"'/home/O'\''Brien/$app/dart'"));
     expect(linux, contains('kill -0 4321'));
   });
+
+  test(
+    'Windows restart reports failed activation and starts the fallback',
+    () async {
+      if (!Platform.isWindows) return;
+
+      final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+      final where = p.join(systemRoot, 'System32', 'where.exe');
+      final activeFile = p.join(temp.path, 'active.json');
+      final logFile = p.join(temp.path, 'restart.log');
+      final command = DesktopUpdateLauncher.windowsScript(
+        where,
+        'build-12-123',
+        2147483647,
+        activeFile: activeFile,
+        logFile: logFile,
+        originalExe: where,
+      );
+      final result = await runWindowsScript(command);
+
+      expect(result.exitCode, 0, reason: '${result.stderr}\n${result.stdout}');
+      final log = await File(logFile).readAsString();
+      expect(log, contains('Update wurde nicht aktiviert'));
+      expect(log, contains('Ursprüngliche App wurde als Fallback gestartet'));
+    },
+  );
+
+  test(
+    'Windows restart observes activation before the update process exits',
+    () async {
+      if (!Platform.isWindows) return;
+
+      final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+      final where = p.join(systemRoot, 'System32', 'where.exe');
+      final fakeUpdate = File(p.join(temp.path, 'fake update.cmd'));
+      final activeFile = p.join(temp.path, 'active.json');
+      final logFile = p.join(temp.path, 'restart.log');
+      await fakeUpdate.writeAsString(
+        '@echo off\r\n'
+        '> "$activeFile" echo {"schemaVersion":1,"id":"build-12-123"}\r\n'
+        'exit /b 0\r\n',
+      );
+      final command = DesktopUpdateLauncher.windowsScript(
+        fakeUpdate.path,
+        'build-12-123',
+        2147483647,
+        activeFile: activeFile,
+        logFile: logFile,
+        originalExe: where,
+      );
+
+      final result = await runWindowsScript(command);
+
+      expect(result.exitCode, 0, reason: '${result.stderr}\n${result.stdout}');
+      expect(
+        await File(activeFile).readAsString(),
+        contains('"id":"build-12-123"'),
+      );
+      final log = await File(logFile).readAsString();
+      expect(log, contains('Update wurde erfolgreich aktiviert'));
+      expect(log, isNot(contains('Fallback gestartet')));
+    },
+  );
 }

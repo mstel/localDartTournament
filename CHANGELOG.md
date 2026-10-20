@@ -1,3 +1,33 @@
+# Dart Tournament Manager 1.0.5+6
+
+## Fehlerbehebungen
+
+- Turnierspeicher mit Schema-Version 24 werden nur dann wieder lesbar, wenn
+  `tournaments.json.v22.bak` vorhanden ist und bis auf das Wurzelfeld
+  `schemaVersion` semantisch exakt übereinstimmt. Unbekannte oder nicht
+  belegbare Speicherstände bleiben unverändert gesperrt.
+- Die Recovery-Prüfung berücksichtigt auch die passende Sicherung bei
+  Backup-Vorschau und Update-Backup-Prüfung.
+- Die SQLite-Migration von Schema 9 auf 10 ergänzt `custom_order`
+  transaktional und erhält Spieler, Ranglisten und Zuordnungen.
+- Der Windows-Updater wartet auf das Ende der bisherigen App, prüft die
+  Aktivierung des neuen Bundles und startet bei einem Fehlschlag die bisherige
+  App als Fallback.
+
+## Datensicherheit und Installation
+
+- Vor dem Update eine vollständige Sicherung des Ordners
+  `%APPDATA%\DartTournamentManager` aufbewahren. Keine App-Daten oder
+  Sicherungsdateien löschen und keine ältere Sicherung über aktuelle Dateien
+  kopieren.
+- Das Windows-Release ist ein ZIP-Bundle und kein klassischer Installer.
+  Falls eine Datenversion nicht sicher erkannt wird, bleibt die Quelldatei
+  erhalten und die App zeigt eine Diagnose statt sie zurückzusetzen.
+# DartTournamentPro 1.0.4
+
+Änderungen seit `v1.0.3+3`; Buildnummer 4. Die Release Notes für GitHub
+stehen in [`docs/releases/v1.0.4+4.md`](docs/releases/v1.0.4+4.md).
+
 # Dart Turnier 0.2.3
 
 Änderungen seit Version 0.2.2. Der Build trägt die interne Buildnummer 28

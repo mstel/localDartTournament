@@ -1,6 +1,6 @@
 # Infrastruktur und Update-Sicherheit
 
-Prüfstand: 24.09.2026. Backup/Wiederherstellung und Speichersperren sind implementiert. Der erste signierte Android-Release über GitHub ist veröffentlicht. Backup und Datenerhalt beim APK-Upgrade wurden im Android-Emulator geprüft; ein physischer Gerätetest steht noch aus. Siehe `android-releases.md`.
+Prüfstand: 20.10.2026. Backup/Wiederherstellung und Speichersperren sind implementiert. Der erste signierte Android-Release über GitHub ist veröffentlicht. Backup und Datenerhalt beim APK-Upgrade wurden im Android-Emulator geprüft; ein physischer Gerätetest steht noch aus. Siehe `android-releases.md`.
 
 ## Speichervertrag
 
@@ -27,15 +27,14 @@ Das Dateiauswahl-Modul verwendet native Dialoge. Die Verifikation erfolgte für 
 
 Bootstrap, Feature-Ordner, Domain-Engines und Persistenz sind getrennt angelegt. Die Übergangs-Library `tournament_workspace.dart` koppelt jedoch weiterhin UI und Laufzeit über Parts. Die produktive Runtime sollte als Application-Service extrahiert werden; der Entwicklungstester muss weiterhin dieselbe Engine verwenden. Dieser Refactor ist keine Voraussetzung für den reinen Austausch der App-Dateien.
 
-## Vor dem ersten automatischen Update noch erforderlich
+## Desktop-Updates und Schema-Kompatibilität
 
-1. Festen Release-Kanal, Paketidentitäten und Signierung festlegen. Beispiel-Bundle-IDs vor Veröffentlichung kontrolliert ersetzen; Application-Support-Pfade dürfen dabei nicht ohne Migration wechseln.
-2. App-Version/Buildnummer bei Releases erhöhen (aktuell `1.0.0+2`). App-Version und Speicherschema getrennt behandeln.
-3. Updater lädt und prüft signierte Pakete, beendet die App nach abgeschlossenen Schreibvorgängen und ersetzt ausschließlich Installationsdateien. Benutzerverzeichnisse sind vom Löschen/Aufräumen ausgeschlossen.
-4. Installations-Upgrade und Rollback mit realen alten Spielständen auf jeder Zielplattform testen. Alte bereits veröffentlichte Binärdateien besitzen den neuen Versionsschutz und die Instanzsperre noch nicht und dürfen neue Daten nicht öffnen.
+- Windows-Releases werden als ZIP-Bundle (`dart-turnier-windows-x64.zip`), nicht als klassischer Installer, veröffentlicht. Der Updater prüft Größe und SHA-256, entpackt in `%APPDATA%` unter `desktop_updates`, validiert Manifest und Programmdateien und erstellt vor dem Neustart ein `.dartbackup`.
+- Beim Windows-Neustart wartet ein eigener PowerShell-Prozess auf das Ende der bisherigen App. Er startet das neue Bundle mit Aktivierungs-ID und wartet auf dessen `active.json`-Bestätigung. Schlägt der Start fehl, protokolliert `restart.log` den Grund und der bisherige Programmstart wird als Fallback versucht. Benutzerdateien werden nicht ersetzt oder gelöscht.
+- Release `v1.0.4+4` verwendet SQLite-Schema 10 und Turnier-JSON-Schema 23. Das Upgrade von SQLite 9 auf 10 fügt `custom_order` innerhalb einer Transaktion hinzu, behält Profile, Ranglisten und Zuordnungen und legt vorher eine `.v9.*.bak`-Kopie an.
+- Ältere bekannte Turnier-JSON-Versionen bleiben lesbar; beim ersten Schreibvorgang wird die Quelldatei vor der Migration versioniert gesichert. `v1.0.3+3` verwendete Schema 24, während `v1.0.4+4` die Konstante ohne belegte 24→23-Migration auf 23 zurücksetzte. Schema 24 wird daher ausschließlich dann lesbar, wenn `tournaments.json.v22.bak` vorhanden, gültig und bis auf das Wurzelfeld `schemaVersion` semantisch identisch ist. Sonst bleibt die Datei unverändert gesperrt. Bei erfolgreicher Prüfung wird die Sicherung nur gelesen; der erste spätere Schreibvorgang legt `.bak` und `.v24.bak` an. Keine Dateien löschen und keinen älteren Backup-Stand über die vorhandene Datei schreiben, bevor der aktuelle Stand gesichert wurde.
+- App-Version und SQLite-/JSON-Speicherversion bleiben getrennte Nummern. Ein Build aus `main` darf kein veröffentlichtes neueres Speicherschema abweisen; jede künftige Schemaänderung braucht eine gezielte Migration sowie einen Upgrade-Test mit repräsentativen Bestandsdaten.
 
 ## Verifikation
 
-Die automatischen Tests decken die Wiederherstellung aller vier Speicher inklusive Matchergebnissen, Vorschau/Abbruch/Bestätigung, Versions- und Prüfsummenfehler, fehlerhafte Datenbanken, fehlende Bereiche, Fehler nach dem ersten Dateitausch, unterbrochene und abgeschlossene Transaktionen sowie konkurrierende Zugriffe ab. Die Instanzsperre wird mit einem echten zweiten Dart-Prozess geprüft. Windows-Debug-Build erfolgreich; native Dateidialoge wurden nicht interaktiv bedient.
-
-Die Änderungen verbessern den Speicherschutz, stellen aber noch keine Ende-zu-Ende-Garantie eines bislang nicht vorhandenen Installers/Updaters dar.
+Die automatischen Tests decken die Wiederherstellung aller vier Speicher inklusive Matchergebnissen, Vorschau/Abbruch/Bestätigung, Versions- und Prüfsummenfehler, fehlerhafte Datenbanken, fehlende Bereiche, Fehler nach dem ersten Dateitausch, unterbrochene und abgeschlossene Transaktionen sowie konkurrierende Zugriffe ab. Zusätzlich wird die v9→v10-Migration mit erhaltenen Spieler-/Ranglisten-Datensätzen und der Windows-PowerShell-Handoff für Aktivierungsbestätigung und Fallback geprüft. Ein echter Installer-/Upgrade-Lauf mit den Nutzerdaten eines Zielgeräts ist weiterhin separat zu prüfen.

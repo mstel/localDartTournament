@@ -185,15 +185,32 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             ),
           ),
 
-        // Unfolded compact list of matches for each group
-        for (var i = 0; i < stage.groups.length; i++) ...[
-          _buildGroupMatchList(
-            context: context,
-            group: stage.groups[i],
-            showGroupHeader: stage.groups.length > 1,
-          ),
-          if (i < stage.groups.length - 1) const SizedBox(height: 12),
-        ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns =
+                constraints.maxWidth >= 900 && stage.groups.length > 1 ? 2 : 1;
+            final groupWidth = columns == 1
+                ? constraints.maxWidth
+                : (constraints.maxWidth - 12) / columns;
+
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final group in stage.groups)
+                  SizedBox(
+                    width: groupWidth,
+                    child: _buildGroupMatchList(
+                      context: context,
+                      group: group,
+                      showGroupHeader: true,
+                      compact: columns > 1,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -202,6 +219,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     required BuildContext context,
     required TournamentGroup group,
     required bool showGroupHeader,
+    required bool compact,
   }) {
     final theme = Theme.of(context);
 
@@ -223,7 +241,10 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
         if (showGroupHeader) ...[
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 8),
-            child: Row(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   group.name,
@@ -231,7 +252,6 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -285,11 +305,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               tournament: widget.tournament,
               onEditResult: widget.onEditResult,
               canEditResult: widget.canEditResults,
-              leadingLabel: match.isDecider
-                  ? match.label
-                  : (showGroupHeader
-                        ? '${group.name} · R${match.round}'
-                        : 'Runde ${match.round}'),
+              leadingLabel: match.isDecider ? match.label : null,
+              showRoundLabel: match.isDecider,
+              compact: compact,
             ),
       ],
     );
