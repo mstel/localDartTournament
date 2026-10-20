@@ -64,10 +64,15 @@ class GitHubReleaseClient {
         const Duration(seconds: 20),
       );
       if (response.statusCode != 200) {
-        final guidance =
-            response.statusCode == 403 || response.statusCode == 429
-            ? 'GitHub begrenzt die Update-Anfragen. Bitte später erneut prüfen.'
-            : 'GitHub antwortet mit ${response.statusCode}. Bitte später erneut prüfen.';
+        final guidance = switch (response.statusCode) {
+          403 || 429 =>
+            'GitHub begrenzt die Update-Anfragen. Bitte später erneut prüfen.',
+          404 =>
+            'Das konfigurierte Release-Repository ${AndroidRelease.repository} ist über die öffentliche GitHub-API nicht erreichbar. '
+                'Prüfe GITHUB_RELEASE_REPOSITORY und stelle sicher, dass das Repository öffentlich ist.',
+          _ =>
+            'GitHub antwortet mit HTTP ${response.statusCode} für ${_releasesUri.host}${_releasesUri.path}. Bitte später erneut prüfen.',
+        };
         throw UpdateCheckException(guidance);
       }
       final bytes = <int>[];

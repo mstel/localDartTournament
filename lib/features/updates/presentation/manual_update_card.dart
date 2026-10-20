@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../domain/android_release.dart';
 
 /// Recovery remains available without reading local storage or the release API.
 class ManualUpdateCard extends StatefulWidget {
   const ManualUpdateCard({super.key, this.openReleases});
 
-  static final releasesUri = Uri.parse(
-    'https://github.com/mstel/localDartTournament/releases',
+  static final releasesUri = Uri.https(
+    'github.com',
+    '/${AndroidRelease.repository}/releases',
   );
   final Future<bool> Function(Uri)? openReleases;
 

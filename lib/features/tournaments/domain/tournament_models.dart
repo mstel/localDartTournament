@@ -476,7 +476,7 @@ class CreatedTournament {
     this.leagueMatch,
     this.importedArchive,
     this.countsForRanking = true,
-    this.rankingIds = const [],
+    List<String> rankingIds = const [],
     this.activeStageIndex = 0,
     this.boardCount = 1,
     this.syncRevision = 0,
@@ -493,6 +493,7 @@ class CreatedTournament {
   }) : id = id ?? _newTournamentId(),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now(),
+       rankingIds = List<String>.from(rankingIds),
        completedStageIndexes = completedStageIndexes ?? <int>{},
        blockedBoards = blockedBoards ?? <int>{},
        withdrawals = withdrawals ?? [];
@@ -516,10 +517,10 @@ class CreatedTournament {
           : ImportedTournamentArchive.fromJson(
               Map<String, dynamic>.from(json['importedArchive'] as Map),
             ),
-      countsForRanking: json['countsForRanking'] as bool? ?? true,
-      rankingIds: List<String>.unmodifiable(
-        (json['rankingIds'] as List? ?? const []).cast<String>(),
-      ),
+      countsForRanking:
+          json['countsForRanking'] as bool? ??
+          (json['rankingIds'] as List? ?? const []).isNotEmpty,
+      rankingIds: (json['rankingIds'] as List? ?? const []).cast<String>(),
       activeStageIndex: json['activeStageIndex'] as int? ?? 0,
       boardCount: (json['boardCount'] as int? ?? 1).clamp(1, 64),
       syncRevision: json['syncRevision'] as int? ?? 0,
@@ -579,7 +580,7 @@ class CreatedTournament {
       'runStages': runStages.map(_runStageToJson).toList(),
       if (leagueMatch != null) 'leagueMatch': leagueMatch!.toJson(),
       if (importedArchive != null) 'importedArchive': importedArchive!.toJson(),
-      if (!countsForRanking) 'countsForRanking': false,
+      'countsForRanking': countsForRanking,
       if (rankingIds.isNotEmpty) 'rankingIds': rankingIds,
       'activeStageIndex': activeStageIndex,
       'boardCount': boardCount,

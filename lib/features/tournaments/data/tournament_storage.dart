@@ -13,9 +13,10 @@ class TournamentStorage {
   TournamentStorage({File? file}) : _file = file;
 
   final File? _file;
-  static const _schemaVersion = 23;
+  static const _schemaVersion = 24;
 
-  Future<T> _locked<T>(Future<T> Function() action) => StorageAccess.run(action);
+  Future<T> _locked<T>(Future<T> Function() action) =>
+      StorageAccess.run(action);
 
   Future<Map<String, dynamic>> _readDocument() async {
     final file = await _storageFile();
@@ -86,7 +87,9 @@ class TournamentStorage {
         tournaments[index] = tournament;
       }
       final document = await _readDocument();
-      document['tournaments'] = tournaments.map((item) => item.toJson()).toList();
+      document['tournaments'] = tournaments
+          .map((item) => item.toJson())
+          .toList();
       await _writeDocument(document);
     });
     StorageAccess.markLocalDataChanged();
@@ -97,7 +100,9 @@ class TournamentStorage {
       final tournaments = await _loadTournamentsUnlocked();
       tournaments.removeWhere((item) => item.id == id);
       final document = await _readDocument();
-      document['tournaments'] = tournaments.map((item) => item.toJson()).toList();
+      document['tournaments'] = tournaments
+          .map((item) => item.toJson())
+          .toList();
       await _writeDocument(document);
     });
     StorageAccess.markLocalDataChanged();

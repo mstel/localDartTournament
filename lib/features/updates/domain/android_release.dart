@@ -11,7 +11,10 @@ class AndroidRelease {
     this.isPrerelease = false,
     this.platform = UpdatePlatform.android,
   });
-  static const repository = 'mstel/localDartTournament';
+  static const repository = String.fromEnvironment(
+    'GITHUB_RELEASE_REPOSITORY',
+    defaultValue: 'mstel/localDartTournament',
+  );
   final String version;
   final int build;
   final Uri url;

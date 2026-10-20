@@ -31,7 +31,7 @@ class _AndroidUpdatesPanelState extends State<AndroidUpdatesPanel> {
   bool _busy = false;
   bool _downloaded = false;
   double? _progress;
-  String _status = 'Updates aus mstel/localDartTournament.';
+  String _status = 'Updates aus ${AndroidRelease.repository}.';
   String? _installed;
   String? _backupStatus;
   AndroidRelease? _release;

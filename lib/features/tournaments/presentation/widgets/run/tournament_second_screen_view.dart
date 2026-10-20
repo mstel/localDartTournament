@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -7,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../domain/engines/group_standings_engine.dart';
 import '../../../domain/engines/qualification_certainty.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
@@ -22,11 +22,13 @@ class TournamentSecondScreenView extends StatefulWidget {
     super.key,
     required this.tournament,
     this.isStandaloneWindow = false,
+    this.showStandings = true,
     this.onClose,
   });
 
   final CreatedTournament tournament;
   final bool isStandaloneWindow;
+  final bool showStandings;
   final VoidCallback? onClose;
 
   @override
@@ -37,8 +39,7 @@ class TournamentSecondScreenView extends StatefulWidget {
 class _TournamentSecondScreenViewState
     extends State<TournamentSecondScreenView> {
   bool _showNextStagePreview = false;
-  bool _showForecastInCompactLayout = false;
-  Timer? _clockTimer;
+  bool _showForecast = false;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
@@ -49,9 +50,6 @@ class _TournamentSecondScreenViewState
     super.initState();
     _refreshEloChanges();
     _refreshAdvancementForecast();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
   }
 
   @override
@@ -100,7 +98,6 @@ class _TournamentSecondScreenViewState
 
   @override
   void dispose() {
-    _clockTimer?.cancel();
     super.dispose();
   }
 
@@ -117,14 +114,6 @@ class _TournamentSecondScreenViewState
     await SystemNavigator.pop();
   }
 
-  String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    final s = d.inSeconds.remainder(60);
-    if (h > 0) return '$h Std. $m Min. ${s}s';
-    return '$m Min. ${s}s';
-  }
-
   List<GroupMatch> _matchesOf(TournamentRunStage? stage) {
     if (stage is GroupTournamentRunStage) {
       return stage.groups.expand((g) => g.matches).toList();
@@ -138,8 +127,6 @@ class _TournamentSecondScreenViewState
   Widget build(BuildContext context) {
     final t = widget.tournament;
     final theme = Theme.of(context);
-    final timing = TournamentTiming.snapshot(t, DateTime.now());
-
     final activeIndex = t.activeStageIndex.clamp(
       0,
       t.runStages.isEmpty ? 0 : t.runStages.length - 1,
@@ -170,55 +157,13 @@ class _TournamentSecondScreenViewState
             spacing: 8,
             runSpacing: 8,
             children: [
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 10,
-                runSpacing: 4,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF144D34),
-                      border: Border.all(color: const Color(0xFF70E0BA)),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.tv,
-                          size: 16,
-                          color: Color(0xFF70E0BA),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            widget.isStandaloneWindow
-                                ? 'TV-LIVE-ÜBERSICHT'
-                                : 'LIVE-TICKER',
-                            style: const TextStyle(
-                              color: Color(0xFF70E0BA),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              letterSpacing: 1.1,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    '${t.name} · ${activeStage?.name ?? "Turnier"}',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              Text(
+                '${t.name} · ${activeStage?.name ?? "Turnier"}',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
               if (widget.isStandaloneWindow)
                 IconButton(
@@ -241,7 +186,6 @@ class _TournamentSecondScreenViewState
                     t: t,
                     activeIndex: activeIndex,
                     activeStage: activeStage,
-                    timing: timing,
                     progressPercent: pct,
                     playedMatches: playedMatches,
                     totalMatches: totalMatches,
@@ -262,7 +206,6 @@ class _TournamentSecondScreenViewState
     required CreatedTournament t,
     required int activeIndex,
     required TournamentRunStage? activeStage,
-    required TimingSnapshot timing,
     required int progressPercent,
     required List<GroupMatch> playedMatches,
     required int totalMatches,
@@ -271,35 +214,135 @@ class _TournamentSecondScreenViewState
       builder: (context, constraints) {
         final wide =
             constraints.maxWidth >= 1000 && constraints.maxHeight >= 620;
-        if (!wide) {
-          return SingleChildScrollView(
-            child: Column(
+        if (!widget.showStandings) {
+          if (wide) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildBoardsAndPriorityPanel(
-                  context,
-                  t,
-                  activeIndex,
-                  activeStage,
-                  expand: false,
+                Expanded(
+                  flex: 5,
+                  child: _buildBoardsAndPriorityPanel(
+                    context,
+                    t,
+                    activeIndex,
+                    activeStage,
+                    expand: true,
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _buildRecentMatchesAndEloPanel(
-                  context,
-                  t,
-                  playedMatches,
-                  expand: false,
+                const SizedBox(height: 12),
+                Expanded(
+                  flex: 4,
+                  child: _buildRecentMatchesAndEloPanel(
+                    context,
+                    t,
+                    playedMatches,
+                    expand: true,
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _buildProgressAndBestPerformancesPanel(
-                  context: context,
-                  t: t,
-                  timing: timing,
-                  progressPercent: progressPercent,
-                  playedMatches: playedMatches,
-                  totalMatches: totalMatches,
-                  expand: false,
+                const SizedBox(height: 12),
+                Expanded(
+                  flex: 5,
+                  child: _buildProgressAndBestPerformancesPanel(
+                    context: context,
+                    t: t,
+                    progressPercent: progressPercent,
+                    playedMatches: playedMatches,
+                    totalMatches: totalMatches,
+                    expand: true,
+                  ),
                 ),
+              ],
+            );
+          }
+        }
+        if (wide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 6,
+                child: Column(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: _buildBoardsAndPriorityPanel(
+                        context,
+                        t,
+                        activeIndex,
+                        activeStage,
+                        expand: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      flex: 4,
+                      child: _buildRecentMatchesAndEloPanel(
+                        context,
+                        t,
+                        playedMatches,
+                        expand: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      flex: 5,
+                      child: _buildProgressAndBestPerformancesPanel(
+                        context: context,
+                        t: t,
+                        progressPercent: progressPercent,
+                        playedMatches: playedMatches,
+                        totalMatches: totalMatches,
+                        expand: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.showStandings) ...[
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 5,
+                  child: _buildStandingsForecastPanel(
+                    context,
+                    t,
+                    activeIndex,
+                    activeStage,
+                    expand: true,
+                  ),
+                ),
+              ],
+            ],
+          );
+        }
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildBoardsAndPriorityPanel(
+                context,
+                t,
+                activeIndex,
+                activeStage,
+                expand: false,
+              ),
+              const SizedBox(height: 16),
+              _buildRecentMatchesAndEloPanel(
+                context,
+                t,
+                playedMatches,
+                expand: false,
+              ),
+              const SizedBox(height: 16),
+              _buildProgressAndBestPerformancesPanel(
+                context: context,
+                t: t,
+                progressPercent: progressPercent,
+                playedMatches: playedMatches,
+                totalMatches: totalMatches,
+                expand: false,
+              ),
+              if (widget.showStandings) ...[
                 const SizedBox(height: 16),
                 _buildCompactStandingsForecastControl(
                   context,
@@ -308,85 +351,8 @@ class _TournamentSecondScreenViewState
                   activeStage,
                 ),
               ],
-            ),
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 6,
-              child: Column(
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: _buildBoardsAndPriorityPanel(
-                      context,
-                      t,
-                      activeIndex,
-                      activeStage,
-                      expand: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    flex: 4,
-                    child: _buildRecentMatchesAndEloPanel(
-                      context,
-                      t,
-                      playedMatches,
-                      expand: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    flex: 5,
-                    child: _buildProgressAndBestPerformancesPanel(
-                      context: context,
-                      t: t,
-                      timing: timing,
-                      progressPercent: progressPercent,
-                      playedMatches: playedMatches,
-                      totalMatches: totalMatches,
-                      expand: true,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              flex: 5,
-              child: Column(
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: _buildStandingsAndPreviewControl(
-                      context,
-                      t,
-                      activeIndex,
-                      activeStage,
-                      expand: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    flex: 5,
-                    child: SingleChildScrollView(
-                      child: _buildKoPrognosisPanel(
-                        context,
-                        t,
-                        activeIndex,
-                        activeStage,
-                        expand: false,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -398,49 +364,111 @@ class _TournamentSecondScreenViewState
     int activeIndex,
     TournamentRunStage? activeStage,
   ) {
-    if (activeStage is! GroupTournamentRunStage ||
-        _nextKnockoutStage(t, activeIndex, activeStage) == null) {
-      return _buildStandingsAndPreviewControl(
-        context,
-        t,
-        activeIndex,
-        activeStage,
-        expand: false,
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment(value: false, label: Text('Tabelle')),
-            ButtonSegment(value: true, label: Text('Prognose')),
-          ],
-          selected: {_showForecastInCompactLayout},
-          onSelectionChanged: (selection) {
-            if (selection.isNotEmpty) {
-              setState(() => _showForecastInCompactLayout = selection.first);
-            }
-          },
-        ),
-        const SizedBox(height: 8),
-        if (_showForecastInCompactLayout)
-          _buildKoPrognosisPanel(
+    return _buildStandingsForecastPanel(
+      context,
+      t,
+      activeIndex,
+      activeStage,
+      expand: false,
+    );
+  }
+
+  Widget _buildStandingsForecastPanel(
+    BuildContext context,
+    CreatedTournament t,
+    int activeIndex,
+    TournamentRunStage? activeStage, {
+    required bool expand,
+  }) {
+    final content = _showForecast
+        ? _buildKoPrognosisPanel(
             context,
             t,
             activeIndex,
             activeStage,
             expand: false,
           )
-        else
-          _buildStandingsAndPreviewControl(
+        : _buildStandingsAndPreviewControl(
             context,
             t,
             activeIndex,
             activeStage,
             expand: false,
-          ),
+          );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 900) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _viewModeButton(
+                    label: 'Tabellen & Zwischenstände',
+                    value: false,
+                    icon: Icons.leaderboard_outlined,
+                  ),
+                  const SizedBox(height: 4),
+                  _viewModeButton(
+                    label: 'Siegprognose & Weiterkommen',
+                    value: true,
+                    icon: Icons.account_tree_outlined,
+                  ),
+                ],
+              );
+            }
+            return SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  label: Text('Tabellen & Zwischenstände'),
+                  icon: Icon(Icons.leaderboard_outlined),
+                ),
+                ButtonSegment(
+                  value: true,
+                  label: Text('Siegprognose & Weiterkommen'),
+                  icon: Icon(Icons.account_tree_outlined),
+                ),
+              ],
+              selected: {_showForecast},
+              onSelectionChanged: (selection) {
+                if (selection.isNotEmpty) {
+                  setState(() => _showForecast = selection.first);
+                }
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        if (expand)
+          Expanded(child: SingleChildScrollView(child: content))
+        else
+          content,
       ],
+    );
+  }
+
+  Widget _viewModeButton({
+    required String label,
+    required bool value,
+    required IconData icon,
+  }) {
+    final selected = _showForecast == value;
+    final onPressed = selected
+        ? null
+        : () => setState(() => _showForecast = value);
+    if (selected) {
+      return FilledButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: Text(label),
     );
   }
 
@@ -704,7 +732,10 @@ class _TournamentSecondScreenViewState
     var inputIndex = 0;
     for (var groupIndex = 0; groupIndex < stage.groups.length; groupIndex++) {
       final group = stage.groups[groupIndex];
-      final standings = _calculateGroupStandings(group, stage.tieBreakers);
+      final standings = const GroupStandingsEngine().calculate(
+        group,
+        stage.tieBreakers,
+      );
       final fixedPlaces = groupIndex < plan.fixedByGroup.length
           ? plan.fixedByGroup[groupIndex]
           : plan.fixedPerGroup;
@@ -909,7 +940,10 @@ class _TournamentSecondScreenViewState
     required List<String> tieBreakers,
     bool full = false,
   }) {
-    final standings = _calculateGroupStandings(group, tieBreakers);
+    final standings = const GroupStandingsEngine().calculate(
+      group,
+      tieBreakers,
+    );
     final fixedPlaces = qualificationPlan?.fixedPerGroup ?? 2;
 
     return Container(
@@ -1149,7 +1183,7 @@ class _TournamentSecondScreenViewState
               Builder(
                 builder: (context) {
                   final group = groupStage.groups[groupIndex];
-                  final standings = _calculateGroupStandings(
+                  final standings = const GroupStandingsEngine().calculate(
                     group,
                     groupStage.tieBreakers,
                   );
@@ -1320,6 +1354,11 @@ class _TournamentSecondScreenViewState
       }
     }
 
+    final namesById = <String, String>{
+      for (final player in t.players)
+        for (final individual in player.individuals)
+          individual.profileId ?? individual.name: individual.name,
+    };
     final preferredPlayers = <String>{};
     String? priorityNotice;
     if (openCounts.isNotEmpty) {
@@ -1331,8 +1370,11 @@ class _TournamentSecondScreenViewState
               .where((entry) => entry.value == maxOpen)
               .map((entry) => entry.key),
         );
+        final preferredNames = preferredPlayers
+            .map((id) => namesById[id] ?? 'Spieler')
+            .toList();
         priorityNotice =
-            'Vorrang: ${preferredPlayers.join(', ')} hat mindestens zwei offene Partien mehr als andere Spieler ($maxOpen gegenüber $minOpen).';
+            'Vorrang: ${preferredNames.join(', ')} hat mindestens zwei offene Partien mehr als andere Spieler ($maxOpen gegenüber $minOpen).';
       }
     }
 
@@ -1347,13 +1389,19 @@ class _TournamentSecondScreenViewState
             spacing: 10,
             runSpacing: 10,
             children: [
-              for (var i = 0; i < matches.take(8).length; i++)
+              for (var i = 0; i < matches.take(6).length; i++)
                 _buildMatchTile(
                   context,
                   matches[i],
                   isPreferred:
-                      preferredPlayers.contains(matches[i].homePlayer?.name) ||
-                      preferredPlayers.contains(matches[i].awayPlayer?.name),
+                      preferredPlayers.contains(
+                        matches[i].homePlayer?.profileId ??
+                            matches[i].homePlayer?.name,
+                      ) ||
+                      preferredPlayers.contains(
+                        matches[i].awayPlayer?.profileId ??
+                            matches[i].awayPlayer?.name,
+                      ),
                 ),
             ],
           );
@@ -1519,7 +1567,13 @@ class _TournamentSecondScreenViewState
     List<GroupMatch> playedMatches, {
     bool expand = true,
   }) {
-    final recent = playedMatches.reversed.take(6).toList();
+    final recent = playedMatches.toList()
+      ..sort(
+        (a, b) => (b.finishedAt ?? DateTime(1970)).compareTo(
+          a.finishedAt ?? DateTime(1970),
+        ),
+      );
+    final latestMatches = recent.take(2).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1547,7 +1601,7 @@ class _TournamentSecondScreenViewState
                 FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
                   future: _eloChanges,
                   builder: (context, snapshot) {
-                    final recentContent = recent.isEmpty
+                    final recentContent = latestMatches.isEmpty
                         ? const Center(
                             child: Text(
                               'Noch keine beendeten Partien vorhanden.',
@@ -1557,7 +1611,7 @@ class _TournamentSecondScreenViewState
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              for (final match in recent) ...[
+                              for (final match in latestMatches) ...[
                                 _buildRecentMatchRow(
                                   context,
                                   match,
@@ -1682,7 +1736,6 @@ class _TournamentSecondScreenViewState
   Widget _buildProgressAndBestPerformancesPanel({
     required BuildContext context,
     required CreatedTournament t,
-    required TimingSnapshot timing,
     required int progressPercent,
     required List<GroupMatch> playedMatches,
     required int totalMatches,
@@ -1863,36 +1916,16 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Overall timing
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              children: [
-                const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
-                Text(
-                  'Turnieruhr: ${_formatDuration(timing.elapsed)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '$progressPercent% Gesamt',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Color(0xFF70E0BA),
             ),
-            Text(
-              '$progressPercent% Gesamt',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Color(0xFF70E0BA),
-              ),
-            ),
-          ],
+          ),
         ),
         const SizedBox(height: 10),
 
@@ -1927,64 +1960,5 @@ class _TournamentSecondScreenViewState
         ),
       ],
     );
-  }
-
-  List<PlayerStanding> _calculateGroupStandings(
-    TournamentGroup group,
-    List<String> tieBreakers,
-  ) {
-    final standings = {
-      for (final player in group.players) player.name: PlayerStanding(player),
-    };
-
-    for (final match in group.matches.where(
-      (m) => m.hasResult && !m.isDecider,
-    )) {
-      final homePlayer = match.homePlayer;
-      final awayPlayer = match.awayPlayer;
-      if (homePlayer == null || awayPlayer == null) continue;
-      final home = standings[homePlayer.name];
-      final away = standings[awayPlayer.name];
-      if (home == null || away == null) continue;
-      final homeLegs = match.homeLegs ?? 0;
-      final awayLegs = match.awayLegs ?? 0;
-
-      home.played++;
-      home.legsFor += homeLegs;
-      home.legsAgainst += awayLegs;
-      away.played++;
-      away.legsFor += awayLegs;
-      away.legsAgainst += homeLegs;
-
-      if (match.winner == homePlayer) {
-        home.wins++;
-        home.points += 3;
-        away.losses++;
-      } else if (match.winner == awayPlayer) {
-        away.wins++;
-        away.points += 3;
-        home.losses++;
-      } else {
-        home.draws++;
-        home.points++;
-        away.draws++;
-        away.points++;
-      }
-    }
-
-    final sorted = standings.values.toList();
-    sorted.sort((a, b) {
-      for (final rule in tieBreakers) {
-        final cmp = switch (rule) {
-          'points' => b.points.compareTo(a.points),
-          'legDifference' => b.legDifference.compareTo(a.legDifference),
-          'legsFor' => b.legsFor.compareTo(a.legsFor),
-          _ => 0,
-        };
-        if (cmp != 0) return cmp;
-      }
-      return a.player.name.compareTo(b.player.name);
-    });
-    return sorted;
   }
 }

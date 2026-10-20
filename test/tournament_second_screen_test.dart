@@ -46,7 +46,7 @@ void main() {
     });
   }
 
-  testWidgets('compact TV view can switch between standings and forecast', (
+  testWidgets('TV view switches between standings and forecast', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(800, 600);
@@ -64,15 +64,97 @@ void main() {
         ),
       ),
     );
-    final selector = find.byType(SegmentedButton<bool>);
-    expect(selector, findsOneWidget);
-    expect(tester.widget<SegmentedButton<bool>>(selector).selected, {false});
-    await tester.ensureVisible(find.text('Prognose'));
-    await tester.tap(find.text('Prognose'));
+    expect(find.text('Tabellen & Zwischenstände').first, findsOneWidget);
+    expect(find.text('Siegprognose & Weiterkommen'), findsOneWidget);
+    await tester.ensureVisible(find.text('Siegprognose & Weiterkommen').first);
+    await tester.tap(find.text('Siegprognose & Weiterkommen').first);
     await tester.pump();
-    expect(tester.widget<SegmentedButton<bool>>(selector).selected, {true});
+    expect(find.text('Siegprognose & Weiterkommen'), findsNWidgets(2));
+    expect(find.text('Tabellen & Zwischenstände'), findsOneWidget);
+    await tester.ensureVisible(find.text('Tabellen & Zwischenstände').first);
+    await tester.tap(find.text('Tabellen & Zwischenstände').first);
+    await tester.pump();
+    expect(find.text('Tabellen & Zwischenstände'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'director TV queue shows six matches and resolves priority ids to names',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final anna = const TournamentPlayer(
+        profileId: '1792065292054802-eef1db4f',
+        name: 'Anna Nord',
+        isGenerated: false,
+      );
+      final ben = const TournamentPlayer(
+        profileId: 'ben-profile',
+        name: 'Ben Süd',
+        isGenerated: false,
+      );
+      final otherPlayers = [
+        for (var i = 0; i < 12; i++)
+          TournamentPlayer(
+            profileId: 'player-$i',
+            name: 'Spieler $i',
+            isGenerated: false,
+          ),
+      ];
+      final players = [anna, ben, ...otherPlayers];
+      final matches = [
+        GroupMatch(homePlayer: anna, awayPlayer: ben, round: 1),
+        GroupMatch(homePlayer: anna, awayPlayer: otherPlayers[0], round: 2),
+        GroupMatch(homePlayer: anna, awayPlayer: otherPlayers[1], round: 3),
+        for (var i = 2; i < otherPlayers.length; i += 2)
+          GroupMatch(
+            homePlayer: otherPlayers[i],
+            awayPlayer: otherPlayers[i + 1],
+            round: i + 2,
+          ),
+      ];
+      final group = TournamentGroup(
+        name: 'Queue',
+        playType: 'round_robin',
+        players: players,
+        matches: matches,
+      );
+      final tournament = CreatedTournament(
+        name: 'Priority cup',
+        boardCount: 4,
+        players: players,
+        stages: const [],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Group',
+            groupPlayType: 'round_robin',
+            groups: [group],
+            qualificationPlan: null,
+            tieBreakers: const ['points'],
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+              showStandings: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nächste Partie'), findsNWidgets(6));
+      expect(find.textContaining('Anna Nord'), findsWidgets);
+      expect(find.textContaining('1792065292054802-eef1db4f'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('next-stage preview shows current qualifiers provisionally', (
     tester,

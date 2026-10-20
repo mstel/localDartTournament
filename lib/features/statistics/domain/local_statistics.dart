@@ -4,6 +4,7 @@ import '../../rankings/application/local_ranking_series_service.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
+import '../../tournaments/domain/tournament_winner.dart';
 import 'best_performance.dart';
 
 class LocalPlayerStatistics {
@@ -56,10 +57,8 @@ class LocalStatisticsService {
       )) {
         playedTournamentIds.add(tournament.id);
       }
-      if (tournament.players.any(
-            (p) => p.profileId != null && ids.contains(p.profileId),
-          ) &&
-          _tournamentWinner(tournament, ids) != null) {
+      final winnerId = TournamentWinner.profileId(tournament);
+      if (winnerId != null && ids.contains(winnerId)) {
         tournamentWins++;
       }
       for (final match in _matches(tournament)) {
@@ -226,46 +225,6 @@ class LocalStatisticsService {
         }
       }
     }
-  }
-
-  String? _tournamentWinner(CreatedTournament tournament, Set<String> ids) {
-    GroupMatch? finalMatch;
-    for (final stage in tournament.runStages) {
-      if (stage is KnockoutTournamentRunStage &&
-          stage.rounds.isNotEmpty &&
-          stage.rounds.last.length == 1 &&
-          stage.rounds.last.single.hasResult) {
-        finalMatch = stage.rounds.last.single;
-      }
-    }
-    final winnerId = finalMatch?.winner?.profileId;
-    if (winnerId != null && ids.contains(winnerId)) return winnerId;
-
-    final lastStage = tournament.runStages.length - 1;
-    if (lastStage < 0 ||
-        !tournament.completedStageIndexes.contains(lastStage)) {
-      return null;
-    }
-    final wins = <String, int>{};
-    final legs = <String, int>{};
-    for (final match in _matches(tournament).toSet()) {
-      if (!match.hasResult || match.withdrawalIgnored) continue;
-      final winner = match.winner?.profileId;
-      if (winner == null || !ids.contains(winner)) continue;
-      wins.update(winner, (value) => value + 1, ifAbsent: () => 1);
-      final wonLegs = winner == match.homePlayer?.profileId
-          ? match.homeLegs ?? 0
-          : match.awayLegs ?? 0;
-      legs.update(winner, (value) => value + wonLegs, ifAbsent: () => wonLegs);
-    }
-    final candidates = wins.keys.toList()
-      ..sort((a, b) {
-        final byWins = wins[b]!.compareTo(wins[a]!);
-        if (byWins != 0) return byWins;
-        final byLegs = (legs[b] ?? 0).compareTo(legs[a] ?? 0);
-        return byLegs != 0 ? byLegs : a.compareTo(b);
-      });
-    return candidates.isEmpty ? null : candidates.first;
   }
 }
 

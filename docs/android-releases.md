@@ -1,9 +1,20 @@
 # Android-Updates in mstel/localDartTournament
 
-Die Update-Suche und der manuelle Release-Link der App zeigen auf
-`mstel/localDartTournament`. Tag-Releases veröffentlichen Windows-, Linux- und
-signierte Android-Pakete. Das Android-APK heißt `dart-turnier-android.apk`;
-seine Prüfsumme ist in `SHA256SUMS` enthalten.
+Die Update-Suche und der manuelle Release-Link der App zeigen standardmäßig auf
+`mstel/localDartTournament`. Das Repository ist öffentlich; die anonyme
+GitHub-Releases-API ist unter
+`https://api.github.com/repos/mstel/localDartTournament/releases` erreichbar.
+Ein persönlicher GitHub-Zugangstoken ist weder erforderlich noch darf einer in
+der App oder in Releases hinterlegt werden.
+
+Für einen anderen öffentlichen Release-Host kann dessen Repository mit
+`--dart-define=GITHUB_RELEASE_REPOSITORY=owner/public-releases` konfiguriert
+werden. Die Assets müssen weiterhin die in der App geprüften Dateinamen,
+Release-Tags, SHA-256-Digests und Downloadpfade verwenden.
+
+Tag-Releases veröffentlichen Windows-, Linux- und signierte Android-Pakete.
+Das Android-APK heißt `dart-turnier-android.apk`; seine Prüfsumme ist in
+`SHA256SUMS` enthalten.
 
 Für ein bestehendes GitHub-Release kann der Android-Workflow manuell mit dessen
 Tag gestartet werden. Er baut Windows und Android aus genau diesem Tag für das

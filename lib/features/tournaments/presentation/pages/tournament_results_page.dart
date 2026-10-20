@@ -18,6 +18,7 @@ import 'challonge_archive_page.dart';
 import '../../application/tournament_timing.dart';
 import '../widgets/results/tournament_results_statistics.dart';
 import '../widgets/results/tournament_ranking_changes_section.dart';
+import '../widgets/results/tournament_ranking_assignment_section.dart';
 import '../widgets/tournament_export_dialog.dart';
 
 class TournamentResultsPage extends StatefulWidget {
@@ -179,8 +180,14 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                 ranking: podium,
                 onPlayerTap: (stats) => _openPlayer(context, stats.player),
               ),
-              TournamentRankingChangesSection(tournament: tournament),
             ],
+            if (tournament.countsForRanking && tournament.rankingIds.isNotEmpty)
+              TournamentRankingChangesSection(tournament: tournament)
+            else
+              TournamentRankingAssignmentSection(
+                tournament: tournament,
+                onAssigned: () => setState(() {}),
+              ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => Navigator.of(context).push(
@@ -687,38 +694,40 @@ class _ResultMatchCard extends StatelessWidget {
     final highlightHome = highlightPlayer?.name == home;
     final highlightAway = highlightPlayer?.name == away;
     return Card(
+      margin: const EdgeInsets.symmetric(vertical: 3),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               '${entry.stageName} · ${entry.roundName}',
-              style: Theme.of(context).textTheme.labelLarge,
+              style: Theme.of(context).textTheme.labelMedium,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 2),
             Text(
               '$home  $score  $away',
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             for (final change in eloChanges)
               Padding(
-                padding: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   '${change.rankingName}: $home ${_formatEloDelta(change.homeDelta)} · '
                   '$away ${_formatEloDelta(change.awayDelta)}',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
             if (highlightHome || highlightAway)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   highlightHome
                       ? '$home spielte zuhause'
                       : '$away spielte auswärts',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
             if (onEditBestPerformances != null)

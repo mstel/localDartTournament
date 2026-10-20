@@ -1873,16 +1873,32 @@ class _TournamentEloPlayerHistory extends StatelessWidget {
         final date = a.playedAt.compareTo(b.playedAt);
         return date == 0 ? a.matchIndex.compareTo(b.matchIndex) : date;
       });
-    final before = ordered.first.ratingAfter - ordered.first.delta;
-    final after = ordered.last.ratingAfter;
     final delta = ordered.fold<int>(0, (sum, item) => sum + item.delta);
 
     return ExpansionTile(
       key: PageStorageKey('ranking-tournament-$tournamentId-player-$playerId'),
-      title: Text(playerName),
-      subtitle: Text(
-        '$before → $after Elo · ${delta > 0 ? "+" : ""}$delta Elo',
+      leading: CircleAvatar(
+        backgroundColor: delta > 0
+            ? Colors.green.shade100
+            : delta < 0
+            ? Colors.red.shade100
+            : Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Icon(
+          delta > 0
+              ? Icons.arrow_upward
+              : delta < 0
+              ? Icons.arrow_downward
+              : Icons.remove,
+          color: delta > 0
+              ? Colors.green.shade800
+              : delta < 0
+              ? Colors.red.shade800
+              : Theme.of(context).colorScheme.onSurfaceVariant,
+          size: 20,
+        ),
       ),
+      title: Text(playerName),
+      subtitle: Text('${delta > 0 ? "+" : ""}$delta Elo'),
       children: [
         for (final item in ordered)
           ListTile(
@@ -2135,9 +2151,9 @@ class PlayerEloHistoryPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            if (trajectory.points.length > 1) ...[
+            if (trajectory.length > 1) ...[
               Text(
-                'Elo-Entwicklung · ${trajectory.isMonthly ? 'Monate' : 'Jahre'}',
+                'Elo-Entwicklung pro Turnier',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -2151,24 +2167,20 @@ class PlayerEloHistoryPage extends StatelessWidget {
                     children: [
                       SizedBox(
                         height: 180,
-                        child: CustomPaint(
-                          painter: _EloTrajectoryPainter(
-                            ratings: trajectory.points
-                                .map((point) => point.rating)
-                                .toList(),
-                            color: colorScheme.primary,
-                            gridColor: colorScheme.outlineVariant,
-                          ),
+                        child: _InteractiveEloTrajectory(
+                          points: trajectory,
+                          color: colorScheme.primary,
+                          gridColor: colorScheme.outlineVariant,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
                         alignment: WrapAlignment.spaceBetween,
                         children: [
-                          Text(trajectory.points.first.label),
-                          Text(trajectory.points.last.label),
+                          Text(_historyDate(trajectory.first.playedAt)),
+                          Text(_historyDate(trajectory.last.playedAt)),
                           Text(
-                            '${trajectory.points.first.rating} → ${trajectory.points.last.rating} Elo',
+                            '${trajectory.first.rating} → ${trajectory.last.rating} Elo',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],
@@ -2308,50 +2320,150 @@ class PlayerEloHistoryPage extends StatelessWidget {
   }
 }
 
-({List<({String label, int rating})> points, bool isMonthly}) _eloTrajectory(
-  List<LocalEloHistoryItem> history,
-) {
-  if (history.isEmpty) return (points: const [], isMonthly: true);
+List<({DateTime playedAt, String tournamentName, int rating, int delta})>
+_eloTrajectory(List<LocalEloHistoryItem> history) {
+  if (history.isEmpty) return const [];
   final ordered = history.toList()
     ..sort((a, b) => a.playedAt.compareTo(b.playedAt));
-  final firstDate = ordered.first.playedAt;
-  final lastDate = ordered.last.playedAt;
-  final isMonthly = lastDate.difference(firstDate).inDays <= 365;
-  final buckets = <String, ({DateTime date, int rating})>{};
+  final byTournament = <String, List<LocalEloHistoryItem>>{};
   for (final item in ordered) {
-    final date = item.playedAt;
-    final key = isMonthly
-        ? '${date.year}-${date.month.toString().padLeft(2, '0')}'
-        : '${date.year}';
-    buckets[key] = (date: date, rating: item.ratingAfter);
+    (byTournament[item.tournamentId] ??= []).add(item);
   }
-  final sorted = buckets.entries.toList()
-    ..sort((a, b) => a.value.date.compareTo(b.value.date));
-  final visible = isMonthly && sorted.length > 12
-      ? sorted.sublist(sorted.length - 12)
-      : sorted;
-  return (
-    points: [
-      for (final entry in visible)
-        (
-          label: isMonthly
-              ? '${entry.value.date.month.toString().padLeft(2, '0')}/${entry.value.date.year}'
-              : '${entry.value.date.year}',
-          rating: entry.value.rating,
+  final points = [
+    for (final items in byTournament.values)
+      (
+        playedAt: items.last.playedAt,
+        tournamentName: items.last.tournamentName,
+        rating: items.last.ratingAfter,
+        delta: items.fold<int>(0, (sum, item) => sum + item.delta),
+      ),
+  ]..sort((a, b) => a.playedAt.compareTo(b.playedAt));
+  return points;
+}
+
+class _InteractiveEloTrajectory extends StatefulWidget {
+  const _InteractiveEloTrajectory({
+    required this.points,
+    required this.color,
+    required this.gridColor,
+  });
+
+  final List<
+    ({DateTime playedAt, String tournamentName, int rating, int delta})
+  >
+  points;
+  final Color color;
+  final Color gridColor;
+
+  @override
+  State<_InteractiveEloTrajectory> createState() =>
+      _InteractiveEloTrajectoryState();
+}
+
+class _InteractiveEloTrajectoryState extends State<_InteractiveEloTrajectory> {
+  int? _selectedIndex;
+
+  @override
+  void didUpdateWidget(covariant _InteractiveEloTrajectory oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_selectedIndex != null && _selectedIndex! >= widget.points.length) {
+      _selectedIndex = null;
+    }
+  }
+
+  void _selectPoint(double localX, double width) {
+    if (widget.points.length < 2 || width <= 0) return;
+    const padding = 12.0;
+    final plotWidth = width - padding * 2;
+    if (plotWidth <= 0) return;
+    final position = ((localX - padding) / plotWidth).clamp(0.0, 1.0);
+    final index = (position * (widget.points.length - 1)).round();
+    if (index != _selectedIndex) setState(() => _selectedIndex = index);
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final selected =
+          _selectedIndex == null || _selectedIndex! >= widget.points.length
+          ? null
+          : widget.points[_selectedIndex!];
+      final width = constraints.maxWidth;
+      final tooltipLeft = _selectedIndex == null
+          ? 0.0
+          : (12 +
+                    (width - 24) *
+                        _selectedIndex! /
+                        (widget.points.length - 1) -
+                    110)
+                .clamp(0.0, math.max(0.0, width - 220))
+                .toDouble();
+
+      return MouseRegion(
+        onHover: (event) => _selectPoint(event.localPosition.dx, width),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (details) => _selectPoint(details.localPosition.dx, width),
+          onPanUpdate: (details) =>
+              _selectPoint(details.localPosition.dx, width),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _EloTrajectoryPainter(
+                    ratings: widget.points
+                        .map((point) => point.rating)
+                        .toList(),
+                    selectedIndex: _selectedIndex,
+                    color: widget.color,
+                    gridColor: widget.gridColor,
+                  ),
+                ),
+              ),
+              if (selected != null)
+                Positioned(
+                  top: 0,
+                  left: tooltipLeft,
+                  child: IgnorePointer(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.inverseSurface,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${_historyDate(selected.playedAt)} · ${selected.tournamentName}\n'
+                        '${selected.rating} Elo (${selected.delta >= 0 ? "+" : ""}${selected.delta})',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onInverseSurface,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-    ],
-    isMonthly: isMonthly,
+      );
+    },
   );
 }
 
 class _EloTrajectoryPainter extends CustomPainter {
   const _EloTrajectoryPainter({
     required this.ratings,
+    required this.selectedIndex,
     required this.color,
     required this.gridColor,
   });
 
   final List<int> ratings;
+  final int? selectedIndex;
   final Color color;
   final Color gridColor;
 
@@ -2392,11 +2504,32 @@ class _EloTrajectoryPainter extends CustomPainter {
       }
     }
     canvas.drawPath(path, linePaint);
+    final selected = selectedIndex;
+    if (selected != null && selected >= 0 && selected < ratings.length) {
+      final x = plot.left + plot.width * selected / (ratings.length - 1);
+      final y = plot.bottom - (ratings[selected] - low) / range * plot.height;
+      canvas.drawCircle(
+        Offset(x, y),
+        6,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawCircle(
+        Offset(x, y),
+        8,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+    }
   }
 
   @override
   bool shouldRepaint(covariant _EloTrajectoryPainter oldDelegate) =>
       !listEquals(oldDelegate.ratings, ratings) ||
+      oldDelegate.selectedIndex != selectedIndex ||
       oldDelegate.color != color ||
       oldDelegate.gridColor != gridColor;
 }

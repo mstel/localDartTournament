@@ -1,7 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../application/tournament_director_snapshot.dart';
-import '../../../application/tournament_timing.dart';
 import '../../../domain/tournament_models.dart';
 import 'tournament_second_screen_view.dart';
 
@@ -39,22 +37,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
 
 class _TournamentDirectorDashboardState
     extends State<TournamentDirectorDashboard> {
-  Timer? _timer;
   bool _busy = false;
   String? _actionError;
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
 
   Future<void> _act(Future<void> Function() action) async {
     if (_busy) return;
@@ -85,21 +69,12 @@ class _TournamentDirectorDashboardState
       ),
     ),
   );
-  String _duration(Duration d) =>
-      '${d.inHours} h ${d.inMinutes.remainder(60)} min';
-  String _clock(DateTime t) =>
-      '${t.toLocal().hour.toString().padLeft(2, '0')}:${t.toLocal().minute.toString().padLeft(2, '0')}';
-  String _timeOfDay(DateTime t) =>
-      '${t.toLocal().hour.toString().padLeft(2, '0')}:${t.toLocal().minute.toString().padLeft(2, '0')} Uhr';
-
   @override
   Widget build(BuildContext context) => _build(context);
 
   Widget _build(BuildContext context) {
     final t = widget.tournament;
     final state = TournamentDirectorSnapshot(t, widget.activeStage);
-    final now = DateTime.now();
-    final timing = TournamentTiming.snapshot(t, now);
     final active = state.entries
         .where((e) => e.stageIndex == widget.activeStage && e.match.hasPlayers)
         .toList();
@@ -169,7 +144,7 @@ class _TournamentDirectorDashboardState
     final heroBoard = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TournamentSecondScreenView(tournament: t),
+        TournamentSecondScreenView(tournament: t, showStandings: false),
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerRight,
@@ -267,14 +242,6 @@ class _TournamentDirectorDashboardState
           ),
           Text('${state.schedule.running.length} laufen gerade'),
           Text('${state.freeBoards.length} Boards frei'),
-          Text(
-            t.startedAt == null
-                ? 'Turnieruhr nicht gestartet'
-                : 'Laufzeit: ${_duration(timing.elapsed)} · Start ${_timeOfDay(t.startedAt!)}',
-          ),
-          Text('Uhrzeit: ${_timeOfDay(now)}'),
-          if (timing.forecast != null)
-            Text('Prognose Ende: ${_clock(timing.forecast!)}'),
         ],
       ),
       if (!widget.canOperate)
@@ -400,7 +367,15 @@ class _TournamentDirectorDashboardState
                     flex: 5,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [status, const SizedBox(height: 12), notices],
+                      children: [
+                        status,
+                        const SizedBox(height: 12),
+                        notices,
+                        const SizedBox(height: 12),
+                        _stageProgressPanel(t),
+                        const SizedBox(height: 12),
+                        _bestPerformancePanel(t),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -418,10 +393,81 @@ class _TournamentDirectorDashboardState
             const SizedBox(height: 12),
             notices,
             const SizedBox(height: 12),
+            _stageProgressPanel(t),
+            const SizedBox(height: 12),
+            _bestPerformancePanel(t),
+            const SizedBox(height: 12),
             status,
           ],
         );
       },
     );
+  }
+
+  Iterable<GroupMatch> _stageMatches(TournamentRunStage stage) sync* {
+    if (stage is GroupTournamentRunStage) {
+      for (final group in stage.groups) {
+        yield* group.matches;
+        yield* group.knockoutRounds.expand((round) => round);
+        yield* group.placementMatches;
+      }
+    } else if (stage is KnockoutTournamentRunStage) {
+      yield* stage.matches;
+      yield* stage.placementMatches;
+    }
+  }
+
+  Widget _stageProgressPanel(CreatedTournament tournament) => _box([
+    Text(
+      'Fortschritt nach Etappen',
+      style: Theme.of(context).textTheme.titleLarge,
+    ),
+    const SizedBox(height: 8),
+    for (final stage in tournament.runStages) ...[
+      Builder(
+        builder: (context) {
+          final matches = _stageMatches(
+            stage,
+          ).where((match) => match.hasPlayers).toList();
+          final completed = matches.where((match) => match.isResolved).length;
+          final progress = matches.isEmpty ? 0.0 : completed / matches.length;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('${stage.name} · $completed von ${matches.length}'),
+                const SizedBox(height: 4),
+                LinearProgressIndicator(value: progress),
+              ],
+            ),
+          );
+        },
+      ),
+    ],
+  ]);
+
+  Widget _bestPerformancePanel(CreatedTournament tournament) {
+    final performances = [
+      for (final stage in tournament.runStages)
+        for (final match in _stageMatches(stage)) ...match.bestPerformances,
+    ];
+    return _box([
+      Text('Bestleistungen', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 8),
+      if (performances.isEmpty)
+        const Text('Noch keine Bestleistungen erfasst.')
+      else
+        for (final performance in performances.take(8))
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.military_tech_outlined),
+            title: Text(
+              '${performance.label}${performance.value == null ? '' : ' · ${performance.value}'}',
+            ),
+            subtitle: Text(performance.playerName),
+          ),
+    ]);
   }
 }

@@ -100,6 +100,11 @@ void main() {
           ),
         );
         expect(find.text('Dashboard'), findsOneWidget);
+        expect(find.text('Fortschritt nach Etappen'), findsOneWidget);
+        expect(find.text('Bestleistungen'), findsOneWidget);
+        expect(find.text('LIVE-TICKER'), findsNothing);
+        expect(find.text('Tabellen & Zwischenstände'), findsNothing);
+        expect(find.textContaining('Turnieruhr'), findsNothing);
         expect(tester.takeException(), isNull);
         for (final section in ['Übersicht', 'Boards', 'Spiele']) {
           final tab = find.widgetWithText(ChoiceChip, section);
@@ -200,7 +205,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 23);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 24);
     },
   );
   testWidgets('director dashboard survives width changes', (tester) async {

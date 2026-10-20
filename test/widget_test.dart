@@ -1617,7 +1617,7 @@ void main() {
     await selectTournamentDashboard(tester);
 
     expect(find.text('Neues Turnier · Vorrunde'), findsOneWidget);
-    expect(find.text('Gruppe A'), findsWidgets);
+    expect(find.text('Gruppe A'), findsNothing);
     expect(find.text('Runde 1'), findsNothing);
 
     await selectTournamentStage(tester, '2. Endrunde');
@@ -1695,7 +1695,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Endrunde'), findsWidgets);
-    expect(find.textContaining('Spielansetzungen'), findsOneWidget);
+    expect(find.textContaining('Spielansetzungen'), findsNothing);
     expect(
       find.textContaining('Aktuelle & nächste Begegnungen'),
       findsOneWidget,

@@ -34,6 +34,32 @@ class ResultsStatisticsPreview extends StatelessWidget {
   );
 }
 
+CreatedTournament compactResultsFixture() {
+  const home = TournamentPlayer(
+    name: 'Anna Musterfrau',
+    profileId: 'anna',
+    isGenerated: false,
+  );
+  const away = TournamentPlayer(
+    name: 'Ben Beispielmann',
+    profileId: 'ben',
+    isGenerated: false,
+  );
+  return CreatedTournament(
+    name: 'Compact results',
+    players: [home, away],
+    stages: const [],
+    runStages: [
+      KnockoutTournamentRunStage(
+        name: 'Finale',
+        rounds: [
+          [GroupMatch(homePlayer: home, awayPlayer: away, round: 1)],
+        ],
+      ),
+    ],
+  );
+}
+
 void main() {
   testWidgets('results statistics show zero and recorded best performances', (
     tester,
@@ -94,6 +120,50 @@ void main() {
     expect(find.byType(TournamentResultsPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('result match cards use compact vertical spacing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentMatchesPage(tournament: compactResultsFixture()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final card = find.byType(Card).first;
+    expect(tester.getSize(card).height, lessThan(100));
+    expect(tester.takeException(), isNull);
+  });
+  for (final size in [
+    const Size(360, 800),
+    const Size(800, 600),
+    const Size(1440, 900),
+  ]) {
+    testWidgets('compact result card fits $size with large text', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: TournamentMatchesPage(tournament: compactResultsFixture()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Anna Musterfrau'), findsOneWidget);
+      expect(tester.getSize(find.byType(Card).first).height, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets(
     'manual results show zero best performances without inventing records',
     (tester) async {

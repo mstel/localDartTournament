@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
@@ -88,6 +89,65 @@ void main() {
       find.textContaining('Elo wird chronologisch aus abgeschlossenen'),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Elo curve shows the hovered tournament and rating delta', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final firstDate = DateTime(2026, 2, 3);
+    final secondDate = DateTime(2026, 4, 8);
+    final history = [
+      LocalEloHistoryItem(
+        playedAt: firstDate,
+        tournamentId: 'cup-a',
+        tournamentName: 'Wintercup',
+        matchIndex: 0,
+        opponentName: 'Ben',
+        score: '1:0',
+        delta: 12,
+        ratingAfter: 1012,
+        kFactor: 25,
+        expectedScore: .5,
+      ),
+      LocalEloHistoryItem(
+        playedAt: secondDate,
+        tournamentId: 'cup-b',
+        tournamentName: 'Frühjahrscup',
+        matchIndex: 0,
+        opponentName: 'Caro',
+        score: '0:1',
+        delta: -7,
+        ratingAfter: 1005,
+        kFactor: 25,
+        expectedScore: .5,
+      ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerEloHistoryPage(
+          player: LocalEloPlayer(id: 'anna', name: 'Anna', rating: 1005),
+          rankingName: 'Vereins-Elo',
+          history: history,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final chart = find.byType(CustomPaint).first;
+    await tester.ensureVisible(chart);
+    final rect = tester.getRect(chart);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: rect.center);
+    await mouse.moveTo(Offset(rect.right - 12, rect.center.dy));
+    await tester.pump();
+
+    expect(find.textContaining('Frühjahrscup'), findsOneWidget);
+    expect(find.textContaining('-7'), findsOneWidget);
+    expect(find.text('1005 Elo'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
