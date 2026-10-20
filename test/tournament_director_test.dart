@@ -99,6 +99,8 @@ void main() {
           ),
         );
         expect(find.text('Dashboard'), findsOneWidget);
+        expect(find.text('Fortschritt nach Etappen'), findsOneWidget);
+        expect(find.text('Bestleistungen'), findsOneWidget);
         expect(tester.takeException(), isNull);
         for (final section in ['Übersicht', 'Boards', 'Spiele']) {
           final tab = find.widgetWithText(ChoiceChip, section);
@@ -202,9 +204,7 @@ void main() {
       expect(jsonDecode(await file.readAsString())['schemaVersion'], 24);
     },
   );
-  testWidgets('director dashboard survives width changes', (
-    tester,
-  ) async {
+  testWidgets('director dashboard survives width changes', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 800);
     addTearDown(tester.view.reset);

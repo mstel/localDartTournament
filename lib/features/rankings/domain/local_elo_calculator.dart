@@ -47,6 +47,8 @@ class LocalEloPlayer {
 
 class LocalEloHistoryItem {
   const LocalEloHistoryItem({
+    required this.tournamentId,
+    required this.matchIndex,
     required this.playedAt,
     required this.tournamentName,
     required this.opponentName,
@@ -56,6 +58,8 @@ class LocalEloHistoryItem {
     required this.kFactor,
     required this.expectedScore,
   });
+  final String tournamentId;
+  final int matchIndex;
   final DateTime playedAt;
   final String tournamentName, opponentName, score;
   final int delta, ratingAfter, kFactor;
@@ -245,6 +249,8 @@ class LocalEloCalculator {
       if (countHome) {
         (history[homeId] ??= []).add(
           LocalEloHistoryItem(
+            tournamentId: tournament.id,
+            matchIndex: row.matchIndex,
             playedAt: date,
             tournamentName: tournament.name,
             opponentName: away.name,
@@ -259,6 +265,8 @@ class LocalEloCalculator {
       if (countAway) {
         (history[awayId] ??= []).add(
           LocalEloHistoryItem(
+            tournamentId: tournament.id,
+            matchIndex: row.matchIndex,
             playedAt: date,
             tournamentName: tournament.name,
             opponentName: home.name,

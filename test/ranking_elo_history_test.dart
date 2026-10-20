@@ -1,5 +1,7 @@
 import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
 import 'package:dart_tournament_manager/features/rankings/presentation/rankings_page.dart';
+import 'package:dart_tournament_manager/features/rankings/presentation/widgets/elo_trajectory_chart.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,6 +14,8 @@ void main() {
           rankingName: 'Vereinsrangliste',
           history: [
             LocalEloHistoryItem(
+              tournamentId: 'tournament-1',
+              matchIndex: 0,
               playedAt: DateTime(2026, 10, 20),
               tournamentName: 'Turnier 1',
               opponentName: 'Gegner',
@@ -31,5 +35,94 @@ void main() {
     expect(find.text('1000 → 1030 Elo'), findsOneWidget);
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Elo curve exposes the hovered tournament and rating delta', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerEloHistoryPage(
+          player: LocalEloPlayer(id: 'anna', name: 'Anna', rating: 1005),
+          rankingName: 'Vereinsrangliste',
+          history: [
+            LocalEloHistoryItem(
+              tournamentId: 'cup-a',
+              matchIndex: 0,
+              playedAt: DateTime(2025, 12, 20),
+              tournamentName: 'Wintercup',
+              opponentName: 'Ben',
+              score: '1:0',
+              delta: 12,
+              ratingAfter: 1012,
+              kFactor: 32,
+              expectedScore: 0.5,
+            ),
+            LocalEloHistoryItem(
+              tournamentId: 'cup-b',
+              matchIndex: 0,
+              playedAt: DateTime(2026, 1, 20),
+              tournamentName: 'Frühjahrscup',
+              opponentName: 'Caro',
+              score: '0:1',
+              delta: -7,
+              ratingAfter: 1005,
+              kFactor: 32,
+              expectedScore: 0.5,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final chart = find.byType(EloTrajectoryChart);
+    final rect = tester.getRect(chart);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: rect.center);
+    await mouse.moveTo(Offset(rect.right - 12, rect.center.dy));
+    await tester.pump();
+
+    expect(
+      find.text('20.1.2026 · Frühjahrscup\n1005 Elo (-7)'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tournament history cards start collapsed', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerEloHistoryPage(
+          player: LocalEloPlayer(id: 'anna', name: 'Anna', rating: 1030),
+          rankingName: 'Vereinsrangliste',
+          history: [
+            LocalEloHistoryItem(
+              tournamentId: 'cup-a',
+              matchIndex: 0,
+              playedAt: DateTime(2026, 10, 20),
+              tournamentName: 'Vereinspokal',
+              opponentName: 'Ben',
+              score: '1:0',
+              delta: 30,
+              ratingAfter: 1030,
+              kFactor: 32,
+              expectedScore: 0.5,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('vs. Ben'), findsNothing);
+    final tile = find.widgetWithText(ExpansionTile, 'Vereinspokal');
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+    expect(find.text('vs. Ben'), findsOneWidget);
   });
 }

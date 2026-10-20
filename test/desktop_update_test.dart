@@ -337,11 +337,25 @@ void main() {
       final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
       final where = p.join(systemRoot, 'System32', 'where.exe');
       final fakeUpdate = File(p.join(temp.path, 'fake update.cmd'));
+      final delayedActivation = File(p.join(temp.path, 'activate-later.ps1'));
       final activeFile = p.join(temp.path, 'active.json');
       final logFile = p.join(temp.path, 'restart.log');
+      final powershell = p.join(
+        systemRoot,
+        'System32',
+        'WindowsPowerShell',
+        'v1.0',
+        'powershell.exe',
+      );
+      await delayedActivation.writeAsString(
+        "Start-Sleep -Seconds 2\r\n"
+        "Set-Content -LiteralPath '${activeFile.replaceAll("'", "''")}' "
+        "-Value '{\"schemaVersion\":1,\"id\":\"build-12-123\"}'\r\n",
+      );
       await fakeUpdate.writeAsString(
         '@echo off\r\n'
-        '> "$activeFile" echo {"schemaVersion":1,"id":"build-12-123"}\r\n'
+        'start "" "$powershell" -NoProfile -NonInteractive '
+        '-WindowStyle Hidden -File "${delayedActivation.path}"\r\n'
         'exit /b 0\r\n',
       );
       final command = DesktopUpdateLauncher.windowsScript(

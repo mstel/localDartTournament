@@ -174,10 +174,18 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                     _StatCard(label: 'Spiele', value: '${stats.matches}'),
                     _StatCard(label: 'Siege', value: '${stats.wins}'),
                     _StatCard(label: 'Niederlagen', value: '${stats.losses}'),
+                    _StatCard(
+                      label: 'Turniersiege',
+                      value: '${stats.tournamentWins}',
+                    ),
                     _StatCard(label: 'Unentschieden', value: '${stats.draws}'),
                     _StatCard(
                       label: 'Siegquote',
                       value: '${stats.matchWinRate.toStringAsFixed(1)} %',
+                    ),
+                    _StatCard(
+                      label: 'Turniersiegchance %',
+                      value: '${stats.tournamentWinRate.toStringAsFixed(1)} %',
                     ),
                     _StatCard(
                       label: 'Erwartete Siegchance (Elo)',

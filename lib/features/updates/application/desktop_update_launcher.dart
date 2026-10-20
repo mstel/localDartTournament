@@ -134,6 +134,7 @@ if (\$null -ne \$parentProcess -and -not \$parentProcess.WaitForExit(120000)) {
 try {
   \$updatedProcess = Start-Process -FilePath ${quote(exe)} -WorkingDirectory ${quote(p.dirname(exe))} -ArgumentList '--desktop-update-activate=$id' -WindowStyle Normal -PassThru
   \$deadline = [DateTime]::UtcNow.AddSeconds(120)
+  \$exitDeadline = \$null
   while ([DateTime]::UtcNow -lt \$deadline) {
     if (Test-Path -LiteralPath ${quote(activeFile)}) {
       try {
@@ -144,7 +145,12 @@ try {
         }
       } catch {}
     }
-    if (\$updatedProcess.HasExited) { break }
+    if (\$updatedProcess.HasExited) {
+      if (\$null -eq \$exitDeadline) {
+        \$exitDeadline = [DateTime]::UtcNow.AddSeconds(15)
+      }
+      if ([DateTime]::UtcNow -ge \$exitDeadline) { break }
+    }
     Start-Sleep -Milliseconds 250
   }
   if (-not \$updatedProcess.HasExited) {

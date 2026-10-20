@@ -26,9 +26,15 @@ class PlanningSettingsStorage {
       if (!await target.exists()) return const TournamentPlanningParameters();
       final json = jsonDecode(await target.readAsString());
       if (json is! Map<String, dynamic> ||
-          (json['schemaVersion'] != 1 && json['schemaVersion'] != 2) ||
+          (json['schemaVersion'] != 1 &&
+              json['schemaVersion'] != 2 &&
+              json['schemaVersion'] != 3) ||
           json['parameters'] is! Map<String, dynamic>) {
-        throw const FormatException('Unbekanntes Einstellungsformat');
+        throw FormatException(
+          'Unbekanntes Einstellungsformat '
+          '(Version ${json is Map ? json['schemaVersion'] ?? 'fehlt' : 'ungültig'}). '
+          'Die Originaldatei wurde nicht verändert.',
+        );
       }
       // Version 1 fixed leg counts are retired; retain all other parameters.
       return TournamentPlanningParameters.fromJson(
@@ -47,7 +53,7 @@ class PlanningSettingsStorage {
       }
       final temporary = File('${target.path}.tmp');
       await temporary.writeAsString(
-        jsonEncode({'schemaVersion': 2, 'parameters': parameters.toJson()}),
+        jsonEncode({'schemaVersion': 3, 'parameters': parameters.toJson()}),
         flush: true,
       );
       await temporary.rename(target.path);

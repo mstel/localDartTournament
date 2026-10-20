@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import '../application/ranking_year_review_image_generator.dart';
 import '../application/ranking_standings_image_generator.dart';
@@ -16,6 +14,7 @@ import '../application/local_ranking_series_service.dart';
 import '../application/ranking_year_review_service.dart';
 import '../domain/local_ranking.dart';
 import '../domain/elo_tier.dart';
+import 'widgets/elo_trajectory_chart.dart';
 
 import '../../statistics/domain/best_performance.dart';
 import '../../statistics/domain/local_statistics.dart';
@@ -1885,13 +1884,23 @@ class PlayerEloHistoryPage extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final orderedHistory = history.toList()
+      ..sort((a, b) {
+        final time = a.playedAt.compareTo(b.playedAt);
+        if (time != 0) return time;
+        final tournament = a.tournamentId.compareTo(b.tournamentId);
+        return tournament != 0
+            ? tournament
+            : a.matchIndex.compareTo(b.matchIndex);
+      });
     final tournamentGroups = <_TournamentEloGroup>[];
-    for (final item in history) {
+    for (final item in orderedHistory) {
       if (tournamentGroups.isNotEmpty &&
-          tournamentGroups.last.tournamentName == item.tournamentName) {
+          tournamentGroups.last.tournamentId == item.tournamentId) {
         tournamentGroups.last.matches.add(item);
       } else {
         final group = _TournamentEloGroup(
+          tournamentId: item.tournamentId,
           tournamentName: item.tournamentName,
           playedAt: item.playedAt,
         );
@@ -1957,9 +1966,9 @@ class PlayerEloHistoryPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            if (trajectory.points.length > 1) ...[
+            if (trajectory.length > 1) ...[
               Text(
-                'Elo-Entwicklung · ${trajectory.isMonthly ? 'Monate' : 'Jahre'}',
+                'Elo-Entwicklung pro Turnier',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -1971,26 +1980,19 @@ class PlayerEloHistoryPage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(
-                        height: 180,
-                        child: CustomPaint(
-                          painter: _EloTrajectoryPainter(
-                            ratings: trajectory.points
-                                .map((point) => point.rating)
-                                .toList(),
-                            color: colorScheme.primary,
-                            gridColor: colorScheme.outlineVariant,
-                          ),
-                        ),
+                      EloTrajectoryChart(
+                        points: trajectory,
+                        color: colorScheme.primary,
+                        gridColor: colorScheme.outlineVariant,
                       ),
                       const SizedBox(height: 8),
                       Wrap(
                         alignment: WrapAlignment.spaceBetween,
                         children: [
-                          Text(trajectory.points.first.label),
-                          Text(trajectory.points.last.label),
+                          Text(trajectory.first.tournamentName),
+                          Text(trajectory.last.tournamentName),
                           Text(
-                            '${trajectory.points.first.rating} → ${trajectory.points.last.rating} Elo',
+                            '${trajectory.first.rating} → ${trajectory.last.rating} Elo',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],
@@ -2021,10 +2023,7 @@ class PlayerEloHistoryPage extends StatelessWidget {
               Card(
                 margin: const EdgeInsets.only(bottom: 10),
                 child: ExpansionTile(
-                  key: PageStorageKey(
-                    'elo-group-${group.tournamentName}-${group.playedAt.toIso8601String()}',
-                  ),
-                  initiallyExpanded: group == reversedGroups.first,
+                  key: PageStorageKey('elo-group-${group.tournamentId}'),
                   leading: CircleAvatar(
                     backgroundColor: group.totalDelta > 0
                         ? Colors.green.shade100
@@ -2123,111 +2122,54 @@ class PlayerEloHistoryPage extends StatelessWidget {
   }
 }
 
-({List<({String label, int rating})> points, bool isMonthly}) _eloTrajectory(
-  List<LocalEloHistoryItem> history,
-) {
-  if (history.isEmpty) return (points: const [], isMonthly: true);
+List<EloTrajectoryPoint> _eloTrajectory(List<LocalEloHistoryItem> history) {
+  if (history.isEmpty) return const [];
   final ordered = history.toList()
-    ..sort((a, b) => a.playedAt.compareTo(b.playedAt));
-  final firstDate = ordered.first.playedAt;
-  final lastDate = ordered.last.playedAt;
-  final isMonthly = lastDate.difference(firstDate).inDays <= 365;
-  final buckets = <String, ({DateTime date, int rating})>{};
+    ..sort((a, b) {
+      final time = a.playedAt.compareTo(b.playedAt);
+      if (time != 0) return time;
+      final tournament = a.tournamentId.compareTo(b.tournamentId);
+      return tournament != 0
+          ? tournament
+          : a.matchIndex.compareTo(b.matchIndex);
+    });
+  final byTournament = <String, List<LocalEloHistoryItem>>{};
   for (final item in ordered) {
-    final date = item.playedAt;
-    final key = isMonthly
-        ? '${date.year}-${date.month.toString().padLeft(2, '0')}'
-        : '${date.year}';
-    buckets[key] = (date: date, rating: item.ratingAfter);
+    (byTournament[item.tournamentId] ??= []).add(item);
   }
-  final sorted = buckets.entries.toList()
-    ..sort((a, b) => a.value.date.compareTo(b.value.date));
-  final visible = isMonthly && sorted.length > 12
-      ? sorted.sublist(sorted.length - 12)
-      : sorted;
-  return (
-    points: [
-      (label: 'Start', rating: ordered.first.ratingAfter - ordered.first.delta),
-      for (final entry in visible)
-        (
-          label: isMonthly
-              ? '${entry.value.date.month.toString().padLeft(2, '0')}/${entry.value.date.year}'
-              : '${entry.value.date.year}',
-          rating: entry.value.rating,
-        ),
-    ],
-    isMonthly: isMonthly,
-  );
-}
-
-class _EloTrajectoryPainter extends CustomPainter {
-  const _EloTrajectoryPainter({
-    required this.ratings,
-    required this.color,
-    required this.gridColor,
-  });
-
-  final List<int> ratings;
-  final Color color;
-  final Color gridColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (ratings.length < 2 || size.isEmpty) return;
-    const padding = 12.0;
-    final plot = Rect.fromLTWH(
-      padding,
-      padding,
-      size.width - padding * 2,
-      size.height - padding * 2,
-    );
-    final low = math.min(1000, ratings.reduce(math.min)).toDouble();
-    final high = math.max(1000, ratings.reduce(math.max)).toDouble();
-    final range = math.max(high - low, 1);
-    final gridPaint = Paint()
-      ..color = gridColor
-      ..strokeWidth = 1;
-    for (var line = 0; line < 4; line++) {
-      final y = plot.top + plot.height * line / 3;
-      canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), gridPaint);
-    }
-    final linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final path = Path();
-    for (var index = 0; index < ratings.length; index++) {
-      final x = plot.left + plot.width * index / (ratings.length - 1);
-      final y = plot.bottom - (ratings[index] - low) / range * plot.height;
-      if (index == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    canvas.drawPath(path, linePaint);
-    canvas.drawCircle(
-      Offset(
-        plot.left,
-        plot.bottom - (ratings.first - low) / range * plot.height,
+  final tournaments = byTournament.values.toList()
+    ..sort((a, b) {
+      final time = a.last.playedAt.compareTo(b.last.playedAt);
+      return time != 0
+          ? time
+          : a.last.tournamentId.compareTo(b.last.tournamentId);
+    });
+  final first = ordered.first;
+  return [
+    EloTrajectoryPoint(
+      playedAt: first.playedAt,
+      tournamentName: 'Start',
+      rating: first.ratingAfter - first.delta,
+      delta: 0,
+    ),
+    for (final tournament in tournaments)
+      EloTrajectoryPoint(
+        playedAt: tournament.last.playedAt,
+        tournamentName: tournament.last.tournamentName,
+        rating: tournament.last.ratingAfter,
+        delta: tournament.fold<int>(0, (sum, item) => sum + item.delta),
       ),
-      4,
-      Paint()..color = color,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _EloTrajectoryPainter oldDelegate) =>
-      !listEquals(oldDelegate.ratings, ratings) ||
-      oldDelegate.color != color ||
-      oldDelegate.gridColor != gridColor;
+  ];
 }
 
 class _TournamentEloGroup {
-  _TournamentEloGroup({required this.tournamentName, required this.playedAt});
+  _TournamentEloGroup({
+    required this.tournamentId,
+    required this.tournamentName,
+    required this.playedAt,
+  });
 
+  final String tournamentId;
   final String tournamentName;
   final DateTime playedAt;
   final List<LocalEloHistoryItem> matches = [];

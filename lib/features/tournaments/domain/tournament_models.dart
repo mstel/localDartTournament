@@ -476,7 +476,7 @@ class CreatedTournament {
     this.leagueMatch,
     this.importedArchive,
     this.countsForRanking = true,
-    this.rankingIds = const [],
+    List<String> rankingIds = const [],
     this.activeStageIndex = 0,
     this.boardCount = 1,
     this.syncRevision = 0,
@@ -495,6 +495,7 @@ class CreatedTournament {
        updatedAt = updatedAt ?? DateTime.now(),
        completedStageIndexes = completedStageIndexes ?? <int>{},
        blockedBoards = blockedBoards ?? <int>{},
+       rankingIds = List<String>.from(rankingIds),
        withdrawals = withdrawals ?? [];
 
   factory CreatedTournament.fromJson(Map<String, dynamic> json) {
@@ -553,7 +554,7 @@ class CreatedTournament {
   final LeagueMatch? leagueMatch;
   final ImportedTournamentArchive? importedArchive;
   bool countsForRanking;
-  final List<String> rankingIds;
+  List<String> rankingIds;
   int activeStageIndex;
   int boardCount;
   int syncRevision;

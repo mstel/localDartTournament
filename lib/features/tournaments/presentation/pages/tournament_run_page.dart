@@ -1,21 +1,30 @@
 part of '../../../../tournament_workspace.dart';
 
 class TournamentRunPage extends StatelessWidget {
-  const TournamentRunPage({super.key, required this.tournament});
+  const TournamentRunPage({
+    super.key,
+    required this.tournament,
+    this.runController,
+  });
 
   final CreatedTournament tournament;
+  final TournamentRunController? runController;
 
   @override
   Widget build(BuildContext context) =>
       tournament.importedArchive != null &&
           !tournament.importedArchive!.usesNativeLogic
       ? ChallongeArchivePage(tournament: tournament)
-      : _LiveTournamentRunPage(tournament: tournament);
+      : _LiveTournamentRunPage(
+          tournament: tournament,
+          runController: runController,
+        );
 }
 
 class _LiveTournamentRunPage extends StatefulWidget {
-  const _LiveTournamentRunPage({required this.tournament});
+  const _LiveTournamentRunPage({required this.tournament, this.runController});
   final CreatedTournament tournament;
+  final TournamentRunController? runController;
   @override
   State<_LiveTournamentRunPage> createState() => _TournamentRunPageState();
 }
@@ -25,6 +34,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _leaving = false;
   bool _allowPop = false;
   bool _backgrounded = false;
+  bool _savingRankingSelection = false;
   Future<void> _checkpoint() => _runController.saveProgress(
     tournament: widget.tournament,
     activeStageIndex: _activeStageIndex,
@@ -307,7 +317,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _isBracketEditMode = false;
   bool _isApplyingStartDraw = false;
   final Set<int> _completedStageIndexes = {};
-  final _runController = const TournamentRunController();
+  TournamentRunController get _runController =>
+      widget.runController ?? const TournamentRunController();
   final _tournamentNameController = TextEditingController();
   late final Future<List<LocalRanking>> _localRankings = LocalAppDatabase()
       .loadLocalRankings();
@@ -357,7 +368,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _saveTournamentProgress({bool propagateError = false}) async {
     try {
-      await _checkpoint();
       await _runController.saveProgress(
         tournament: widget.tournament,
         activeStageIndex: _activeStageIndex,
@@ -430,9 +440,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     required bool countsForRanking,
     required List<String> rankingIds,
   }) async {
+    if (_savingRankingSelection) return;
     final previousCounts = widget.tournament.countsForRanking;
     final previousIds = List<String>.from(widget.tournament.rankingIds);
     setState(() {
+      _savingRankingSelection = true;
       widget.tournament.countsForRanking = countsForRanking;
       widget.tournament.rankingIds
         ..clear()
@@ -448,6 +460,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           ..clear()
           ..addAll(previousIds);
       });
+    } finally {
+      if (mounted) {
+        setState(() => _savingRankingSelection = false);
+      }
     }
   }
 
@@ -2731,8 +2747,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                     if (!isViewingActiveStage &&
                         _viewStageIndex > _activeStageIndex &&
                         _stageViewMode != StageViewMode.orderOfPlay &&
-                        _stageViewMode != StageViewMode.director &&
-                        _stageViewMode != StageViewMode.statistics)
+                        _stageViewMode != StageViewMode.director)
                       const Padding(
                         padding: EdgeInsets.only(bottom: 12),
                         child: Text(
@@ -2807,14 +2822,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
                                       ),
                                       value: widget.tournament.countsForRanking,
-                                      onChanged: (value) =>
-                                          _saveRankingSelection(
-                                            countsForRanking: value,
-                                            rankingIds: value
-                                                ? widget.tournament.rankingIds
-                                                : const [],
-                                          ),
+                                      onChanged: _savingRankingSelection
+                                          ? null
+                                          : (value) => _saveRankingSelection(
+                                              countsForRanking: value,
+                                              rankingIds: value
+                                                  ? widget.tournament.rankingIds
+                                                  : const [],
+                                            ),
                                     ),
+                                  if (_savingRankingSelection)
+                                    const LinearProgressIndicator(),
                                   if (widget.tournament.countsForRanking &&
                                       widget.tournament.leagueMatch == null)
                                     FutureBuilder<List<LocalRanking>>(
@@ -2844,22 +2862,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                                     .tournament
                                                     .rankingIds
                                                     .contains(ranking.id),
-                                                onChanged: (selected) {
-                                                  final ids = List<String>.from(
-                                                    widget
-                                                        .tournament
-                                                        .rankingIds,
-                                                  );
-                                                  if (selected == true) {
-                                                    ids.add(ranking.id);
-                                                  } else {
-                                                    ids.remove(ranking.id);
-                                                  }
-                                                  _saveRankingSelection(
-                                                    countsForRanking: true,
-                                                    rankingIds: ids,
-                                                  );
-                                                },
+                                                onChanged:
+                                                    _savingRankingSelection
+                                                    ? null
+                                                    : (selected) {
+                                                        final ids =
+                                                            List<String>.from(
+                                                              widget
+                                                                  .tournament
+                                                                  .rankingIds,
+                                                            );
+                                                        if (selected == true) {
+                                                          ids.add(ranking.id);
+                                                        } else {
+                                                          ids.remove(
+                                                            ranking.id,
+                                                          );
+                                                        }
+                                                        _saveRankingSelection(
+                                                          countsForRanking:
+                                                              true,
+                                                          rankingIds: ids,
+                                                        );
+                                                      },
                                               ),
                                           ],
                                         );
@@ -3154,10 +3179,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                             ),
                         ],
-                      )
-                    else if (_stageViewMode == StageViewMode.statistics)
-                      LiveTournamentStatisticsSection(
-                        tournament: widget.tournament,
                       )
                     else ...[
                       // Modus "Ergebnisse"
