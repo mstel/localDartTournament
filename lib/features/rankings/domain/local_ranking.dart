@@ -22,6 +22,7 @@ class LocalRanking {
     this.validFromDate,
     this.validToDate,
     this.enableTiers = false,
+    this.customOrder = 0,
   });
 
   final String id;
@@ -44,6 +45,7 @@ class LocalRanking {
   final DateTime? validFromDate;
   final DateTime? validToDate;
   final bool enableTiers;
+  final int customOrder;
 
   bool includesTournamentYear(int year) =>
       (validFromYear == null || year >= validFromYear!) &&
@@ -51,9 +53,14 @@ class LocalRanking {
 
   bool includesTournamentDate(DateTime date) {
     final day = DateTime(date.year, date.month, date.day);
-    final from = validFromDate ?? (validFromYear == null ? null : DateTime(validFromYear!, 1, 1));
-    final to = validToDate ?? (validToYear == null ? null : DateTime(validToYear!, 12, 31));
-    return (from == null || !day.isBefore(from)) && (to == null || !day.isAfter(to));
+    final from =
+        validFromDate ??
+        (validFromYear == null ? null : DateTime(validFromYear!, 1, 1));
+    final to =
+        validToDate ??
+        (validToYear == null ? null : DateTime(validToYear!, 12, 31));
+    return (from == null || !day.isBefore(from)) &&
+        (to == null || !day.isAfter(to));
   }
 
   Map<String, Object?> toJson() => {
@@ -126,6 +133,7 @@ class LocalRanking {
     DateTime? validFromDate,
     DateTime? validToDate,
     bool? enableTiers,
+    int? customOrder,
   }) => LocalRanking(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -147,5 +155,6 @@ class LocalRanking {
     validFromDate: validFromDate ?? this.validFromDate,
     validToDate: validToDate ?? this.validToDate,
     enableTiers: enableTiers ?? this.enableTiers,
+    customOrder: customOrder ?? this.customOrder,
   );
 }

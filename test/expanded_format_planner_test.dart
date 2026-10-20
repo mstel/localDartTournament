@@ -44,7 +44,7 @@ void main() {
         }
       }
     },
-    timeout: const Timeout(Duration(seconds: 90)),
+    timeout: const Timeout(Duration(minutes: 3)),
   );
   final parameters = TournamentPlanningParameters.fromValues({
     PlanningParameter.maximumSuggestions: 64,

@@ -69,20 +69,136 @@ void main() {
     await tester.pump();
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-    expect(
-      find.textContaining('A\nGesetzt · Setzplatz vorläufig'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('B\nGesetzt · Setzplatz vorläufig'),
-      findsNothing,
-    );
-    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
+    expect(find.textContaining('A · vorläufig weiter'), findsOneWidget);
+    expect(find.textContaining('B · vorläufig weiter'), findsNothing);
+    expect(find.text('Vorschau schließen'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Zur Übersichtsansicht zurückkehren'));
+    await tester.tap(find.text('Vorschau schließen'));
     await tester.pump();
     expect(find.text('Zuletzt beendete Matches'), findsOneWidget);
+  });
+
+  testWidgets('shows a separate progress row for each group', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final tournament = _tournament();
+    final stage = tournament.runStages.first as GroupTournamentRunStage;
+    stage.groups.add(
+      TournamentGroup(
+        name: 'Gruppe B',
+        playType: 'round_robin',
+        players: stage.groups.first.players,
+        matches: [
+          GroupMatch(
+            homePlayer: stage.groups.first.players[0],
+            awayPlayer: stage.groups.first.players[1],
+            round: 1,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('1. Gruppenphase · Gruppe A'), findsOneWidget);
+    expect(find.text('1. Gruppenphase · Gruppe B'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps preview visible when switching the right-side panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _tournament(),
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final previewButton = find.text('Vorschau für die nächste Etappe');
+    await tester.ensureVisible(previewButton);
+    await tester.tap(previewButton);
+    await tester.pump();
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+
+    final prognosisTab = find.text('Siegprognose & Weiterkommen');
+    await tester.ensureVisible(prognosisTab);
+    await tester.tap(prognosisTab);
+    await tester.pump();
+
+    expect(find.text('KO-Prognose & Weiterkommen'), findsOneWidget);
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('can open directly in next-stage preview mode', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _tournament(),
+            isStandaloneWindow: true,
+            showNextStagePreviewInitially: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
+  });
+
+  testWidgets('compact preview shows all eight first-round matches at 1080p', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _largePreviewTournament(),
+            isStandaloneWindow: true,
+            showNextStagePreviewInitially: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    expect(find.text('Qualifikant offen').hitTestable(), findsNWidgets(16));
+    expect(find.text('Halbfinale'), findsOneWidget);
+    expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('standalone close control invokes its close handler', (
@@ -103,6 +219,57 @@ void main() {
     await tester.tap(find.byTooltip('Schließen'));
     expect(didClose, isTrue);
   });
+}
+
+CreatedTournament _largePreviewTournament() {
+  final players = [
+    for (var index = 1; index <= 16; index++)
+      TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+  ];
+  return CreatedTournament(
+    name: 'Großes Testturnier',
+    players: players,
+    stages: const [
+      TournamentStage(name: 'Gruppenphase', type: 'groups', groupSizes: [16]),
+      TournamentStage(
+        name: 'KO',
+        type: 'single_knockout',
+        knockoutParticipantCount: 16,
+      ),
+    ],
+    runStages: [
+      GroupTournamentRunStage(
+        name: 'Gruppenphase',
+        groupPlayType: 'round_robin',
+        qualificationPlan: null,
+        tieBreakers: defaultGroupTieBreakers,
+        groups: [
+          TournamentGroup(
+            name: 'Gruppe A',
+            playType: 'round_robin',
+            players: players,
+            matches: const [],
+          ),
+        ],
+      ),
+      KnockoutTournamentRunStage(
+        name: 'KO',
+        rounds: [
+          [
+            for (var index = 0; index < players.length; index += 2)
+              GroupMatch(
+                homePlayer: players[index],
+                awayPlayer: players[index + 1],
+                round: 1,
+              ),
+          ],
+          [for (var index = 0; index < 4; index++) GroupMatch(round: 2)],
+          [for (var index = 0; index < 2; index++) GroupMatch(round: 3)],
+          [GroupMatch(round: 4)],
+        ],
+      ),
+    ],
+  );
 }
 
 CreatedTournament _tournament() {

@@ -10,7 +10,7 @@ class TournamentFormatPlannerDialog extends StatefulWidget {
 class _TournamentFormatPlannerDialogState
     extends State<TournamentFormatPlannerDialog> {
   final _players = TextEditingController(text: '8');
-  final _boards = TextEditingController(text: '2');
+  final _boards = TextEditingController(text: '4');
   final _maximumGroups = TextEditingController();
   String? _maximumGroupsError;
   final _manualQualifiers = TextEditingController();

@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_director_snapshot.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
 import 'order_of_play_test.dart' show fixture;
 
@@ -215,6 +216,79 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TournamentDirectorDashboard), findsOneWidget);
     expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('dashboard has a direct next-stage preview action', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1440, 900);
+    addTearDown(tester.view.reset);
+    final first = TournamentPlayer.generated(1).copyWith(name: 'Spieler A');
+    final second = TournamentPlayer.generated(2).copyWith(name: 'Spieler B');
+    final tournament = CreatedTournament(
+      name: 'Testturnier',
+      players: [first, second],
+      stages: const [
+        TournamentStage(name: 'Gruppenphase', type: 'groups', groupSizes: [2]),
+        TournamentStage(
+          name: 'KO',
+          type: 'single_knockout',
+          knockoutParticipantCount: 2,
+        ),
+      ],
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppenphase',
+          groupPlayType: 'round_robin',
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: [first, second],
+              matches: [
+                GroupMatch(homePlayer: first, awayPlayer: second, round: 1),
+              ],
+            ),
+          ],
+          qualificationPlan: null,
+          tieBreakers: defaultGroupTieBreakers,
+        ),
+        KnockoutTournamentRunStage(
+          name: 'KO',
+          rounds: [
+            [GroupMatch(round: 1)],
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onCompleteStage: () {},
+              onFinishEarly: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final previewButton = find.text('Vorschau nächste Etappe');
+    expect(previewButton, findsOneWidget);
+    await tester.tap(previewButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

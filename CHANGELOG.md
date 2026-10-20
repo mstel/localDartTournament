@@ -23,6 +23,10 @@
 - Das Windows-Release ist ein ZIP-Bundle und kein klassischer Installer.
   Falls eine Datenversion nicht sicher erkannt wird, bleibt die Quelldatei
   erhalten und die App zeigt eine Diagnose statt sie zurückzusetzen.
+# DartTournamentPro 1.0.4
+
+Änderungen seit `v1.0.3+3`; Buildnummer 4. Die Release Notes für GitHub
+stehen in [`docs/releases/v1.0.4+4.md`](docs/releases/v1.0.4+4.md).
 
 # Dart Turnier 0.2.3
 

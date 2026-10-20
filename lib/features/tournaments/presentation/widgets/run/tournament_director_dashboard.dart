@@ -76,6 +76,18 @@ class _TournamentDirectorDashboardState
     }
   }
 
+  bool _hasNextKnockoutStage(CreatedTournament tournament) {
+    if (widget.activeStage < 0 ||
+        widget.activeStage >= tournament.runStages.length ||
+        tournament.runStages[widget.activeStage]
+            is KnockoutTournamentRunStage) {
+      return false;
+    }
+    return tournament.runStages
+        .skip(widget.activeStage + 1)
+        .any((stage) => stage is KnockoutTournamentRunStage);
+  }
+
   Widget _box(List<Widget> children) => Card(
     child: Padding(
       padding: const EdgeInsets.all(16),
@@ -251,6 +263,21 @@ class _TournamentDirectorDashboardState
                           ? 'Turnier abschließen'
                           : 'Etappe abschließen',
                     ),
+                  ),
+                if (_hasNextKnockoutStage(t))
+                  OutlinedButton.icon(
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (context) => Dialog.fullscreen(
+                        child: TournamentSecondScreenView(
+                          tournament: t,
+                          isStandaloneWindow: true,
+                          showNextStagePreviewInitially: true,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.account_tree_outlined),
+                    label: const Text('Vorschau nächste Etappe'),
                   ),
               ],
             ),
