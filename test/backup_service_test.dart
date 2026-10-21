@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dart_tournament_manager/app/app_bootstrap.dart';
 import 'package:dart_tournament_manager/features/backups/data/backup_service.dart';
 import 'package:dart_tournament_manager/features/settings/data/planning_settings_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
@@ -69,6 +70,25 @@ void main() {
       }),
     );
   }
+
+  test('default backup service maps every store to its own file', () async {
+    final created = await BackupService.create();
+
+    expect(created.files.keys.toSet(), BackupService.names.toSet());
+    expect(
+      created.files['tournaments.json.v22.bak']!.path,
+      '${created.files['tournaments.json']!.path}.v22.bak',
+    );
+    expect(
+      created.files['app_database.sqlite']!.path,
+      endsWith('app_database.sqlite'),
+    );
+    expect(
+      created.files['planning_settings.json']!.path,
+      endsWith('planning_settings.json'),
+    );
+    expect(created.backupDirectory.path, endsWith('backups'));
+  });
 
   test(
     'all active stores roundtrip with results and a pre-restore backup',
@@ -234,6 +254,34 @@ void main() {
     expect((await tournaments.loadTournaments()).single.name, 'Gesichert');
     expect(await journal.parent.exists(), isFalse);
   });
+
+  test(
+    'failed restore recovery preserves its journal and reports its path',
+    () async {
+      await seed();
+      final journal = File(
+        '${service.backupDirectory.path}/restore_transaction/original.dartbackup',
+      );
+      await journal.parent.create(recursive: true);
+      await journal.writeAsString('not a backup archive');
+      final tournamentFile = service.files['tournaments.json']!;
+      final originalTournamentBytes = await tournamentFile.readAsBytes();
+
+      await expectLater(
+        service.recoverInterruptedRestore(),
+        throwsA(isA<FormatException>()),
+      );
+
+      expect(await journal.readAsString(), 'not a backup archive');
+      expect(await tournamentFile.readAsBytes(), originalTournamentBytes);
+      final message = AppBootstrap.formatRestoreRecoveryFailure(
+        const FormatException('Ungültiges Journal'),
+        transactionPath: service.restoreTransactionDirectory.path,
+      );
+      expect(message, contains('FormatException: Ungültiges Journal'));
+      expect(message, contains(service.restoreTransactionDirectory.path));
+    },
+  );
 
   test('committed restore is retained during startup cleanup', () async {
     await seed();

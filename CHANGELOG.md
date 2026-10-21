@@ -1,3 +1,15 @@
+# Dart Tournament Manager 1.0.8+10 preview
+
+## Startup recovery fix
+
+- Fixes the backup-store path mapping that blocked every Windows startup in
+  v1.0.8+9. The app now includes the schema-22 proof backup, SQLite database,
+  and planning settings at their correct paths.
+- Recovery startup errors now show the underlying exception and transaction
+  directory instead of presenting every setup failure as a failed restore.
+
+No local data files are deleted or replaced by this fix.
+
 # Dart Tournament Manager 1.0.8+9 preview
 
 ## Feature parity and data safety

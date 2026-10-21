@@ -48,14 +48,16 @@ class BackupService {
   final Directory backupDirectory;
   Directory get _transaction =>
       Directory(path.join(backupDirectory.path, 'restore_transaction'));
+  Directory get restoreTransactionDirectory => _transaction;
 
   static Future<BackupService> create() async {
     final tournaments = await TournamentStorage().storageFile();
     return BackupService(
       files: {
-        names[0]: tournaments,
-        names[1]: await LocalAppDatabase().databaseFile(),
-        names[2]: await PlanningSettingsStorage().storageFile(),
+        'tournaments.json': tournaments,
+        'tournaments.json.v22.bak': File('${tournaments.path}.v22.bak'),
+        'app_database.sqlite': await LocalAppDatabase().databaseFile(),
+        'planning_settings.json': await PlanningSettingsStorage().storageFile(),
       },
       backupDirectory: Directory(path.join(tournaments.parent.path, 'backups')),
     );

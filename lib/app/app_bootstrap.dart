@@ -27,12 +27,16 @@ class AppBootstrap {
       return 'Die App ist bereits geöffnet oder der Datenordner ist nicht zugänglich. '
           'Schließe weitere Instanzen und starte die App erneut.';
     }
+    BackupService? backupService;
     try {
-      await (await BackupService.create()).recoverInterruptedRestore();
-    } catch (_) {
-      return 'Eine unterbrochene Wiederherstellung konnte nicht abgeschlossen werden. '
-          'Die App wurde zum Schutz der Daten nicht gestartet. '
-          'Bitte den Datenordner und die Sicherungen im Unterordner backups prüfen.';
+      backupService = await BackupService.create();
+      await backupService.recoverInterruptedRestore();
+    } catch (error) {
+      final transactionPath = backupService?.restoreTransactionDirectory.path;
+      return formatRestoreRecoveryFailure(
+        error,
+        transactionPath: transactionPath,
+      );
     }
     if (Platform.isLinux) LinuxNotificationService.startAccountGuard();
     try {
@@ -43,10 +47,27 @@ class AppBootstrap {
     return null;
   }
 
-  static Future<void> initializeSecondScreen({List<String> args = const []}) async {
+  static String formatRestoreRecoveryFailure(
+    Object error, {
+    String? transactionPath,
+  }) {
+    final details = switch (error) {
+      FormatException failure => 'FormatException: ${failure.message}',
+      FileSystemException failure => 'FileSystemException: ${failure.message}',
+      _ => '${error.runtimeType}: $error',
+    };
+    return 'Eine unterbrochene Wiederherstellung konnte nicht abgeschlossen werden. '
+        'Die App wurde zum Schutz der Daten nicht gestartet. '
+        'Bitte den Datenordner und die Sicherungen im Unterordner backups prüfen.\n\n'
+        'Ursache: $details'
+        '${transactionPath == null ? '' : '\nWiederherstellungsordner: $transactionPath'}';
+  }
+
+  static Future<void> initializeSecondScreen({
+    List<String> args = const [],
+  }) async {
     WidgetsFlutterBinding.ensureInitialized();
     PerformanceDiagnostics.start();
     await SupabaseAccountBootstrap.initialize();
   }
 }
-
