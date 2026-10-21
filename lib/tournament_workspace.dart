@@ -30,6 +30,7 @@ import 'features/settings/data/planning_settings_storage.dart';
 import 'features/players/presentation/players_page.dart';
 import 'features/rankings/presentation/rankings_page.dart';
 import 'features/rankings/domain/local_ranking.dart';
+import 'features/rankings/application/local_ranking_elo_service.dart';
 import 'features/league/domain/league_match.dart';
 import 'features/tournaments/application/tournament_creation_controller.dart';
 import 'features/tournaments/application/tournament_run_controller.dart';
@@ -50,6 +51,7 @@ import 'features/tournaments/data/app_database.dart';
 import 'features/tournaments/data/tournament_storage.dart';
 import 'features/tournaments/domain/engines/tournament_engine.dart';
 import 'features/tournaments/domain/engines/group_bye_seeding.dart';
+import 'features/tournaments/domain/engines/group_player_allocation_engine.dart';
 import 'features/tournaments/domain/tournament_models.dart'
     hide defaultGroupTieBreakers, groupLabel;
 import 'features/tournaments/domain/tournament_format_planner.dart';

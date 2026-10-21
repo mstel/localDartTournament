@@ -178,20 +178,14 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                       label: 'Turniersiege',
                       value: '${stats.tournamentWins}',
                     ),
+                    _StatCard(
+                      label: 'Turniersiegquote',
+                      value: '${stats.tournamentWinRate.toStringAsFixed(1)} %',
+                    ),
                     _StatCard(label: 'Unentschieden', value: '${stats.draws}'),
                     _StatCard(
                       label: 'Siegquote',
                       value: '${stats.matchWinRate.toStringAsFixed(1)} %',
-                    ),
-                    _StatCard(
-                      label: 'Turniersiegchance %',
-                      value: '${stats.tournamentWinRate.toStringAsFixed(1)} %',
-                    ),
-                    _StatCard(
-                      label: 'Erwartete Siegchance (Elo)',
-                      value: stats.expectedWinChance == null
-                          ? '—'
-                          : '${stats.expectedWinChance!.toStringAsFixed(1)} %',
                     ),
                   ],
                 ),
@@ -207,6 +201,10 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                     _StatCard(
                       label: 'Legs gewonnen / verloren',
                       value: '${stats.legsWon} / ${stats.legsLost}',
+                    ),
+                    _StatCard(
+                      label: 'Matches mit gleich vielen Legs',
+                      value: '${stats.legsDrawn}',
                     ),
                     _StatCard(
                       label: 'Leg-Siegquote',

@@ -7,6 +7,7 @@ import '../../domain/knockout_round_names.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/tournament_models.dart';
+import '../../data/app_database.dart';
 import '../../data/tournament_storage.dart';
 import '../../../league/domain/league_match.dart';
 import '../../../rankings/application/tournament_match_elo_service.dart';
@@ -15,14 +16,21 @@ import '../../../statistics/domain/best_performance.dart';
 import '../widgets/run/best_performance_editor.dart';
 import 'challonge_archive_page.dart';
 import '../../application/tournament_timing.dart';
-import '../widgets/results/tournament_results_statistics.dart';
+import '../widgets/results/tournament_ranking_assignment.dart';
 import '../widgets/results/tournament_ranking_changes_section.dart';
 import '../widgets/tournament_export_dialog.dart';
 
 class TournamentResultsPage extends StatefulWidget {
-  const TournamentResultsPage({super.key, required this.tournament});
+  const TournamentResultsPage({
+    super.key,
+    required this.tournament,
+    this.database,
+    this.storage,
+  });
 
   final CreatedTournament tournament;
+  final LocalAppDatabase? database;
+  final TournamentStorage? storage;
 
   @override
   State<TournamentResultsPage> createState() => _TournamentResultsPageState();
@@ -168,50 +176,18 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                 ranking: podium,
                 onPlayerTap: (stats) => _openPlayer(context, stats.player),
               ),
+            ],
+            const SizedBox(height: 16),
+            TournamentRankingAssignment(
+              tournament: tournament,
+              database: widget.database,
+              storage: widget.storage,
+            ),
+            if (tournament.countsForRanking &&
+                tournament.rankingIds.isNotEmpty) ...[
+              const SizedBox(height: 12),
               TournamentRankingChangesSection(tournament: tournament),
             ],
-            const SizedBox(height: 24),
-            Text(
-              'Turnierstatistik',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            _StatisticsGrid(
-              summary: summary,
-              onPlayersTap: () => _openPlayerList(context, summary),
-              onMatchesTap: () => _openMatches(context),
-            ),
-            const SizedBox(height: 24),
-            TournamentResultsStatistics(tournament: tournament),
-            const SizedBox(height: 24),
-            Text(
-              'Gesamtwertung',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              summary.rankingHint,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: Column(
-                children: [
-                  for (var index = 0; index < summary.ranking.length; index++)
-                    _RankingRow(
-                      place: index + 1,
-                      stats: summary.ranking[index],
-                      maxLegs: summary.maxLegs,
-                      onTap: () =>
-                          _openPlayer(context, summary.ranking[index].player),
-                    ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
@@ -294,91 +270,6 @@ class _Podium extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _StatisticsGrid extends StatelessWidget {
-  const _StatisticsGrid({
-    required this.summary,
-    required this.onPlayersTap,
-    required this.onMatchesTap,
-  });
-
-  final _TournamentResultSummary summary;
-  final VoidCallback onPlayersTap;
-  final VoidCallback onMatchesTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        _StatisticCard(
-          label: 'Spieler',
-          value: '${summary.playerCount}',
-          onTap: onPlayersTap,
-        ),
-        _StatisticCard(
-          label: 'Spiele',
-          value: '${summary.matchCount}',
-          onTap: onMatchesTap,
-        ),
-        _StatisticCard(
-          label: 'Legs',
-          value: '${summary.legCount}',
-          onTap: onMatchesTap,
-        ),
-        _StatisticCard(
-          label: 'Legs / Spiel',
-          value: summary.matchCount == 0
-              ? '–'
-              : (summary.legCount / summary.matchCount).toStringAsFixed(1),
-          onTap: onMatchesTap,
-        ),
-      ],
-    );
-  }
-}
-
-class _StatisticCard extends StatelessWidget {
-  const _StatisticCard({
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

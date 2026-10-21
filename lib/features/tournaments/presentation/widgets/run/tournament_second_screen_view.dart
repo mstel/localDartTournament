@@ -10,6 +10,8 @@ import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/qualification_certainty.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
+import '../../../application/group_advancement_forecast_service.dart';
+import '../../../domain/engines/group_advancement_forecast_engine.dart';
 import '../../../../statistics/domain/best_performance.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
@@ -22,12 +24,14 @@ class TournamentSecondScreenView extends StatefulWidget {
     this.isStandaloneWindow = false,
     this.onClose,
     this.showNextStagePreviewInitially = false,
+    this.forecastService,
   });
 
   final CreatedTournament tournament;
   final bool isStandaloneWindow;
   final VoidCallback? onClose;
   final bool showNextStagePreviewInitially;
+  final GroupAdvancementForecastService? forecastService;
 
   @override
   State<TournamentSecondScreenView> createState() =>
@@ -42,12 +46,15 @@ class _TournamentSecondScreenViewState
   Timer? _clockTimer;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
+  Future<Map<String, AdvancementChance>>? _advancementForecast;
+  late String _forecastFingerprint;
 
   @override
   void initState() {
     super.initState();
     _showNextStagePreview = widget.showNextStagePreviewInitially;
     _refreshEloChanges();
+    _refreshAdvancementForecast();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -60,12 +67,42 @@ class _TournamentSecondScreenViewState
     if (fingerprint != _eloInputFingerprint) {
       _refreshEloChanges(fingerprint: fingerprint);
     }
+    if (fingerprint != _forecastFingerprint) {
+      _refreshAdvancementForecast(fingerprint: fingerprint);
+    }
   }
 
   void _refreshEloChanges({String? fingerprint}) {
     _eloInputFingerprint =
         fingerprint ?? jsonEncode(widget.tournament.toJson());
     _eloChanges = TournamentMatchEloService().calculate(widget.tournament);
+  }
+
+  void _refreshAdvancementForecast({String? fingerprint}) {
+    _forecastFingerprint =
+        fingerprint ?? jsonEncode(widget.tournament.toJson());
+    _advancementForecast = null;
+  }
+
+  Future<Map<String, AdvancementChance>> _forecastFor(
+    GroupTournamentRunStage stage,
+  ) {
+    final cached = _advancementForecast;
+    if (cached != null) return cached;
+    final tournament = widget.tournament;
+    if (tournament.runStages.isEmpty) return Future.value(const {});
+    final activeIndex = tournament.activeStageIndex.clamp(
+      0,
+      tournament.runStages.length - 1,
+    );
+    if (_nextKnockoutStage(tournament, activeIndex, stage) == null) {
+      return _advancementForecast = Future.value(const {});
+    }
+    return _advancementForecast =
+        (widget.forecastService ?? GroupAdvancementForecastService()).calculate(
+          tournament: tournament,
+          stage: stage,
+        );
   }
 
   @override
@@ -1101,7 +1138,7 @@ class _TournamentSecondScreenViewState
     final hasPrognosis =
         currentStage is GroupTournamentRunStage && koStage != null;
     final prognosisContent = hasPrognosis
-        ? _buildContenderPrognosisList(context, currentStage, koStage)
+        ? _buildContenderPrognosisList(context, currentStage)
         : (koStage != null
               ? _buildKnockoutRoundsPreview(context, koStage)
               : const Center(
@@ -1163,129 +1200,145 @@ class _TournamentSecondScreenViewState
   Widget _buildContenderPrognosisList(
     BuildContext context,
     GroupTournamentRunStage groupStage,
-    KnockoutTournamentRunStage koStage,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < groupStage.groups.length; i++)
-          Builder(
-            builder: (context) {
-              final group = groupStage.groups[i];
-              final standings = _calculateGroupStandings(
-                group,
-                groupStage.tieBreakers,
-              );
-              final fixedPlaces =
-                  groupStage.qualificationPlan?.fixedPerGroup ?? 2;
-              final evidence = standings.map((standing) {
-                if (standing.played == 0) return 1.0;
-                return (standing.wins + standing.draws * 0.5 + 0.5) /
-                    (standing.played + 1);
-              }).toList();
-              final totalEvidence = evidence.fold<double>(
-                0,
-                (sum, value) => sum + value,
-              );
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF101922),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${group.name} · KO-Siegchance nach Ergebnissen',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF70E0BA),
-                        fontSize: 13,
-                      ),
+    return FutureBuilder<Map<String, AdvancementChance>>(
+      future: _forecastFor(groupStage),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Text(
+            'Siegprognose konnte nicht berechnet werden: ${snapshot.error}',
+            style: const TextStyle(color: Colors.redAccent),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+        final forecast = snapshot.data!;
+        final plan = groupStage.qualificationPlan;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (
+              var groupIndex = 0;
+              groupIndex < groupStage.groups.length;
+              groupIndex++
+            )
+              Builder(
+                builder: (context) {
+                  final group = groupStage.groups[groupIndex];
+                  final standings = _calculateGroupStandings(
+                    group,
+                    groupStage.tieBreakers,
+                  );
+                  final fixedPlaces = plan == null
+                      ? 0
+                      : groupIndex < plan.fixedByGroup.length
+                      ? plan.fixedByGroup[groupIndex]
+                      : plan.fixedPerGroup;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF101922),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 6),
-                    for (var r = 0; r < standings.length; r++)
-                      Builder(
-                        builder: (context) {
-                          final standing = standings[r];
-                          final place = r + 1;
-                          final isCertain = const QualificationCertainty()
-                              .isCertain(
-                                standing: standing,
-                                place: place,
-                                fixedPlaces: fixedPlaces,
-                                standings: standings,
-                                matches: group.matches,
-                                tieBreakers: groupStage.tieBreakers,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          group.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF70E0BA),
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        for (var rank = 0; rank < standings.length; rank++)
+                          Builder(
+                            builder: (context) {
+                              final standing = standings[rank];
+                              final chance =
+                                  forecast[standing.player.profileId ??
+                                      standing.player.name] ??
+                                  const AdvancementChance(
+                                    groupWinProbability: 0,
+                                    advancementProbability: 0,
+                                  );
+                              final isCertain = const QualificationCertainty()
+                                  .isCertain(
+                                    standing: standing,
+                                    place: rank + 1,
+                                    fixedPlaces: fixedPlaces,
+                                    standings: standings,
+                                    matches: group.matches,
+                                    tieBreakers: groupStage.tieBreakers,
+                                  );
+                              final label =
+                                  '${chance.groupWinProbability.toStringAsFixed(1)} % Sieg · '
+                                  '${chance.advancementProbability.toStringAsFixed(1)} % weiter';
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      '${rank + 1}. ',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isCertain
+                                            ? const Color(0xFF86EFAC)
+                                            : Colors.white70,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        standing.player.name,
+                                        style: TextStyle(
+                                          fontWeight: isCertain
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: Colors.white,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Tooltip(
+                                      message:
+                                          'Siegchance: ${chance.groupWinProbability.toStringAsFixed(1)} %\n'
+                                          'Weiterkommen: ${chance.advancementProbability.toStringAsFixed(1)} %',
+                                      child: Text(
+                                        label,
+                                        textAlign: TextAlign.end,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: isCertain
+                                              ? const Color(0xFF86EFAC)
+                                              : Colors.white70,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               );
-
-                          final probability = totalEvidence == 0
-                              ? 0.0
-                              : evidence[r] / totalEvidence * 100;
-
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Platz $place: ',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    standing.player.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isCertain
-                                        ? const Color(0xFF144D34)
-                                        : (probability >= 50
-                                              ? const Color(0xFF1D4E3A)
-                                              : const Color(0xFF4A3B18)),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    isCertain
-                                        ? 'Fest im KO'
-                                        : '${probability.toStringAsFixed(1)}% Siegchance',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: isCertain
-                                          ? const Color(0xFF86EFAC)
-                                          : (probability >= 50
-                                                ? Colors.white
-                                                : Colors.amber.shade200),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
-      ],
+                            },
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 

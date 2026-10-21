@@ -8,7 +8,7 @@ class TournamentCreationController {
   final TournamentStorage? _storage;
 
   CreatedTournament createTournament({
-    int boardCount = 1,
+    int boardCount = 4,
     bool countsForRanking = false,
     List<String> rankingIds = const [],
     required String name,
@@ -30,7 +30,7 @@ class TournamentCreationController {
   }
 
   CreatedTournament _buildTournament({
-    int boardCount = 1,
+    int boardCount = 4,
     required String name,
     required List<TournamentPlayer> players,
     required List<TournamentStage> stages,

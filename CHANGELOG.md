@@ -1,3 +1,16 @@
+# Dart Tournament Manager 1.0.8+9 preview
+
+## Feature parity and data safety
+
+- Restores the requested dashboard, tournament/TV, statistics, ranking-history,
+  tournament-results, and planning behavior with regression tests.
+- Rejects unknown SQLite and settings formats without modifying their files;
+  documented migrations and schema-24 recovery remain supported.
+- Improves the Windows update handoff and verifies the packaged update bundle.
+
+This preview does not merge device data. Back up each device separately before
+testing; preserve storage files if an unsupported-format warning appears.
+
 # Dart Tournament Manager 1.0.7+8
 
 ## Wiederhergestellte Funktionen und Kompatibilität

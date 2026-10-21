@@ -24,6 +24,7 @@ class _LimitedGroupSetupPreviewState extends State<LimitedGroupSetupPreview> {
     super.initState();
     limit = widget.initialLimit;
   }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
@@ -133,9 +134,7 @@ void main() {
       await file.writeAsString(
         jsonEncode({'schemaVersion': 21, 'tournaments': []}),
       );
-      final storage = TournamentStorage(
-        file: file,
-      );
+      final storage = TournamentStorage(file: file);
       await storage.saveTournament(tournament);
       expect(
         (await storage.loadTournaments())
@@ -146,7 +145,7 @@ void main() {
         [5],
       );
       expect(await File('${file.path}.v21.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 24);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 25);
       expect(
         TournamentStage.fromJson({
           'name': 'Alt',

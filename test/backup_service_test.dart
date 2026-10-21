@@ -118,10 +118,10 @@ void main() {
   );
 
   test(
-    'update backup validates schema 24 without a cross-store proof file',
+    'update backup validates current schema 25 without a cross-store proof file',
     () async {
       const current =
-          '{"schemaVersion":24,"tournaments":[],"cache":{"marker":"keep"}}';
+          '{"schemaVersion":25,"tournaments":[],"cache":{"marker":"keep"}}';
       final tournamentFile = service.files['tournaments.json']!;
       await tournamentFile.writeAsString(current);
 
@@ -137,6 +137,46 @@ void main() {
       expect(utf8.decode(saved), current);
     },
   );
+
+  test('schema 24 backup retains its exact v22 proof file', () async {
+    final tournamentFile = service.files['tournaments.json']!;
+    final proofFile = service.files['tournaments.json.v22.bak']!;
+    const content = '{"schemaVersion":24,"tournaments":[]}';
+    const proof = '{"schemaVersion":22,"tournaments":[]}';
+    await tournamentFile.writeAsString(content);
+    await proofFile.writeAsString(proof);
+
+    final bytes = await service.exportBytes();
+    final preview = await service.inspect(bytes);
+    final exported = jsonDecode(utf8.decode(bytes)) as Map;
+    final files = exported['files'] as Map;
+    expect(preview.tournaments, 0);
+    expect(
+      files['tournaments.json.v22.bak']['data'],
+      base64Encode(utf8.encode(proof)),
+    );
+    expect(await tournamentFile.readAsString(), content);
+    expect(await proofFile.readAsString(), proof);
+
+    final tournamentOnly = await service.exportBytes(
+      categories: const {'tournaments.json'},
+    );
+    final tournamentOnlyFiles =
+        (jsonDecode(utf8.decode(tournamentOnly)) as Map)['files'] as Map;
+    expect(
+      tournamentOnlyFiles['tournaments.json.v22.bak']['data'],
+      base64Encode(utf8.encode(proof)),
+    );
+    expect(tournamentOnlyFiles['app_database.sqlite'], isNull);
+
+    final tournamentOnlyPreview = await service.inspect(tournamentOnly);
+    await service.restore(
+      tournamentOnlyPreview,
+      selectedCategories: const {'tournaments.json'},
+      restartApp: false,
+    );
+    expect(await proofFile.readAsString(), proof);
+  });
 
   test(
     'unknown versions, paths and checksums are rejected without writes',

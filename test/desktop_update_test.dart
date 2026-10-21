@@ -248,6 +248,40 @@ void main() {
       },
     );
   }
+  test(
+    'Windows package ZIP accepts PowerShell backslash entry paths',
+    () async {
+      final windows = release(UpdatePlatform.windows);
+      final manifest = utf8.encode(
+        jsonEncode({
+          'schemaVersion': 1,
+          'version': windows.version,
+          'build': windows.build,
+          'platform': windows.platform.manifestPlatform,
+          'architecture': windows.platform.architecture,
+        }),
+      );
+      final archive = Archive()
+        ..addFile(
+          ArchiveFile(r'data\update-manifest.json', manifest.length, manifest),
+        )
+        ..addFile(ArchiveFile(r'data\icudtl.dat', 1, [1]))
+        ..addFile(ArchiveFile(r'dart_tournament_manager.exe', 1, [1]))
+        ..addFile(ArchiveFile(r'flutter_windows.dll', 1, [1]));
+      final source = File(p.join(temp.path, 'windows-backslash.zip'));
+      await source.writeAsBytes(ZipEncoder().encode(archive));
+      final destination = Directory(p.join(temp.path, 'windows-backslash'));
+
+      await DesktopBundle.extract(source, destination, windows);
+
+      expect(
+        await File(
+          p.join(destination.path, 'data', 'icudtl.dat'),
+        ).readAsBytes(),
+        [1],
+      );
+    },
+  );
   test('rejects dangerous cross-platform paths and device names', () {
     for (final name in [
       '../file',

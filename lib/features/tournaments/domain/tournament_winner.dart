@@ -8,21 +8,19 @@ class TournamentWinner {
     final archiveWinner = _challongeWinner(tournament);
     if (tournament.importedArchive != null) return archiveWinner;
 
-    for (final stage in tournament.runStages.reversed) {
-      if (stage is KnockoutTournamentRunStage &&
-          stage.rounds.isNotEmpty &&
-          stage.rounds.last.length == 1 &&
-          stage.rounds.last.single.hasResult) {
-        return stage.rounds.last.single.winner?.profileId;
-      }
-    }
-
     final lastIndex = tournament.runStages.length - 1;
     if (lastIndex < 0 ||
-        !tournament.completedStageIndexes.contains(lastIndex)) {
+        (!tournament.completedStageIndexes.contains(lastIndex) &&
+            tournament.finishedAt == null)) {
       return null;
     }
     final finalStage = tournament.runStages[lastIndex];
+    if (finalStage is KnockoutTournamentRunStage &&
+        finalStage.rounds.isNotEmpty &&
+        finalStage.rounds.last.length == 1 &&
+        finalStage.rounds.last.single.hasResult) {
+      return finalStage.rounds.last.single.winner?.profileId;
+    }
     if (finalStage is! GroupTournamentRunStage ||
         finalStage.groups.length != 1) {
       return null;

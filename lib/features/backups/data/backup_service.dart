@@ -34,6 +34,12 @@ class BackupService {
 
   static const names = [
     'tournaments.json',
+    'tournaments.json.v22.bak',
+    'app_database.sqlite',
+    'planning_settings.json',
+  ];
+  static const categoryNames = [
+    'tournaments.json',
     'app_database.sqlite',
     'planning_settings.json',
   ];
@@ -93,7 +99,10 @@ class BackupService {
   }) async {
     final result = <String, Uint8List?>{};
     for (final entry in files.entries) {
-      if (categories != null && !categories.contains(entry.key)) {
+      if (categories != null &&
+          !categories.contains(entry.key) &&
+          !(entry.key == 'tournaments.json.v22.bak' &&
+              categories.contains('tournaments.json'))) {
         continue;
       }
       if (!await entry.value.exists()) {
@@ -206,11 +215,17 @@ class BackupService {
         if (entry.value == null) continue;
         final file = File(path.join(temporary.path, entry.key));
         await file.writeAsBytes(entry.value!, flush: true);
+      }
+      for (final entry in snapshot.entries) {
+        if (entry.value == null) continue;
+        final file = File(path.join(temporary.path, entry.key));
         switch (entry.key) {
           case 'tournaments.json':
             count = (await TournamentStorage(
               file: file,
             ).loadTournaments()).length;
+          case 'tournaments.json.v22.bak':
+            break;
           case 'planning_settings.json':
             await PlanningSettingsStorage(file: file).load();
           case 'app_database.sqlite':
@@ -272,7 +287,15 @@ class BackupService {
     await journalTemporary.writeAsBytes(_encode(original), flush: true);
     await journalTemporary.rename(journal.path);
     try {
-      await _install(replacement, selectedNames: selectedCategories);
+      final selectedNames = selectedCategories == null
+          ? null
+          : Set<String>.from(selectedCategories);
+      if (selectedNames != null &&
+          selectedNames.contains('tournaments.json') &&
+          replacement['tournaments.json.v22.bak'] != null) {
+        selectedNames.add('tournaments.json.v22.bak');
+      }
+      await _install(replacement, selectedNames: selectedNames);
       final committed = File(path.join(_transaction.path, 'committed.tmp'));
       await committed.writeAsString('1', flush: true);
       await committed.rename(path.join(_transaction.path, 'committed'));

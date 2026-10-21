@@ -577,7 +577,7 @@ class _StatMiniCard extends StatelessWidget {
   );
 }
 
-class _ReviewLeaders extends StatelessWidget {
+class _ReviewLeaders extends StatefulWidget {
   const _ReviewLeaders({
     required this.title,
     required this.rows,
@@ -592,10 +592,20 @@ class _ReviewLeaders extends StatelessWidget {
   final int? year;
 
   @override
+  State<_ReviewLeaders> createState() => _ReviewLeadersState();
+}
+
+class _ReviewLeadersState extends State<_ReviewLeaders> {
+  bool _showAll = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ranked = rows.where((r) => metric(r.value) > 0).toList()
-      ..sort((a, b) => metric(b.value).compareTo(metric(a.value)));
+    final ranked = widget.rows.where((r) => widget.metric(r.value) > 0).toList()
+      ..sort(
+        (a, b) => widget.metric(b.value).compareTo(widget.metric(a.value)),
+      );
+    final visible = ranked.take(_showAll ? ranked.length : 5).toList();
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -610,7 +620,7 @@ class _ReviewLeaders extends StatelessWidget {
         ),
         collapsedBackgroundColor: theme.colorScheme.surface,
         title: Text(
-          title,
+          widget.title,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -626,7 +636,7 @@ class _ReviewLeaders extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '${ranked.first.key} (${metric(ranked.first.value)})',
+                    '${ranked.first.key} (${widget.metric(ranked.first.value)})',
                     style: TextStyle(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w600,
@@ -640,7 +650,7 @@ class _ReviewLeaders extends StatelessWidget {
             child: Column(
               children: [
                 const Divider(height: 1),
-                for (var i = 0; i < ranked.take(5).length; i++) ...[
+                for (var i = 0; i < visible.length; i++) ...[
                   ListTile(
                     dense: true,
                     leading: CircleAvatar(
@@ -667,7 +677,7 @@ class _ReviewLeaders extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${metric(ranked[i].value)}',
+                          '${widget.metric(ranked[i].value)}',
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -677,25 +687,34 @@ class _ReviewLeaders extends StatelessWidget {
                       ],
                     ),
                     onTap: () {
-                      final pId = profileIds[ranked[i].key];
+                      final pId = widget.profileIds[ranked[i].key];
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => LocalPlayerStatisticsPage(
                             name: ranked[i].key,
                             profileIds: pId != null ? {pId} : const <String>{},
-                            year: year,
+                            year: widget.year,
                           ),
                         ),
                       );
                     },
                   ),
-                  if (i < ranked.take(5).length - 1)
+                  if (i < visible.length - 1)
                     Divider(
                       height: 1,
                       indent: 48,
                       color: theme.colorScheme.outlineVariant.withAlpha(40),
                     ),
                 ],
+                if (ranked.length > 5)
+                  TextButton(
+                    onPressed: () => setState(() => _showAll = !_showAll),
+                    child: Text(
+                      _showAll
+                          ? 'Weniger anzeigen'
+                          : 'Alle anzeigen (${ranked.length})',
+                    ),
+                  ),
               ],
             ),
           ),

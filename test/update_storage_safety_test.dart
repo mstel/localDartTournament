@@ -59,7 +59,7 @@ void main() {
   test(
     'unknown tournament version reports its version and remains untouched',
     () async {
-      const content = '{"schemaVersion":25,"tournaments":[]}';
+      const content = '{"schemaVersion":26,"tournaments":[]}';
       await file.writeAsString(content);
       final storage = TournamentStorage(file: file);
 
@@ -67,8 +67,8 @@ void main() {
         await storage.loadTournaments();
         fail('A future storage version must not be interpreted as supported.');
       } on FormatException catch (error) {
-        expect(error.message, contains('Version 25'));
-        expect(error.message, contains('1 bis 24'));
+        expect(error.message, contains('Version 26'));
+        expect(error.message, contains('1 bis 25'));
       }
 
       await expectLater(
@@ -80,23 +80,28 @@ void main() {
   );
 
   test(
-    'schema 24 documents from v1.0.3 remain readable and writable',
+    'schema 24 reads only with an exact schema 22 backup and never writes it',
     () async {
       final legacyTournament = _tournament().toJson()
         ..['countsForRanking'] = false
         ..['rankingIds'] = ['ranking-1'];
-      final current = jsonEncode({
+      final currentDocument = {
         'schemaVersion': 24,
         'tournaments': [legacyTournament],
         'playerStatistics': {'total': 7},
-      });
+      };
+      final backupDocument = {...currentDocument, 'schemaVersion': 22};
+      final current = jsonEncode(currentDocument);
+      final backup = jsonEncode(backupDocument);
       await file.writeAsString(current);
+      await File('${file.path}.v22.bak').writeAsString(backup);
       final storage = TournamentStorage(file: file);
 
       final loaded = await storage.loadTournaments();
       expect(loaded.single.countsForRanking, isFalse);
       expect(loaded.single.rankingIds, ['ranking-1']);
       expect(await file.readAsString(), current);
+      expect(await File('${file.path}.v22.bak').readAsString(), backup);
 
       await storage.saveTournament(
         CreatedTournament(
@@ -109,7 +114,7 @@ void main() {
       );
 
       final saved = jsonDecode(await file.readAsString());
-      expect(saved['schemaVersion'], 24);
+      expect(saved['schemaVersion'], 25);
       expect(saved['playerStatistics'], {'total': 7});
       expect((saved['tournaments'] as List).length, 2);
       expect(
@@ -125,8 +130,59 @@ void main() {
         ['ranking-1'],
       );
       expect(await File('${file.path}.bak').readAsString(), current);
+      expect(await File('${file.path}.v22.bak').readAsString(), backup);
     },
   );
+
+  test(
+    'schema 24 without the matching v22 backup stays unchanged and is rejected',
+    () async {
+      const current = '{"schemaVersion":24,"tournaments":[]}';
+      await file.writeAsString(current);
+      final storage = TournamentStorage(file: file);
+
+      await expectLater(
+        storage.loadTournaments(),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            allOf(contains('Sicherung fehlt'), contains('${file.path}.v22.bak')),
+          ),
+        ),
+      );
+      await expectLater(
+        storage.saveTournament(_tournament()),
+        throwsA(isA<FormatException>()),
+      );
+      expect(await file.readAsString(), current);
+      expect(await File('${file.path}.v22.bak').exists(), isFalse);
+    },
+  );
+
+  for (final backupContent in [
+    '{"schemaVersion":22,"tournaments":[{"name":"different"}]}',
+    '{broken',
+    '{"schemaVersion":24,"tournaments":[]}',
+  ]) {
+    test(
+      'schema 24 rejects an invalid or differing v22 backup without mutation: $backupContent',
+      () async {
+        const current = '{"schemaVersion":24,"tournaments":[]}';
+        await file.writeAsString(current);
+        final backup = File('${file.path}.v22.bak');
+        await backup.writeAsString(backupContent);
+        final storage = TournamentStorage(file: file);
+
+        await expectLater(
+          storage.loadTournaments(),
+          throwsA(isA<FormatException>()),
+        );
+        expect(await file.readAsString(), current);
+        expect(await backup.readAsString(), backupContent);
+      },
+    );
+  }
 
   test(
     'newer SQLite database is rejected without changing its schema',
@@ -144,21 +200,6 @@ void main() {
       reopened.close();
     },
   );
-
-  test('SQLite migration creates a readable pre-migration backup', () async {
-    final storage = LocalAppDatabase(baseDirectory: directory);
-    await storage.loadPlayerProfiles();
-    final database = sqlite3.open('${directory.path}/app_database.sqlite');
-    database.execute('PRAGMA user_version = 2');
-    database.close();
-    await storage.loadPlayerProfiles();
-    final backup = directory.listSync().whereType<File>().singleWhere(
-      (f) => f.path.endsWith('.bak'),
-    );
-    final old = sqlite3.open(backup.path);
-    expect(old.select('PRAGMA user_version').first.values.single, 2);
-    old.close();
-  });
 
   test('v9 to v10 migration keeps players, rankings and assignments', () async {
     final path = '${directory.path}/app_database.sqlite';

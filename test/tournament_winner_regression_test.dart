@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:dart_tournament_manager/features/statistics/domain/local_statistics.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
+import 'package:dart_tournament_manager/features/rankings/application/ranking_year_review_service.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/player_withdrawal.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/imported_tournament_archive.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -42,9 +44,36 @@ void main() {
           ],
         ),
       ],
+      completedStageIndexes: {0},
     );
 
     expect(TournamentWinner.profileId(tournament), 'profile-anna');
+  });
+
+  test('an unfinished knockout final is not a tournament victory', () {
+    final tournament = CreatedTournament(
+      name: 'Noch nicht abgeschlossen',
+      players: const [anna, ben],
+      stages: const [],
+      runStages: [
+        KnockoutTournamentRunStage(
+          name: 'Finale',
+          rounds: [
+            [
+              GroupMatch(
+                homePlayer: anna,
+                awayPlayer: ben,
+                round: 1,
+                homeLegs: 3,
+                awayLegs: 1,
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+
+    expect(TournamentWinner.profileId(tournament), isNull);
   });
 
   test('only a completed, untied final group has a winner', () {
@@ -349,8 +378,21 @@ void main() {
               ),
             ],
           ],
+          placementMatches: [
+            GroupMatch(
+              homePlayer: annaPlayer,
+              awayPlayer: benPlayer,
+              round: 1,
+              homeLegs: 2,
+              awayLegs: 2,
+            ),
+          ],
         ),
       ],
+      completedStageIndexes: {0},
+      finishedAt: DateTime.utc(2026),
+      countsForRanking: true,
+      rankingIds: const ['club-ranking'],
     );
     final storage = TournamentStorage(
       file: File('${directory.path}${Platform.pathSeparator}tournaments.json'),
@@ -364,5 +406,15 @@ void main() {
 
     expect(statistics.tournamentWins, 1);
     expect(statistics.tournamentWinRate, 100);
+    expect(statistics.legsDrawn, 1);
+
+    const ranking = LocalRanking(id: 'club-ranking', name: 'Vereinsrangliste');
+    await database.saveLocalRanking(ranking);
+    await database.setRankingPlayers(ranking.id, [annaProfile.id]);
+    final review = await RankingYearReviewService(
+      database: database,
+      tournamentStorage: storage,
+    ).calculate(ranking, 2026);
+    expect(review.players['Anna']!.tournamentWins, 1);
   });
 }
