@@ -5,6 +5,8 @@ import 'package:dart_tournament_manager/features/tournaments/presentation/pages/
 import 'package:dart_tournament_manager/features/challonge/application/challonge_native_import.dart';
 import 'package:dart_tournament_manager/features/challonge/domain/challonge_tournament.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 
 Map<String, dynamic> fixture(
   String mode,
@@ -90,6 +92,7 @@ void main() {
                 [1, 1, 2, 3, 1],
               ]),
             ),
+            database: _EmptyRankingDatabase(),
           ),
         ),
       );
@@ -111,6 +114,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
   test('round robin calculates standings and exposes source discrepancies', () {
     final result = native(
       fixture(
@@ -162,4 +166,9 @@ void main() {
       expect(result.importedArchive!.nativeValidation!['issues'], isEmpty);
     },
   );
+}
+
+class _EmptyRankingDatabase extends LocalAppDatabase {
+  @override
+  Future<List<LocalRanking>> loadLocalRankings() async => const [];
 }

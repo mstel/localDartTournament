@@ -34,6 +34,12 @@ class BackupService {
 
   static const names = [
     'tournaments.json',
+    'tournaments.json.v22.bak',
+    'app_database.sqlite',
+    'planning_settings.json',
+  ];
+  static const categoryNames = [
+    'tournaments.json',
     'app_database.sqlite',
     'planning_settings.json',
   ];
@@ -42,14 +48,16 @@ class BackupService {
   final Directory backupDirectory;
   Directory get _transaction =>
       Directory(path.join(backupDirectory.path, 'restore_transaction'));
+  Directory get restoreTransactionDirectory => _transaction;
 
   static Future<BackupService> create() async {
     final tournaments = await TournamentStorage().storageFile();
     return BackupService(
       files: {
-        names[0]: tournaments,
-        names[1]: await LocalAppDatabase().databaseFile(),
-        names[2]: await PlanningSettingsStorage().storageFile(),
+        'tournaments.json': tournaments,
+        'tournaments.json.v22.bak': File('${tournaments.path}.v22.bak'),
+        'app_database.sqlite': await LocalAppDatabase().databaseFile(),
+        'planning_settings.json': await PlanningSettingsStorage().storageFile(),
       },
       backupDirectory: Directory(path.join(tournaments.parent.path, 'backups')),
     );
@@ -93,7 +101,10 @@ class BackupService {
   }) async {
     final result = <String, Uint8List?>{};
     for (final entry in files.entries) {
-      if (categories != null && !categories.contains(entry.key)) {
+      if (categories != null &&
+          !categories.contains(entry.key) &&
+          !(entry.key == 'tournaments.json.v22.bak' &&
+              categories.contains('tournaments.json'))) {
         continue;
       }
       if (!await entry.value.exists()) {
@@ -206,11 +217,17 @@ class BackupService {
         if (entry.value == null) continue;
         final file = File(path.join(temporary.path, entry.key));
         await file.writeAsBytes(entry.value!, flush: true);
+      }
+      for (final entry in snapshot.entries) {
+        if (entry.value == null) continue;
+        final file = File(path.join(temporary.path, entry.key));
         switch (entry.key) {
           case 'tournaments.json':
             count = (await TournamentStorage(
               file: file,
             ).loadTournaments()).length;
+          case 'tournaments.json.v22.bak':
+            break;
           case 'planning_settings.json':
             await PlanningSettingsStorage(file: file).load();
           case 'app_database.sqlite':
@@ -272,7 +289,15 @@ class BackupService {
     await journalTemporary.writeAsBytes(_encode(original), flush: true);
     await journalTemporary.rename(journal.path);
     try {
-      await _install(replacement, selectedNames: selectedCategories);
+      final selectedNames = selectedCategories == null
+          ? null
+          : Set<String>.from(selectedCategories);
+      if (selectedNames != null &&
+          selectedNames.contains('tournaments.json') &&
+          replacement['tournaments.json.v22.bak'] != null) {
+        selectedNames.add('tournaments.json.v22.bak');
+      }
+      await _install(replacement, selectedNames: selectedNames);
       final committed = File(path.join(_transaction.path, 'committed.tmp'));
       await committed.writeAsString('1', flush: true);
       await committed.rename(path.join(_transaction.path, 'committed'));

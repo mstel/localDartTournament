@@ -2,11 +2,16 @@ import '../../statistics/domain/best_performance.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
+import '../../tournaments/domain/tournament_winner.dart';
 import '../domain/local_ranking.dart';
 
 class RankingYearPlayerStats {
   int participations = 0, tournamentWins = 0, legsWon = 0, legsLost = 0;
-  int bestPerformances = 0, scores180 = 0, scores170 = 0, shortLegs = 0, highFinishes = 0;
+  int bestPerformances = 0,
+      scores180 = 0,
+      scores170 = 0,
+      shortLegs = 0,
+      highFinishes = 0;
 }
 
 class RankingYearReview {
@@ -24,12 +29,18 @@ class RankingYearReview {
   final List<int> monthlyTournaments;
   final Map<int, int> yearlyTournaments;
   final Map<String, String> profileIds;
-  int get totalLegs => players.values.fold(0, (sum, player) => sum + player.legsWon);
-  int get totalBestPerformances => players.values.fold(0, (sum, player) => sum + player.bestPerformances);
-  int get total180 => players.values.fold(0, (sum, player) => sum + player.scores180);
-  int get total170 => players.values.fold(0, (sum, player) => sum + player.scores170);
-  int get totalShortLegs => players.values.fold(0, (sum, player) => sum + player.shortLegs);
-  int get totalHighFinishes => players.values.fold(0, (sum, player) => sum + player.highFinishes);
+  int get totalLegs =>
+      players.values.fold(0, (sum, player) => sum + player.legsWon);
+  int get totalBestPerformances =>
+      players.values.fold(0, (sum, player) => sum + player.bestPerformances);
+  int get total180 =>
+      players.values.fold(0, (sum, player) => sum + player.scores180);
+  int get total170 =>
+      players.values.fold(0, (sum, player) => sum + player.scores170);
+  int get totalShortLegs =>
+      players.values.fold(0, (sum, player) => sum + player.shortLegs);
+  int get totalHighFinishes =>
+      players.values.fold(0, (sum, player) => sum + player.highFinishes);
 }
 
 class RankingYearReviewService {
@@ -40,28 +51,48 @@ class RankingYearReviewService {
   Future<RankingYearReview> calculate(LocalRanking ranking, int? year) async {
     final db = database ?? LocalAppDatabase();
     final roster = (await db.loadRankingPlayerIds(ranking.id)).toSet();
-    final names = {for (final player in await db.loadPlayerProfiles()) player.id: player.displayName};
+    final names = {
+      for (final player in await db.loadPlayerProfiles())
+        player.id: player.displayName,
+    };
     final profileIdByName = {
-      for (final entry in names.entries) entry.value.trim().toLowerCase(): entry.key,
+      for (final entry in names.entries)
+        entry.value.trim().toLowerCase(): entry.key,
     };
     final stats = {for (final id in roster) id: RankingYearPlayerStats()};
     final monthly = List<int>.filled(12, 0);
     final yearly = <int, int>{};
     var tournamentCount = 0;
-    final tournaments = await (tournamentStorage ?? TournamentStorage()).loadTournaments();
+    final tournaments = await (tournamentStorage ?? TournamentStorage())
+        .loadTournaments();
     for (final tournament in tournaments) {
       final date = (tournament.finishedAt ?? tournament.createdAt).toLocal();
       if (year != null && date.year != year) continue;
-      if (!ranking.includesTournamentDate(date) || !tournament.countsForRanking || !tournament.rankingIds.contains(ranking.id)) continue;
+      if (!ranking.includesTournamentDate(date) ||
+          !tournament.countsForRanking ||
+          !tournament.rankingIds.contains(ranking.id)) {
+        continue;
+      }
       tournamentCount++;
       monthly[date.month - 1]++;
       yearly.update(date.year, (v) => v + 1, ifAbsent: () => 1);
-      final participants = tournament.players.where((p) => p.profileId != null && stats.containsKey(p.profileId)).map((p) => p.profileId!).toSet();
-      for (final id in participants) { stats[id]!.participations++; }
+      final participants = tournament.players
+          .where((p) => p.profileId != null && stats.containsKey(p.profileId))
+          .map((p) => p.profileId!)
+          .toSet();
+      for (final id in participants) {
+        stats[id]!.participations++;
+      }
       for (final match in _matches(tournament).toSet()) {
         if (!match.hasResult || match.withdrawalIgnored) continue;
-        final home = match.homePlayer?.profileId, away = match.awayPlayer?.profileId;
-        if (home == null || away == null || !stats.containsKey(home) || !stats.containsKey(away)) continue;
+        final home = match.homePlayer?.profileId,
+            away = match.awayPlayer?.profileId;
+        if (home == null ||
+            away == null ||
+            !stats.containsKey(home) ||
+            !stats.containsKey(away)) {
+          continue;
+        }
         stats[home]!.legsWon += match.homeLegs ?? 0;
         stats[home]!.legsLost += match.awayLegs ?? 0;
         stats[away]!.legsWon += match.awayLegs ?? 0;
@@ -72,10 +103,14 @@ class RankingYearReviewService {
           final player = stats[id]!;
           player.bestPerformances++;
           switch (performance.type) {
-            case BestPerformanceType.score180: player.scores180++;
-            case BestPerformanceType.score170: player.scores170++;
-            case BestPerformanceType.highFinish: player.highFinishes++;
-            case BestPerformanceType.shortLeg: player.shortLegs++;
+            case BestPerformanceType.score180:
+              player.scores180++;
+            case BestPerformanceType.score170:
+              player.scores170++;
+            case BestPerformanceType.highFinish:
+              player.highFinishes++;
+            case BestPerformanceType.shortLeg:
+              player.shortLegs++;
           }
         }
       }
@@ -86,30 +121,42 @@ class RankingYearReviewService {
           final id = participant['profileId'];
           if (id is! String || !stats.containsKey(id)) continue;
           byName['${participant['name'] ?? ''}'] = id;
-          for (final alias in participant['groupPlayerIds'] as List? ?? const []) {
+          for (final alias
+              in participant['groupPlayerIds'] as List? ?? const []) {
             byName['$alias'] = id;
           }
         }
         for (final importedMatch in archive.matches) {
-          for (final raw in (importedMatch['bestPerformances'] as List? ?? const []).whereType<Map>()) {
-            final performance = BestPerformance.fromJson(Map<String, dynamic>.from(raw));
-            final id = performance.playerProfileId ??
+          for (final raw
+              in (importedMatch['bestPerformances'] as List? ?? const [])
+                  .whereType<Map>()) {
+            final performance = BestPerformance.fromJson(
+              Map<String, dynamic>.from(raw),
+            );
+            final id =
+                performance.playerProfileId ??
                 byName[performance.playerName] ??
                 profileIdByName[performance.playerName.trim().toLowerCase()];
             if (id == null || !stats.containsKey(id)) continue;
             final player = stats[id]!;
             player.bestPerformances++;
             switch (performance.type) {
-              case BestPerformanceType.score180: player.scores180++;
-              case BestPerformanceType.score170: player.scores170++;
-              case BestPerformanceType.highFinish: player.highFinishes++;
-              case BestPerformanceType.shortLeg: player.shortLegs++;
+              case BestPerformanceType.score180:
+                player.scores180++;
+              case BestPerformanceType.score170:
+                player.scores170++;
+              case BestPerformanceType.highFinish:
+                player.highFinishes++;
+              case BestPerformanceType.shortLeg:
+                player.shortLegs++;
             }
           }
         }
       }
-      final winnerId = _tournamentWinner(tournament, stats.keys.toSet());
-      if (winnerId != null && stats.containsKey(winnerId)) stats[winnerId]!.tournamentWins++;
+      final winnerId = TournamentWinner.profileId(tournament);
+      if (winnerId != null && stats.containsKey(winnerId)) {
+        stats[winnerId]!.tournamentWins++;
+      }
     }
     final mappedProfileIds = <String, String>{};
     for (final entry in stats.entries) {
@@ -118,7 +165,10 @@ class RankingYearReviewService {
     }
     return RankingYearReview(
       year,
-      {for (final entry in stats.entries) names[entry.key] ?? entry.key: entry.value},
+      {
+        for (final entry in stats.entries)
+          names[entry.key] ?? entry.key: entry.value,
+      },
       monthly,
       tournamentCount,
       yearlyTournaments: yearly,
@@ -140,37 +190,5 @@ class RankingYearReviewService {
         }
       }
     }
-  }
-
-  GroupMatch? _finalMatch(CreatedTournament tournament) {
-    GroupMatch? result;
-    for (final stage in tournament.runStages) {
-      if (stage is KnockoutTournamentRunStage && stage.rounds.isNotEmpty && stage.rounds.last.length == 1 && stage.rounds.last.single.hasResult) result = stage.rounds.last.single;
-    }
-    return result;
-  }
-
-  String? _tournamentWinner(CreatedTournament tournament, Set<String> roster) {
-    final finalMatch = _finalMatch(tournament);
-    if (finalMatch != null) {
-      final finalWinner = finalMatch.winner?.profileId;
-      return finalWinner != null && roster.contains(finalWinner) ? finalWinner : null;
-    }
-    final wins = <String, int>{};
-    final legs = <String, int>{};
-    for (final match in _matches(tournament).toSet()) {
-      if (!match.hasResult || match.withdrawalIgnored) continue;
-      final winner = match.winner?.profileId;
-      if (winner == null || !roster.contains(winner)) continue;
-      wins.update(winner, (value) => value + 1, ifAbsent: () => 1);
-      legs.update(winner, (value) => value + (winner == match.homePlayer?.profileId
-          ? match.homeLegs ?? 0 : match.awayLegs ?? 0), ifAbsent: () => winner == match.homePlayer?.profileId
-          ? match.homeLegs ?? 0 : match.awayLegs ?? 0);
-    }
-    final candidates = wins.keys.toList()..sort((a, b) {
-      final byWins = wins[b]!.compareTo(wins[a]!);
-      return byWins != 0 ? byWins : (legs[b] ?? 0).compareTo(legs[a] ?? 0);
-    });
-    return candidates.isEmpty ? null : candidates.first;
   }
 }

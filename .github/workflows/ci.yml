@@ -96,16 +96,25 @@ jobs:
         run: flutter build windows --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
 
       - name: Package Windows update
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          $releaseTag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:RELEASE_TAG } else { $env:GITHUB_REF_NAME }
+          $packageVersion = (Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$').Matches.Groups[1].Value.Trim()
+          $releaseTag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $env:RELEASE_TAG
+          } elseif ($env:GITHUB_REF -match '^refs/tags/v\d+\.\d+\.\d+\+\d+$') {
+            $env:GITHUB_REF_NAME
+          } else {
+            "v$packageVersion"
+          }
           if ($releaseTag -notmatch '^v\d+\.\d+\.\d+\+\d+$') {
             throw "Unsupported release tag: $releaseTag"
           }
           $tagVersion = $releaseTag.Substring(1)
+          if ($tagVersion -ne $packageVersion) {
+            throw "Update package version $tagVersion does not match pubspec.yaml ($packageVersion)."
+          }
           $version, $build = $tagVersion.Split('+')
           $bundle = 'build/windows/x64/runner/Release'
           New-Item -ItemType Directory -Force "$bundle/data" | Out-Null
@@ -118,6 +127,53 @@ jobs:
           }
           $manifest | ConvertTo-Json -Compress | Set-Content "$bundle/data/update-manifest.json" -Encoding utf8
           Compress-Archive -Path "$bundle/*" -DestinationPath 'dart-turnier-windows-x64.zip' -Force
+
+      - name: Verify Windows update package
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $packageVersion = (Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$').Matches.Groups[1].Value.Trim()
+          $version, $build = $packageVersion.Split('+')
+          $package = [System.IO.Compression.ZipFile]::OpenRead('dart-turnier-windows-x64.zip')
+          try {
+            $entryNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($entry in $package.Entries) {
+              [void]$entryNames.Add($entry.FullName.Replace('\', '/').TrimStart('./'))
+            }
+            foreach ($required in @(
+              'dart_tournament_manager.exe',
+              'data/icudtl.dat',
+              'data/update-manifest.json',
+              'flutter_windows.dll'
+            )) {
+              if (-not $entryNames.Contains($required)) {
+                throw "Windows update package is missing $required."
+              }
+            }
+            $manifestEntry = $package.Entries |
+              Where-Object { $_.FullName.Replace('\', '/') -eq 'data/update-manifest.json' } |
+              Select-Object -First 1
+            if ($null -eq $manifestEntry) {
+              throw 'Windows update package is missing data/update-manifest.json.'
+            }
+            $reader = [System.IO.StreamReader]::new($manifestEntry.Open())
+            try {
+              $manifest = $reader.ReadToEnd() | ConvertFrom-Json
+            } finally {
+              $reader.Dispose()
+            }
+            if (
+              $manifest.schemaVersion -ne 1 -or
+              $manifest.version -ne $version -or
+              $manifest.build -ne [int]$build -or
+              $manifest.platform -ne 'windows' -or
+              $manifest.architecture -ne 'x64'
+            ) {
+              throw 'Windows update package manifest does not match pubspec.yaml.'
+            }
+          } finally {
+            $package.Dispose()
+          }
 
       - name: Upload Windows update
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -351,6 +407,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
+          prerelease: ${{ github.ref_name == 'v1.0.8+9' || github.ref_name == 'v1.0.8+10' || github.ref_name == 'v1.0.8+11' }}
           body_path: docs/releases/${{ github.ref_name }}.md
           files: |
             release-assets/windows-x64/dart-turnier-windows-x64.zip

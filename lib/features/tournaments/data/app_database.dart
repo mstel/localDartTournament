@@ -395,6 +395,13 @@ class LocalAppDatabase {
           'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
         );
       }
+      if (version > 0 && version < schemaVersion - 1) {
+        throw StateError(
+          'Lokale Datenbank-Version $version kann nicht sicher migriert werden. '
+          'Die Datei wurde nicht verändert. Bitte erstelle eine Kopie der '
+          'Datenbank und öffne sie mit einer passenden App-Version.',
+        );
+      }
       if (version > 0 && version < schemaVersion) {
         final backup =
             '${file.path}.v$version.${DateTime.now().microsecondsSinceEpoch}.bak';

@@ -30,6 +30,8 @@ class BoardSchedule {
 }
 
 class BoardSchedulingEngine {
+  static const preferredPlayerRestBlocks = 2;
+
   const BoardSchedulingEngine();
   List<BoardAssignment> schedule({
     required List<PlayEntry> all,
@@ -68,6 +70,13 @@ class BoardSchedulingEngine {
       int rest(PlayEntry e) => e.players
           .map((p) => lastPlayed[p] ?? -100000)
           .reduce((a, b) => a > b ? a : b);
+      int minimumRestGap(PlayEntry e) => e.players
+          .map(
+            (p) => lastPlayed[p] == null
+                ? preferredPlayerRestBlocks
+                : block - lastPlayed[p]!,
+          )
+          .reduce((a, b) => a < b ? a : b);
       int maxRemaining(PlayEntry e) => e.players
           .map((p) => remainingCount[p] ?? 0)
           .fold<int>(0, (a, b) => a > b ? a : b);
@@ -75,7 +84,14 @@ class BoardSchedulingEngine {
       final available =
           pending.where((e) => !e.players.any(busy.contains)).toList()
             ..sort((a, b) {
-              final r = rest(a).compareTo(rest(b));
+                final preferredGap = minimumRestGap(b).compareTo(
+                  minimumRestGap(a),
+                );
+                if ((minimumRestGap(a) < preferredPlayerRestBlocks) !=
+                    (minimumRestGap(b) < preferredPlayerRestBlocks)) {
+                  return preferredGap;
+                }
+                final r = rest(a).compareTo(rest(b));
               if (r != 0) return r;
               final rem = maxRemaining(b).compareTo(maxRemaining(a));
               return rem != 0 ? rem : all.indexOf(a).compareTo(all.indexOf(b));

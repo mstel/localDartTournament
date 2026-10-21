@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -5,8 +6,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/settings/data/planning_settings_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_planning_parameters.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_format_planner.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/tournament_creation_controller.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 
 void main() {
+  test('new tournament drafts default to four boards', () async {
+    final storage = _RecordingTournamentStorage();
+    final tournament = TournamentCreationController(storage: storage)
+        .createTournament(
+          name: 'Vier Boards',
+          players: const [],
+          stages: const [],
+          runStages: const [],
+        );
+    expect(tournament.boardCount, 4);
+    await storage.saveCompleted;
+  });
+
   const request = TournamentPlanningRequest(
     requireGroupPhase: true,
     players: 8,
@@ -78,6 +95,23 @@ void main() {
     },
   );
 
+  test('legacy settings schemas 1 and 2 retain parameter values', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'planning_settings_legacy_',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    for (final version in [1, 2]) {
+      final file = File('${directory.path}/settings-v$version.json');
+      final content =
+          '{"schemaVersion":$version,"parameters":{"minutes501DoubleOut":17}}';
+      await file.writeAsString(content);
+
+      final parameters = await PlanningSettingsStorage(file: file).load();
+      expect(parameters.minutes501DoubleOut, 17);
+      expect(await file.readAsString(), content);
+    }
+  });
+
   test(
     'invalid values are rejected and missing stored fields use defaults',
     () {
@@ -128,4 +162,17 @@ void main() {
     expect(twoGroups.qualifiersPerGroup, 1);
     expect(twoGroups.totalMatches, 13);
   });
+}
+
+class _RecordingTournamentStorage extends TournamentStorage {
+  CreatedTournament? savedTournament;
+  final Completer<void> _completed = Completer<void>();
+
+  Future<void> get saveCompleted => _completed.future;
+
+  @override
+  Future<void> saveTournament(CreatedTournament tournament) async {
+    savedTournament = tournament;
+    _completed.complete();
+  }
 }

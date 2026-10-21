@@ -1,52 +1,116 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/persistence/storage_access.dart';
 import '../data/backup_service.dart';
+import 'supabase_workspace_sync_service.dart';
 
-/// Resets this installation's local stores after creating a recovery backup.
+/// Resets this installation's local stores after preserving a raw snapshot.
 class LocalAppResetService {
   const LocalAppResetService();
 
-  Future<File> reset() async {
+  Future<Directory> reset() async {
     final backup = await BackupService.create();
+    await SupabaseWorkspaceSyncService.instance
+        .pauseSynchronizationForFreshStart();
     return StorageAccess.run(() async {
-      final bytes = await backup.exportBytes();
-      await backup.backupDirectory.create(recursive: true);
-      final timestamp = DateTime.now()
-          .toUtc()
-          .toIso8601String()
-          .replaceAll(':', '-')
-          .replaceAll('.', '-');
-      final archive = File(
-        path.join(backup.backupDirectory.path, 'factory-reset-$timestamp.dartbackup'),
+      final archive = await preserveAndClearStores(
+        storeFiles: backup.files.values,
+        backupDirectory: backup.backupDirectory,
       );
-      await archive.writeAsBytes(bytes, flush: true);
-
-      for (final store in backup.files.values) {
-        for (final suffix in ['', '.bak', '.tmp', '-wal', '-shm']) {
-          final file = File('${store.path}$suffix');
-          if (await file.exists()) await file.delete();
-        }
-        final parent = store.parent;
-        if (await parent.exists()) {
-          final base = path.basename(store.path);
-          await for (final entity in parent.list(followLinks: false)) {
-            if (entity is File &&
-                path.basename(entity.path).startsWith('$base.v') &&
-                path.basename(entity.path).endsWith('.bak')) {
-              await entity.delete();
-            }
-          }
-        }
-      }
-      await (await SharedPreferences.getInstance()).clear();
+      StorageAccess.markLocalDataChanged();
       StorageAccess.requireRestart(
-        'Die lokalen App-Daten wurden zurückgesetzt. Ein Backup liegt unter ${archive.path}. Bitte starte die App neu.',
+        'Die lokalen Daten dieses Geräts wurden zurückgesetzt. Eine bytegetreue Sicherung liegt unter ${archive.path}. Die Cloud-Synchronisierung bleibt pausiert; bitte starte die App neu.',
       );
       return archive;
     });
+  }
+
+  static Future<Directory> preserveAndClearStores({
+    required Iterable<File> storeFiles,
+    required Directory backupDirectory,
+    DateTime? now,
+  }) async {
+    final timestamp = (now ?? DateTime.now())
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+    final archive = Directory(
+      path.join(backupDirectory.path, 'factory-reset-$timestamp'),
+    );
+    await archive.create(recursive: true);
+    final stores = await _collectStoreFiles(storeFiles);
+    final snapshots = <(File, List<int>)>[];
+    for (final store in stores) {
+      snapshots.add((store, await store.readAsBytes()));
+    }
+    for (final (store, bytes) in snapshots) {
+      final destination = File(
+        path.join(archive.path, path.basename(store.path)),
+      );
+      await destination.writeAsBytes(bytes, flush: true);
+      final copy = await destination.readAsBytes();
+      if (sha256.convert(copy) != sha256.convert(bytes)) {
+        throw FileSystemException(
+          'Die lokale Sicherung konnte nicht verifiziert werden.',
+          destination.path,
+        );
+      }
+    }
+    final deleted = <File>[];
+    try {
+      for (final store in stores) {
+        try {
+          await store.delete();
+          deleted.add(store);
+        } catch (_) {
+          if (!await store.exists()) deleted.add(store);
+          rethrow;
+        }
+      }
+    } catch (error, stackTrace) {
+      Object? rollbackError;
+      for (final store in deleted.reversed) {
+        try {
+          await File(
+            path.join(archive.path, path.basename(store.path)),
+          ).copy(store.path);
+        } catch (restoreError) {
+          rollbackError ??= restoreError;
+        }
+      }
+      if (rollbackError != null) {
+        throw StateError(
+          'Zurücksetzen fehlgeschlagen: $error. '
+          'Wiederherstellung aus ${archive.path} fehlgeschlagen: $rollbackError',
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    return archive;
+  }
+
+  static Future<List<File>> _collectStoreFiles(
+    Iterable<File> storeFiles,
+  ) async {
+    final files = <String, File>{};
+    for (final store in storeFiles) {
+      final parent = store.parent;
+      if (!await parent.exists()) continue;
+      final base = path.basename(store.path);
+      await for (final entity in parent.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = path.basename(entity.path);
+        if (name == base ||
+            name.startsWith('$base.') ||
+            name.startsWith('$base-')) {
+          files[entity.path] = entity;
+        }
+      }
+    }
+    return files.values.toList(growable: false);
   }
 }

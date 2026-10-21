@@ -54,10 +54,32 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
     });
   }
 
-  Future<void> _upload() => _run(() async {
-    await SupabaseWorkspaceSyncService.instance.uploadLocalVersion();
-    _status = SupabaseWorkspaceSyncService.status.value;
-  });
+  Future<void> _upload() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cloud-Datenstand ersetzen?'),
+        content: const Text(
+          'Der lokale Datenstand dieses Geräts wird zum Cloud-Datenstand dieses Kontos. Andere Geräte werden nicht direkt gelöscht, können diesen Stand aber beim nächsten Abgleich übernehmen. Nur fortfahren, wenn dieser PC der gewünschte kanonische Stand ist.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cloud-Stand ersetzen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _run(() async {
+      await SupabaseWorkspaceSyncService.instance.uploadLocalVersion();
+      _status = SupabaseWorkspaceSyncService.status.value;
+    });
+  }
 
   Future<void> _restore() => _run(() async {
     final backups = await BackupService.create();

@@ -145,6 +145,42 @@ void main() {
     expect(rankings.map((ranking) => ranking.customOrder), [0, 1]);
   });
 
+  test('rejects unknown old SQLite schema without changing its data', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'dart_local_database_unknown_schema_test_',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+
+    final file = File('${directory.path}/app_database.sqlite');
+    final old = sqlite3.open(file.path);
+    old.execute('CREATE TABLE legacy_data (value TEXT NOT NULL)');
+    old.execute("INSERT INTO legacy_data VALUES ('keep')");
+    old.execute('PRAGMA user_version = 2');
+    old.close();
+    final originalBytes = await file.readAsBytes();
+
+    await expectLater(
+      LocalAppDatabase(baseDirectory: directory).loadPlayerProfiles(),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('kann nicht sicher migriert werden'),
+        ),
+      ),
+    );
+
+    expect(await file.readAsBytes(), originalBytes);
+    expect(directory.listSync().whereType<File>(), hasLength(1));
+    final unchanged = sqlite3.open(file.path, mode: OpenMode.readOnly);
+    expect(unchanged.select('PRAGMA user_version').single.values.single, 2);
+    expect(
+      unchanged.select('SELECT value FROM legacy_data').single['value'],
+      'keep',
+    );
+    unchanged.close();
+  });
+
   test('keeps player profile id in tournament player json', () {
     const player = TournamentPlayer(
       profileId: 'profile-1',

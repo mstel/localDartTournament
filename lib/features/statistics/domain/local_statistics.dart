@@ -17,15 +17,14 @@ class LocalPlayerStatistics {
     required this.tournamentWins,
     required this.legsWon,
     required this.legsLost,
+    required this.legsDrawn,
     required this.setsWon,
     required this.setsLost,
     required this.bestPerformances,
-    required this.expectedWinChance,
   });
   final int tournaments, matches, wins, losses, draws, tournamentWins;
-  final int legsWon, legsLost, setsWon, setsLost;
+  final int legsWon, legsLost, legsDrawn, setsWon, setsLost;
   final List<BestPerformance> bestPerformances;
-  final double? expectedWinChance;
   double get matchWinRate => matches == 0 ? 0 : wins * 100 / matches;
   double get tournamentWinRate =>
       tournaments == 0 ? 0 : tournamentWins * 100 / tournaments;
@@ -51,7 +50,7 @@ class LocalStatisticsService {
         .loadTournaments();
     final playedTournamentIds = <String>{};
     var matches = 0, wins = 0, losses = 0, draws = 0, tournamentWins = 0;
-    var legsWon = 0, legsLost = 0, setsWon = 0, setsLost = 0;
+    var legsWon = 0, legsLost = 0, legsDrawn = 0, setsWon = 0, setsLost = 0;
     final performances = <BestPerformance>[];
     for (final tournament in tournaments) {
       if (year != null) {
@@ -86,6 +85,7 @@ class LocalStatisticsService {
         }
         legsWon += isHome ? match.homeLegs ?? 0 : match.awayLegs ?? 0;
         legsLost += isHome ? match.awayLegs ?? 0 : match.homeLegs ?? 0;
+        if (match.homeLegs == match.awayLegs) legsDrawn++;
         setsWon += isHome ? match.homeSets ?? 0 : match.awaySets ?? 0;
         setsLost += isHome ? match.awaySets ?? 0 : match.homeSets ?? 0;
         performances.addAll(
@@ -149,22 +149,6 @@ class LocalStatisticsService {
         }
       }
     }
-    var expectedTotal = 0.0;
-    var expectedCount = 0;
-    final rankingIds = <String>{};
-    for (final id in ids) {
-      for (final ranking in await database.loadRankingsForPlayer(id)) {
-        if (ranking.type == RankingType.elo && rankingIds.add(ranking.id)) {
-          final snapshot = await LocalRankingEloService(
-            database: database,
-          ).calculate(ranking);
-          for (final item in snapshot.history[id] ?? const []) {
-            expectedTotal += item.expectedScore;
-            expectedCount++;
-          }
-        }
-      }
-    }
     return LocalPlayerStatistics(
       tournaments: playedTournamentIds.length,
       matches: matches,
@@ -174,12 +158,10 @@ class LocalStatisticsService {
       tournamentWins: tournamentWins,
       legsWon: legsWon,
       legsLost: legsLost,
+      legsDrawn: legsDrawn,
       setsWon: setsWon,
       setsLost: setsLost,
       bestPerformances: performances,
-      expectedWinChance: expectedCount == 0
-          ? null
-          : expectedTotal * 100 / expectedCount,
     );
   }
 
@@ -245,7 +227,6 @@ class LocalStatisticsService {
     for (final stage in tournament.runStages) {
       if (stage is KnockoutTournamentRunStage) {
         yield* stage.matches;
-        yield* stage.placementMatches;
       } else if (stage is GroupTournamentRunStage) {
         for (final group in stage.groups) {
           yield* group.matches;

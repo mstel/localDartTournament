@@ -10,8 +10,9 @@ ThemeData _buildTheme({required bool isDark}) {
   final gold = isDark ? const Color(0xFFD49B44) : const Color(0xFFB5811E);
   final bg = isDark ? const Color(0xFF121316) : const Color(0xFFF7F5F0);
   final surface = isDark ? const Color(0xFF1B1D24) : const Color(0xFFFFFFFF);
-  final surfaceSecondary =
-      isDark ? const Color(0xFF242731) : const Color(0xFFF1EFEA);
+  final surfaceSecondary = isDark
+      ? const Color(0xFF242731)
+      : const Color(0xFFF1EFEA);
 
   final scheme =
       (isDark
@@ -26,20 +27,26 @@ ThemeData _buildTheme({required bool isDark}) {
           .copyWith(
             primary: gold,
             onPrimary: isDark ? const Color(0xFF121316) : Colors.white,
-            primaryContainer:
-                isDark ? const Color(0xFF382B14) : const Color(0xFFFCEECF),
-            onPrimaryContainer:
-                isDark ? const Color(0xFFFDE8B5) : const Color(0xFF281C03),
-            secondary: isDark ? const Color(0xFFB0B4C0) : const Color(0xFF2D323E),
+            primaryContainer: isDark
+                ? const Color(0xFF382B14)
+                : const Color(0xFFFCEECF),
+            onPrimaryContainer: isDark
+                ? const Color(0xFFFDE8B5)
+                : const Color(0xFF281C03),
+            secondary: isDark
+                ? const Color(0xFFB0B4C0)
+                : const Color(0xFF2D323E),
             onSecondary: isDark ? const Color(0xFF121316) : Colors.white,
             secondaryContainer: surfaceSecondary,
             surface: surface,
             onSurface: ink,
-            onSurfaceVariant:
-                isDark ? const Color(0xFFA5AAB7) : const Color(0xFF5B606D),
+            onSurfaceVariant: isDark
+                ? const Color(0xFFA5AAB7)
+                : const Color(0xFF5B606D),
             outline: isDark ? const Color(0xFF3E4351) : const Color(0xFF757065),
-            outlineVariant:
-                isDark ? const Color(0xFF2A2E38) : const Color(0xFFE2DDD2),
+            outlineVariant: isDark
+                ? const Color(0xFF2A2E38)
+                : const Color(0xFFE2DDD2),
           );
 
   final base = ThemeData(
@@ -158,7 +165,13 @@ ThemeData _buildTheme({required bool isDark}) {
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: isDark ? const Color(0xFF282C36) : const Color(0xFF191B20),
+      backgroundColor: isDark
+          ? const Color(0xFF282C36)
+          : const Color(0xFF191B20),
+      contentTextStyle: base.textTheme.bodyMedium?.copyWith(
+        color: Colors.white,
+      ),
+      actionTextColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     dividerTheme: DividerThemeData(color: scheme.outlineVariant, space: 24),

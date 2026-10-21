@@ -1,3 +1,57 @@
+# Dart Tournament Manager 1.1.0+12
+
+## Daten sicher neu aufsetzen und Synchronisierung bewusst aktivieren
+
+- Sichert beim lokalen Zurücksetzen alle aktiven Stores und Sidecars
+  bytegetreu und verifiziert die Kopien vor dem Entfernen der aktiven Dateien.
+- Pausiert automatische Cloud-Synchronisierung nach einem lokalen Neustart mit
+  frischem Datenstand.
+- Verlangt eine ausdrückliche Bestätigung, bevor der lokale Stand den Cloud-
+  Datenstand des Kontos ersetzt.
+- Übernimmt den Schema-24-Kompatibilitätsbeleg nur bei exakter Übereinstimmung
+  des Turnierbestands; vorhandene Belege werden nie überschrieben.
+- Enthält die wiederhergestellte Feature-Parität sowie Regressionstests für
+  Dashboard, Turnierablauf, Ranglisten, Statistiken, Einstellungen und
+  responsive Ansichten.
+
+# Dart Tournament Manager 1.0.8+11 preview
+
+## Preserve schema-24 proof during account migration
+
+- Carries a legacy v22 proof file into an account-scoped workspace when copying
+  the corresponding tournament file.
+- For an already existing account workspace, copies a missing proof only when
+  the schema-22 document exactly matches the schema-24 data. Never overwrites
+  an existing proof or applies a proof for a different dataset.
+- Makes the local reset flow preserve a verified byte-for-byte snapshot and
+  pause automatic cloud synchronization; uploading a replacement cloud
+  snapshot requires explicit confirmation.
+
+# Dart Tournament Manager 1.0.8+10 preview
+
+## Startup recovery fix
+
+- Fixes the backup-store path mapping that blocked every Windows startup in
+  v1.0.8+9. The app now includes the schema-22 proof backup, SQLite database,
+  and planning settings at their correct paths.
+- Recovery startup errors now show the underlying exception and transaction
+  directory instead of presenting every setup failure as a failed restore.
+
+No local data files are deleted or replaced by this fix.
+
+# Dart Tournament Manager 1.0.8+9 preview
+
+## Feature parity and data safety
+
+- Restores the requested dashboard, tournament/TV, statistics, ranking-history,
+  tournament-results, and planning behavior with regression tests.
+- Rejects unknown SQLite and settings formats without modifying their files;
+  documented migrations and schema-24 recovery remain supported.
+- Improves the Windows update handoff and verifies the packaged update bundle.
+
+This preview does not merge device data. Back up each device separately before
+testing; preserve storage files if an unsupported-format warning appears.
+
 # Dart Tournament Manager 1.0.7+8
 
 ## Wiederhergestellte Funktionen und Kompatibilität

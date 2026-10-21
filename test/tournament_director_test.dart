@@ -99,8 +99,10 @@ void main() {
           ),
         );
         expect(find.text('Dashboard'), findsOneWidget);
-        expect(find.text('Fortschritt nach Etappen'), findsOneWidget);
-        expect(find.text('Bestleistungen'), findsOneWidget);
+        expect(find.text('Nächste 6 Spiele'), findsOneWidget);
+        expect(find.text('Letzte 2 Ergebnisse'), findsOneWidget);
+        expect(find.text('Fortschritt nach Etappen'), findsNothing);
+        expect(find.text('Bestleistungen'), findsNothing);
         expect(tester.takeException(), isNull);
         for (final section in ['Übersicht', 'Boards', 'Spiele']) {
           final tab = find.widgetWithText(ChoiceChip, section);
@@ -201,7 +203,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 24);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 25);
     },
   );
   testWidgets('director dashboard survives width changes', (tester) async {
@@ -290,6 +292,57 @@ void main() {
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('dashboard shows at most six upcoming and two recent matches', (
+    tester,
+  ) async {
+    final tournament = fixture();
+    final matches =
+        (tournament.runStages.single as GroupTournamentRunStage)
+            .groups
+            .single
+            .matches;
+    for (var index = 0; index < 3; index++) {
+      matches[index]
+        ..homeLegs = 3
+        ..awayLegs = 1
+        ..finishedAt = DateTime.utc(2026, 1, index + 1);
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final upcoming = find.ancestor(
+      of: find.text('Nächste 6 Spiele'),
+      matching: find.byType(Card),
+    ).first;
+    final recent = find.ancestor(
+      of: find.text('Letzte 2 Ergebnisse'),
+      matching: find.byType(Card),
+    ).first;
+    expect(
+      find.descendant(of: upcoming, matching: find.byType(ListTile)),
+      findsNWidgets(6),
+    );
+    expect(
+      find.descendant(of: recent, matching: find.byType(ListTile)),
+      findsNWidgets(2),
+    );
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets('save and synchronization errors stay visible and offer retry', (

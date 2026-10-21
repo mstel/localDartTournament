@@ -13,9 +13,8 @@ class TournamentStorage {
   TournamentStorage({File? file}) : _file = file;
 
   final File? _file;
-  // v1.0.3 wrote this schema; v1.0.4 lowered the reader limit without a
-  // corresponding data-format change or migration.
-  static const _schemaVersion = 24;
+  // Schema 24 is accepted only after exact verification against its v22 backup.
+  static const _schemaVersion = 25;
   static const _maximumDocumentBytes = 128 * 1024 * 1024;
 
   Future<T> _locked<T>(Future<T> Function() action) =>
@@ -46,6 +45,9 @@ class TournamentStorage {
         'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
       );
     }
+    if (version == 24) {
+      await _verifySchema24Backup(file, decoded);
+    }
     final tournaments = decoded['tournaments'];
     if (tournaments != null &&
         (tournaments is! List ||
@@ -53,6 +55,76 @@ class TournamentStorage {
       throw const FormatException('Beschädigte Turnierliste');
     }
     return decoded;
+  }
+
+  Future<void> _verifySchema24Backup(
+    File file,
+    Map<String, dynamic> document,
+  ) async {
+    final backup = File('${file.path}.v22.bak');
+    if (!await backup.exists()) {
+      throw FormatException(
+        'Turnierspeicher-Version 24 kann nur mit passender '
+        'tournaments.json.v22.bak gelesen werden. Die Sicherung fehlt am '
+        'erwarteten Speicherort: ${backup.path}. '
+        'Die Originaldatei wurde nicht verändert.',
+      );
+    }
+    if (await backup.length() > _maximumDocumentBytes) {
+      throw const FormatException(
+        'Die v22-Sicherung überschreitet die maximale Dateigröße. '
+        'Die Originaldatei wurde nicht verändert.',
+      );
+    }
+
+    dynamic backupDocument;
+    try {
+      backupDocument = jsonDecode(await backup.readAsString());
+    } on FormatException {
+      throw const FormatException(
+        'Die v22-Sicherung ist kein gültiges JSON. '
+        'Die Originaldatei wurde nicht verändert.',
+      );
+    }
+    if (backupDocument is! Map<String, dynamic> ||
+        backupDocument['schemaVersion'] != 22) {
+      throw const FormatException(
+        'Die vorhandene Sicherung ist keine gültige Turnierspeicher-Version 22. '
+        'Die Originaldatei wurde nicht verändert.',
+      );
+    }
+
+    final currentComparable = Map<String, dynamic>.from(document)
+      ..remove('schemaVersion');
+    final backupComparable = Map<String, dynamic>.from(backupDocument)
+      ..remove('schemaVersion');
+    if (!_sameJsonValue(currentComparable, backupComparable)) {
+      throw const FormatException(
+        'Turnierspeicher-Version 24 stimmt nicht exakt mit der '
+        'v22-Sicherung überein. Es wurden keine Daten verändert.',
+      );
+    }
+  }
+
+  bool _sameJsonValue(Object? left, Object? right) {
+    if (left is Map && right is Map) {
+      if (left.length != right.length) return false;
+      for (final entry in left.entries) {
+        if (!right.containsKey(entry.key) ||
+            !_sameJsonValue(entry.value, right[entry.key])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (left is List && right is List) {
+      if (left.length != right.length) return false;
+      for (var index = 0; index < left.length; index++) {
+        if (!_sameJsonValue(left[index], right[index])) return false;
+      }
+      return true;
+    }
+    return left == right;
   }
 
   Future<void> _writeDocument(Map<String, dynamic> document) async {

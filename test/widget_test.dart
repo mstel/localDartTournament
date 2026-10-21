@@ -264,7 +264,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
-    expect(find.text('Neues Turnier · KO pur'), findsOneWidget);
+    expect(find.text('Neues Turnier (Normales Turnier)'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1603,8 +1603,9 @@ void main() {
     await tester.pumpAndSettle();
     await selectTournamentDashboard(tester);
 
-    expect(find.text('Neues Turnier · Vorrunde'), findsOneWidget);
-    expect(find.text('Gruppe A'), findsWidgets);
+    expect(find.text('Neues Turnier (Normales Turnier)'), findsOneWidget);
+    expect(find.text('Nächste 6 Spiele'), findsOneWidget);
+    expect(find.text('Letzte 2 Ergebnisse'), findsOneWidget);
     expect(find.text('Runde 1'), findsNothing);
 
     await selectTournamentStage(tester, '2. Endrunde');
@@ -1682,10 +1683,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Endrunde'), findsWidgets);
-    expect(find.textContaining('Spielansetzungen'), findsOneWidget);
-    expect(
-      find.textContaining('Aktuelle & nächste Begegnungen'),
-      findsOneWidget,
-    );
+    expect(find.text('Nächste 6 Spiele'), findsOneWidget);
+    expect(find.text('Letzte 2 Ergebnisse'), findsOneWidget);
   });
 }

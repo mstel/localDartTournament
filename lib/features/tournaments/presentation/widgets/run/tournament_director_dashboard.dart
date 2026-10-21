@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../domain/engines/board_scheduling_engine.dart';
 import 'tournament_second_screen_view.dart';
 
 /// Embedded tournament controls for match scheduling and result entry.
@@ -98,73 +99,6 @@ class _TournamentDirectorDashboardState
     ),
   );
 
-  Iterable<GroupMatch> _stageMatches(TournamentRunStage stage) sync* {
-    if (stage is GroupTournamentRunStage) {
-      for (final group in stage.groups) {
-        yield* group.matches;
-        yield* group.knockoutRounds.expand((round) => round);
-        yield* group.placementMatches;
-      }
-    } else if (stage is KnockoutTournamentRunStage) {
-      yield* stage.matches;
-      yield* stage.placementMatches;
-    }
-  }
-
-  Widget _stageProgressPanel(CreatedTournament tournament) => _box([
-    Text(
-      'Fortschritt nach Etappen',
-      style: Theme.of(context).textTheme.titleLarge,
-    ),
-    const SizedBox(height: 8),
-    for (final stage in tournament.runStages) ...[
-      Builder(
-        builder: (context) {
-          final matches = _stageMatches(
-            stage,
-          ).where((match) => match.hasPlayers).toList();
-          final completed = matches.where((match) => match.isResolved).length;
-          final progress = matches.isEmpty ? 0.0 : completed / matches.length;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('${stage.name} · $completed von ${matches.length}'),
-                const SizedBox(height: 4),
-                LinearProgressIndicator(value: progress),
-              ],
-            ),
-          );
-        },
-      ),
-    ],
-  ]);
-
-  Widget _bestPerformancePanel(CreatedTournament tournament) {
-    final performances = [
-      for (final stage in tournament.runStages)
-        for (final match in _stageMatches(stage)) ...match.bestPerformances,
-    ];
-    return _box([
-      Text('Bestleistungen', style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(height: 8),
-      if (performances.isEmpty)
-        const Text('Noch keine Bestleistungen erfasst.')
-      else
-        for (final performance in performances.take(8))
-          ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.military_tech_outlined),
-            title: Text(
-              '${performance.label}${performance.value == null ? '' : ' · ${performance.value}'}',
-            ),
-            subtitle: Text(performance.playerName),
-          ),
-    ]);
-  }
-
   Widget _button(
     String label,
     VoidCallback? action, {
@@ -182,6 +116,43 @@ class _TournamentDirectorDashboardState
   String _timeOfDay(DateTime t) =>
       '${t.toLocal().hour.toString().padLeft(2, '0')}:${t.toLocal().minute.toString().padLeft(2, '0')} Uhr';
 
+  Widget _matchQueue(
+    String title,
+    List<PlayEntry> entries, {
+    required String emptyMessage,
+    bool showResult = false,
+  }) => _box([
+    Text(title, style: Theme.of(context).textTheme.titleLarge),
+    const SizedBox(height: 4),
+    if (entries.isEmpty)
+      Text(emptyMessage)
+    else
+      for (final entry in entries)
+        ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(
+            showResult ? Icons.check_circle_outline : Icons.sports_score,
+          ),
+          title: Text(
+            '${entry.match.homePlayer?.name ?? 'Freilos'} · '
+            '${entry.match.awayPlayer?.name ?? 'Freilos'}',
+          ),
+          subtitle: Text(
+            showResult
+                ? entry.origin
+                : 'Etappe ${entry.stageIndex + 1}'
+                      '${entry.match.boardNumber == null ? '' : ' · Board ${entry.match.boardNumber}'}',
+          ),
+          trailing: showResult
+              ? Text(
+                  '${entry.match.homeLegs ?? 0}:${entry.match.awayLegs ?? 0}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                )
+              : null,
+        ),
+  ]);
+
   @override
   Widget build(BuildContext context) => _build(context);
 
@@ -197,6 +168,32 @@ class _TournamentDirectorDashboardState
     final waiting = state.schedule.waiting
         .where((e) => e.stageIndex == widget.activeStage && !e.match.isResolved)
         .length;
+    final upcoming = state.schedule.planned
+        .where(
+          (assignment) =>
+              assignment.entry.stageIndex == widget.activeStage &&
+              assignment.entry.match.hasPlayers,
+        )
+        .take(6)
+        .map((assignment) => assignment.entry)
+        .toList();
+    final recentResults =
+        state.entries
+            .where(
+              (entry) =>
+                  entry.stageIndex == widget.activeStage &&
+                  entry.match.hasPlayers &&
+                  entry.match.hasResult,
+            )
+            .toList()
+          ..sort((a, b) {
+            final aTime = a.match.finishedAt;
+            final bTime = b.match.finishedAt;
+            if (aTime == null) return bTime == null ? 0 : 1;
+            if (bTime == null) return -1;
+            return bTime.compareTo(aTime);
+          });
+    final latestResults = recentResults.take(2).toList();
     // Prüfe auf Ungleichgewicht der absolvierten Spiele pro Spieler in Gruppen
     final List<String> flowNotices = [];
     if (t.runStages[widget.activeStage] is GroupTournamentRunStage) {
@@ -255,36 +252,6 @@ class _TournamentDirectorDashboardState
     final progressPct = totalGames > 0
         ? ((completed / totalGames) * 100).round()
         : 0;
-
-    final heroBoard = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TournamentSecondScreenView(tournament: t),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (ctx) => Dialog.fullscreen(
-                child: TournamentSecondScreenView(
-                  tournament: t,
-                  isStandaloneWindow: true,
-                ),
-              ),
-            ),
-            child: const Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 6,
-              children: [
-                Icon(Icons.open_in_new, size: 18),
-                Text('2. Bildschirm (TV-Vollbild) öffnen'),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
 
     final status = _box([
       Wrap(
@@ -390,6 +357,22 @@ class _TournamentDirectorDashboardState
             'Spielstart derzeit gesperrt: Etappenfreigabe oder Auslosung abwarten.',
           ),
         ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (context) => Dialog.fullscreen(
+              child: TournamentSecondScreenView(
+                tournament: t,
+                isStandaloneWindow: true,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('2. Bildschirm (TV-Vollbild) öffnen'),
+        ),
+      ),
     ]);
 
     final notices = _box([
@@ -466,85 +449,26 @@ class _TournamentDirectorDashboardState
           'Keine akuten Probleme erkannt. Der Turnierbetrieb läuft flüssig.',
         ),
     ]);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide =
-            constraints.maxWidth >= 1000 &&
-            MediaQuery.textScalerOf(context).scale(16) <= 24;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (widget.saveError != null) ...[
-              Card(
-                color: Theme.of(context).colorScheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          widget.saveError!,
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onErrorContainer,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Speichern erneut versuchen'),
-                        onPressed: () => _act(widget.onChange),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (wide)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        status,
-                        const SizedBox(height: 12),
-                        notices,
-                        const SizedBox(height: 12),
-                        _stageProgressPanel(t),
-                        const SizedBox(height: 12),
-                        _bestPerformancePanel(t),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(flex: 7, child: heroBoard),
-                ],
-              )
-            else ...[
-              heroBoard,
-              const SizedBox(height: 12),
-              notices,
-              const SizedBox(height: 12),
-              status,
-              const SizedBox(height: 12),
-              _stageProgressPanel(t),
-              const SizedBox(height: 12),
-              _bestPerformancePanel(t),
-            ],
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        notices,
+        const SizedBox(height: 12),
+        status,
+        const SizedBox(height: 12),
+        _matchQueue(
+          'Nächste 6 Spiele',
+          upcoming,
+          emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+        ),
+        const SizedBox(height: 12),
+        _matchQueue(
+          'Letzte 2 Ergebnisse',
+          latestResults,
+          emptyMessage: 'Noch keine Ergebnisse in dieser Etappe.',
+          showResult: true,
+        ),
+      ],
     );
   }
 }

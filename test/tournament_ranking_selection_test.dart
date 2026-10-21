@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_run_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
@@ -44,12 +44,14 @@ void main() {
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      final controller = _ControlledRunController();
+      final storage = _RecordingTournamentStorage();
       final tournament = fixture()
         ..countsForRanking = true
         ..rankingIds.add('club-ranking')
         ..plannedMinutes = 45
         ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'));
+      await storage.saveTournament(tournament);
+      final controller = _ControlledRunController(storage: storage);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -76,15 +78,38 @@ void main() {
       expect(tournament.rankingIds, isEmpty);
       expect(tester.widget<SwitchListTile>(setting).onChanged, isNull);
       controller.completePendingSave();
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
       expect(tester.widget<SwitchListTile>(setting).value, isFalse);
       expect(tester.widget<SwitchListTile>(setting).onChanged, isNotNull);
+      final persisted = (await storage.loadTournaments()).single;
+      expect(persisted.countsForRanking, isFalse);
+      expect(persisted.rankingIds, isEmpty);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
 }
 
+class _RecordingTournamentStorage extends TournamentStorage {
+  Map<String, dynamic>? _savedTournament;
+
+  @override
+  Future<void> saveTournament(CreatedTournament tournament) async {
+    _savedTournament = tournament.toJson();
+  }
+
+  @override
+  Future<List<CreatedTournament>> loadTournaments() async {
+    final saved = _savedTournament;
+    return saved == null
+        ? []
+        : [CreatedTournament.fromJson(Map<String, dynamic>.from(saved))];
+  }
+}
+
 class _ControlledRunController extends TournamentRunController {
+  _ControlledRunController({required TournamentStorage storage})
+    : super(storage: storage);
   final _pendingSave = Completer<void>();
   var _saveCount = 0;
 
@@ -95,7 +120,14 @@ class _ControlledRunController extends TournamentRunController {
     required Set<int> completedStageIndexes,
   }) async {
     _saveCount++;
-    if (_saveCount > 1) await _pendingSave.future;
+    if (_saveCount > 1) {
+      await _pendingSave.future;
+      await super.saveProgress(
+        tournament: tournament,
+        activeStageIndex: activeStageIndex,
+        completedStageIndexes: completedStageIndexes,
+      );
+    }
   }
 
   void completePendingSave() {

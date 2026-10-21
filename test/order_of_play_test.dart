@@ -38,18 +38,23 @@ CreatedTournament fixture({int boards = 2}) {
 
 void main() {
   const controller = OrderOfPlayController();
-  test('participant suggestion excludes busy opponents and occupied boards', () {
-    final t = fixture();
-    final first = controller.suggestForPlayer(t, 0, t.players.first)!;
-    expect(controller.start(t, 0, first.entry.match, first.board), true);
-    expect(controller.suggestForPlayer(t, 0, t.players.first), isNull);
-    final idle = t.players.firstWhere((p) => !first.entry.players.contains(p.name));
-    final next = controller.suggestForPlayer(t, 0, idle)!;
-    expect(next.board, isNot(first.board));
-    expect(next.entry.players.intersection(first.entry.players), isEmpty);
-    expect(controller.start(t, 0, next.entry.match, next.board), true);
-    expect(controller.suggestForPlayer(t, 0, t.players.last), isNull);
-  });
+  test(
+    'participant suggestion excludes busy opponents and occupied boards',
+    () {
+      final t = fixture();
+      final first = controller.suggestForPlayer(t, 0, t.players.first)!;
+      expect(controller.start(t, 0, first.entry.match, first.board), true);
+      expect(controller.suggestForPlayer(t, 0, t.players.first), isNull);
+      final idle = t.players.firstWhere(
+        (p) => !first.entry.players.contains(p.name),
+      );
+      final next = controller.suggestForPlayer(t, 0, idle)!;
+      expect(next.board, isNot(first.board));
+      expect(next.entry.players.intersection(first.entry.players), isEmpty);
+      expect(controller.start(t, 0, next.entry.match, next.board), true);
+      expect(controller.suggestForPlayer(t, 0, t.players.last), isNull);
+    },
+  );
   test('all matches scheduled once with no board or player conflicts', () {
     for (final boards in [1, 2, 3, 4]) {
       final tournament = fixture(boards: boards);
@@ -66,6 +71,44 @@ void main() {
         );
       }
     }
+  });
+  test('queue prefers a two-block rest before reusing a recent player', () {
+    final players = [
+      TournamentPlayer.generated(101),
+      TournamentPlayer.generated(102),
+      TournamentPlayer.generated(103),
+      TournamentPlayer.generated(104),
+    ];
+    final recentlyPlayed = GroupMatch(
+      homePlayer: players[0],
+      awayPlayer: players[1],
+      round: 1,
+      homeLegs: 2,
+      awayLegs: 1,
+    );
+    final reuseRecentPlayer = GroupMatch(
+      homePlayer: players[0],
+      awayPlayer: players[2],
+      round: 2,
+    );
+    final playRestedPair = GroupMatch(
+      homePlayer: players[2],
+      awayPlayer: players[3],
+      round: 2,
+    );
+    final pastEntry = PlayEntry(recentlyPlayed, 0, 'Gruppen');
+    final reuseEntry = PlayEntry(reuseRecentPlayer, 0, 'Gruppen');
+    final restedEntry = PlayEntry(playRestedPair, 0, 'Gruppen');
+
+    final schedule = const BoardSchedulingEngine().schedule(
+      all: [pastEntry, reuseEntry, restedEntry],
+      ready: [reuseEntry, restedEntry],
+      finished: [pastEntry],
+      boardCount: 1,
+    );
+
+    expect(BoardSchedulingEngine.preferredPlayerRestBlocks, 2);
+    expect(schedule.first.entry, same(restedEntry));
   });
   test(
     'starting a later match replans and prevents concurrent player/board use',
@@ -141,7 +184,10 @@ void main() {
     final schedule = controller.plan(restored, 0);
     expect(schedule.finished.length, 1);
     expect(schedule.planned.length, 14);
-    expect(schedule.planned.first.entry.players.intersection(pulled.players), isEmpty);
+    expect(
+      schedule.planned.first.entry.players.intersection(pulled.players),
+      isEmpty,
+    );
     final finished = schedule.finished.single.match;
     finished.homeLegs = null;
     finished.awayLegs = null;

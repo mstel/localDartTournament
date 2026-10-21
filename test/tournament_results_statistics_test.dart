@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/results/tournament_results_statistics.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'support/recorded_match.dart';
@@ -76,27 +78,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('results show highlights and player statistics inline', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(home: TournamentResultsPage(tournament: resultsFixture())),
-    );
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Spielerstatistiken'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.scrollUntilVisible(
-      find.textContaining('Gewonnene / verlorene Legs').first,
-      150,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.textContaining('Gewonnene / verlorene Legs'), findsWidgets);
-    expect(find.byType(TournamentResultsPage), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'results keep statistics out of the overview and expose details',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TournamentResultsPage(
+            tournament: resultsFixture(),
+            database: _EmptyRankingDatabase(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Spielerstatistiken'), findsNothing);
+      expect(find.textContaining('Gewonnene / verlorene Legs'), findsNothing);
+      final player = find.text('Anna Musterfrau').first;
+      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      await tester.tap(player);
+      await tester.pumpAndSettle();
+      expect(find.text('Ergebnisse von Anna Musterfrau'), findsOneWidget);
+      expect(find.text('1 Siege aus 1 gewerteten Begegnungen'), findsOneWidget);
+      expect(find.byType(TournamentPlayerResultsPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'manual results retain player stats without invented scorer highlights',
     (tester) async {
@@ -142,7 +148,10 @@ void main() {
             ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
-          home: TournamentResultsPage(tournament: resultsFixture()),
+          home: TournamentResultsPage(
+            tournament: resultsFixture(),
+            database: _EmptyRankingDatabase(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -154,4 +163,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+}
+
+class _EmptyRankingDatabase extends LocalAppDatabase {
+  @override
+  Future<List<LocalRanking>> loadLocalRankings() async => const [];
 }

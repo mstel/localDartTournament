@@ -1,4 +1,6 @@
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_advancement_forecast_engine.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
 import 'package:flutter/material.dart';
@@ -77,6 +79,38 @@ void main() {
     await tester.tap(find.text('Vorschau schließen'));
     await tester.pump();
     expect(find.text('Zuletzt beendete Matches'), findsOneWidget);
+  });
+
+  testWidgets('forecast tab shows tournament and advancement probabilities', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final forecastService = _FixedForecastService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _tournament(),
+            isStandaloneWindow: true,
+            forecastService: forecastService,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Siegprognose & Weiterkommen'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('KO-Prognose & Weiterkommen'), findsOneWidget);
+    expect(find.textContaining('73.0 % Sieg'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('88.0 % weiter'), findsAtLeastNWidgets(1));
+    expect(forecastService.calls, 1);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('shows a separate progress row for each group', (tester) async {
@@ -409,4 +443,25 @@ CreatedTournament _tournament() {
       ),
     ],
   );
+}
+
+class _FixedForecastService extends GroupAdvancementForecastService {
+  _FixedForecastService() : super(simulations: 1);
+
+  int calls = 0;
+
+  @override
+  Future<Map<String, AdvancementChance>> calculate({
+    required CreatedTournament tournament,
+    required GroupTournamentRunStage stage,
+  }) async {
+    calls++;
+    return {
+      for (final player in stage.groups.expand((group) => group.players))
+        player.profileId ?? player.name: const AdvancementChance(
+          groupWinProbability: 73,
+          advancementProbability: 88,
+        ),
+    };
+  }
 }

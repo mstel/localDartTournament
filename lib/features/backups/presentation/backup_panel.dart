@@ -61,9 +61,10 @@ class _BackupPanelState extends State<BackupPanel> {
       context: context,
       builder: (context) => const _SelectiveCategoryDialog(
         title: 'Backup exportieren',
-        description: 'Wähle die Kategorien aus, die in der Datei gesichert werden sollen:',
+        description:
+            'Wähle die Kategorien aus, die in der Datei gesichert werden sollen:',
         confirmLabel: 'Exportieren',
-        availableFiles: BackupService.names,
+        availableFiles: BackupService.categoryNames,
       ),
     );
     if (categories == null || categories.isEmpty) return;
@@ -105,7 +106,9 @@ class _BackupPanelState extends State<BackupPanel> {
             '${preview.tournaments} Turniere in der Datei gefunden.\n\n'
             'Wähle die Kategorien aus, die du wiederherstellen möchtest (nicht ausgewählte bleiben unverändert):',
         confirmLabel: 'Wiederherstellen',
-        availableFiles: preview.files,
+        availableFiles: preview.files
+            .where((file) => BackupService.categoryNames.contains(file))
+            .toList(),
         warning:
             'Die ausgewählten Kategorien werden durch das Backup überschrieben. '
             'Vorher wird dein aktueller Stand automatisch gesichert.',
