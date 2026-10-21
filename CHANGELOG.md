@@ -1,3 +1,16 @@
+# Dart Tournament Manager 1.0.8+11 preview
+
+## Preserve schema-24 proof during account migration
+
+- Carries a legacy v22 proof file into an account-scoped workspace when copying
+  the corresponding tournament file.
+- For an already existing account workspace, copies a missing proof only when
+  the schema-22 document exactly matches the schema-24 data. Never overwrites
+  an existing proof or applies a proof for a different dataset.
+- Makes the local reset flow preserve a verified byte-for-byte snapshot and
+  pause automatic cloud synchronization; uploading a replacement cloud
+  snapshot requires explicit confirmation.
+
 # Dart Tournament Manager 1.0.8+10 preview
 
 ## Startup recovery fix

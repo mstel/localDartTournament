@@ -38,15 +38,26 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Wrap(spacing: 8, runSpacing: 4, children: [
-              for (var i = 0; i < _sections.length; i++)
-                ChoiceChip(
-                  label: Text(_sections[i]),
-                  avatar: Icon([Icons.storage, Icons.system_update_outlined, Icons.palette, Icons.settings_outlined][i]),
-                  selected: _selected == i,
-                  onSelected: (_) => setState(() => _selected = i),
-                ),
-            ]),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (var i = 0; i < _sections.length; i++)
+                  ChoiceChip(
+                    label: Text(_sections[i]),
+                    avatar: Icon(
+                      [
+                        Icons.storage,
+                        Icons.system_update_outlined,
+                        Icons.palette,
+                        Icons.settings_outlined,
+                      ][i],
+                    ),
+                    selected: _selected == i,
+                    onSelected: (_) => setState(() => _selected = i),
+                  ),
+              ],
+            ),
           ),
           Expanded(
             child: switch (_selected) {
@@ -72,7 +83,9 @@ class _DataPanel extends StatelessWidget {
       child: ListTile(
         leading: const Icon(Icons.restart_alt),
         title: const Text('Lokale App-Daten zurücksetzen'),
-        subtitle: const Text('Erstellt zuerst ein Wiederherstellungs-Backup.'),
+        subtitle: const Text(
+          'Sichert lokale Dateien bytegetreu; Cloud und andere Geräte bleiben unberührt.',
+        ),
         onTap: onReset,
       ),
     ),
@@ -86,7 +99,10 @@ class _AdministrationPanel extends StatelessWidget {
   Widget build(BuildContext context) => AdaptiveContentList(
     padding: const EdgeInsets.all(20),
     children: [
-      Text('Werkzeuge & Verwaltung', style: Theme.of(context).textTheme.headlineSmall),
+      Text(
+        'Werkzeuge & Verwaltung',
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
       const SizedBox(height: 16),
       const PushSenderMenu(),
       const PushDeviceMenu(),
@@ -94,14 +110,18 @@ class _AdministrationPanel extends StatelessWidget {
         child: ListTile(
           leading: const Icon(Icons.lightbulb_outline),
           title: const Text('Govee Licht-Hub'),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const GoveeHubPage())),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const GoveeHubPage())),
         ),
       ),
       Card(
         child: ListTile(
           leading: const Icon(Icons.science_outlined),
           title: const Text('Dev Tools'),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DevToolsPage())),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const DevToolsPage())),
         ),
       ),
       Card(
@@ -109,7 +129,9 @@ class _AdministrationPanel extends StatelessWidget {
           leading: const Icon(Icons.auto_awesome_outlined),
           title: const Text('Passende Turnierform'),
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const PlanningParametersPage()),
+            MaterialPageRoute<void>(
+              builder: (_) => const PlanningParametersPage(),
+            ),
           ),
         ),
       ),
@@ -138,7 +160,7 @@ Future<void> _resetLocalData(BuildContext context) async {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Lokale Turniere, Spieler, Ranglisten und Einstellungen werden entfernt. Vorher wird ein Backup angelegt. Das Supabase-Backup bleibt davon unberührt.',
+            'Die aktiven lokalen Turniere, Spieler, Ergebnisse, Ranglisten, Statistiken und Planungseinstellungen dieses Geräts werden nach einer bytegetreuen Sicherung entfernt. Deine Anmeldung und übrigen App-Einstellungen bleiben erhalten. Cloud-Daten und andere Geräte bleiben unberührt. Die Synchronisierung wird pausiert, damit keine alten Cloud-Daten zurückgeladen oder neue lokale Daten automatisch hochgeladen werden. Ein neuer Stand bleibt lokal, bis du ihn ausdrücklich als Cloud-Stand freigibst.',
           ),
           const SizedBox(height: 16),
           TextField(

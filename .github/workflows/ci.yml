@@ -407,7 +407,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
-          prerelease: ${{ github.ref_name == 'v1.0.8+9' || github.ref_name == 'v1.0.8+10' }}
+          prerelease: ${{ github.ref_name == 'v1.0.8+9' || github.ref_name == 'v1.0.8+10' || github.ref_name == 'v1.0.8+11' }}
           body_path: docs/releases/${{ github.ref_name }}.md
           files: |
             release-assets/windows-x64/dart-turnier-windows-x64.zip

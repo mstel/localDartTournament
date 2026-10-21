@@ -16,6 +16,10 @@ import '../data/supabase_backup_repository.dart';
 /// pulled when the local account workspace has no unpushed edits.
 class SupabaseWorkspaceSyncService {
   static final instance = SupabaseWorkspaceSyncService._();
+  static const _localOnlyPreview = bool.fromEnvironment(
+    'LOCAL_ONLY_PREVIEW',
+    defaultValue: false,
+  );
 
   SupabaseWorkspaceSyncService._()
     : _repository = SupabaseBackupRepository(),
@@ -32,6 +36,7 @@ class SupabaseWorkspaceSyncService {
   final Duration _debounce;
   Timer? _timer;
   bool _busy = false;
+  bool _pausePending = false;
   bool _started = false;
   late final VoidCallback _changeListener = _onLocalChange;
 
@@ -43,14 +48,33 @@ class SupabaseWorkspaceSyncService {
   }
 
   Future<void> activateAccount(String? accountId) async {
-    if (accountId == null) return;
+    if (accountId == null || _localOnlyPreview) return;
     final accountDirectory = await appDataDirectory();
-    final stateFile = File(path.join(accountDirectory.path, 'supabase_sync_state.json'));
-    final localWorkspaceExists = await File(path.join(accountDirectory.path, 'tournaments.json')).exists() ||
-        await File(path.join(accountDirectory.path, 'app_database.sqlite')).exists();
-    final legacyDirectory = await appDataDirectory(includeSupabaseAccount: false);
-    final ownerMarker = File(path.join(legacyDirectory.path, 'supabase_workspace_owner'));
+    final stateFile = File(
+      path.join(accountDirectory.path, 'supabase_sync_state.json'),
+    );
+    final localWorkspaceExists =
+        await File(
+          path.join(accountDirectory.path, 'tournaments.json'),
+        ).exists() ||
+        await File(
+          path.join(accountDirectory.path, 'app_database.sqlite'),
+        ).exists();
+    final legacyDirectory = await appDataDirectory(
+      includeSupabaseAccount: false,
+    );
+    final ownerMarker = File(
+      path.join(legacyDirectory.path, 'supabase_workspace_owner'),
+    );
     if (localWorkspaceExists) {
+      await copyMatchingSchema24Proof(
+        activeTournamentFile: File(
+          path.join(accountDirectory.path, 'tournaments.json'),
+        ),
+        sourceProofFile: File(
+          path.join(legacyDirectory.path, 'tournaments.json.v22.bak'),
+        ),
+      );
       await ownerMarker.parent.create(recursive: true);
       if (!await ownerMarker.exists()) {
         await ownerMarker.writeAsString(accountId, flush: true);
@@ -71,7 +95,11 @@ class SupabaseWorkspaceSyncService {
       await ownerMarker.writeAsString(accountId, flush: true);
       return;
     }
-    final files = ['tournaments.json', 'app_database.sqlite', 'planning_settings.json'];
+    final files = [
+      'tournaments.json',
+      'app_database.sqlite',
+      'planning_settings.json',
+    ];
     var copied = false;
     for (final name in files) {
       final source = File(path.join(legacyDirectory.path, name));
@@ -80,6 +108,19 @@ class SupabaseWorkspaceSyncService {
       await target.parent.create(recursive: true);
       await source.copy(target.path);
       copied = true;
+    }
+    final legacyTournamentFile = File(
+      path.join(legacyDirectory.path, 'tournaments.json'),
+    );
+    final accountTournamentFile = File(
+      path.join(accountDirectory.path, 'tournaments.json'),
+    );
+    if (await legacyTournamentFile.exists()) {
+      final sourceProof = File('${legacyTournamentFile.path}.v22.bak');
+      final targetProof = File('${accountTournamentFile.path}.v22.bak');
+      if (await sourceProof.exists() && !await targetProof.exists()) {
+        await sourceProof.copy(targetProof.path);
+      }
     }
     await ownerMarker.parent.create(recursive: true);
     await ownerMarker.writeAsString(accountId, flush: true);
@@ -92,6 +133,36 @@ class SupabaseWorkspaceSyncService {
     // The state file is account-scoped; creating it here also makes a later
     // sync distinguish this account from the legacy local-only store.
     if (!await stateFile.exists()) await _writeState({'dirty': copied});
+  }
+
+  /// Copies only a genuine matching schema-22 proof; never replaces a proof.
+  static Future<bool> copyMatchingSchema24Proof({
+    required File activeTournamentFile,
+    required File sourceProofFile,
+  }) async {
+    final targetProofFile = File('${activeTournamentFile.path}.v22.bak');
+    if (await targetProofFile.exists() ||
+        !await activeTournamentFile.exists() ||
+        !await sourceProofFile.exists()) {
+      return false;
+    }
+
+    final current = jsonDecode(await activeTournamentFile.readAsString());
+    final proof = jsonDecode(await sourceProofFile.readAsString());
+    if (current is! Map<String, dynamic> ||
+        current['schemaVersion'] != 24 ||
+        proof is! Map<String, dynamic> ||
+        proof['schemaVersion'] != 22) {
+      return false;
+    }
+    final currentComparable = Map<String, dynamic>.from(current)
+      ..remove('schemaVersion');
+    final proofComparable = Map<String, dynamic>.from(proof)
+      ..remove('schemaVersion');
+    if (!_sameJsonValue(currentComparable, proofComparable)) return false;
+
+    await sourceProofFile.copy(targetProofFile.path);
+    return true;
   }
 
   Future<void> _prepareAndSynchronize() async {
@@ -114,10 +185,9 @@ class SupabaseWorkspaceSyncService {
     _timer = Timer(delay, () => unawaited(synchronize()));
   }
 
-  Future<File> get _stateFile async => File(path.join(
-    (await appDataDirectory()).path,
-    'supabase_sync_state.json',
-  ));
+  Future<File> get _stateFile async => File(
+    path.join((await appDataDirectory()).path, 'supabase_sync_state.json'),
+  );
 
   Future<Map<String, dynamic>> _readState() async {
     final file = await _stateFile;
@@ -141,12 +211,19 @@ class SupabaseWorkspaceSyncService {
   Future<void> _setDirty(bool dirty) async {
     final state = await _readState();
     state['dirty'] = dirty;
-    if (dirty) state['lastLocalChangeAt'] = DateTime.now().toUtc().toIso8601String();
+    if (dirty) {
+      state['lastLocalChangeAt'] = DateTime.now().toUtc().toIso8601String();
+    }
     await _writeState(state);
   }
 
   Future<void> synchronize() async {
-    if (_busy) return;
+    if (_localOnlyPreview) {
+      status.value =
+          'Lokaler Testmodus · automatische Cloud-Synchronisierung ist deaktiviert';
+      return;
+    }
+    if (_busy || _pausePending) return;
     try {
       if (Supabase.instance.client.auth.currentUser == null) {
         status.value = 'Nicht angemeldet · lokal gespeichert';
@@ -158,16 +235,23 @@ class SupabaseWorkspaceSyncService {
     _busy = true;
     try {
       final state = await _readState();
+      if (state['syncPaused'] == true) {
+        status.value =
+            'Synchronisierung pausiert · neuer lokaler Datenstand bleibt auf diesem Gerät';
+        return;
+      }
       if (!await _repository.hasBackup()) {
         await _push(state);
         return;
       }
       final remote = await _repository.download(await BackupService.create());
       final lastSynced = DateTime.tryParse('${state['lastSyncedAt'] ?? ''}');
-      final remoteIsNewer = lastSynced == null || remote.createdAt.isAfter(lastSynced);
+      final remoteIsNewer =
+          lastSynced == null || remote.createdAt.isAfter(lastSynced);
       if (state['dirty'] == true) {
         if (remoteIsNewer) {
-          status.value = 'Cloud und dieses Gerät haben Änderungen · Abgleich erforderlich';
+          status.value =
+              'Cloud und dieses Gerät haben Änderungen · Abgleich erforderlich';
           return;
         }
         await _push(state);
@@ -176,7 +260,10 @@ class SupabaseWorkspaceSyncService {
       if (remoteIsNewer) {
         status.value = 'Lade neueren Datenstand aus Supabase …';
         await (await BackupService.create()).restore(remote, restartApp: false);
-        await _writeState({'dirty': false, 'lastSyncedAt': remote.createdAt.toUtc().toIso8601String()});
+        await _writeState({
+          'dirty': false,
+          'lastSyncedAt': remote.createdAt.toUtc().toIso8601String(),
+        });
         status.value = 'Aktueller Datenstand aus Supabase geladen';
       } else {
         status.value = 'Mit Supabase synchronisiert';
@@ -188,19 +275,48 @@ class SupabaseWorkspaceSyncService {
     }
   }
 
+  static bool _sameJsonValue(Object? left, Object? right) {
+    if (left is Map && right is Map) {
+      if (left.length != right.length) return false;
+      for (final entry in left.entries) {
+        if (!right.containsKey(entry.key) ||
+            !_sameJsonValue(entry.value, right[entry.key])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (left is List && right is List) {
+      if (left.length != right.length) return false;
+      for (var index = 0; index < left.length; index++) {
+        if (!_sameJsonValue(left[index], right[index])) return false;
+      }
+      return true;
+    }
+    return left == right;
+  }
+
   Future<void> _push(Map<String, dynamic> state) async {
     status.value = 'Sichere Änderungen in Supabase …';
     final timestamp = await _repository.upload(await BackupService.create());
-    await _writeState({'dirty': false, 'lastSyncedAt': timestamp.toUtc().toIso8601String()});
+    await _writeState({
+      'dirty': false,
+      'lastSyncedAt': timestamp.toUtc().toIso8601String(),
+    });
     status.value = 'Mit Supabase synchronisiert';
   }
 
   /// User-confirmed resolution for simultaneous offline changes.
   Future<void> uploadLocalVersion() async {
+    if (_pausePending) return;
     if (_busy) return;
     _busy = true;
     try {
-      await _push(await _readState());
+      final state = await _readState();
+      state.remove('syncPaused');
+      state['dirty'] = true;
+      await _writeState(state);
+      await _push(state);
     } finally {
       _busy = false;
     }
@@ -208,16 +324,40 @@ class SupabaseWorkspaceSyncService {
 
   /// User-confirmed resolution that replaces the local account workspace.
   Future<void> downloadRemoteVersion() async {
+    if (_pausePending) return;
     if (_busy) return;
     _busy = true;
     try {
       final backups = await BackupService.create();
       final remote = await _repository.download(backups);
       await backups.restore(remote, restartApp: false);
-      await _writeState({'dirty': false, 'lastSyncedAt': remote.createdAt.toUtc().toIso8601String()});
+      await _writeState({
+        'dirty': false,
+        'lastSyncedAt': remote.createdAt.toUtc().toIso8601String(),
+      });
       status.value = 'Cloud-Datenstand geladen';
     } finally {
       _busy = false;
+    }
+  }
+
+  /// Pauses every automatic cloud operation before this device is reset.
+  Future<void> pauseSynchronizationForFreshStart() async {
+    _pausePending = true;
+    _timer?.cancel();
+    try {
+      while (_busy) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      }
+      final state = await _readState();
+      state['syncPaused'] = true;
+      state['dirty'] = true;
+      state['lastLocalChangeAt'] = DateTime.now().toUtc().toIso8601String();
+      await _writeState(state);
+      status.value =
+          'Synchronisierung pausiert · neuer lokaler Datenstand bleibt auf diesem Gerät';
+    } finally {
+      _pausePending = false;
     }
   }
 
