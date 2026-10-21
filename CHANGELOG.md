@@ -1,3 +1,19 @@
+# Dart Tournament Manager 1.1.0+12
+
+## Daten sicher neu aufsetzen und Synchronisierung bewusst aktivieren
+
+- Sichert beim lokalen Zurücksetzen alle aktiven Stores und Sidecars
+  bytegetreu und verifiziert die Kopien vor dem Entfernen der aktiven Dateien.
+- Pausiert automatische Cloud-Synchronisierung nach einem lokalen Neustart mit
+  frischem Datenstand.
+- Verlangt eine ausdrückliche Bestätigung, bevor der lokale Stand den Cloud-
+  Datenstand des Kontos ersetzt.
+- Übernimmt den Schema-24-Kompatibilitätsbeleg nur bei exakter Übereinstimmung
+  des Turnierbestands; vorhandene Belege werden nie überschrieben.
+- Enthält die wiederhergestellte Feature-Parität sowie Regressionstests für
+  Dashboard, Turnierablauf, Ranglisten, Statistiken, Einstellungen und
+  responsive Ansichten.
+
 # Dart Tournament Manager 1.0.8+11 preview
 
 ## Preserve schema-24 proof during account migration
