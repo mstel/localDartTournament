@@ -20,9 +20,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: const TextScaler.linear(2),
-            ),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const HomePage(),
@@ -35,7 +35,12 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      for (final label in ['Turniere', 'Spieler', 'Statistik', 'Ranglisten']) {
+      for (final label in [
+        'Turniere',
+        'Spieler',
+        'Statistiken',
+        'Ranglisten',
+      ]) {
         expect(find.text(label), findsWidgets);
       }
       expect(tester.takeException(), isNull);

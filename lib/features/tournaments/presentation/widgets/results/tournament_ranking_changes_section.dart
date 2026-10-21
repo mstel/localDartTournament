@@ -5,16 +5,19 @@ import '../../../../rankings/domain/local_ranking.dart';
 import '../../../../rankings/domain/elo_tier.dart';
 import '../../../../rankings/application/local_ranking_elo_service.dart';
 import '../../../data/app_database.dart';
+import '../../../data/tournament_storage.dart';
 
 class TournamentRankingChangesSection extends StatefulWidget {
   const TournamentRankingChangesSection({
     super.key,
     required this.tournament,
     this.database,
+    this.storage,
   });
 
   final CreatedTournament tournament;
   final LocalAppDatabase? database;
+  final TournamentStorage? storage;
 
   @override
   State<TournamentRankingChangesSection> createState() =>
@@ -52,8 +55,12 @@ class _TournamentRankingChangesSectionState
     extends State<TournamentRankingChangesSection>
     with SingleTickerProviderStateMixin {
   late Future<List<_PlayerRankingDelta>> _deltasFuture;
+  late String _rankingFingerprint;
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
+
+  String _fingerprint() =>
+      '${widget.tournament.countsForRanking}:${(widget.tournament.rankingIds.toList()..sort()).join(',')}';
 
   @override
   void initState() {
@@ -66,8 +73,19 @@ class _TournamentRankingChangesSectionState
       parent: _animController,
       curve: Curves.elasticOut,
     );
+    _rankingFingerprint = _fingerprint();
     _deltasFuture = _calculateDeltas();
     _animController.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant TournamentRankingChangesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextFingerprint = _fingerprint();
+    if (nextFingerprint != _rankingFingerprint) {
+      _rankingFingerprint = nextFingerprint;
+      _deltasFuture = _calculateDeltas();
+    }
   }
 
   @override
@@ -81,7 +99,12 @@ class _TournamentRankingChangesSectionState
     final db = widget.database ?? LocalAppDatabase();
     final allRankings = await db.loadLocalRankings();
     final eloRankings = allRankings
-        .where((r) => r.type == RankingType.elo && (t.rankingIds.isEmpty || t.rankingIds.contains(r.id)))
+        .where(
+          (ranking) =>
+              t.countsForRanking &&
+              ranking.type == RankingType.elo &&
+              t.rankingIds.contains(ranking.id),
+        )
         .toList();
 
     if (eloRankings.isEmpty) return const [];
@@ -90,7 +113,10 @@ class _TournamentRankingChangesSectionState
 
     for (final ranking in eloRankings) {
       try {
-        final service = LocalRankingEloService(database: db);
+        final service = LocalRankingEloService(
+          database: db,
+          tournamentStorage: widget.storage,
+        );
         final snapshot = await service.calculate(ranking);
 
         for (final entry in snapshot.history.entries) {
@@ -104,10 +130,12 @@ class _TournamentRankingChangesSectionState
           final lastItem = items.last;
           final ratingBefore = firstItem.ratingAfter - firstItem.delta;
           final ratingAfter = lastItem.ratingAfter;
-          final playerName = snapshot.entries
-              .where((p) => p.id == entry.key)
-              .firstOrNull
-              ?.name ?? entry.key;
+          final playerName =
+              snapshot.entries
+                  .where((p) => p.id == entry.key)
+                  .firstOrNull
+                  ?.name ??
+              entry.key;
 
           result.add(
             _PlayerRankingDelta(
@@ -147,8 +175,8 @@ class _TournamentRankingChangesSectionState
         final losses = deltas.where((d) => d.delta < 0).toList()
           ..sort((a, b) => a.delta.compareTo(b.delta));
 
-        final topGains = gains.take(3).toList();
-        final topLosses = losses.take(3).toList();
+        final topGains = gains;
+        final topLosses = losses;
 
         final theme = Theme.of(context);
 
@@ -179,7 +207,9 @@ class _TournamentRankingChangesSectionState
               ScaleTransition(
                 scale: _scaleAnimation,
                 child: Card(
-                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                  color: theme.colorScheme.primaryContainer.withValues(
+                    alpha: 0.5,
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -187,7 +217,10 @@ class _TournamentRankingChangesSectionState
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.military_tech, color: Colors.amber),
+                            const Icon(
+                              Icons.military_tech,
+                              color: Colors.amber,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               'Liga-Auf- & Abstiege',
@@ -215,8 +248,10 @@ class _TournamentRankingChangesSectionState
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    change.playerName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    '${change.rankingName} · ${change.playerName}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                                 _MiniTierBadge(tier: change.tierBefore),
@@ -232,7 +267,9 @@ class _TournamentRankingChangesSectionState
                                     fontWeight: FontWeight.bold,
                                     color: change.delta > 0
                                         ? Colors.green
-                                        : Colors.red,
+                                        : change.delta < 0
+                                        ? Colors.red
+                                        : theme.colorScheme.onSurface,
                                   ),
                                 ),
                               ],
@@ -260,30 +297,47 @@ class _TournamentRankingChangesSectionState
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.arrow_circle_up, color: Colors.green, size: 20),
+                              Icon(
+                                Icons.arrow_circle_up,
+                                color: Colors.green,
+                                size: 20,
+                              ),
                               SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   'Größter Punktezuwachs',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                           const Divider(height: 16),
                           if (topGains.isEmpty)
-                            const Text('Keine Punktegewinne', style: TextStyle(fontSize: 12))
+                            const Text(
+                              'Keine Punktegewinne',
+                              style: TextStyle(fontSize: 12),
+                            )
                           else
                             for (var i = 0; i < topGains.length; i++)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        '${i + 1}. ${topGains[i].playerName}',
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                        '${i + 1}. ${topGains[i].rankingName} · '
+                                        '${topGains[i].playerName}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -315,30 +369,47 @@ class _TournamentRankingChangesSectionState
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.arrow_circle_down, color: Colors.red, size: 20),
+                              Icon(
+                                Icons.arrow_circle_down,
+                                color: Colors.red,
+                                size: 20,
+                              ),
                               SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   'Größter Punkteverlust',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                           const Divider(height: 16),
                           if (topLosses.isEmpty)
-                            const Text('Keine Punkteverluste', style: TextStyle(fontSize: 12))
+                            const Text(
+                              'Keine Punkteverluste',
+                              style: TextStyle(fontSize: 12),
+                            )
                           else
                             for (var i = 0; i < topLosses.length; i++)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        '${i + 1}. ${topLosses[i].playerName}',
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                        '${i + 1}. ${topLosses[i].rankingName} · '
+                                        '${topLosses[i].playerName}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),

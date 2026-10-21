@@ -20,6 +20,7 @@ class MatchResultTile extends StatelessWidget {
     this.leadingLabel,
     this.showRoundLabel = true,
     this.compact = false,
+    this.onPlayerTap,
   });
 
   final GroupMatch match;
@@ -30,6 +31,7 @@ class MatchResultTile extends StatelessWidget {
   final String? leadingLabel;
   final bool showRoundLabel;
   final bool compact;
+  final ValueChanged<TournamentPlayer>? onPlayerTap;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +41,33 @@ class MatchResultTile extends StatelessWidget {
     String playerLabel(bool home) {
       return (home ? match.homePlayer : match.awayPlayer)?.name ??
           (match.allowsBye ? 'Freilos' : 'offen');
+    }
+
+    Widget playerName(bool home, {TextAlign textAlign = TextAlign.start}) {
+      final player = home ? match.homePlayer : match.awayPlayer;
+      final label = playerLabel(home);
+      final text = Text(
+        label,
+        textAlign: textAlign,
+        style: Theme.of(context).textTheme.titleMedium,
+      );
+      if (player == null || onPlayerTap == null) return text;
+      return Tooltip(
+        message: 'Spiele von ${player.name} anzeigen',
+        child: InkWell(
+          onTap: () => onPlayerTap!(player),
+          borderRadius: BorderRadius.circular(4),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Align(
+              alignment: textAlign == TextAlign.right
+                  ? Alignment.centerRight
+                  : Alignment.centerLeft,
+              child: text,
+            ),
+          ),
+        ),
+      );
     }
 
     return MatchStatisticsTapTarget(
@@ -79,15 +108,9 @@ class MatchResultTile extends StatelessWidget {
                     ),
                     SizedBox(height: compact ? 4 : 8),
                   ],
-                  Text(
-                    playerLabel(true),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  playerName(true),
                   const SizedBox(height: 4),
-                  Text(
-                    playerLabel(false),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  playerName(false),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -108,8 +131,12 @@ class MatchResultTile extends StatelessWidget {
                       const Spacer(),
                       IconButton.filledTonal(
                         onPressed: canEdit ? () => onEditResult(match) : null,
-                        icon: const Icon(Icons.edit_outlined),
+                        icon: const Icon(Icons.edit_outlined, size: 18),
                         tooltip: 'Ergebnis',
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                          padding: EdgeInsets.zero,
+                        ),
                       ),
                     ],
                   ),
@@ -133,7 +160,7 @@ class MatchResultTile extends StatelessWidget {
                   _MatchOriginChip(label: originLabel!),
                   const SizedBox(width: 8),
                 ],
-                Expanded(child: Text(playerLabel(true))),
+                Expanded(child: playerName(true)),
                 _ScoreBadge(
                   match: match,
                   onTap: match.hasResult
@@ -146,14 +173,16 @@ class MatchResultTile extends StatelessWidget {
                       ? () => onEditResult(match)
                       : null,
                 ),
-                Expanded(
-                  child: Text(playerLabel(false), textAlign: TextAlign.right),
-                ),
+                Expanded(child: playerName(false, textAlign: TextAlign.right)),
                 const SizedBox(width: 12),
                 IconButton.filledTonal(
                   onPressed: canEdit ? () => onEditResult(match) : null,
-                  icon: const Icon(Icons.edit_outlined),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
                   tooltip: 'Ergebnis',
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
               ],
             );

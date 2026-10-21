@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:dart_tournament_manager/tournament_workspace.dart'
+    show ProductionTournamentRuntime;
 import 'package:flutter/services.dart';
 
 import '../../../domain/knockout_round_names.dart';
@@ -324,6 +326,7 @@ class _TournamentSecondScreenViewState
                   t,
                   activeIndex,
                   activeStage,
+                  timing: timing,
                   expand: false,
                 ),
               ],
@@ -386,6 +389,7 @@ class _TournamentSecondScreenViewState
                       t,
                       activeIndex,
                       activeStage,
+                      timing: timing,
                       expand: true,
                     ),
                   ),
@@ -403,6 +407,7 @@ class _TournamentSecondScreenViewState
     CreatedTournament t,
     int activeIndex,
     TournamentRunStage? stage, {
+    required TimingSnapshot timing,
     bool expand = true,
   }) {
     final hasNextKnockout = _nextKnockoutStage(t, activeIndex, stage) != null;
@@ -420,6 +425,24 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
+              Text(
+                'Turnieruhr: ${_formatDuration(timing.elapsed)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
         SegmentedButton<bool>(
           segments: const [
             ButtonSegment<bool>(
@@ -594,77 +617,69 @@ class _TournamentSecondScreenViewState
             t.runStages[stageIndex - 1] is GroupTournamentRunStage
         ? t.runStages[stageIndex - 1] as GroupTournamentRunStage
         : null;
-    final certainQualifiers = groupStage == null
-        ? const <int, TournamentPlayer>{}
-        : _certainQualifierByInputIndex(groupStage);
+    var previewStage = stage;
+    if (groupStage != null &&
+        stageIndex != null &&
+        stageIndex >= 0 &&
+        stageIndex < t.stages.length) {
+      final runtime = ProductionTournamentRuntime(t);
+      final projectedPlayers = runtime.qualifiers(groupStage);
+      final presentedPlayers = const GroupStagePreviewService()
+          .presentProjectedPlayers(
+            stage: groupStage,
+            projectedPlayers: projectedPlayers,
+            tournament: t,
+          );
+      final rebuiltStage = runtime.build(
+        t.stages[stageIndex],
+        presentedPlayers,
+      );
+      if (rebuiltStage is KnockoutTournamentRunStage) {
+        previewStage = rebuiltStage;
+      }
+    }
     final groupStageIsSet =
         groupStage != null &&
         const GroupStagePreviewService().isStageSet(groupStage);
-    final config = stageIndex != null && stageIndex < t.stages.length
-        ? t.stages[stageIndex]
-        : null;
-    final canShowSeedPositions =
-        config == null ||
-        !config.knockoutDrawOnStart ||
-        config.knockoutSlotOrder.isNotEmpty;
 
     String playerLabel(TournamentPlayer? player, int roundIndex) {
       if (roundIndex > 0) {
         return player?.name ?? 'Sieger der vorherigen Runde';
       }
-      if (player != null && canShowSeedPositions) {
-        final playerIndex = t.players.indexWhere(
-          (candidate) =>
-              candidate == player ||
-              (candidate.profileId != null &&
-                  candidate.profileId == player.profileId),
-        );
-        final guaranteed = playerIndex < 0
-            ? null
-            : certainQualifiers[playerIndex];
-        if (guaranteed != null) {
-          return '${guaranteed.name} · ${groupStageIsSet ? 'gesetzt' : 'vorläufig'}';
-        }
+      if (player == null || player.name.startsWith('Qualifikant ')) {
+        return 'Qualifikant offen';
       }
-      return 'Qualifikant offen';
+      return player.name;
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '${stage.name} · Turnierbaum-Vorschau',
+          '${previewStage.name} · Turnierbaum-Vorschau',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
-        if (certainQualifiers.isNotEmpty)
+        if (groupStage != null &&
+            groupStage.groups.any(
+              (group) =>
+                  group.matches.any((match) => match.countsForStatistics),
+            ))
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
               groupStageIsSet
                   ? 'Die Setzplätze der Etappe stehen fest.'
-                  : 'Setzplätze bleiben bis zum Abschluss der Etappe vorläufig.',
+                  : 'Die angezeigten Plätze entsprechen dem aktuellen Tabellenstand und sind vorläufig.',
               style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-          ),
-        if (certainQualifiers.isNotEmpty && !canShowSeedPositions)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              'Sicher weiter: ${certainQualifiers.values.map((player) => player.name).join(', ')}',
-              style: const TextStyle(
-                color: Color(0xFF86EFAC),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
             ),
           ),
         const SizedBox(height: 6),
         Expanded(
-          child: stage.rounds.isEmpty
+          child: previewStage.rounds.isEmpty
               ? const Center(
                   child: Text(
                     'Für diese Etappe ist noch kein Turnierbaum vorhanden.',
@@ -673,7 +688,7 @@ class _TournamentSecondScreenViewState
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {
-                    final rounds = stage.rounds;
+                    final rounds = previewStage.rounds;
                     const roundWidth = 280.0;
                     const roundGap = 28.0;
                     const roundHeaderHeight = 42.0;
@@ -792,75 +807,6 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  Map<int, TournamentPlayer> _certainQualifierByInputIndex(
-    GroupTournamentRunStage stage,
-  ) {
-    final plan = stage.qualificationPlan;
-    if (plan == null) return const {};
-
-    final certainPlayers = <int, TournamentPlayer>{};
-    var inputIndex = 0;
-    for (var groupIndex = 0; groupIndex < stage.groups.length; groupIndex++) {
-      final group = stage.groups[groupIndex];
-      final standings = _calculateGroupStandings(group, stage.tieBreakers);
-      final fixedPlaces = groupIndex < plan.fixedByGroup.length
-          ? plan.fixedByGroup[groupIndex]
-          : plan.fixedPerGroup;
-      if (group.playType == 'swiss' ||
-          group.matches.any((match) => match.isDecider)) {
-        inputIndex += fixedPlaces;
-        continue;
-      }
-      final unsupportedTieBreaker = stage.tieBreakers.indexWhere(
-        (rule) => !const {'points', 'legDifference', 'legsFor'}.contains(rule),
-      );
-      for (var rank = 0; rank < min(fixedPlaces, standings.length); rank++) {
-        final standing = standings[rank];
-        if (unsupportedTieBreaker >= 0 &&
-            standings.any(
-              (other) =>
-                  other.player != standing.player &&
-                  _tiesOnTieBreakerPrefix(
-                    standing,
-                    other,
-                    stage.tieBreakers.take(unsupportedTieBreaker),
-                  ),
-            )) {
-          continue;
-        }
-        if (const QualificationCertainty().isCertain(
-          standing: standing,
-          place: rank + 1,
-          fixedPlaces: fixedPlaces,
-          standings: standings,
-          matches: group.matches,
-          tieBreakers: stage.tieBreakers,
-        )) {
-          certainPlayers[inputIndex + rank] = standing.player;
-        }
-      }
-      inputIndex += fixedPlaces;
-    }
-    return certainPlayers;
-  }
-
-  bool _tiesOnTieBreakerPrefix(
-    PlayerStanding first,
-    PlayerStanding second,
-    Iterable<String> tieBreakers,
-  ) {
-    for (final rule in tieBreakers) {
-      final comparison = switch (rule) {
-        'points' => first.points.compareTo(second.points),
-        'legDifference' => first.legDifference.compareTo(second.legDifference),
-        'legsFor' => first.legsFor.compareTo(second.legsFor),
-        _ => 0,
-      };
-      if (comparison != 0) return false;
-    }
-    return true;
-  }
-
   Widget _buildBracketMatchPreview(
     GroupMatch match, {
     required String homeLabel,
@@ -868,9 +814,9 @@ class _TournamentSecondScreenViewState
     required int matchNumber,
   }) {
     final homeIsCertain =
-        homeLabel.contains('· vorläufig') || homeLabel.contains('· gesetzt');
+        homeLabel.contains('vorläufig') || homeLabel.contains('gesetzt');
     final awayIsCertain =
-        awayLabel.contains('· vorläufig') || awayLabel.contains('· gesetzt');
+        awayLabel.contains('vorläufig') || awayLabel.contains('gesetzt');
     return Container(
       padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
@@ -1781,8 +1727,16 @@ class _TournamentSecondScreenViewState
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: const Color(0xFF263D52)),
                   ),
-                  child: Text(
-                    '${change.rankingName}: ${change.homeDelta == null ? '–' : _signedDelta(change.homeDelta!)} / ${change.awayDelta == null ? '–' : _signedDelta(change.awayDelta!)} Elo',
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: '${change.rankingName}: '),
+                        _eloDeltaSpan(change.homeDelta),
+                        const TextSpan(text: ' / '),
+                        _eloDeltaSpan(change.awayDelta),
+                        const TextSpan(text: ' Elo'),
+                      ],
+                    ),
                     style: const TextStyle(
                       color: Color(0xFF70E0BA),
                       fontSize: 12,
@@ -1798,6 +1752,18 @@ class _TournamentSecondScreenViewState
   }
 
   String _signedDelta(int delta) => delta > 0 ? '+$delta' : '$delta';
+
+  TextSpan _eloDeltaSpan(int? delta) {
+    final color = delta == null || delta == 0
+        ? const Color(0xFFB0BEC5)
+        : delta > 0
+        ? const Color(0xFF86EFAC)
+        : const Color(0xFFEF9A9A);
+    return TextSpan(
+      text: delta == null ? '–' : _signedDelta(delta),
+      style: TextStyle(color: color),
+    );
+  }
 
   // ------------------------------------------
   // SLIDE 4 HELPER: Etappenfortschritt & Bestleistungen
@@ -1903,31 +1869,6 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Overall timing
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              children: [
-                const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
-                Text(
-                  'Turnieruhr: ${_formatDuration(timing.elapsed)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-
         // Stages breakdown
         if (expand)
           Expanded(child: SingleChildScrollView(child: breakdownContent))

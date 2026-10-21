@@ -7,6 +7,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('tournament clock precedes the mode switch on TV surfaces', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final size in [const Size(360, 800), const Size(1440, 900)]) {
+      for (final isStandalone in [false, true]) {
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: TournamentSecondScreenView(
+                tournament: _tournament(),
+                isStandaloneWindow: isStandalone,
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final clock = tester.getRect(find.textContaining('Turnieruhr:'));
+        final modeSwitch = tester.getRect(find.byType(SegmentedButton<bool>));
+        expect(clock.bottom, lessThanOrEqualTo(modeSwitch.top));
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
   for (final size in [
     const Size(360, 800),
     const Size(800, 600),
@@ -45,41 +75,72 @@ void main() {
     });
   }
 
-  testWidgets('next-stage preview marks only guaranteed qualifiers', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1440, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'next-stage preview uses current standings for projected qualifiers',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final tournament = _tournament();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: TournamentSecondScreenView(
-            tournament: tournament,
-            isStandaloneWindow: true,
+      final tournament = _tournament();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    expect(find.text('Vorschau für die nächste Etappe'), findsOneWidget);
-    await tester.tap(find.text('Vorschau für die nächste Etappe'));
-    await tester.pump();
+      expect(find.text('Vorschau für die nächste Etappe'), findsOneWidget);
+      await tester.tap(find.text('Vorschau für die nächste Etappe'));
+      await tester.pump();
 
-    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.textContaining('A · vorläufig'), findsOneWidget);
-    expect(find.textContaining('B · vorläufig'), findsNothing);
-    expect(find.text('Vorschau schließen'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+      expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+      expect(find.textContaining('A · gesetzt'), findsOneWidget);
+      expect(find.textContaining('B · vorläufig'), findsOneWidget);
+      expect(find.text('Vorschau schließen'), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Vorschau schließen'));
-    await tester.pump();
-    expect(find.text('Zuletzt beendete Matches'), findsOneWidget);
-  });
+      await tester.tap(find.text('Vorschau schließen'));
+      await tester.pump();
+      expect(find.text('Zuletzt beendete Matches'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'projected bracket uses current qualifiers from two six-player groups',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: _twoGroupPreviewTournament(),
+              isStandaloneWindow: true,
+              showNextStagePreviewInitially: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Jonas · vorläufig'), findsOneWidget);
+      expect(find.textContaining('Dietmar · vorläufig'), findsOneWidget);
+      expect(find.textContaining('Bernd ·'), findsNothing);
+      expect(find.textContaining('Lars · vorläufig'), findsOneWidget);
+      expect(find.textContaining('Mika · vorläufig'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('next-stage preview labels fixed qualifiers as set', (
     tester,
@@ -362,6 +423,118 @@ void main() {
     await tester.tap(find.byTooltip('Schließen'));
     expect(didClose, isTrue);
   });
+}
+
+CreatedTournament _twoGroupPreviewTournament() {
+  final groupA = [
+    for (var index = 1; index <= 6; index++)
+      TournamentPlayer.generated(index).copyWith(
+        name: ['Jonas', 'Dietmar', 'Bernd', 'A4', 'A5', 'A6'][index - 1],
+      ),
+  ];
+  final groupB = [
+    for (var index = 7; index <= 12; index++)
+      TournamentPlayer.generated(
+        index,
+      ).copyWith(name: ['Lars', 'Mika', 'Noah', 'B4', 'B5', 'B6'][index - 7]),
+  ];
+
+  List<GroupMatch> groupMatches(
+    List<TournamentPlayer> players,
+    Set<String> winningPairings,
+  ) {
+    GroupMatch buildMatch(int home, int away) {
+      final homeWins = winningPairings.contains(
+        '${players[home].name}:${players[away].name}',
+      );
+      final awayWins = winningPairings.contains(
+        '${players[away].name}:${players[home].name}',
+      );
+      return GroupMatch(
+        homePlayer: players[home],
+        awayPlayer: players[away],
+        round: 1,
+        homeLegs: homeWins
+            ? 2
+            : awayWins
+            ? 0
+            : null,
+        awayLegs: homeWins
+            ? 0
+            : awayWins
+            ? 2
+            : null,
+      );
+    }
+
+    return [
+      for (var home = 0; home < players.length; home++)
+        for (var away = home + 1; away < players.length; away++)
+          buildMatch(home, away),
+    ];
+  }
+
+  return CreatedTournament(
+    name: 'Zwei Gruppen',
+    players: [...groupA, ...groupB],
+    stages: const [
+      TournamentStage(name: 'Gruppenphase', type: 'groups', groupSizes: [6, 6]),
+      TournamentStage(
+        name: 'KO',
+        type: 'single_knockout',
+        knockoutParticipantCount: 4,
+        knockoutSeedingMode: 'cross',
+      ),
+    ],
+    runStages: [
+      GroupTournamentRunStage(
+        name: 'Gruppenphase',
+        groupPlayType: 'round_robin',
+        groups: [
+          TournamentGroup(
+            name: 'Gruppe A',
+            playType: 'round_robin',
+            players: groupA,
+            matches: groupMatches(groupA, const {
+              'Jonas:Dietmar',
+              'Jonas:Bernd',
+              'Dietmar:Bernd',
+            }),
+          ),
+          TournamentGroup(
+            name: 'Gruppe B',
+            playType: 'round_robin',
+            players: groupB,
+            matches: groupMatches(groupB, const {
+              'Lars:Mika',
+              'Lars:Noah',
+              'Mika:Noah',
+            }),
+          ),
+        ],
+        qualificationPlan: const QualificationPlan(
+          totalQualifiers: 4,
+          fixedPerGroup: 2,
+          extraCount: 0,
+          extraRank: 0,
+          eligibleGroupSize: null,
+          extraGroups: [],
+          fixedByGroup: [2, 2],
+        ),
+        tieBreakers: defaultGroupTieBreakers,
+      ),
+      KnockoutTournamentRunStage(
+        name: 'KO',
+        rounds: [
+          [
+            GroupMatch(homePlayer: groupA[2], awayPlayer: groupB[2], round: 1),
+            GroupMatch(homePlayer: groupA[1], awayPlayer: groupB[1], round: 1),
+          ],
+          [GroupMatch(round: 2)],
+        ],
+      ),
+    ],
+  );
 }
 
 CreatedTournament _largePreviewTournament() {

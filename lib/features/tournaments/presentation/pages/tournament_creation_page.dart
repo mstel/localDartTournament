@@ -1097,6 +1097,12 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   Future<void> _renamePlayer(int index) async {
+    if (index < 0 ||
+        index >= _players.length ||
+        _players[index].profileId != null ||
+        _players[index].isTeam) {
+      return;
+    }
     final newName = await showDialog<String>(
       context: context,
       builder: (context) => RenamePlayerDialog(player: _players[index]),

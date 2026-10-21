@@ -101,7 +101,7 @@ void main() {
         );
         expect(find.text('Dashboard'), findsOneWidget);
         expect(find.text('Nächste 6 Spiele'), findsOneWidget);
-        expect(find.text('Letzte 2 Ergebnisse'), findsOneWidget);
+        expect(find.text('Letzte Ergebnisse'), findsOneWidget);
         expect(find.text('Fortschritt nach Etappen'), findsNothing);
         expect(find.text('Bestleistungen'), findsNothing);
         expect(tester.takeException(), isNull);
@@ -295,7 +295,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('dashboard shows at most six upcoming and two recent matches', (
+  testWidgets('dashboard shows at most six upcoming and four recent matches', (
     tester,
   ) async {
     final tournament = fixture();
@@ -303,7 +303,7 @@ void main() {
         .groups
         .single
         .matches;
-    for (var index = 0; index < 3; index++) {
+    for (var index = 0; index < 4; index++) {
       matches[index]
         ..homeLegs = 3
         ..awayLegs = 1
@@ -342,7 +342,7 @@ void main() {
         .first;
     final recent = find
         .ancestor(
-          of: find.text('Letzte 2 Ergebnisse'),
+          of: find.text('Letzte Ergebnisse'),
           matching: find.byType(Card),
         )
         .first;
@@ -352,9 +352,10 @@ void main() {
     );
     expect(
       find.descendant(of: recent, matching: find.byType(Container)),
-      findsNWidgets(2),
+      findsNWidgets(4),
     );
-    expect(find.text('Spieler 3 · 180+ 180'), findsOneWidget);
+    expect(find.text('Bestleistungen'), findsOneWidget);
+    expect(find.text('Spieler 3 · 180+ 180'), findsAtLeastNWidgets(1));
     await tester.pumpWidget(const SizedBox());
   });
 

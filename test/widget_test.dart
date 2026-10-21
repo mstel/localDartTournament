@@ -1605,7 +1605,7 @@ void main() {
 
     expect(find.text('Neues Turnier (Normales Turnier)'), findsOneWidget);
     expect(find.text('Nächste 6 Spiele'), findsOneWidget);
-    expect(find.text('Letzte 2 Ergebnisse'), findsOneWidget);
+    expect(find.text('Letzte Ergebnisse'), findsOneWidget);
     expect(find.text('Runde 1'), findsNothing);
 
     await selectTournamentStage(tester, '2. Endrunde');
@@ -1684,6 +1684,6 @@ void main() {
 
     expect(find.textContaining('Endrunde'), findsWidgets);
     expect(find.text('Nächste 6 Spiele'), findsOneWidget);
-    expect(find.text('Letzte 2 Ergebnisse'), findsOneWidget);
+    expect(find.text('Letzte Ergebnisse'), findsOneWidget);
   });
 }

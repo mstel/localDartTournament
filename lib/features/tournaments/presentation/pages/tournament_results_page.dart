@@ -47,11 +47,6 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     }
     final summary = _TournamentResultSummary.fromTournament(tournament);
     final podium = summary.ranking.take(3).toList();
-    final colorScheme = Theme.of(context).colorScheme;
-    final completionGreen = colorScheme.brightness == Brightness.dark
-        ? const Color(0xFF144D34)
-        : const Color(0xFF0B6B45);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Turnierergebnisse'),
@@ -79,68 +74,77 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
           padding: const EdgeInsets.all(16),
           children: [
             Card(
-              color: completionGreen,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Text(
-                      tournament.name,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Turnier abgeschlossen',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Art: ${_tournamentTypeLabel(tournament)}',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    Builder(
-                      builder: (context) {
-                        final summary = TournamentTiming.durationSummary(
-                          tournament,
-                        );
-                        String formatDur(Duration d) => d.inHours > 0
-                            ? '${d.inHours}h ${d.inMinutes % 60}m'
-                            : '${d.inMinutes}m';
-                        final duration =
-                            summary == null || summary.playedMatches == 0
-                            ? 'Dauer: nicht erfasst'
-                            : 'Dauer: ${formatDur(summary.totalDuration)} · '
-                                  '${summary.playedMatches} ${summary.playedMatches == 1 ? "Match" : "Matches"}'
-                                  '${summary.averageMatchDuration != null ? " · Ø ${formatDur(summary.averageMatchDuration!)} / Match" : ""}';
-                        return Text(
-                          duration,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        );
-                      },
-                    ),
-                    if (tournament.stages.isNotEmpty) ...[
+              clipBehavior: Clip.antiAlias,
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF142B3A), Color(0xFF175C59)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Text(
+                        tournament.name,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Turnier abgeschlossen',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       const SizedBox(height: 8),
                       Text(
-                        tournament.stages
-                            .map(
-                              (stage) =>
-                                  '${stage.name}: ${stage.gameFormat.label}',
-                            )
-                            .join('\n'),
-                        textAlign: TextAlign.center,
+                        'Art: ${_tournamentTypeLabel(tournament)}',
                         style: const TextStyle(color: Colors.white),
                       ),
+                      Builder(
+                        builder: (context) {
+                          final summary = TournamentTiming.durationSummary(
+                            tournament,
+                          );
+                          String formatDur(Duration d) => d.inHours > 0
+                              ? '${d.inHours}h ${d.inMinutes % 60}m'
+                              : '${d.inMinutes}m';
+                          final duration =
+                              summary == null || summary.playedMatches == 0
+                              ? 'Dauer: nicht erfasst'
+                              : 'Dauer: ${formatDur(summary.totalDuration)} · '
+                                    '${summary.playedMatches} ${summary.playedMatches == 1 ? "Match" : "Matches"}'
+                                    '${summary.averageMatchDuration != null ? " · Ø ${formatDur(summary.averageMatchDuration!)} / Match" : ""}';
+                          return Text(
+                            duration,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          );
+                        },
+                      ),
+                      if (tournament.stages.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          tournament.stages
+                              .map(
+                                (stage) =>
+                                    '${stage.name}: ${stage.gameFormat.label}',
+                              )
+                              .join('\n'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -186,11 +190,18 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               tournament: tournament,
               database: widget.database,
               storage: widget.storage,
+              onSaved: () {
+                if (mounted) setState(() {});
+              },
             ),
             if (tournament.countsForRanking &&
                 tournament.rankingIds.isNotEmpty) ...[
               const SizedBox(height: 12),
-              TournamentRankingChangesSection(tournament: tournament),
+              TournamentRankingChangesSection(
+                tournament: tournament,
+                database: widget.database,
+                storage: widget.storage,
+              ),
             ],
             const SizedBox(height: 16),
             OutlinedButton.icon(

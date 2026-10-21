@@ -8,24 +8,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('brand mark uses fallback icon and accepts transparent logos', (
+  testWidgets('brand mark uses golden fallback and accepts transparent logos', (
     tester,
   ) async {
     final logoNotifier = AppThemeController.instance.logoBytesNotifier;
     addTearDown(() => logoNotifier.value = null);
 
-    const brandColor = Color(0xffa75e12);
     logoNotifier.value = null;
     await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData(colorScheme: ColorScheme.light(primary: brandColor)),
-        home: const Scaffold(body: AppBrandMark(size: 40)),
-      ),
+      const MaterialApp(home: Scaffold(body: AppBrandMark(size: 40))),
     );
-    expect(find.byIcon(Icons.sports_score), findsOneWidget);
+    final fallback = tester.widget<Image>(find.byType(Image).first);
     expect(
-      tester.widget<Icon>(find.byIcon(Icons.sports_score)).color,
-      brandColor,
+      (fallback.image as AssetImage).assetName,
+      'assets/images/app_brand_mark.png',
     );
 
     logoNotifier.value = await tester.runAsync(_transparentPixelPng);

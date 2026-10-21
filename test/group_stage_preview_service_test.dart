@@ -30,7 +30,7 @@ void main() {
       tournament: tournament,
     );
 
-    expect(projected.single.name, 'Spieler 1 (vorläufig)');
+    expect(projected.single.name, 'Spieler 1 · vorläufig');
   });
 
   test('labels an uncatchable group leader as set before the group ends', () {
@@ -49,7 +49,7 @@ void main() {
       tournament: tournament,
     );
 
-    expect(projected.single.name, 'Spieler 1 (gesetzt)');
+    expect(projected.single.name, 'Spieler 1 · gesetzt');
   });
 }
 

@@ -11,11 +11,13 @@ class TournamentRankingAssignment extends StatefulWidget {
     required this.tournament,
     this.database,
     this.storage,
+    this.onSaved,
   });
 
   final CreatedTournament tournament;
   final LocalAppDatabase? database;
   final TournamentStorage? storage;
+  final VoidCallback? onSaved;
 
   @override
   State<TournamentRankingAssignment> createState() =>
@@ -55,6 +57,7 @@ class _TournamentRankingAssignmentState
         ..countsForRanking = _selectedIds.isNotEmpty
         ..rankingIds = rankingIds;
       await _storage.saveTournament(widget.tournament);
+      widget.onSaved?.call();
     } catch (error) {
       widget.tournament
         ..countsForRanking = oldCountsForRanking

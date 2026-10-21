@@ -85,11 +85,13 @@ class TeamParticipantList extends StatelessWidget {
                                 ),
                               Wrap(
                                 children: [
-                                  IconButton(
-                                    tooltip: 'Umbenennen',
-                                    onPressed: () => onRename(i),
-                                    icon: const Icon(Icons.edit),
-                                  ),
+                                  if (players[i].profileId == null &&
+                                      !players[i].isTeam)
+                                    IconButton(
+                                      tooltip: 'Umbenennen',
+                                      onPressed: () => onRename(i),
+                                      icon: const Icon(Icons.edit),
+                                    ),
                                   PopupMenuButton<String>(
                                     tooltip: 'Team bearbeiten',
                                     icon: const Icon(Icons.group_add),

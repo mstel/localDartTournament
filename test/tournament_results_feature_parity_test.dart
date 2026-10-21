@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
+import 'package:dart_tournament_manager/features/rankings/application/tournament_match_elo_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -98,7 +99,12 @@ void main() {
         matching: find.byType(Card),
       ),
     );
-    expect(completionCard.color, const Color(0xff0b6b45));
+    final completionGradient = completionCard.child! as Container;
+    expect(completionGradient.decoration, isA<BoxDecoration>());
+    expect(
+      (completionGradient.decoration! as BoxDecoration).gradient,
+      isA<LinearGradient>(),
+    );
     expect(find.byIcon(Icons.emoji_events), findsNothing);
 
     expect(find.text('Ranglisten-Zuweisung'), findsOneWidget);
@@ -166,15 +172,84 @@ void main() {
     expect(reloaded.countsForRanking, isTrue);
     expect(reloaded.rankingIds, ['ranking-2026']);
   });
+
+  test(
+    'live Elo changes include only assigned rankings and clear on removal',
+    () async {
+      tournament
+        ..countsForRanking = true
+        ..rankingIds = ['ranking-2026', 'ranking-2025'];
+      await storage.saveTournament(tournament);
+
+      final database = _RankingDatabase(
+        baseDirectory: Directory(
+          '${directory.path}${Platform.pathSeparator}elo-db',
+        ),
+        rankings: const [
+          LocalRanking(id: 'ranking-2026', name: 'Rangliste 2026'),
+          LocalRanking(id: 'ranking-2025', name: 'Rangliste 2025'),
+          LocalRanking(id: 'unassigned', name: 'Nicht zugewiesen'),
+        ],
+        playerIds: const ['profile-first', 'profile-second'],
+        profiles: [
+          for (final player in tournament.players)
+            PlayerProfile(
+              id: player.profileId!,
+              displayName: player.name,
+              country: '',
+              city: '',
+              dartsSetupJson: '',
+              createdAt: DateTime.utc(2020),
+              isActive: true,
+            ),
+        ],
+      );
+      final service = TournamentMatchEloService(
+        database: database,
+        tournamentStorage: storage,
+      );
+
+      var changes = await service.calculate(tournament);
+      expect(changes, hasLength(1));
+      expect(
+        changes.values.single.map((change) => change.rankingName).toSet(),
+        {'Rangliste 2026', 'Rangliste 2025'},
+      );
+
+      tournament.rankingIds.remove('ranking-2025');
+      await storage.saveTournament(tournament);
+      changes = await service.calculate(tournament);
+      expect(changes.values.single.map((change) => change.rankingName), [
+        'Rangliste 2026',
+      ]);
+
+      tournament.countsForRanking = false;
+      expect(await service.calculate(tournament), isEmpty);
+    },
+  );
 }
 
 class _RankingDatabase extends LocalAppDatabase {
-  _RankingDatabase({required super.baseDirectory, required this.rankings});
+  _RankingDatabase({
+    required super.baseDirectory,
+    required this.rankings,
+    this.playerIds = const [],
+    this.profiles = const [],
+  });
 
   final List<LocalRanking> rankings;
+  final List<String> playerIds;
+  final List<PlayerProfile> profiles;
 
   @override
   Future<List<LocalRanking>> loadLocalRankings() async => rankings;
+
+  @override
+  Future<List<String>> loadRankingPlayerIds(String rankingId) async =>
+      playerIds;
+
+  @override
+  Future<List<PlayerProfile>> loadPlayerProfiles() async => profiles;
 }
 
 class _ImmediateTournamentStorage extends TournamentStorage {

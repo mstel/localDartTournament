@@ -108,6 +108,75 @@ void main() {
       }
     }
   });
+
+  testWidgets('one large group uses two match columns and player filtering', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final stage = _oneLargeGroup();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: stage,
+              standingsFor: (group, _) => [
+                for (final player in group.players) PlayerStanding(player),
+              ],
+              onEditResult: (match) {
+                match
+                  ..homeLegs = 2
+                  ..awayLegs = 0;
+              },
+              canEditResults: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tiles = find.byType(MatchResultTile);
+    expect(tiles, findsNWidgets(15));
+    final firstTile = tester.getRect(tiles.at(0));
+    final secondTile = tester.getRect(tiles.at(1));
+    expect((firstTile.center.dy - secondTile.center.dy).abs(), lessThan(8));
+    expect(
+      (firstTile.center.dx - secondTile.center.dx).abs(),
+      greaterThan(300),
+    );
+    expect(
+      tester
+          .getRect(
+            find
+                .descendant(of: tiles.first, matching: find.byType(IconButton))
+                .first,
+          )
+          .height,
+      greaterThanOrEqualTo(48),
+    );
+
+    await tester.tap(find.text('Spieler 1').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Spiele von Spieler 1'), findsOneWidget);
+    expect(find.byType(MatchResultTile), findsNWidgets(5));
+
+    await tester.tap(find.byTooltip('Ergebnis').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Spiele von Spieler 1'), findsNothing);
+    expect(find.byType(MatchResultTile), findsNWidgets(14));
+
+    final standingsPlayer = find.text('Spieler 2').last;
+    expect(tester.getRect(standingsPlayer).left, greaterThan(1200));
+    await tester.tap(standingsPlayer);
+    await tester.pumpAndSettle();
+    expect(find.text('Spiele von Spieler 2'), findsOneWidget);
+    expect(find.byType(MatchResultTile), findsNWidgets(4));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 GroupTournamentRunStage _groupStage() {
@@ -136,6 +205,35 @@ GroupTournamentRunStage _groupStage() {
             ),
           ],
         ),
+    ],
+  );
+}
+
+GroupTournamentRunStage _oneLargeGroup() {
+  final players = [
+    for (var index = 1; index <= 6; index++)
+      TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+  ];
+  return GroupTournamentRunStage(
+    name: 'Gruppenphase',
+    groupPlayType: 'round_robin',
+    qualificationPlan: null,
+    tieBreakers: defaultGroupTieBreakers,
+    groups: [
+      TournamentGroup(
+        name: 'Gruppe A',
+        playType: 'round_robin',
+        players: players,
+        matches: [
+          for (var home = 0; home < players.length; home++)
+            for (var away = home + 1; away < players.length; away++)
+              GroupMatch(
+                homePlayer: players[home],
+                awayPlayer: players[away],
+                round: 1,
+              ),
+        ],
+      ),
     ],
   );
 }

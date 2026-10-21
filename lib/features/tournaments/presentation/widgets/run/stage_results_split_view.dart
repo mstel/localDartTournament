@@ -46,6 +46,29 @@ class StageResultsSplitView extends StatefulWidget {
 class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   // Default is "Offene Spiele" (always visible on initial load, finished and all matches hidden by default)
   MatchCategoryFilter _filter = MatchCategoryFilter.open;
+  TournamentPlayer? _filteredPlayer;
+
+  String _playerKey(TournamentPlayer player) => player.profileId ?? player.name;
+
+  void _selectPlayer(TournamentPlayer player) {
+    setState(() => _filteredPlayer = player);
+  }
+
+  void _editResult(GroupMatch match) {
+    if (_filteredPlayer != null) {
+      setState(() => _filteredPlayer = null);
+    }
+    widget.onEditResult(match);
+  }
+
+  bool _matchesPlayerFilter(GroupMatch match) {
+    final player = _filteredPlayer;
+    return player == null ||
+        match.homePlayer != null &&
+            _playerKey(match.homePlayer!) == _playerKey(player) ||
+        match.awayPlayer != null &&
+            _playerKey(match.awayPlayer!) == _playerKey(player);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -185,6 +208,27 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             ),
           ),
 
+        if (_filteredPlayer case final player?) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              children: [
+                Chip(
+                  avatar: const Icon(Icons.filter_alt_outlined, size: 18),
+                  label: Text('Spiele von ${player.name}'),
+                ),
+                TextButton.icon(
+                  onPressed: () => setState(() => _filteredPlayer = null),
+                  icon: const Icon(Icons.clear),
+                  label: const Text('Filter aufheben'),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         LayoutBuilder(
           builder: (context, constraints) {
             final columns =
@@ -204,7 +248,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                       context: context,
                       group: group,
                       showGroupHeader: true,
-                      compact: columns > 1,
+                      compact: true,
                     ),
                   ),
               ],
@@ -225,6 +269,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
     final filteredMatches = group.matches.where((m) {
       if (!m.hasPlayers) return false;
+      if (!_matchesPlayerFilter(m)) return false;
       switch (_filter) {
         case MatchCategoryFilter.open:
           return !m.hasResult;
@@ -285,7 +330,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               padding: const EdgeInsets.all(16),
               child: Center(
                 child: Text(
-                  _filter == MatchCategoryFilter.open
+                  _filteredPlayer != null
+                      ? 'Keine Spiele von ${_filteredPlayer!.name} in dieser Ansicht.'
+                      : _filter == MatchCategoryFilter.open
                       ? 'Alle Spiele in ${group.name} sind abgeschlossen.'
                       : _filter == MatchCategoryFilter.finished
                       ? 'Noch keine gespielten Partien in ${group.name}.'
@@ -298,17 +345,34 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             ),
           )
         else
-          for (final match in filteredMatches)
-            MatchResultTile(
-              key: ValueKey(match),
-              match: match,
-              tournament: widget.tournament,
-              onEditResult: widget.onEditResult,
-              canEditResult: widget.canEditResults,
-              leadingLabel: match.isDecider ? match.label : null,
-              showRoundLabel: match.isDecider,
-              compact: compact,
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 900 ? 2 : 1;
+              final width =
+                  (constraints.maxWidth - (columns - 1) * 8) / columns;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final match in filteredMatches)
+                    SizedBox(
+                      width: width,
+                      child: MatchResultTile(
+                        key: ValueKey(match),
+                        match: match,
+                        tournament: widget.tournament,
+                        onEditResult: _editResult,
+                        canEditResult: widget.canEditResults,
+                        leadingLabel: match.isDecider ? match.label : null,
+                        showRoundLabel: match.isDecider,
+                        compact: compact,
+                        onPlayerTap: _selectPlayer,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
       ],
     );
   }
@@ -367,6 +431,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                     groupNumber: index + 1,
                     qualificationPlan: stage.qualificationPlan,
                     tieBreakers: stage.tieBreakers,
+                    onPlayerTap: _selectPlayer,
                   ),
                 ],
               ),

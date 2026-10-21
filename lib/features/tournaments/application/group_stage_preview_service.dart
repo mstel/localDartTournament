@@ -26,14 +26,16 @@ class GroupStagePreviewService {
       for (final player in projectedPlayers)
         player.copyWith(
           name:
-              '${player.name} (${stageIsSet || _isCertainQualifier(stage, player, tournament) ? 'gesetzt' : 'vorläufig'})',
+              '${player.name} · '
+              '${stageIsSet || _isCertainQualifier(stage, player, tournament) ? 'gesetzt' : 'vorläufig'}',
         ),
     ];
   }
 
-  bool isStageSet(TournamentRunStage stage) => _matches(
-    stage,
-  ).where((match) => match.hasPlayers).every((match) => match.isResolved);
+  bool isStageSet(TournamentRunStage stage) {
+    final matches = _matches(stage).where((match) => !match.isDecider).toList();
+    return matches.isNotEmpty && matches.every((match) => match.isResolved);
+  }
 
   bool _isCertainQualifier(
     TournamentRunStage stage,

@@ -19,10 +19,16 @@ class AppBrandMark extends StatelessWidget {
     valueListenable: AppThemeController.instance.logoBytesNotifier,
     builder: (context, bytes, _) {
       if (bytes == null) {
-        return Icon(
-          icon,
-          color: Theme.of(context).colorScheme.primary,
-          size: size,
+        return Image.asset(
+          'assets/images/app_brand_mark.png',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => Icon(
+            icon,
+            color: Theme.of(context).colorScheme.primary,
+            size: size,
+          ),
         );
       }
       return ClipRRect(

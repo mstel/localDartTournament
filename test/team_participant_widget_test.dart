@@ -4,6 +4,53 @@ import 'package:dart_tournament_manager/features/tournaments/domain/tournament_m
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/creation/team_participant_list.dart';
 
 void main() {
+  testWidgets('catalog players cannot be renamed in tournament creation', (
+    tester,
+  ) async {
+    final players = [
+      TournamentPlayer(
+        profileId: 'catalog-player',
+        name: 'Katalogspieler',
+        isGenerated: false,
+      ),
+      TournamentPlayer(name: 'Gastspieler', isGenerated: false),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TeamParticipantList(
+            players: players,
+            onRename: (_) {},
+            onRemove: (_) {},
+            onSplit: (_) {},
+            onMerge: (_, _) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.ancestor(
+          of: find.text('Katalogspieler'),
+          matching: find.byType(Card),
+        ),
+        matching: find.byTooltip('Umbenennen'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.ancestor(
+          of: find.text('Gastspieler'),
+          matching: find.byType(Card),
+        ),
+        matching: find.byTooltip('Umbenennen'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('dragging one entrant onto another merges them', (tester) async {
     final players = List.generate(2, (i) => TournamentPlayer.generated(i + 1));
     List<int>? merged;

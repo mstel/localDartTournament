@@ -125,6 +125,7 @@ class _TournamentDirectorDashboardState
     List<PlayEntry> entries, {
     required String emptyMessage,
     bool showResult = false,
+    int? maxColumns,
     Set<GroupMatch> prioritizedMatches = const {},
   }) => _box([
     Text(title, style: Theme.of(context).textTheme.titleLarge),
@@ -134,11 +135,14 @@ class _TournamentDirectorDashboardState
     else
       LayoutBuilder(
         builder: (context, constraints) {
-          final width = constraints.maxWidth >= 1100
-              ? (constraints.maxWidth - 5 * 8) / 6
-              : constraints.maxWidth >= 700
-              ? (constraints.maxWidth - 2 * 8) / 3
-              : constraints.maxWidth;
+          final columns = maxColumns == null
+              ? constraints.maxWidth >= 1100
+                    ? 6
+                    : constraints.maxWidth >= 700
+                    ? 3
+                    : 1
+              : ((constraints.maxWidth + 8) / 228).floor().clamp(1, maxColumns);
+          final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
           return Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -306,7 +310,10 @@ class _TournamentDirectorDashboardState
             if (bTime == null) return -1;
             return bTime.compareTo(aTime);
           });
-    final latestResults = recentResults.take(2).toList();
+    final latestResults = recentResults.take(4).toList();
+    final bestPerformances = [
+      for (final entry in recentResults) ...entry.match.bestPerformances,
+    ];
     final flowNotices = flowPriority.notices;
 
     final totalGames = active.length;
@@ -510,11 +517,36 @@ class _TournamentDirectorDashboardState
         ),
         const SizedBox(height: 12),
         _matchQueue(
-          'Letzte 2 Ergebnisse',
+          'Letzte Ergebnisse',
           latestResults,
           emptyMessage: 'Noch keine Ergebnisse in dieser Etappe.',
           showResult: true,
+          maxColumns: 4,
         ),
+        if (bestPerformances.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _box([
+            Text(
+              'Bestleistungen',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                for (final performance in bestPerformances)
+                  Chip(
+                    avatar: const Icon(Icons.military_tech_outlined, size: 18),
+                    label: Text(
+                      '${performance.playerName} · ${performance.label}'
+                      '${performance.value == null ? '' : ' ${performance.value}'}',
+                    ),
+                  ),
+              ],
+            ),
+          ]),
+        ],
       ],
     );
   }

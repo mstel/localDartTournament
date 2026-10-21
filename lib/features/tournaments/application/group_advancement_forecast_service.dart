@@ -22,8 +22,8 @@ class GroupAdvancementForecastService {
         .where(
           (ranking) =>
               ranking.type == RankingType.elo &&
-              (tournament.rankingIds.isEmpty ||
-                  tournament.rankingIds.contains(ranking.id)),
+              tournament.countsForRanking &&
+              tournament.rankingIds.contains(ranking.id),
         )
         .toList();
     final ratings = <String, List<int>>{};

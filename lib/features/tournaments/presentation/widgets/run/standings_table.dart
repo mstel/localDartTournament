@@ -12,6 +12,7 @@ class StandingsTable extends StatefulWidget {
     required this.groupNumber,
     required this.qualificationPlan,
     required this.tieBreakers,
+    this.onPlayerTap,
   });
 
   final List<PlayerStanding> standings;
@@ -19,6 +20,7 @@ class StandingsTable extends StatefulWidget {
   final int groupNumber;
   final QualificationPlan? qualificationPlan;
   final List<String> tieBreakers;
+  final ValueChanged<TournamentPlayer>? onPlayerTap;
 
   @override
   State<StandingsTable> createState() => _StandingsTableState();
@@ -186,6 +188,9 @@ class _StandingsTableState extends State<StandingsTable> {
             textColor: cellTextColor,
             fontWeight: fontWeight,
           ),
+          onTap: widget.onPlayerTap == null
+              ? null
+              : () => widget.onPlayerTap!(standing.player),
         ),
         DataCell(
           _StandingText(
