@@ -5,6 +5,7 @@ import '../../../../../shared/widgets/sport_settings_section.dart';
 import '../../../../../shared/widgets/sport_menu.dart';
 import 'package:flutter/material.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
+import '../../../application/tournament_flow_priority.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../../statistics/presentation/tournament_match_statistics_page.dart';
 
@@ -25,6 +26,11 @@ class OrderOfPlaySection extends StatelessWidget {
   Widget build(BuildContext context) {
     const controller = OrderOfPlayController();
     final schedule = controller.plan(tournament, activeStage);
+    final activeStageData =
+        activeStage >= 0 && activeStage < tournament.runStages.length
+        ? tournament.runStages[activeStage]
+        : null;
+    final flowPriority = TournamentFlowPriority.forStage(activeStageData);
     final occupied = {for (final e in schedule.running) e.match.boardNumber};
     Widget title(String text) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -53,6 +59,9 @@ class OrderOfPlaySection extends StatelessWidget {
       away: assignment.entry.match.awayPlayer?.name ?? 'Noch offen',
       origin: assignment.entry.origin,
       board: assignment.board,
+      isPriority: flowPriority.prioritizedMatches.contains(
+        assignment.entry.match,
+      ),
       action: Wrap(
         spacing: 4,
         runSpacing: 4,
@@ -112,6 +121,18 @@ class OrderOfPlaySection extends StatelessWidget {
     final blocks = <int, List<BoardAssignment>>{};
     for (final assignment in schedule.planned) {
       blocks.putIfAbsent(assignment.block, () => []).add(assignment);
+    }
+    for (final assignments in blocks.values) {
+      assignments.sort((a, b) {
+        final aIsPriority = flowPriority.prioritizedMatches.contains(
+          a.entry.match,
+        );
+        final bIsPriority = flowPriority.prioritizedMatches.contains(
+          b.entry.match,
+        );
+        if (aIsPriority == bIsPriority) return 0;
+        return aIsPriority ? -1 : 1;
+      });
     }
     final orderedBlocks = blocks.keys.toList()..sort();
     return Center(
@@ -194,65 +215,36 @@ class OrderOfPlaySection extends StatelessWidget {
                   },
                 ),
               ),
-            Builder(
-              builder: (context) {
-                final openMatchesPerPlayer = <String, int>{};
-                for (final assignment in schedule.planned) {
-                  for (final p in assignment.entry.players) {
-                    openMatchesPerPlayer[p] =
-                        (openMatchesPerPlayer[p] ?? 0) + 1;
-                  }
-                }
-                if (openMatchesPerPlayer.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                final maxOpen = openMatchesPerPlayer.values.reduce(
-                  (a, b) => a > b ? a : b,
-                );
-                final minOpen = openMatchesPerPlayer.values.reduce(
-                  (a, b) => a < b ? a : b,
-                );
-                if (maxOpen >= 3 && maxOpen - minOpen >= 2) {
-                  final bottleneckPlayers = openMatchesPerPlayer.entries
-                      .where((e) => e.value == maxOpen)
-                      .map((e) => e.key)
-                      .toList();
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Card(
-                      color: Theme.of(context).colorScheme.tertiaryContainer,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.priority_high,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onTertiaryContainer,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Empfehlung zur Spielreihenfolge: ${bottleneckPlayers.join(", ")} hat noch $maxOpen offene Spiele '
-                                '(deutlich mehr als der Schnitt mit $minOpen). Bevorzugt aufrufen, um Wartezeiten zu vermeiden.',
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onTertiaryContainer,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+            for (final notice in flowPriority.notices)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.tertiaryContainer.withAlpha(48),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.tertiary.withAlpha(100),
                     ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.priority_high,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.tertiary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(notice)),
+                    ],
+                  ),
+                ),
+              ),
             title('Geplante Reihenfolge'),
             const Text(
               'Unverbindliche Empfehlung zur gleichmäßigen Auslastung. Spiele im selben Block sind parallel vorgesehen. Ergebnisse können jederzeit direkt ohne Startschritt erfasst werden.',

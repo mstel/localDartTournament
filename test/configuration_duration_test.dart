@@ -5,7 +5,10 @@ import 'package:dart_tournament_manager/features/tournaments/domain/tournament_p
 
 void main() {
   const estimator = ConfigurationDurationEstimator();
-  const parameters = TournamentPlanningParameters();
+  final parameters = TournamentPlanningParameters.fromValues({
+    PlanningParameter.minutes501DoubleOut: 10,
+    PlanningParameter.boardIdleMinutes: 0,
+  });
   const group = TournamentStage(
     name: 'Liga',
     type: 'groups',
@@ -32,6 +35,17 @@ void main() {
       4500,
     ]);
     expect(group.toJson(), before);
+  });
+  test('default board idle time is counted between concurrent group waves', () {
+    const defaults = TournamentPlanningParameters();
+
+    final oneBoard = estimator.preview([group], 1, defaults)!;
+    final twoBoards = estimator.preview([group], 2, defaults)!;
+
+    expect(oneBoard.minutes, 95);
+    expect(oneBoard.waitMinutes, 20);
+    expect(twoBoards.minutes, 46);
+    expect(twoBoards.waitMinutes, 8);
   });
   test('formats and repeats affect estimates', () {
     final longer = TournamentStage.fromJson({

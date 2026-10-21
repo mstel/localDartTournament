@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/settings/data/planning_settings_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_planning_parameters.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_format_planner.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/planning_duration.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_creation_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -44,7 +45,12 @@ void main() {
       addTearDown(() => directory.delete(recursive: true));
       final file = File('${directory.path}/settings.json');
       final storage = PlanningSettingsStorage(file: file);
-      expect((await storage.load()).minutes501DoubleOut, 10);
+      final defaults = await storage.load();
+      expect(defaults.minutes301DoubleOut, 3);
+      expect(defaults.minutes501DoubleOut, 5);
+      expect(defaults.minutes301SingleOut, 2);
+      expect(defaults.minutes501SingleOut, 4);
+      expect(defaults.boardIdleMinutes, 4);
       await storage.save(
         TournamentPlanningParameters.fromValues({
           PlanningParameter.minutes501DoubleOut: 15,
@@ -55,7 +61,7 @@ void main() {
         15,
       );
       await storage.save(const TournamentPlanningParameters());
-      expect((await storage.load()).minutes501DoubleOut, 10);
+      expect((await storage.load()).minutes501DoubleOut, 5);
       await file.writeAsString('{"schemaVersion":99,"parameters":{}}');
       await expectLater(storage.load(), throwsFormatException);
       expect(await file.readAsString(), '{"schemaVersion":99,"parameters":{}}');
@@ -135,15 +141,31 @@ void main() {
     final base = TournamentFormatPlanner(
       parameters: TournamentPlanningParameters.fromValues({
         PlanningParameter.maximumGroups: 1,
+        PlanningParameter.boardIdleMinutes: 0,
       }),
     ).suggest(request).single;
     final slower = TournamentFormatPlanner(
       parameters: TournamentPlanningParameters.fromValues({
         PlanningParameter.maximumGroups: 1,
         PlanningParameter.minutes501DoubleOut: 20,
+        PlanningParameter.boardIdleMinutes: 0,
       }),
     ).suggest(request).single;
-    expect(slower.estimatedMinutes, base.estimatedMinutes * 2);
+    expect(slower.estimatedMinutes, base.estimatedMinutes * 4);
+  });
+
+  test('group block duration includes idle time between board waves', () {
+    final estimate = PlanningDuration.calculate(
+      groupSizes: const [4],
+      qualifiers: 0,
+      boards: 2,
+      matchMinutes: 10,
+      boardIdleMinutes: 4,
+    );
+
+    expect(estimate.groupSlots, 3);
+    expect(estimate.groupMinutes, 38);
+    expect(estimate.totalMinutes, 38);
   });
 
   test('group, suggestion and qualification parameters reach suggestions', () {

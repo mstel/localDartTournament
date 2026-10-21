@@ -54,6 +54,7 @@ class TournamentPlanningRequest {
   final bool requireGroupPhase;
   final int maximumStages;
   final int maximumLives;
+
   /// Null enables all modes; an empty set deliberately allows no suggestions.
   final Set<String>? enabledModes;
   final String? preferredFinalStage;
@@ -243,6 +244,7 @@ class TournamentFormatPlanner {
             knockoutSlots: slots.knockoutSlots,
             matchMinutes: groupMatchMinutes,
             knockoutMatchMinutes: finalMatchMinutes,
+            boardIdleMinutes: parameters.boardIdleMinutes,
           );
           final fits =
               minimumGames >= request.minimumMatchesPerPlayer &&
@@ -261,7 +263,8 @@ class TournamentFormatPlanner {
                     : '$groups Gruppen à $sizeDesc Spieler';
                 // Determine mode key for lookup (double round robin or regular)
                 final modeKey = 'groups:round_robin';
-                final modeLabel = TournamentPlanningRequest.modeLabels[modeKey] ?? '';
+                final modeLabel =
+                    TournamentPlanningRequest.modeLabels[modeKey] ?? '';
                 return '$groupDesc ($modeLabel)';
               })(),
               stages: [
@@ -301,6 +304,7 @@ class TournamentFormatPlanner {
           qualifiers: request.players,
           boards: request.boards,
           matchMinutes: _matchMinutes(format),
+          boardIdleMinutes: parameters.boardIdleMinutes,
         );
         final fits =
             request.minimumMatchesPerPlayer <= 1 &&
@@ -422,6 +426,7 @@ class TournamentFormatPlanner {
       matchMinutes:
           _legMinutes(format501) *
           PlanningDuration.estimatedLegs(format501.bestOfLegs),
+      boardIdleMinutes: parameters.boardIdleMinutes,
     ).totalMinutes;
     return estimated501 > (request.targetMinutes ?? request.maximumMinutes)
         ? TournamentGameFormat(

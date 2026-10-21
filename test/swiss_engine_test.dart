@@ -145,7 +145,10 @@ void main() {
         groupRoundRobinRepeats: [3],
       );
       const estimator = ConfigurationDurationEstimator();
-      const parameters = TournamentPlanningParameters();
+      final parameters = TournamentPlanningParameters.fromValues({
+        PlanningParameter.minutes501DoubleOut: 10,
+        PlanningParameter.boardIdleMinutes: 0,
+      });
       final three = estimator.preview([config], 3, parameters)!;
       final four = estimator.preview([config], 4, parameters)!;
       expect(three.totalMatches, 12);

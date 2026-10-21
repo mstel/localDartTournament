@@ -11,6 +11,9 @@ void main() {
   final planner = TournamentFormatPlanner(
     parameters: TournamentPlanningParameters.fromValues({
       PlanningParameter.maximumSuggestions: 64,
+      PlanningParameter.minutes301DoubleOut: 8,
+      PlanningParameter.minutes501DoubleOut: 10,
+      PlanningParameter.boardIdleMinutes: 0,
     }),
   );
   TournamentPlanningRequest request(String score) => TournamentPlanningRequest(

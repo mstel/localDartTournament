@@ -92,61 +92,88 @@ class PlayQueueMatch extends StatelessWidget {
     required this.origin,
     required this.board,
     required this.action,
+    this.isPriority = false,
   });
   final String home, away, origin;
   final int board;
   final Widget action;
+  final bool isPriority;
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-    ),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final pairing = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$home – $away',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(origin, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        );
-        final boardLabel = Text(
-          'Board $board',
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        );
-        if (constraints.maxWidth >= 640 &&
-            MediaQuery.textScalerOf(context).scale(16) <= 24) {
-          return Row(
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isPriority
+            ? colors.tertiaryContainer.withAlpha(48)
+            : colors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isPriority
+              ? colors.tertiary.withAlpha(100)
+              : colors.outlineVariant,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final pairing = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              boardLabel,
-              const SizedBox(width: 20),
-              Expanded(child: pairing),
-              const SizedBox(width: 12),
-              action,
+              Text(
+                '$home – $away',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(origin, style: Theme.of(context).textTheme.bodySmall),
             ],
           );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            boardLabel,
-            const SizedBox(height: 6),
-            pairing,
-            Align(alignment: Alignment.centerRight, child: action),
-          ],
-        );
-      },
-    ),
-  );
+          final boardLabel = Text(
+            'Board $board',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: colors.primary),
+          );
+          final priorityLabel = isPriority
+              ? Tooltip(
+                  message: 'Priorisierte Partie',
+                  child: Text(
+                    '!',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: colors.tertiary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              : null;
+          if (constraints.maxWidth >= 640 &&
+              MediaQuery.textScalerOf(context).scale(16) <= 24) {
+            return Row(
+              children: [
+                boardLabel,
+                const SizedBox(width: 20),
+                Expanded(child: pairing),
+                if (priorityLabel != null) ...[
+                  const SizedBox(width: 8),
+                  priorityLabel,
+                ],
+                const SizedBox(width: 12),
+                action,
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [boardLabel, const Spacer(), ?priorityLabel]),
+              const SizedBox(height: 6),
+              pairing,
+              Align(alignment: Alignment.centerRight, child: action),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }

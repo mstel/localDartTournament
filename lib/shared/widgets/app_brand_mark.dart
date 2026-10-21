@@ -19,7 +19,11 @@ class AppBrandMark extends StatelessWidget {
     valueListenable: AppThemeController.instance.logoBytesNotifier,
     builder: (context, bytes, _) {
       if (bytes == null) {
-        return Icon(icon, color: const Color(0xFF70E0BA), size: size);
+        return Icon(
+          icon,
+          color: Theme.of(context).colorScheme.primary,
+          size: size,
+        );
       }
       return ClipRRect(
         borderRadius: BorderRadius.circular(6),
@@ -28,8 +32,11 @@ class AppBrandMark extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) =>
-              Icon(icon, color: const Color(0xFF70E0BA), size: size),
+          errorBuilder: (context, error, stackTrace) => Icon(
+            icon,
+            color: Theme.of(context).colorScheme.primary,
+            size: size,
+          ),
         ),
       );
     },

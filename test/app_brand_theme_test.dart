@@ -14,11 +14,19 @@ void main() {
     final logoNotifier = AppThemeController.instance.logoBytesNotifier;
     addTearDown(() => logoNotifier.value = null);
 
+    const brandColor = Color(0xffa75e12);
     logoNotifier.value = null;
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: AppBrandMark(size: 40))),
+      MaterialApp(
+        theme: ThemeData(colorScheme: ColorScheme.light(primary: brandColor)),
+        home: const Scaffold(body: AppBrandMark(size: 40)),
+      ),
     );
     expect(find.byIcon(Icons.sports_score), findsOneWidget);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.sports_score)).color,
+      brandColor,
+    );
 
     logoNotifier.value = await tester.runAsync(_transparentPixelPng);
     await tester.pump();

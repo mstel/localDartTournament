@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../application/tournament_flow_priority.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../domain/tournament_models.dart';
@@ -43,11 +44,14 @@ class _TournamentDirectorDashboardState
   Timer? _timer;
   bool _busy = false;
   String? _actionError;
+  int _noticeIndex = 0;
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) setState(() {});
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (mounted) {
+        setState(() => _noticeIndex++);
+      }
     });
   }
 
@@ -121,37 +125,126 @@ class _TournamentDirectorDashboardState
     List<PlayEntry> entries, {
     required String emptyMessage,
     bool showResult = false,
+    Set<GroupMatch> prioritizedMatches = const {},
   }) => _box([
     Text(title, style: Theme.of(context).textTheme.titleLarge),
-    const SizedBox(height: 4),
+    const SizedBox(height: 8),
     if (entries.isEmpty)
       Text(emptyMessage)
     else
-      for (final entry in entries)
-        ListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(
-            showResult ? Icons.check_circle_outline : Icons.sports_score,
-          ),
-          title: Text(
-            '${entry.match.homePlayer?.name ?? 'Freilos'} · '
-            '${entry.match.awayPlayer?.name ?? 'Freilos'}',
-          ),
-          subtitle: Text(
-            showResult
-                ? entry.origin
-                : 'Etappe ${entry.stageIndex + 1}'
-                      '${entry.match.boardNumber == null ? '' : ' · Board ${entry.match.boardNumber}'}',
-          ),
-          trailing: showResult
-              ? Text(
-                  '${entry.match.homeLegs ?? 0}:${entry.match.awayLegs ?? 0}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                )
-              : null,
-        ),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth >= 1100
+              ? (constraints.maxWidth - 5 * 8) / 6
+              : constraints.maxWidth >= 700
+              ? (constraints.maxWidth - 2 * 8) / 3
+              : constraints.maxWidth;
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in entries)
+                _queueTile(
+                  entry,
+                  width: width,
+                  showResult: showResult,
+                  isPriority: prioritizedMatches.contains(entry.match),
+                ),
+            ],
+          );
+        },
+      ),
   ]);
+
+  Widget _queueTile(
+    PlayEntry entry, {
+    required double width,
+    required bool showResult,
+    required bool isPriority,
+  }) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final match = entry.match;
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isPriority
+            ? colors.tertiaryContainer.withAlpha(48)
+            : colors.surfaceContainerLow,
+        border: Border.all(
+          color: isPriority
+              ? colors.tertiary.withAlpha(100)
+              : colors.outlineVariant.withAlpha(100),
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                showResult ? Icons.check_circle_outline : Icons.sports_score,
+                size: 18,
+                color: colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  showResult
+                      ? entry.origin
+                      : 'Etappe ${entry.stageIndex + 1}'
+                            '${match.boardNumber == null ? '' : ' · Board ${match.boardNumber}'}',
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isPriority)
+                Tooltip(
+                  message: 'Priorisierte Partie',
+                  child: Text(
+                    '!',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: colors.tertiary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${match.homePlayer?.name ?? 'Freilos'} · '
+            '${match.awayPlayer?.name ?? 'Freilos'}',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (showResult) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${match.homeLegs ?? 0}:${match.awayLegs ?? 0}',
+              style: theme.textTheme.titleMedium,
+            ),
+            for (final performance in match.bestPerformances.take(2))
+              Text(
+                '${performance.playerName} · ${performance.label}'
+                '${performance.value == null ? '' : ' ${performance.value}'}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.primary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => _build(context);
@@ -174,6 +267,26 @@ class _TournamentDirectorDashboardState
               assignment.entry.stageIndex == widget.activeStage &&
               assignment.entry.match.hasPlayers,
         )
+        .toList();
+    final flowPriority = TournamentFlowPriority.forStage(
+      t.runStages[widget.activeStage],
+    );
+    upcoming.sort((a, b) {
+      final aIsPriority = flowPriority.prioritizedMatches.contains(
+        a.entry.match,
+      );
+      final bIsPriority = flowPriority.prioritizedMatches.contains(
+        b.entry.match,
+      );
+      final priorityComparison = aIsPriority == bIsPriority
+          ? 0
+          : aIsPriority
+          ? -1
+          : 1;
+      if (priorityComparison != 0) return priorityComparison;
+      return a.block.compareTo(b.block);
+    });
+    final nextSix = upcoming
         .take(6)
         .map((assignment) => assignment.entry)
         .toList();
@@ -194,59 +307,7 @@ class _TournamentDirectorDashboardState
             return bTime.compareTo(aTime);
           });
     final latestResults = recentResults.take(2).toList();
-    // Prüfe auf Ungleichgewicht der absolvierten Spiele pro Spieler in Gruppen
-    final List<String> flowNotices = [];
-    if (t.runStages[widget.activeStage] is GroupTournamentRunStage) {
-      final groupStage =
-          t.runStages[widget.activeStage] as GroupTournamentRunStage;
-      final groupProgress = [
-        for (final group in groupStage.groups)
-          if (group.matches.any((match) => match.hasPlayers))
-            group.matches.where((match) => match.hasResult).length /
-                group.matches.where((match) => match.hasPlayers).length,
-      ];
-      if (groupProgress.length > 1) {
-        final spread =
-            (groupProgress.reduce((a, b) => a > b ? a : b) -
-                groupProgress.reduce((a, b) => a < b ? a : b)) *
-            100;
-        if (spread >= 25) {
-          flowNotices.add(
-            'Die Gruppen liegen beim Spielfortschritt ${spread.round()} Prozentpunkte auseinander. '
-            'Offene Partien der zurückliegenden Gruppen sollten bevorzugt angesetzt werden.',
-          );
-        }
-      }
-      for (final group in groupStage.groups) {
-        if (group.players.length >= 3) {
-          final playedMap = <TournamentPlayer, int>{};
-          for (final p in group.players) {
-            playedMap[p] = group.matches
-                .where(
-                  (m) =>
-                      m.hasPlayers &&
-                      m.hasResult &&
-                      (m.homePlayer == p || m.awayPlayer == p),
-                )
-                .length;
-          }
-          final sortedPlayers = group.players.toList()
-            ..sort((a, b) => (playedMap[b] ?? 0).compareTo(playedMap[a] ?? 0));
-          if (sortedPlayers.length >= 2) {
-            final most = sortedPlayers.first;
-            final least = sortedPlayers.last;
-            final diff = (playedMap[most] ?? 0) - (playedMap[least] ?? 0);
-            if (diff >= 2 && (playedMap[least] ?? 0) < group.matches.length) {
-              flowNotices.add(
-                'In ${group.name} hat ${most.name} bereits ${playedMap[most]} Partien absolviert, '
-                'während ${least.name} erst ${playedMap[least]} Partien gespielt hat. '
-                'Offene Partien von ${least.name} sollten priorisiert werden, um den Turnierfluss nicht zu blockieren.',
-              );
-            }
-          }
-        }
-      }
-    }
+    final flowNotices = flowPriority.notices;
 
     final totalGames = active.length;
     final progressPct = totalGames > 0
@@ -357,22 +418,6 @@ class _TournamentDirectorDashboardState
             'Spielstart derzeit gesperrt: Etappenfreigabe oder Auslosung abwarten.',
           ),
         ),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (context) => Dialog.fullscreen(
-              child: TournamentSecondScreenView(
-                tournament: t,
-                isStandaloneWindow: true,
-              ),
-            ),
-          ),
-          icon: const Icon(Icons.open_in_new),
-          label: const Text('2. Bildschirm (TV-Vollbild) öffnen'),
-        ),
-      ),
     ]);
 
     final notices = _box([
@@ -392,10 +437,11 @@ class _TournamentDirectorDashboardState
         ),
       ],
       if (_actionError != null) Text(_actionError!),
-      for (final notice in flowNotices)
+      if (flowNotices.isNotEmpty)
         Builder(
           builder: (context) {
             final colors = Theme.of(context).colorScheme;
+            final notice = flowNotices[_noticeIndex % flowNotices.length];
             return Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.all(10),
@@ -458,8 +504,9 @@ class _TournamentDirectorDashboardState
         const SizedBox(height: 12),
         _matchQueue(
           'Nächste 6 Spiele',
-          upcoming,
+          nextSix,
           emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+          prioritizedMatches: flowPriority.prioritizedMatches,
         ),
         const SizedBox(height: 12),
         _matchQueue(

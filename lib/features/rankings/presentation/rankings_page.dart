@@ -708,11 +708,10 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                 ],
                 if (ranked.length > 5)
                   TextButton(
+                    key: ValueKey('year-review-show-all-${widget.title}'),
                     onPressed: () => setState(() => _showAll = !_showAll),
                     child: Text(
-                      _showAll
-                          ? 'Weniger anzeigen'
-                          : 'Alle anzeigen (${ranked.length})',
+                      _showAll ? 'Weniger anzeigen' : 'Alle anzeigen',
                     ),
                   ),
               ],
@@ -936,9 +935,11 @@ class _RankingsPageState extends State<RankingsPage> {
                 'Ranglisten verwalten',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
+              const SizedBox(height: 8),
               const Text(
                 'Ranglisten werden lokal geführt und im konto-bezogenen Supabase-Datenstand gesichert.',
               ),
+              const SizedBox(height: 12),
               if (snapshot.connectionState == ConnectionState.waiting)
                 const LinearProgressIndicator(),
               if (snapshot.hasError)

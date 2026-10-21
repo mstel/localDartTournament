@@ -90,12 +90,33 @@ void main() {
       find.byType(TournamentRankingAssignment),
       500,
     );
+    await tester.pumpAndSettle();
+
+    final completionCard = tester.widget<Card>(
+      find.ancestor(
+        of: find.text('Turnier abgeschlossen'),
+        matching: find.byType(Card),
+      ),
+    );
+    expect(completionCard.color, const Color(0xff0b6b45));
+    expect(find.byIcon(Icons.emoji_events), findsNothing);
 
     expect(find.text('Ranglisten-Zuweisung'), findsOneWidget);
     expect(find.text('Gesamtwertung'), findsNothing);
     expect(find.text('Turnierstatistik'), findsNothing);
     expect(find.text('Spielerstatistiken'), findsNothing);
     expect(find.text('Vereinsrangliste 2026'), findsOneWidget);
+    final scrollable = find.byType(Scrollable).first;
+    final assignmentScrollOffset = tester
+        .state<ScrollableState>(scrollable)
+        .position
+        .pixels;
+    final exportButton = find.text('Turnier exportieren');
+    await tester.scrollUntilVisible(exportButton, 500, scrollable: scrollable);
+    expect(
+      tester.state<ScrollableState>(scrollable).position.pixels,
+      greaterThan(assignmentScrollOffset),
+    );
     expect(tester.takeException(), isNull);
   });
 

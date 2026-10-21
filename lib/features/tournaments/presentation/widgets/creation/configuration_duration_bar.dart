@@ -121,6 +121,8 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
                 : _error ??
                       (_minutes == null
                           ? 'Bitte eine vollständige Etappe konfigurieren.'
+                          : _minutes! < 60
+                          ? 'ca. ${_minutes!} min'
                           : 'ca. ${_minutes! ~/ 60} h ${_minutes! % 60} min'),
             style: Theme.of(context).textTheme.titleLarge,
           ),
@@ -131,6 +133,11 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
             ),
             Text(
               'Garantiert mindestens ${_estimate!.minimumMatches} Spiele je Teilnehmer',
+            ),
+            Text(
+              'Zusätzliche Pausen- und Leerstandszeit: '
+              'ca. ${_estimate!.waitMinutes.ceil()} min '
+              '(Leerstand ${_parameters!.boardIdleMinutes} min je Boardwechsel).',
             ),
             const Text(
               'Matches, nicht einzelne Legs. Freilose zählen nicht als Spiel. Spätere Etappen zählen zur Mindestzahl nur, wenn alle Teilnehmer sie erreichen. Zusätzliche Entscheidungsspiele sind nicht enthalten.',
@@ -170,8 +177,11 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
                 : 'Berechnet für die hinzugefügten Etappen.',
           ),
           const Text(
-            'Schätzung mit Boardbelegung und durchschnittlicher Leg-/Set-Anzahl. '
-            'Ergebnisse, Entscheidungsspiele und zusätzliche Pausen können die Dauer verändern.',
+            'Die Schätzung addiert die durchschnittliche Matchdauer je Zeitblock. '
+            'Gleichzeitig spielbare Matches teilen sich einen Block; der Board-Leerstand '
+            'wird nur zwischen belegten Blöcken berücksichtigt. Abhängige KO- und '
+            'Swiss-Runden werden nacheinander eingeplant. Ergebnisse, Entscheidungsspiele '
+            'und zusätzliche Pausen können die Dauer verändern.',
           ),
         ],
       ),

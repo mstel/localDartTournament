@@ -43,9 +43,9 @@ void main() {
     await tester.tap(allocation);
     await tester.pumpAndSettle();
 
-    expect(find.text('Leistungsstufen trennen'), findsWidgets);
-    expect(find.text('Gleichstarke Gruppen'), findsWidgets);
-    expect(find.text('Zufall'), findsWidgets);
+    expect(find.text('Wertungsstufen bündeln'), findsWidgets);
+    expect(find.text('Stärken gleichmäßig verteilen'), findsWidgets);
+    expect(find.text('Zufällig verteilen'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

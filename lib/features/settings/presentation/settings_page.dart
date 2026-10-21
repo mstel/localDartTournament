@@ -319,6 +319,13 @@ class _PlanningParametersPanelState extends State<_PlanningParametersPanel> {
           const Text(
             'Die Parameter gelten nach dem Speichern für neue Berechnungen. Bereits erstellte Turniere bleiben unverändert.',
           ),
+          const SizedBox(height: 8),
+          const Text(
+            'Die Minutenwerte gelten je Leg. Die Zeitvorschau berücksichtigt '
+            'durchschnittliche Legs pro Match, gleichzeitig belegbare Boards '
+            'und abhängige KO-/Swiss-Runden. Leerstand wird je Boardwechsel '
+            'zwischen zwei belegten Zeitblöcken addiert.',
+          ),
           const SizedBox(height: 16),
           for (final category
               in PlanningParameter.values.map((p) => p.category).toSet())

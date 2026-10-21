@@ -1956,19 +1956,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return widget.tournament.runStages[stageIndex];
     }
 
-    // Qualification and seeding remain provisional until the source stage is
-    // completed. Preview the bracket structure without presenting live table
-    // positions as confirmed participants (including possible bye recipients).
-    final qualifierCount = _advancingPlayersFromStage(
-      widget.tournament.runStages[_activeStageIndex],
-    ).length;
-    var incomingPlayers = List.generate(
-      qualifierCount,
-      (index) => TournamentPlayer(
-        name: 'Qualifikant ${index + 1} (noch offen)',
-        isGenerated: true,
-      ),
-    );
+    final sourceStage = widget.tournament.runStages[_activeStageIndex];
+    var incomingPlayers = const GroupStagePreviewService()
+        .presentProjectedPlayers(
+          stage: sourceStage,
+          projectedPlayers: _advancingPlayersFromStage(sourceStage),
+          tournament: widget.tournament,
+        );
     late TournamentRunStage previewStage;
 
     for (

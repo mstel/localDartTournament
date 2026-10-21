@@ -25,6 +25,8 @@ class LocalPlayerStatistics {
   final int tournaments, matches, wins, losses, draws, tournamentWins;
   final int legsWon, legsLost, legsDrawn, setsWon, setsLost;
   final List<BestPerformance> bestPerformances;
+  int get legsPlayed => legsWon + legsLost;
+  int get setsPlayed => setsWon + setsLost;
   double get matchWinRate => matches == 0 ? 0 : wins * 100 / matches;
   double get tournamentWinRate =>
       tournaments == 0 ? 0 : tournamentWins * 100 / tournaments;

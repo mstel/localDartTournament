@@ -71,14 +71,50 @@ void main() {
     await tester.pump();
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.textContaining('A · vorläufig weiter'), findsOneWidget);
-    expect(find.textContaining('B · vorläufig weiter'), findsNothing);
+    expect(find.textContaining('A · vorläufig'), findsOneWidget);
+    expect(find.textContaining('B · vorläufig'), findsNothing);
     expect(find.text('Vorschau schließen'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('Vorschau schließen'));
     await tester.pump();
     expect(find.text('Zuletzt beendete Matches'), findsOneWidget);
+  });
+
+  testWidgets('next-stage preview labels fixed qualifiers as set', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament();
+    final group =
+        (tournament.runStages.first as GroupTournamentRunStage).groups.first;
+    for (var index = 3; index < group.matches.length; index++) {
+      group.matches[index]
+        ..homeLegs = 2
+        ..awayLegs = 0;
+    }
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Vorschau für die nächste Etappe'));
+    await tester.pump();
+
+    expect(find.textContaining('A · gesetzt'), findsOneWidget);
+    expect(find.textContaining('B · gesetzt'), findsOneWidget);
+    expect(find.text('Die Setzplätze der Etappe stehen fest.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('forecast tab shows tournament and advancement probabilities', (
@@ -170,9 +206,14 @@ void main() {
       name: 'Caro',
       isGenerated: false,
     );
+    final dana = TournamentPlayer(
+      profileId: 'profile-dana-64',
+      name: 'Dana',
+      isGenerated: false,
+    );
     final tournament = CreatedTournament(
       name: 'TV-Namen-Test',
-      players: [anna, ben, caro],
+      players: [anna, ben, caro, dana],
       stages: const [],
       runStages: [
         GroupTournamentRunStage(
@@ -182,10 +223,22 @@ void main() {
             TournamentGroup(
               name: 'Gruppe A',
               playType: 'round_robin',
-              players: [anna, ben, caro],
+              players: [anna, ben, caro, dana],
               matches: [
-                GroupMatch(homePlayer: anna, awayPlayer: ben, round: 1),
-                GroupMatch(homePlayer: anna, awayPlayer: caro, round: 2),
+                GroupMatch(
+                  homePlayer: ben,
+                  awayPlayer: caro,
+                  round: 1,
+                  homeLegs: 3,
+                  awayLegs: 1,
+                ),
+                GroupMatch(
+                  homePlayer: ben,
+                  awayPlayer: dana,
+                  round: 2,
+                  homeLegs: 3,
+                  awayLegs: 1,
+                ),
               ],
             ),
           ],

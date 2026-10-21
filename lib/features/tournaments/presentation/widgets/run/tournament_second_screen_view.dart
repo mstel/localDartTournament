@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/qualification_certainty.dart';
+import '../../../application/group_stage_preview_service.dart';
+import '../../../application/tournament_flow_priority.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../application/group_advancement_forecast_service.dart';
@@ -44,6 +46,8 @@ class _TournamentSecondScreenViewState
   bool _showInlineNextStagePreview = false;
   bool _showPrognosis = false;
   Timer? _clockTimer;
+  int _clockTicks = 0;
+  int _priorityNoticeIndex = 0;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
@@ -56,7 +60,12 @@ class _TournamentSecondScreenViewState
     _refreshEloChanges();
     _refreshAdvancementForecast();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          _clockTicks++;
+          if (_clockTicks % 8 == 0) _priorityNoticeIndex++;
+        });
+      }
     });
   }
 
@@ -588,6 +597,9 @@ class _TournamentSecondScreenViewState
     final certainQualifiers = groupStage == null
         ? const <int, TournamentPlayer>{}
         : _certainQualifierByInputIndex(groupStage);
+    final groupStageIsSet =
+        groupStage != null &&
+        const GroupStagePreviewService().isStageSet(groupStage);
     final config = stageIndex != null && stageIndex < t.stages.length
         ? t.stages[stageIndex]
         : null;
@@ -611,7 +623,7 @@ class _TournamentSecondScreenViewState
             ? null
             : certainQualifiers[playerIndex];
         if (guaranteed != null) {
-          return '${guaranteed.name} · vorläufig weiter';
+          return '${guaranteed.name} · ${groupStageIsSet ? 'gesetzt' : 'vorläufig'}';
         }
       }
       return 'Qualifikant offen';
@@ -629,11 +641,13 @@ class _TournamentSecondScreenViewState
           ),
         ),
         if (certainQualifiers.isNotEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 4),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
             child: Text(
-              'Setzplätze bleiben bis zum Abschluss der Etappe vorläufig.',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              groupStageIsSet
+                  ? 'Die Setzplätze der Etappe stehen fest.'
+                  : 'Setzplätze bleiben bis zum Abschluss der Etappe vorläufig.',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ),
         if (certainQualifiers.isNotEmpty && !canShowSeedPositions)
@@ -853,8 +867,10 @@ class _TournamentSecondScreenViewState
     required String awayLabel,
     required int matchNumber,
   }) {
-    final homeIsCertain = homeLabel.contains('vorläufig weiter');
-    final awayIsCertain = awayLabel.contains('vorläufig weiter');
+    final homeIsCertain =
+        homeLabel.contains('· vorläufig') || homeLabel.contains('· gesetzt');
+    final awayIsCertain =
+        awayLabel.contains('· vorläufig') || awayLabel.contains('· gesetzt');
     return Container(
       padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
@@ -1401,44 +1417,60 @@ class _TournamentSecondScreenViewState
     TournamentRunStage? stage, {
     bool expand = true,
   }) {
+    final schedule = const OrderOfPlayController().plan(t, activeIndex);
+    final flowPriority = TournamentFlowPriority.forStage(stage);
     final matches = _matchesOf(
       stage,
     ).where((m) => m.hasPlayers && !m.isResolved).toList();
-
-    final schedule = const OrderOfPlayController().plan(t, activeIndex);
-    final openCounts = <String, int>{};
-    for (final assignment in schedule.planned) {
-      for (final player in assignment.entry.players) {
-        openCounts[player] = (openCounts[player] ?? 0) + 1;
-      }
-    }
-
-    final namesById = <String, String>{
-      for (final player in t.players) ...{
-        if (player.profileId != null) player.profileId!: player.name,
-        player.name: player.name,
-        for (final individual in player.individuals)
-          individual.profileId ?? individual.name: individual.name,
-      },
+    final plannedOrder = {
+      for (var index = 0; index < schedule.planned.length; index++)
+        schedule.planned[index].entry.match: index,
     };
-    final preferredPlayers = <String>{};
-    String? priorityNotice;
-    if (openCounts.isNotEmpty) {
-      final maxOpen = openCounts.values.reduce(max);
-      final minOpen = openCounts.values.reduce(min);
-      if (maxOpen >= 2 && maxOpen - minOpen >= 1) {
-        preferredPlayers.addAll(
-          openCounts.entries
-              .where((entry) => entry.value == maxOpen)
-              .map((entry) => entry.key),
-        );
-        final preferredNames = preferredPlayers
-            .map((id) => namesById[id] ?? 'Spieler')
-            .toList();
-        priorityNotice =
-            'Priorität: ${preferredNames.join(', ')} hat noch $maxOpen offene Partien (Schnitt: $minOpen). Bevorzugt aufrufen!';
-      }
-    }
+    matches.sort((a, b) {
+      final aIsPriority = flowPriority.prioritizedMatches.contains(a);
+      final bIsPriority = flowPriority.prioritizedMatches.contains(b);
+      final priority = aIsPriority == bIsPriority
+          ? 0
+          : aIsPriority
+          ? -1
+          : 1;
+      if (priority != 0) return priority;
+      return (plannedOrder[a] ?? 1 << 30).compareTo(plannedOrder[b] ?? 1 << 30);
+    });
+    final priorityNotice = flowPriority.notices.isEmpty
+        ? null
+        : flowPriority.notices[_priorityNoticeIndex %
+              flowPriority.notices.length];
+    final priorityBanner = priorityNotice == null
+        ? null
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF30291D),
+              border: Border.all(color: const Color(0xFF75613C)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.priority_high,
+                  size: 18,
+                  color: Color(0xFFC4A96F),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    priorityNotice,
+                    style: const TextStyle(
+                      color: Color(0xFFD2C09B),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
 
     final matchesContent = matches.isEmpty
         ? const Center(
@@ -1455,15 +1487,9 @@ class _TournamentSecondScreenViewState
                 _buildMatchTile(
                   context,
                   matches[i],
-                  isPreferred:
-                      preferredPlayers.contains(
-                        matches[i].homePlayer?.profileId ??
-                            matches[i].homePlayer?.name,
-                      ) ||
-                      preferredPlayers.contains(
-                        matches[i].awayPlayer?.profileId ??
-                            matches[i].awayPlayer?.name,
-                      ),
+                  isPreferred: flowPriority.prioritizedMatches.contains(
+                    matches[i],
+                  ),
                 ),
             ],
           );
@@ -1492,37 +1518,28 @@ class _TournamentSecondScreenViewState
           ],
         ),
         const SizedBox(height: 8),
-        if (priorityNotice != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3E2D12),
-              border: Border.all(color: Colors.amber.shade700),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.priority_high, size: 18, color: Colors.amber),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    priorityNotice,
-                    style: const TextStyle(
-                      color: Colors.amberAccent,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
         if (expand)
-          Expanded(child: SingleChildScrollView(child: matchesContent))
-        else
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (priorityBanner != null) ...[
+                    priorityBanner,
+                    const SizedBox(height: 10),
+                  ],
+                  matchesContent,
+                ],
+              ),
+            ),
+          )
+        else ...[
+          if (priorityBanner != null) ...[
+            priorityBanner,
+            const SizedBox(height: 10),
+          ],
           matchesContent,
+        ],
       ],
     );
   }
@@ -1541,7 +1558,7 @@ class _TournamentSecondScreenViewState
         color: const Color(0xFF14202B),
         border: Border.all(
           color: isPreferred
-              ? Colors.amber
+              ? const Color(0xFF8A744C)
               : isRunning
               ? const Color(0xFF70E0BA)
               : const Color(0xFF263D52),
@@ -1585,12 +1602,16 @@ class _TournamentSecondScreenViewState
                   spacing: 2,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Icon(Icons.priority_high, color: Colors.amber, size: 18),
+                    Icon(
+                      Icons.priority_high,
+                      color: Color(0xFFC4A96F),
+                      size: 18,
+                    ),
                     Text(
-                      'Bevorzugt',
+                      '!',
                       style: TextStyle(
-                        color: Colors.amber,
-                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFD2C09B),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],

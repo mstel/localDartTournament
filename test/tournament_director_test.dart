@@ -10,6 +10,7 @@ import 'package:dart_tournament_manager/features/tournaments/application/order_o
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'order_of_play_test.dart' show fixture;
 
 class DirectorPreview extends StatefulWidget {
@@ -212,12 +213,12 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const MaterialApp(home: DirectorPreview()));
     expect(find.byType(TournamentDirectorDashboard), findsOneWidget);
-    expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsOneWidget);
+    expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsNothing);
     expect(tester.takeException(), isNull);
     tester.view.physicalSize = const Size(1440, 900);
     await tester.pumpAndSettle();
     expect(find.byType(TournamentDirectorDashboard), findsOneWidget);
-    expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsOneWidget);
+    expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -298,16 +299,77 @@ void main() {
     tester,
   ) async {
     final tournament = fixture();
-    final matches =
-        (tournament.runStages.single as GroupTournamentRunStage)
-            .groups
-            .single
-            .matches;
+    final matches = (tournament.runStages.single as GroupTournamentRunStage)
+        .groups
+        .single
+        .matches;
     for (var index = 0; index < 3; index++) {
       matches[index]
         ..homeLegs = 3
         ..awayLegs = 1
         ..finishedAt = DateTime.utc(2026, 1, index + 1);
+    }
+    matches[2].bestPerformances = const [
+      BestPerformance(
+        type: BestPerformanceType.score180,
+        playerName: 'Spieler 3',
+        value: 180,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final upcoming = find
+        .ancestor(
+          of: find.text('Nächste 6 Spiele'),
+          matching: find.byType(Card),
+        )
+        .first;
+    final recent = find
+        .ancestor(
+          of: find.text('Letzte 2 Ergebnisse'),
+          matching: find.byType(Card),
+        )
+        .first;
+    expect(
+      find.descendant(of: upcoming, matching: find.byType(Container)),
+      findsNWidgets(6),
+    );
+    expect(
+      find.descendant(of: recent, matching: find.byType(Container)),
+      findsNWidgets(2),
+    );
+    expect(find.text('Spieler 3 · 180+ 180'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('director queue marks priority matches with a tooltip', (
+    tester,
+  ) async {
+    final tournament = fixture();
+    final matches = (tournament.runStages.single as GroupTournamentRunStage)
+        .groups
+        .single
+        .matches;
+    for (final match in matches.take(2)) {
+      match
+        ..homeLegs = 3
+        ..awayLegs = 1;
     }
 
     await tester.pumpWidget(
@@ -327,22 +389,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final upcoming = find.ancestor(
-      of: find.text('Nächste 6 Spiele'),
-      matching: find.byType(Card),
-    ).first;
-    final recent = find.ancestor(
-      of: find.text('Letzte 2 Ergebnisse'),
-      matching: find.byType(Card),
-    ).first;
-    expect(
-      find.descendant(of: upcoming, matching: find.byType(ListTile)),
-      findsNWidgets(6),
-    );
-    expect(
-      find.descendant(of: recent, matching: find.byType(ListTile)),
-      findsNWidgets(2),
-    );
+    expect(find.byTooltip('Priorisierte Partie'), findsWidgets);
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets('save and synchronization errors stay visible and offer retry', (

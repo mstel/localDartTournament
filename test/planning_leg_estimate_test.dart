@@ -1,10 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/planning_duration.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_format_planner.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/tournament_planning_parameters.dart';
 
 void main() {
+  final planner = TournamentFormatPlanner(
+    parameters: TournamentPlanningParameters.fromValues({
+      PlanningParameter.minutes501DoubleOut: 10,
+      PlanningParameter.boardIdleMinutes: 0,
+    }),
+  );
   test('automatic finder includes Bo101 for a matching time window', () {
-    final suggestions = const TournamentFormatPlanner().suggestFormats(
+    final suggestions = planner.suggestFormats(
       const TournamentPlanningRequest(
         requireGroupPhase: true,
         players: 3,
@@ -31,7 +38,7 @@ void main() {
       expect(PlanningDuration.estimatedLegs(7), 5.5);
       expect(PlanningDuration.estimatedLegs(1), 1);
       for (final bestOf in [3, 5, 7, 21, 101]) {
-        final suggestion = const TournamentFormatPlanner()
+        final suggestion = planner
             .suggest(
               TournamentPlanningRequest(
                 requireGroupPhase: true,

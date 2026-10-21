@@ -10,16 +10,30 @@ class PlanningDuration {
     required this.groupSlots,
     required this.knockoutSlots,
     required this.matchMinutes,
+    this.boardIdleMinutes = 0,
     num? knockoutMatchMinutes,
   }) : knockoutMatchMinutes = knockoutMatchMinutes ?? matchMinutes;
   final int groupSlots;
   final int knockoutSlots;
   final num matchMinutes;
   final num knockoutMatchMinutes;
+  final num boardIdleMinutes;
+  int get _knockoutSwitches => groupSlots > 0
+      ? knockoutSlots
+      : knockoutSlots > 0
+      ? knockoutSlots - 1
+      : 0;
   // Avoid rounding floating-point residues above whole minutes up again.
-  int get groupMinutes => (groupSlots * matchMinutes - 1e-9).ceil();
+  int get groupMinutes =>
+      (groupSlots * matchMinutes +
+              (groupSlots > 0 ? groupSlots - 1 : 0) * boardIdleMinutes -
+              1e-9)
+          .ceil();
   int get knockoutMinutes =>
-      (knockoutSlots * knockoutMatchMinutes - 1e-9).ceil();
+      (knockoutSlots * knockoutMatchMinutes +
+              _knockoutSwitches * boardIdleMinutes -
+              1e-9)
+          .ceil();
   int get totalMinutes => groupMinutes + knockoutMinutes;
 
   static double estimatedLegs(int bestOfLegs) {
@@ -39,10 +53,12 @@ class PlanningDuration {
     required int boards,
     required num matchMinutes,
     num? knockoutMatchMinutes,
+    num boardIdleMinutes = 0,
   }) {
     if (boards < 1 ||
         matchMinutes < 1 ||
-        (knockoutMatchMinutes ?? matchMinutes) < 1) {
+        (knockoutMatchMinutes ?? matchMinutes) < 1 ||
+        boardIdleMinutes < 0) {
       throw ArgumentError('Positive boards and match duration required');
     }
     final groupEntries = <PlayEntry>[];
@@ -78,6 +94,7 @@ class PlanningDuration {
       knockoutSlots: knockoutSlots,
       matchMinutes: matchMinutes,
       knockoutMatchMinutes: knockoutMatchMinutes,
+      boardIdleMinutes: boardIdleMinutes,
     );
   }
 }

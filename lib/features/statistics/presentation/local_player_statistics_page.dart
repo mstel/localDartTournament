@@ -170,22 +170,34 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   spacing: 12,
                   runSpacing: 12,
                   children: [
-                    _StatCard(label: 'Turniere', value: '${stats.tournaments}'),
-                    _StatCard(label: 'Spiele', value: '${stats.matches}'),
-                    _StatCard(label: 'Siege', value: '${stats.wins}'),
-                    _StatCard(label: 'Niederlagen', value: '${stats.losses}'),
                     _StatCard(
-                      label: 'Turniersiege',
+                      label: 'Spiele gespielt',
+                      value: '${stats.matches}',
+                    ),
+                    _StatCard(label: 'Spiele gewonnen', value: '${stats.wins}'),
+                    _StatCard(
+                      label: 'Spiele verloren',
+                      value: '${stats.losses}',
+                    ),
+                    _StatCard(
+                      label: 'Spiele unentschieden',
+                      value: '${stats.draws}',
+                    ),
+                    _StatCard(
+                      label: 'Siegquote Spiele',
+                      value: '${stats.matchWinRate.toStringAsFixed(1)} %',
+                    ),
+                    _StatCard(
+                      label: 'Turniere gespielt',
+                      value: '${stats.tournaments}',
+                    ),
+                    _StatCard(
+                      label: 'Turniere gewonnen',
                       value: '${stats.tournamentWins}',
                     ),
                     _StatCard(
                       label: 'Turniersiegquote',
                       value: '${stats.tournamentWinRate.toStringAsFixed(1)} %',
-                    ),
-                    _StatCard(label: 'Unentschieden', value: '${stats.draws}'),
-                    _StatCard(
-                      label: 'Siegquote',
-                      value: '${stats.matchWinRate.toStringAsFixed(1)} %',
                     ),
                   ],
                 ),
@@ -199,23 +211,35 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   runSpacing: 12,
                   children: [
                     _StatCard(
-                      label: 'Legs gewonnen / verloren',
-                      value: '${stats.legsWon} / ${stats.legsLost}',
+                      label: 'Legs gespielt',
+                      value: '${stats.legsPlayed}',
                     ),
                     _StatCard(
-                      label: 'Matches mit gleich vielen Legs',
-                      value: '${stats.legsDrawn}',
+                      label: 'Legs gewonnen',
+                      value: '${stats.legsWon}',
                     ),
                     _StatCard(
-                      label: 'Leg-Siegquote',
+                      label: 'Legs verloren',
+                      value: '${stats.legsLost}',
+                    ),
+                    _StatCard(
+                      label: 'Siegquote Legs',
                       value: '${stats.legWinRate.toStringAsFixed(1)} %',
                     ),
                     _StatCard(
-                      label: 'Sets gewonnen / verloren',
-                      value: '${stats.setsWon} / ${stats.setsLost}',
+                      label: 'Sets gespielt',
+                      value: '${stats.setsPlayed}',
                     ),
                     _StatCard(
-                      label: 'Set-Siegquote',
+                      label: 'Sets gewonnen',
+                      value: '${stats.setsWon}',
+                    ),
+                    _StatCard(
+                      label: 'Sets verloren',
+                      value: '${stats.setsLost}',
+                    ),
+                    _StatCard(
+                      label: 'Siegquote Sets',
                       value: '${stats.setWinRate.toStringAsFixed(1)} %',
                     ),
                   ],

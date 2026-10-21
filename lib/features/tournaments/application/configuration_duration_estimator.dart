@@ -59,6 +59,7 @@ class ConfigurationDurationEstimator {
     var minimumMatches = 0;
     var allParticipantsReachStage = true;
     var variableMatches = false;
+    var hasScheduledBlocks = false;
     for (var index = 0; index < stages.length; index++) {
       final config = stages[index];
       final count = config.type == 'groups'
@@ -102,12 +103,25 @@ class ConfigurationDurationEstimator {
         );
         final slots = schedule.isEmpty ? 0 : schedule.last.block + 1;
         final matchMinutes = planner.estimatedMatchMinutes(config.gameFormat);
+        if (slots > 0 && hasScheduledBlocks) {
+          minutes += parameters.boardIdleMinutes;
+          waitMinutes += parameters.boardIdleMinutes;
+        }
         for (final assignment in schedule) {
           matchEndSeconds.add(
-            ((minutes + (assignment.block + 1) * matchMinutes) * 60).round(),
+            ((minutes +
+                        (assignment.block + 1) * matchMinutes +
+                        assignment.block * parameters.boardIdleMinutes) *
+                    60)
+                .round(),
           );
         }
-        minutes += slots * planner.estimatedMatchMinutes(config.gameFormat);
+        if (slots > 0) {
+          final boardWait = (slots - 1) * parameters.boardIdleMinutes;
+          minutes += slots * matchMinutes + boardWait;
+          waitMinutes += boardWait;
+          hasScheduledBlocks = true;
+        }
         totalMatches += entries.where((e) => e.match.hasPlayers).length;
         continue;
       }
@@ -121,10 +135,16 @@ class ConfigurationDurationEstimator {
             .where((entry) => entry.match.hasPlayers && !entry.match.isResolved)
             .toList();
         if (stage is GroupTournamentRunStage) {
-          for (final group in stage.groups.where((g) => g.playType == 'swiss')) {
-            for (final match in group.matches.where((m) => m.hasPlayers && !m.isResolved && m.round > 1)) {
+          for (final group in stage.groups.where(
+            (g) => g.playType == 'swiss',
+          )) {
+            for (final match in group.matches.where(
+              (m) => m.hasPlayers && !m.isResolved && m.round > 1,
+            )) {
               if (swissRounds.add(match.round)) {
-                final reserve = parameters.value(PlanningParameter.swissRoundWaitMinutes);
+                final reserve = parameters.value(
+                  PlanningParameter.swissRoundWaitMinutes,
+                );
                 minutes += reserve;
                 waitMinutes += reserve;
               }
@@ -140,14 +160,15 @@ class ConfigurationDurationEstimator {
         );
         final batch = schedule.where((assignment) => assignment.block == 0);
         if (batch.isEmpty) return null;
+        final boardWait = blocks > 0 || hasScheduledBlocks
+            ? parameters.boardIdleMinutes
+            : 0;
+        minutes += boardWait;
+        waitMinutes += boardWait;
+        final matchMinutes = planner.estimatedMatchMinutes(config.gameFormat);
+        minutes += matchMinutes;
         for (final assignment in batch) {
-          matchEndSeconds.add(
-            ((minutes +
-                        (blocks + 1) *
-                            planner.estimatedMatchMinutes(config.gameFormat)) *
-                    60)
-                .round(),
-          );
+          matchEndSeconds.add((minutes * 60).round());
           totalMatches++;
           final match = assignment.entry.match;
           // Deterministic representative results, not predictions of winners.
@@ -161,7 +182,7 @@ class ConfigurationDurationEstimator {
         blocks++;
         runtime.advance();
       }
-      minutes += blocks * planner.estimatedMatchMinutes(config.gameFormat);
+      hasScheduledBlocks = hasScheduledBlocks || blocks > 0;
     }
     return ConfigurationEstimate(
       (minutes - 1e-9).ceil(),
@@ -197,7 +218,8 @@ class ConfigurationDurationEstimator {
       for (var i = 0; i < stage.groups.length; i++) {
         final group = stage.groups[i];
         final games = group.playType == 'swiss'
-            ? group.matches.map((m) => m.round).toSet().length - (group.players.length.isOdd ? 1 : 0)
+            ? group.matches.map((m) => m.round).toSet().length -
+                  (group.players.length.isOdd ? 1 : 0)
             : group.playType == 'round_robin'
             ? group.players
                   .map(

@@ -69,8 +69,12 @@ void main() {
           ),
         );
         await tester.pump(const Duration(milliseconds: 300));
-        expect(find.text('ca. 2 h 30 min'), findsOneWidget);
+        expect(find.text('ca. 1 h 35 min'), findsOneWidget);
         expect(find.text('6 Spiele insgesamt'), findsOneWidget);
+        expect(
+          find.textContaining('ca. 20 min (Leerstand 4 min je Boardwechsel)'),
+          findsOneWidget,
+        );
         expect(
           find.text('Garantiert mindestens 3 Spiele je Teilnehmer'),
           findsOneWidget,
@@ -82,7 +86,7 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         expect(boards, 2);
-        expect(find.text('ca. 1 h 15 min'), findsOneWidget);
+        expect(find.text('ca. 46 min'), findsOneWidget);
         expect(tester.takeException(), isNull);
         if (previewFont.isNotEmpty) {
           await tester.runAsync(() async {

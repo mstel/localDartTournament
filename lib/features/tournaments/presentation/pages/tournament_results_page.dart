@@ -48,6 +48,9 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     final summary = _TournamentResultSummary.fromTournament(tournament);
     final podium = summary.ranking.take(3).toList();
     final colorScheme = Theme.of(context).colorScheme;
+    final completionGreen = colorScheme.brightness == Brightness.dark
+        ? const Color(0xFF144D34)
+        : const Color(0xFF0B6B45);
 
     return Scaffold(
       appBar: AppBar(
@@ -76,27 +79,30 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
           padding: const EdgeInsets.all(16),
           children: [
             Card(
-              color: colorScheme.primaryContainer,
+              color: completionGreen,
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.emoji_events,
-                      size: 52,
-                      color: colorScheme.primary,
-                    ),
-                    const SizedBox(height: 8),
                     Text(
                       tournament.name,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 4),
-                    const Text('Turnier abgeschlossen'),
+                    const Text(
+                      'Turnier abgeschlossen',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     const SizedBox(height: 8),
-                    Text('Art: ${_tournamentTypeLabel(tournament)}'),
+                    Text(
+                      'Art: ${_tournamentTypeLabel(tournament)}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
                     Builder(
                       builder: (context) {
                         final summary = TournamentTiming.durationSummary(
@@ -114,7 +120,10 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                         return Text(
                           duration,
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
                         );
                       },
                     ),
@@ -128,17 +137,12 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                             )
                             .join('\n'),
                         textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white),
                       ),
                     ],
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () => TournamentExportDialog.show(context, tournament),
-              icon: const Icon(Icons.ios_share),
-              label: const Text('Turnier exportieren'),
             ),
             const SizedBox(height: 16),
             SportMenuGroup(
@@ -188,6 +192,12 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               const SizedBox(height: 12),
               TournamentRankingChangesSection(tournament: tournament),
             ],
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => TournamentExportDialog.show(context, tournament),
+              icon: const Icon(Icons.ios_share),
+              label: const Text('Turnier exportieren'),
+            ),
           ],
         ),
       ),
@@ -599,9 +609,16 @@ class _ResultMatchCard extends StatelessWidget {
             for (final change in eloChanges)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  '${change.rankingName}: $home ${_formatEloDelta(change.homeDelta)} · '
-                  '$away ${_formatEloDelta(change.awayDelta)}',
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '${change.rankingName}: $home '),
+                      _eloDeltaSpan(context, change.homeDelta),
+                      const TextSpan(text: ' · '),
+                      TextSpan(text: '$away '),
+                      _eloDeltaSpan(context, change.awayDelta),
+                    ],
+                  ),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -655,6 +672,23 @@ List<TournamentMatchEloChange> _eloChangesForMatch(
 String _formatEloDelta(int? delta) {
   if (delta == null) return '—';
   return delta > 0 ? '+$delta Elo' : '$delta Elo';
+}
+
+TextSpan _eloDeltaSpan(BuildContext context, int? delta) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final color = delta == null || delta == 0
+      ? Theme.of(context).colorScheme.onSurface
+      : delta > 0
+      ? isDark
+            ? const Color(0xFF86EFAC)
+            : const Color(0xFF0B6B45)
+      : isDark
+      ? const Color(0xFFEF9A9A)
+      : const Color(0xFFC62828);
+  return TextSpan(
+    text: _formatEloDelta(delta),
+    style: TextStyle(color: color, fontWeight: FontWeight.w600),
+  );
 }
 
 class _EloChangesLoadError extends StatelessWidget {

@@ -2464,21 +2464,21 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         initialValue: _groupAllocationMode,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
-                          labelText: 'Spieler auf Gruppen verteilen',
+                          labelText: 'Gruppeneinteilung',
                           prefixIcon: Icon(Icons.groups_2_outlined),
                         ),
                         items: const [
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.strengthLevels,
-                            child: Text('Leistungsstufen trennen'),
+                            child: Text('Wertungsstufen bündeln'),
                           ),
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.balanced,
-                            child: Text('Gleichstarke Gruppen'),
+                            child: Text('Stärken gleichmäßig verteilen'),
                           ),
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.random,
-                            child: Text('Zufall'),
+                            child: Text('Zufällig verteilen'),
                           ),
                         ],
                         onChanged: (mode) {
@@ -2486,6 +2486,12 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                             setState(() => _groupAllocationMode = mode);
                           }
                         },
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Wertungsstufen bündeln sortiert nach Wertung und '
+                        'bildet nacheinander Gruppenblöcke. Die stärksten '
+                        'Wertungen starten dabei in der ersten Gruppe.',
                       ),
                       const SizedBox(height: 12),
                       GroupPlayTypeSetup(
