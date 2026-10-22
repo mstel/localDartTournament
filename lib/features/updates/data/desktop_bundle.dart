@@ -114,7 +114,14 @@ class DesktopBundle {
         'Dieses ältere Release-Paket unterstützt automatische Desktop-Updates noch nicht.',
       );
     }
-    final manifest = jsonDecode(await manifestFile.readAsString()) as Map;
+    final manifestText = await manifestFile.readAsString();
+    final manifest =
+        jsonDecode(
+              manifestText.startsWith('\uFEFF')
+                  ? manifestText.substring(1)
+                  : manifestText,
+            )
+            as Map;
     if (manifest['schemaVersion'] != 1 ||
         manifest['build'] != release.build ||
         manifest['version'] != release.version ||

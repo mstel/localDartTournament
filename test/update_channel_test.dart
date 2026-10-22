@@ -87,6 +87,30 @@ void main() {
     await UpdateChannelPreferences().save(false);
     expect(await UpdateChannelPreferences().load(), isFalse);
   });
+  testWidgets('desktop update panel surfaces the persistent failure log path', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildDartTournamentTheme(),
+        home: Scaffold(
+          body: AndroidUpdatesPanel(
+            service: FakeUpdater(desktop: true),
+            failureDiagnosticLoader: () async =>
+                'Update wurde nicht aktiviert.\nLog: C:\\Users\\Test\\restart.log',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Das letzte Desktop-Update ist fehlgeschlagen.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('C:\\Users\\Test\\restart.log'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   for (final size in [
     const Size(360, 800),
     const Size(800, 600),
@@ -167,10 +191,7 @@ void main() {
           attempt < 20 && channelTile.hitTestable().evaluate().isEmpty;
           attempt++
         ) {
-          await tester.drag(
-            find.byType(ListView).first,
-            const Offset(0, -300),
-          );
+          await tester.drag(find.byType(ListView).first, const Offset(0, -300));
           await tester.pumpAndSettle();
         }
         expect(channelTile.hitTestable(), findsOneWidget);

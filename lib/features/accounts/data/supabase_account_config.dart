@@ -18,6 +18,7 @@ class SupabaseAccountConfig {
     'SUPABASE_ANON_KEY',
     defaultValue: publishableKey,
   );
+  static const authRedirectUri = 'dartturnier://auth/callback';
 
   static bool get isConfigured {
     final uri = Uri.tryParse(url);

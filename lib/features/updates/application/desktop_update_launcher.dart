@@ -10,6 +10,14 @@ class DesktopUpdateLauncher {
   static Future<Directory> root() async => Directory(
     p.join((await getApplicationSupportDirectory()).path, 'desktop_updates'),
   );
+  static Future<String?> readFailureDiagnostic({Directory? base}) async {
+    final updateRoot = base ?? await root();
+    final file = File(p.join(updateRoot.path, 'update-failure.txt'));
+    if (!await file.exists()) return null;
+    final diagnostic = (await file.readAsString()).trim();
+    return diagnostic.isEmpty ? null : diagnostic;
+  }
+
   static String executableName() => Platform.isWindows
       ? 'dart_tournament_manager.exe'
       : 'dart_tournament_manager';
@@ -118,17 +126,24 @@ class DesktopUpdateLauncher {
     int parentPid, {
     required String activeFile,
     required String logFile,
+    required String failureFile,
     required String originalExe,
   }) {
     String quote(String value) => "'${value.replaceAll("'", "''")}'";
     return '''\$ErrorActionPreference = 'Stop'
 \$logFile = ${quote(logFile)}
+\$failureFile = ${quote(failureFile)}
 function Write-UpdateLog([string]\$message) {
   try { Add-Content -LiteralPath \$logFile -Value "\$(Get-Date -Format o) \$message" -Encoding UTF8 } catch {}
 }
+function Write-UpdateFailure([string]\$message) {
+  Write-UpdateLog \$message
+  try { Add-Content -LiteralPath \$failureFile -Value "\$(Get-Date -Format o) \$message`nLog: \$logFile" -Encoding UTF8 } catch {}
+}
+try { Remove-Item -LiteralPath \$failureFile -Force -ErrorAction SilentlyContinue } catch {}
 \$parentProcess = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
 if (\$null -ne \$parentProcess -and -not \$parentProcess.WaitForExit(120000)) {
-  Write-UpdateLog 'Die ursprüngliche App wurde nicht beendet; Update nicht gestartet.'
+  Write-UpdateFailure 'Die ursprüngliche App wurde nicht beendet; Update nicht gestartet.'
   exit 1
 }
 try {
@@ -140,6 +155,7 @@ try {
       try {
         \$active = Get-Content -LiteralPath ${quote(activeFile)} -Raw | ConvertFrom-Json
         if (\$active.schemaVersion -eq 1 -and \$active.id -eq ${quote(id)}) {
+          try { Remove-Item -LiteralPath \$failureFile -Force -ErrorAction SilentlyContinue } catch {}
           Write-UpdateLog 'Update wurde erfolgreich aktiviert.'
           exit 0
         }
@@ -157,15 +173,15 @@ try {
     Stop-Process -Id \$updatedProcess.Id -Force
     \$updatedProcess.WaitForExit(10000) | Out-Null
   }
-  Write-UpdateLog 'Update wurde nicht aktiviert; starte die ursprüngliche App.'
+  Write-UpdateFailure 'Update wurde nicht aktiviert; starte die ursprüngliche App.'
 } catch {
-  Write-UpdateLog "Update-Start fehlgeschlagen: \$(\$_.Exception.Message)"
+  Write-UpdateFailure "Update-Start fehlgeschlagen: \$(\$_.Exception.Message)"
 }
 try {
   Start-Process -FilePath ${quote(originalExe)} -WorkingDirectory ${quote(p.dirname(originalExe))} -ArgumentList '--desktop-update-original' -WindowStyle Normal | Out-Null
   Write-UpdateLog 'Ursprüngliche App wurde als Fallback gestartet.'
 } catch {
-  Write-UpdateLog "Fallback-Start fehlgeschlagen: \$(\$_.Exception.Message)"
+  Write-UpdateFailure "Fallback-Start fehlgeschlagen: \$(\$_.Exception.Message)"
 }
 ''';
   }
@@ -197,6 +213,8 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
     final base = await root();
     final exe = await target(base, id);
     if (exe == null) throw const FileSystemException('Update-Dateien fehlen.');
+    final failureFile = File(p.join(base.path, 'update-failure.txt'));
+    if (await failureFile.exists()) await failureFile.delete();
     final script = File(
       p.join(base.path, id, Platform.isWindows ? 'restart.ps1' : 'restart.sh'),
     );
@@ -211,6 +229,7 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
               pid,
               activeFile: activeFile,
               logFile: logFile,
+              failureFile: failureFile.path,
               originalExe: originalExe,
             )
           : linuxScript(exe, id, pid, forwardedArgs: forwardedArgs),
@@ -230,6 +249,7 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
         pid,
         activeFile: activeFile,
         logFile: logFile,
+        failureFile: failureFile.path,
         originalExe: originalExe,
       );
       final encoded = base64Encode([

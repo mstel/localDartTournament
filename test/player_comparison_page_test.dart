@@ -3,7 +3,6 @@ import 'package:dart_tournament_manager/features/statistics/presentation/player_
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
-import 'package:dart_tournament_manager/features/statistics/presentation/widgets/player_elo_comparison_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -71,7 +70,7 @@ void main() {
       );
       for (var frame = 0; frame < 20; frame++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.textContaining('Elo-Entwicklung').evaluate().isNotEmpty) {
+        if (find.textContaining('Spielervergleich').evaluate().isNotEmpty) {
           break;
         }
       }
@@ -79,8 +78,10 @@ void main() {
       expect(find.text('Spieler vergleichen'), findsOneWidget);
       expect(find.text('Spieler Links'), findsOneWidget);
       expect(find.text('Spieler Rechts'), findsOneWidget);
-      expect(find.textContaining('Elo-Entwicklung'), findsOneWidget);
-      expect(find.byType(PlayerEloComparisonChart), findsOneWidget);
+      expect(find.textContaining('Spielervergleich'), findsOneWidget);
+      expect(find.text('Kategorie'), findsOneWidget);
+      expect(find.text('Spiele'), findsOneWidget);
+      expect(find.text('Legquote'), findsOneWidget);
       final left = tester.widget<DropdownButtonFormField<String>>(
         find.byKey(const ValueKey('player-comparison-Links')),
       );

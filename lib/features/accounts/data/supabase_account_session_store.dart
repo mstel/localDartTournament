@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'supabase_account_config.dart';
 import '../application/account_session_store.dart';
 import '../domain/account_user.dart';
 
@@ -30,9 +31,8 @@ class SupabaseAccountSessionStore implements AccountSessionStore {
     final response = await _client.auth.signUp(
       email: email.trim(),
       password: password,
-      data: {
-        'display_name': displayName.trim(),
-      },
+      emailRedirectTo: SupabaseAccountConfig.authRedirectUri,
+      data: {'display_name': displayName.trim()},
     );
     final user = response.user;
     if (user == null) {
@@ -71,7 +71,10 @@ class SupabaseAccountSessionStore implements AccountSessionStore {
 
   @override
   Future<void> sendPasswordResetEmail({required String email}) {
-    return _client.auth.resetPasswordForEmail(email.trim());
+    return _client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: SupabaseAccountConfig.authRedirectUri,
+    );
   }
 
   @override
@@ -81,7 +84,8 @@ class SupabaseAccountSessionStore implements AccountSessionStore {
     final metadata = user.userMetadata ?? const <String, dynamic>{};
     final displayName =
         (metadata['display_name'] as String?) ?? user.email ?? 'Spieler';
-    final createdAt = DateTime.tryParse(user.createdAt) ??
+    final createdAt =
+        DateTime.tryParse(user.createdAt) ??
         DateTime.fromMillisecondsSinceEpoch(0);
     final lastLogin = user.lastSignInAt == null
         ? null

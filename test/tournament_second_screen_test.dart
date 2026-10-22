@@ -41,6 +41,7 @@ void main() {
     const Size(360, 800),
     const Size(800, 600),
     const Size(1440, 900),
+    const Size(1920, 1080),
   ]) {
     testWidgets('fixed second-screen layout fits $size with large text', (
       tester,
@@ -74,6 +75,61 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets(
+    '1920x1080 second screen shows exactly two full recent results and scrolls',
+    (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: _tournament(),
+              isStandaloneWindow: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final viewport = tester.getRect(
+        find.byKey(const ValueKey('recent-results-scroll')),
+      );
+      final resultRects = [
+        for (final key in ['recent-result-3-A-D', 'recent-result-2-A-C'])
+          tester.getRect(find.byKey(ValueKey(key))),
+      ];
+      final fullyVisible = resultRects
+          .where(
+            (rect) =>
+                rect.top >= viewport.top && rect.bottom <= viewport.bottom,
+          )
+          .length;
+
+      expect(fullyVisible, 2);
+      expect(find.byKey(const ValueKey('recent-result-1-A-B')), findsNothing);
+      final scrollable = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('recent-results-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+      await tester.drag(
+        find.byKey(const ValueKey('recent-results-scroll')),
+        const Offset(0, -100),
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('recent-result-1-A-B')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'next-stage preview uses current standings for projected qualifiers',

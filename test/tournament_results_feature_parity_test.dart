@@ -121,6 +121,9 @@ void main() {
     await tester.ensureVisible(exportButton);
     await tester.pumpAndSettle();
     expect(exportButton, findsOneWidget);
+    await tester.tap(exportButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Hochformat-Grafik exportieren'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

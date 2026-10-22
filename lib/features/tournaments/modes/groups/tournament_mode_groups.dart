@@ -68,18 +68,14 @@ List<TournamentGroup> _buildTournamentGroupsForPlayers(
       requiredRankForGroup,
 }) {
   final groups = <TournamentGroup>[];
-  var playerIndex = 0;
+  final playersByGroup = GroupDrawAssignment.partition(
+    players,
+    stage.groupSizes,
+  );
 
   for (var groupIndex = 0; groupIndex < stage.groupSizes.length; groupIndex++) {
     final groupPlayType = _groupPlayTypeForStage(stage, groupIndex);
-    final groupPlayers = <TournamentPlayer>[];
-    for (var slot = 0; slot < stage.groupSizes[groupIndex]; slot++) {
-      if (playerIndex >= players.length) {
-        break;
-      }
-      groupPlayers.add(players[playerIndex]);
-      playerIndex++;
-    }
+    final groupPlayers = playersByGroup[groupIndex];
 
     if (_isEliminationGroupPlayType(groupPlayType)) {
       groups.add(

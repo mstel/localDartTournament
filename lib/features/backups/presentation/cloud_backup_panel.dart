@@ -37,6 +37,7 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
         final res = await Supabase.instance.client.auth.signUp(
           email: result.email,
           password: result.password,
+          emailRedirectTo: SupabaseAccountConfig.authRedirectUri,
         );
         if (res.session == null) {
           _status =
@@ -278,7 +279,10 @@ class _OperatorSignInDialogState extends State<OperatorSignInDialog> {
       _infoMessage = null;
     });
     try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: SupabaseAccountConfig.authRedirectUri,
+      );
       setState(() {
         _infoMessage =
             'Ein Link zum Zurücksetzen des Passworts wurde an $email gesendet.';
@@ -297,7 +301,10 @@ class _OperatorSignInDialogState extends State<OperatorSignInDialog> {
     });
     try {
       await SupabaseAccountBootstrap.setPersistSession(_persistSession);
-      await Supabase.instance.client.auth.signInWithOAuth(OAuthProvider.google);
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: SupabaseAccountConfig.authRedirectUri,
+      );
       if (mounted) Navigator.pop(context);
     } catch (e) {
       setState(() => _errorMessage = 'Google-Anmeldung fehlgeschlagen: $e');

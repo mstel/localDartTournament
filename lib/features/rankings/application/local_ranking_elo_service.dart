@@ -1,6 +1,7 @@
 import '../domain/local_elo_calculator.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
+import '../../tournaments/domain/tournament_models.dart';
 import '../domain/local_ranking.dart';
 
 class LocalRankingEloService {
@@ -14,6 +15,34 @@ class LocalRankingEloService {
   final TournamentStorage? _tournamentStorage;
 
   Future<LocalEloSnapshot> calculate(LocalRanking ranking) async {
+    final tournaments = await (_tournamentStorage ?? TournamentStorage())
+        .loadTournaments();
+    return _calculate(ranking, tournaments);
+  }
+
+  Future<LocalEloSnapshot> calculateThroughTournament(
+    LocalRanking ranking,
+    CreatedTournament target, {
+    required bool includeTournament,
+  }) async {
+    final tournaments = await (_tournamentStorage ?? TournamentStorage())
+        .loadTournaments();
+    final targetDate = target.startedAt ?? target.createdAt;
+    final relevant = tournaments.where((tournament) {
+      final date = tournament.startedAt ?? tournament.createdAt;
+      final comparison = date.compareTo(targetDate);
+      final orderComparison = comparison == 0
+          ? tournament.id.compareTo(target.id)
+          : comparison;
+      return includeTournament ? orderComparison <= 0 : orderComparison < 0;
+    });
+    return _calculate(ranking, relevant.toList());
+  }
+
+  Future<LocalEloSnapshot> _calculate(
+    LocalRanking ranking,
+    Iterable<CreatedTournament> tournaments,
+  ) async {
     if (ranking.type != RankingType.elo) {
       throw ArgumentError.value(
         ranking.type,
@@ -28,11 +57,9 @@ class LocalRankingEloService {
       for (final id in ids)
         if (byId[id] case final profile?) profile.id: profile.displayName,
     };
-    final tournaments = await (_tournamentStorage ?? TournamentStorage())
-        .loadTournaments();
     return LocalEloCalculator().calculate(
       players: players,
-      tournaments: tournaments,
+      tournaments: tournaments.toList(),
       rankingId: ranking.id,
       startRating: ranking.startRating,
       newPlayerK: ranking.newPlayerK,

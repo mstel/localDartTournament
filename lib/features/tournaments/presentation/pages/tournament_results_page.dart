@@ -16,6 +16,7 @@ import '../../../statistics/domain/best_performance.dart';
 import '../widgets/run/best_performance_editor.dart';
 import 'challonge_archive_page.dart';
 import '../../application/tournament_timing.dart';
+import '../../application/tournament_completion_image_generator.dart';
 import '../widgets/results/tournament_ranking_assignment.dart';
 import '../widgets/results/tournament_ranking_changes_section.dart';
 import '../widgets/tournament_export_dialog.dart';
@@ -127,13 +128,6 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                               : tournament.plannedMinutes == null
                               ? null
                               : 'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinutes!))}';
-                          final durationLines = [
-                            if (timing != null)
-                              'Tatsächlich: ${formatDur(timing.totalDuration)}',
-                            ?expectedRange,
-                            if (timing?.averageMatchDuration != null)
-                              'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
-                          ];
                           return Column(
                             children: [
                               const SizedBox(height: 10),
@@ -163,15 +157,43 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              Text(
-                                durationLines.isEmpty
-                                    ? 'Dauer: nicht erfasst'
-                                    : durationLines.join(' · '),
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
+                              DefaultTextStyle(
+                                style:
+                                    Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall?.copyWith(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w600,
-                                    ),
+                                    ) ??
+                                    const TextStyle(color: Colors.white),
+                                child: Wrap(
+                                  alignment: WrapAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (timing != null)
+                                      Text(
+                                        'Tatsächlich: ${formatDur(timing.totalDuration)}',
+                                      ),
+                                    if (expectedRange != null)
+                                      Tooltip(
+                                        message:
+                                            'Geschätzte Turnierdauer: $expectedRange',
+                                        child: Text(
+                                          expectedRange,
+                                          key: const ValueKey(
+                                            'expected-duration-range',
+                                          ),
+                                        ),
+                                      ),
+                                    if (timing?.averageMatchDuration != null)
+                                      Text(
+                                        'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
+                                      ),
+                                    if (timing == null && expectedRange == null)
+                                      const Text('Dauer: nicht erfasst'),
+                                  ],
+                                ),
                               ),
                             ],
                           );
@@ -260,6 +282,11 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                 context,
                 tournament,
                 resultSummary: _exportSummary(summary),
+                completionImageData: _completionImageData(
+                  summary,
+                  podium,
+                  performances,
+                ),
                 database: widget.database,
                 storage: widget.storage,
               ),
@@ -295,6 +322,52 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
           },
       ],
     };
+  }
+
+  TournamentCompletionImageData _completionImageData(
+    _TournamentResultSummary summary,
+    List<_PlayerResultStats> podium,
+    List<BestPerformance> performances,
+  ) {
+    final timing = TournamentTiming.durationSummary(tournament);
+    String formatDur(Duration duration) =>
+        '${duration.inHours}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}';
+    final durationParts = [
+      if (timing != null) 'Tatsächlich: ${formatDur(timing.totalDuration)}',
+      if (tournament.plannedMinimumMinutes != null &&
+          tournament.plannedMinutes != null)
+        'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinimumMinutes!))}'
+            '–${formatDur(Duration(minutes: tournament.plannedMinutes!))}',
+      if (tournament.plannedMinimumMinutes == null &&
+          tournament.plannedMinutes != null)
+        'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinutes!))}',
+      if (timing?.averageMatchDuration != null)
+        'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
+    ];
+    return TournamentCompletionImageData(
+      tournamentName: tournament.name,
+      tournamentType: _tournamentTypeLabel(tournament),
+      participantCount: summary.playerCount,
+      matchCount: summary.matchCount,
+      legCount: summary.legCount,
+      averageLegsPerMatch: summary.matchCount == 0
+          ? 0
+          : summary.legCount / summary.matchCount,
+      durationSummary: durationParts.join(' · '),
+      podium: [
+        for (var index = 0; index < podium.length; index++)
+          TournamentCompletionPodiumEntry(
+            place: index + 1,
+            playerName: podium[index].player.name,
+            wins: podium[index].wins,
+            losses: podium[index].losses,
+            legsFor: podium[index].legsFor,
+            legsAgainst: podium[index].legsAgainst,
+          ),
+      ],
+      rankingChanges: const [],
+      bestPerformances: performances,
+    );
   }
 
   void _openPlayer(BuildContext context, TournamentPlayer player) {

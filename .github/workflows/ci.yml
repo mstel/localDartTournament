@@ -73,6 +73,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify Supabase publishable key
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SUPABASE_PUBLISHABLE_KEY)) {
+            throw "SUPABASE_PUBLISHABLE_KEY is required for the Windows release build."
+          }
+
       - name: Verify manually selected release
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh
@@ -125,7 +132,12 @@ jobs:
             platform = 'windows'
             architecture = 'x64'
           }
-          $manifest | ConvertTo-Json -Compress | Set-Content "$bundle/data/update-manifest.json" -Encoding utf8
+          $manifestJson = $manifest | ConvertTo-Json -Compress
+          [System.IO.File]::WriteAllText(
+            "$bundle/data/update-manifest.json",
+            $manifestJson,
+            [System.Text.UTF8Encoding]::new($false)
+          )
           Compress-Archive -Path "$bundle/*" -DestinationPath 'dart-turnier-windows-x64.zip' -Force
 
       - name: Verify Windows update package

@@ -96,6 +96,12 @@ class _TournamentRankingChangesSectionState
 
         final topGains = gains;
         final topLosses = losses;
+        final positionChanges = [...deltas]
+          ..sort((a, b) {
+            final aChange = a.positionChange ?? 0;
+            final bChange = b.positionChange ?? 0;
+            return bChange.compareTo(aChange);
+          });
 
         final theme = Theme.of(context);
 
@@ -360,9 +366,91 @@ class _TournamentRankingChangesSectionState
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.format_list_numbered,
+                          color: theme.colorScheme.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Ranglistenplätze',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    for (final change in positionChanges)
+                      _PositionChangeRow(change: change),
+                  ],
+                ),
+              ),
+            ),
           ],
         );
       },
+    );
+  }
+}
+
+class _PositionChangeRow extends StatelessWidget {
+  const _PositionChangeRow({required this.change});
+
+  final TournamentRankingPlayerChange change;
+
+  @override
+  Widget build(BuildContext context) {
+    final movement = change.positionChange;
+    final (icon, color, status) = switch (movement) {
+      final value? when value > 0 => (
+        Icons.arrow_upward,
+        Colors.green,
+        'Aufgestiegen um $value ${value == 1 ? 'Platz' : 'Plätze'}',
+      ),
+      final value? when value < 0 => (
+        Icons.arrow_downward,
+        Colors.red,
+        'Abgestiegen um ${-value} ${value == -1 ? 'Platz' : 'Plätze'}',
+      ),
+      0 => (Icons.horizontal_rule, Colors.blueGrey, 'Unverändert'),
+      _ => (Icons.remove_circle_outline, Colors.blueGrey, 'Keine Platzierung'),
+    };
+    final before = change.rankingPositionBefore;
+    final after = change.rankingPositionAfter;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${change.rankingName} · ${change.playerName}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            before == null || after == null
+                ? status
+                : '$status · $before → $after',
+            style: TextStyle(color: color, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }

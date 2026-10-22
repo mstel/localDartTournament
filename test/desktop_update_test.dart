@@ -67,6 +67,25 @@ void main() {
       expect(UpdatePlatform.forDesktopAbi(Abi.windowsArm64), isNull);
     },
   );
+  test(
+    'reads the persistent update failure marker and its log location',
+    () async {
+      final marker = File(p.join(temp.path, 'update-failure.txt'))
+        ..writeAsStringSync(
+          'Update wurde nicht aktiviert.\nLog: C:\\AppData\\restart.log',
+        );
+
+      expect(
+        await DesktopUpdateLauncher.readFailureDiagnostic(base: temp),
+        contains('Log: C:\\AppData\\restart.log'),
+      );
+      await marker.writeAsString('');
+      expect(
+        await DesktopUpdateLauncher.readFailureDiagnostic(base: temp),
+        isNull,
+      );
+    },
+  );
   for (final platform in [
     UpdatePlatform.windows,
     UpdatePlatform.linux,
@@ -282,6 +301,132 @@ void main() {
       );
     },
   );
+  test('Windows release package manifest accepts PowerShell UTF-8 BOM', () async {
+    final windows = release(UpdatePlatform.windows);
+    final windowsRelease = AndroidRelease(
+      version: '1.1.4',
+      build: 16,
+      url: windows.url,
+      sha256: windows.sha256,
+      size: windows.size,
+      notes: windows.notes,
+      platform: UpdatePlatform.windows,
+    );
+    final manifest = utf8.encode(
+      '\uFEFF${jsonEncode({'schemaVersion': 1, 'version': '1.1.4', 'build': 16, 'platform': 'windows', 'architecture': 'x64'})}',
+    );
+    final archive = Archive()
+      ..addFile(
+        ArchiveFile('data/update-manifest.json', manifest.length, manifest),
+      )
+      ..addFile(ArchiveFile('data/icudtl.dat', 1, [1]))
+      ..addFile(ArchiveFile('dart_tournament_manager.exe', 1, [1]))
+      ..addFile(ArchiveFile('flutter_windows.dll', 1, [1]));
+    final source = File(p.join(temp.path, 'release-package.zip'))
+      ..writeAsBytesSync(ZipEncoder().encode(archive));
+
+    await DesktopBundle.extract(
+      source,
+      Directory(p.join(temp.path, 'release-package')),
+      windowsRelease,
+    );
+  });
+
+  test(
+    'Windows v1.1.3+15 launches and acknowledges a staged release bundle',
+    () async {
+      if (!Platform.isWindows) return;
+
+      const installedBuild = 15;
+      const stagedBuild = 16;
+      const stagedId = 'build-16-123';
+      final windows = release(UpdatePlatform.windows);
+      final stagedRelease = AndroidRelease(
+        version: '1.1.4',
+        build: stagedBuild,
+        url: windows.url,
+        sha256: windows.sha256,
+        size: windows.size,
+        notes: windows.notes,
+        platform: UpdatePlatform.windows,
+      );
+      final manifest = utf8.encode(
+        jsonEncode({
+          'schemaVersion': 1,
+          'version': '1.1.4',
+          'build': stagedBuild,
+          'platform': 'windows',
+          'architecture': 'x64',
+        }),
+      );
+      final archive = Archive()
+        ..addFile(
+          ArchiveFile('data/update-manifest.json', manifest.length, manifest),
+        )
+        ..addFile(ArchiveFile('data/icudtl.dat', 1, [1]))
+        ..addFile(ArchiveFile('dart_tournament_manager.exe', 1, [1]))
+        ..addFile(ArchiveFile('flutter_windows.dll', 1, [1]));
+      final bundleRoot = Directory(p.join(temp.path, stagedId, 'bundle'));
+      await bundleRoot.parent.create(recursive: true);
+      final package = File(p.join(temp.path, 'release-package.zip'))
+        ..writeAsBytesSync(ZipEncoder().encode(archive));
+      await DesktopBundle.extract(package, bundleRoot, stagedRelease);
+      expect(stagedBuild, greaterThan(installedBuild));
+      await DesktopBundle.validate(bundleRoot, stagedRelease);
+
+      final activeFile = p.join(temp.path, 'active.json');
+      final argsFile = p.join(temp.path, 'staged-args.txt');
+      final fakeStagedExe = File(
+        p.join(bundleRoot.path, 'simulate-staged-activation.cmd'),
+      );
+      await fakeStagedExe.writeAsString(
+        '@echo off\r\n'
+        'echo %* > "$argsFile"\r\n'
+        'echo {"schemaVersion":1,"id":"$stagedId","build":$stagedBuild} > "$activeFile"\r\n',
+      );
+      expect(
+        await DesktopUpdateLauncher.target(Directory(temp.path), stagedId),
+        await File(
+          p.join(bundleRoot.path, 'dart_tournament_manager.exe'),
+        ).resolveSymbolicLinks(),
+      );
+      final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+      final fallbackExe = p.join(systemRoot, 'System32', 'where.exe');
+      final logFile = p.join(temp.path, 'restart.log');
+      final failureFile = p.join(temp.path, 'update-failure.txt');
+      await File(failureFile).writeAsString('stale failure');
+      final command = DesktopUpdateLauncher.windowsScript(
+        fakeStagedExe.path,
+        stagedId,
+        2147483647,
+        activeFile: activeFile,
+        logFile: logFile,
+        failureFile: failureFile,
+        originalExe: fallbackExe,
+      );
+
+      final result = await runWindowsScript(command);
+
+      expect(result.exitCode, 0, reason: '${result.stderr}\n${result.stdout}');
+      expect(
+        await File(argsFile).readAsString(),
+        contains('--desktop-update-activate=$stagedId'),
+      );
+      expect(
+        jsonDecode(await File(activeFile).readAsString()),
+        containsPair('id', stagedId),
+      );
+      expect(
+        await File(logFile).readAsString(),
+        contains('Update wurde erfolgreich aktiviert'),
+      );
+      expect(
+        await File(logFile).readAsString(),
+        isNot(contains('Fallback gestartet')),
+      );
+      expect(await File(failureFile).exists(), isFalse);
+    },
+  );
   test('rejects dangerous cross-platform paths and device names', () {
     for (final name in [
       '../file',
@@ -321,6 +466,7 @@ void main() {
       4321,
       activeFile: r"C:\App Data\updates\active.json",
       logFile: r"C:\App Data\updates\restart.log",
+      failureFile: r"C:\App Data\updates\update-failure.txt",
       originalExe: r"C:\O'Brien\old\dart.exe",
     );
     expect(windows, contains(r"'C:\O''Brien\$app\dart.exe'"));
@@ -346,12 +492,14 @@ void main() {
       final where = p.join(systemRoot, 'System32', 'where.exe');
       final activeFile = p.join(temp.path, 'active.json');
       final logFile = p.join(temp.path, 'restart.log');
+      final failureFile = p.join(temp.path, 'update-failure.txt');
       final command = DesktopUpdateLauncher.windowsScript(
         where,
         'build-12-123',
         2147483647,
         activeFile: activeFile,
         logFile: logFile,
+        failureFile: failureFile,
         originalExe: where,
       );
       final result = await runWindowsScript(command);
@@ -360,6 +508,9 @@ void main() {
       final log = await File(logFile).readAsString();
       expect(log, contains('Update wurde nicht aktiviert'));
       expect(log, contains('Ursprüngliche App wurde als Fallback gestartet'));
+      final diagnostic = await File(failureFile).readAsString();
+      expect(diagnostic, contains('Update wurde nicht aktiviert'));
+      expect(diagnostic, contains('Log: $logFile'));
     },
   );
 
@@ -374,6 +525,7 @@ void main() {
       final delayedActivation = File(p.join(temp.path, 'activate-later.ps1'));
       final activeFile = p.join(temp.path, 'active.json');
       final logFile = p.join(temp.path, 'restart.log');
+      final failureFile = p.join(temp.path, 'update-failure.txt');
       final powershell = p.join(
         systemRoot,
         'System32',
@@ -398,6 +550,7 @@ void main() {
         2147483647,
         activeFile: activeFile,
         logFile: logFile,
+        failureFile: failureFile,
         originalExe: where,
       );
 

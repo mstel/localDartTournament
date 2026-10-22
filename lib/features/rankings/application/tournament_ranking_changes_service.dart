@@ -16,6 +16,8 @@ class TournamentRankingPlayerChange {
     required this.tierAfter,
     required this.enableTiers,
     required this.rankingName,
+    required this.rankingPositionBefore,
+    required this.rankingPositionAfter,
   });
 
   final String playerProfileId;
@@ -27,9 +29,15 @@ class TournamentRankingPlayerChange {
   final EloTier tierAfter;
   final bool enableTiers;
   final String rankingName;
+  final int? rankingPositionBefore;
+  final int? rankingPositionAfter;
 
   bool get hasTierChange => enableTiers && tierBefore != tierAfter;
   bool get isPromotion => hasTierChange && ratingAfter > ratingBefore;
+  int? get positionChange =>
+      rankingPositionBefore == null || rankingPositionAfter == null
+      ? null
+      : rankingPositionBefore! - rankingPositionAfter!;
 
   Map<String, Object?> toExportJson() => {
     'rankingName': rankingName,
@@ -37,6 +45,8 @@ class TournamentRankingPlayerChange {
     'delta': delta,
     'ratingBefore': ratingBefore,
     'ratingAfter': ratingAfter,
+    'rankingPositionBefore': rankingPositionBefore,
+    'rankingPositionAfter': rankingPositionAfter,
     'tierChange': hasTierChange,
     if (hasTierChange) 'tierBefore': tierBefore.name,
     if (hasTierChange) 'tierAfter': tierAfter.name,
@@ -67,21 +77,39 @@ class TournamentRankingChangesService {
           tournament.rankingIds.contains(ranking.id),
     );
     final result = <TournamentRankingPlayerChange>[];
+    final eloService = LocalRankingEloService(
+      database: _database,
+      tournamentStorage: _storage,
+    );
     for (final ranking in selected) {
-      final snapshot = await LocalRankingEloService(
-        database: _database,
-        tournamentStorage: _storage,
-      ).calculate(ranking);
-      for (final entry in snapshot.history.entries) {
+      final before = await eloService.calculateThroughTournament(
+        ranking,
+        tournament,
+        includeTournament: false,
+      );
+      final after = await eloService.calculateThroughTournament(
+        ranking,
+        tournament,
+        includeTournament: true,
+      );
+      final beforePositions = {
+        for (var index = 0; index < before.entries.length; index++)
+          before.entries[index].id: index + 1,
+      };
+      final afterPositions = {
+        for (var index = 0; index < after.entries.length; index++)
+          after.entries[index].id: index + 1,
+      };
+      for (final entry in after.history.entries) {
         final items = entry.value
-            .where((item) => item.tournamentName == tournament.name)
+            .where((item) => item.tournamentId == tournament.id)
             .toList();
         if (items.isEmpty) continue;
         final delta = items.fold<int>(0, (sum, item) => sum + item.delta);
         final ratingBefore = items.first.ratingAfter - items.first.delta;
         final ratingAfter = items.last.ratingAfter;
         final playerName =
-            snapshot.entries
+            after.entries
                 .where((player) => player.id == entry.key)
                 .firstOrNull
                 ?.name ??
@@ -97,6 +125,8 @@ class TournamentRankingChangesService {
             tierAfter: EloTier.fromElo(ratingAfter),
             enableTiers: ranking.enableTiers,
             rankingName: ranking.name,
+            rankingPositionBefore: beforePositions[entry.key],
+            rankingPositionAfter: afterPositions[entry.key],
           ),
         );
       }

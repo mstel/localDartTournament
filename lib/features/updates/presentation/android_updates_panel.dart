@@ -2,6 +2,7 @@ import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import '../application/app_update_service.dart';
+import '../application/desktop_update_launcher.dart';
 import '../data/desktop_update_service.dart';
 import '../../backups/presentation/backup_file_dialogs.dart';
 import '../../backups/data/backup_service.dart';
@@ -12,9 +13,15 @@ import '../data/update_channel_preferences.dart';
 import 'manual_update_card.dart';
 
 class AndroidUpdatesPanel extends StatefulWidget {
-  const AndroidUpdatesPanel({super.key, this.service, this.preferences});
+  const AndroidUpdatesPanel({
+    super.key,
+    this.service,
+    this.preferences,
+    this.failureDiagnosticLoader,
+  });
   final AppUpdateService? service;
   final UpdateChannelPreferences? preferences;
+  final Future<String?> Function()? failureDiagnosticLoader;
   @override
   State<AndroidUpdatesPanel> createState() => _AndroidUpdatesPanelState();
 }
@@ -40,6 +47,32 @@ class _AndroidUpdatesPanelState extends State<AndroidUpdatesPanel> {
   void initState() {
     super.initState();
     _loadPreferences();
+    _loadDesktopFailureDiagnostic();
+  }
+
+  Future<void> _loadDesktopFailureDiagnostic() async {
+    final loader =
+        widget.failureDiagnosticLoader ??
+        (_service is DesktopUpdateService
+            ? DesktopUpdateLauncher.readFailureDiagnostic
+            : null);
+    if (loader == null) return;
+    try {
+      final diagnostic = await loader();
+      if (mounted && diagnostic != null) {
+        setState(
+          () => _status =
+              'Das letzte Desktop-Update ist fehlgeschlagen.\n$diagnostic',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _status =
+              'Update-Fehlerdiagnose konnte nicht gelesen werden: $error',
+        );
+      }
+    }
   }
 
   Future<void> _loadPreferences() async {

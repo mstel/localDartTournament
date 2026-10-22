@@ -52,6 +52,7 @@ import 'features/tournaments/data/app_database.dart';
 import 'features/tournaments/data/tournament_storage.dart';
 import 'features/tournaments/domain/engines/tournament_engine.dart';
 import 'features/tournaments/domain/engines/group_bye_seeding.dart';
+import 'features/tournaments/domain/engines/group_draw_assignment.dart';
 import 'features/tournaments/domain/engines/group_player_allocation_engine.dart';
 import 'features/tournaments/domain/tournament_models.dart'
     hide defaultGroupTieBreakers, groupLabel;

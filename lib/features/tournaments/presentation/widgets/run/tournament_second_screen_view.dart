@@ -1454,6 +1454,20 @@ class _TournamentSecondScreenViewState
             ),
           );
 
+    final matchTiles = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        for (var i = 0; i < suggestions.length; i++)
+          _buildMatchTile(
+            context,
+            suggestions[i],
+            isPreferred: flowPriority.prioritizedMatches.contains(
+              suggestions[i],
+            ),
+          ),
+      ],
+    );
     final matchesContent = matches.isEmpty
         ? const Center(
             child: Text(
@@ -1461,19 +1475,24 @@ class _TournamentSecondScreenViewState
               style: TextStyle(color: Colors.white70),
             ),
           )
-        : Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (var i = 0; i < suggestions.length; i++)
-                _buildMatchTile(
-                  context,
-                  suggestions[i],
-                  isPreferred: flowPriority.prioritizedMatches.contains(
-                    suggestions[i],
-                  ),
-                ),
-            ],
+        : AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: KeyedSubtree(
+              key: ValueKey(
+                suggestions
+                    .map(
+                      (match) =>
+                          '${match.label}:${match.homePlayer?.profileId ?? match.homePlayer?.name}:'
+                          '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
+                    )
+                    .join('|'),
+              ),
+              child: matchTiles,
+            ),
           );
 
     return Column(
@@ -1532,18 +1551,21 @@ class _TournamentSecondScreenViewState
     required bool isPreferred,
   }) {
     final isRunning = match.boardNumber != null;
+    final colors = Theme.of(context).colorScheme;
 
     return Container(
       constraints: const BoxConstraints(minWidth: 240, maxWidth: 340),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF14202B),
+        color: isPreferred
+            ? colors.tertiaryContainer.withAlpha(48)
+            : colors.surfaceContainerLow,
         border: Border.all(
           color: isPreferred
-              ? const Color(0xFF8A744C)
+              ? colors.tertiary.withAlpha(160)
               : isRunning
-              ? const Color(0xFF70E0BA)
-              : const Color(0xFF263D52),
+              ? colors.primary
+              : colors.outlineVariant.withAlpha(160),
           width: isPreferred || isRunning ? 1.5 : 1,
         ),
         borderRadius: BorderRadius.circular(8),
@@ -1560,7 +1582,9 @@ class _TournamentSecondScreenViewState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isRunning ? const Color(0xFF144D34) : Colors.white12,
+                  color: isRunning
+                      ? colors.primaryContainer
+                      : colors.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -1570,7 +1594,9 @@ class _TournamentSecondScreenViewState
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: isRunning ? const Color(0xFF86EFAC) : Colors.white70,
+                    color: isRunning
+                        ? colors.onPrimaryContainer
+                        : colors.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1603,10 +1629,10 @@ class _TournamentSecondScreenViewState
           const SizedBox(height: 6),
           Text(
             '${match.homePlayer?.name ?? "Offen"} vs. ${match.awayPlayer?.name ?? "Offen"}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: colors.onSurface,
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -1665,45 +1691,52 @@ class _TournamentSecondScreenViewState
                 FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
                   future: _eloChanges,
                   builder: (context, snapshot) {
-                    final recentContent = recent.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Noch keine beendeten Partien vorhanden.',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              for (final match in recent) ...[
-                                _buildRecentMatchRow(
-                                  context,
-                                  match,
-                                  _changesForMatch(t, match, snapshot.data),
-                                ),
-                                const SizedBox(height: 8),
-                              ],
-                            ],
-                          );
-                    return SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (snapshot.hasError)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 8),
+                    final itemExtent =
+                        82 * MediaQuery.textScalerOf(context).scale(1) + 8;
+                    return SizedBox(
+                      height: itemExtent * 2,
+                      child: snapshot.hasError
+                          ? const Center(
                               child: Text(
                                 'Ranglistenänderungen konnten nicht geladen werden.',
                                 style: TextStyle(color: Colors.amber),
                               ),
+                            )
+                          : recent.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Noch keine beendeten Partien vorhanden.',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            )
+                          : ListView.builder(
+                              key: const ValueKey('recent-results-scroll'),
+                              itemExtent: itemExtent,
+                              itemCount: recent.length,
+                              itemBuilder: (context, index) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _buildRecentMatchRow(
+                                  context,
+                                  recent[index],
+                                  _changesForMatch(
+                                    t,
+                                    recent[index],
+                                    snapshot.data,
+                                  ),
+                                ),
+                              ),
                             ),
-                          recentContent,
-                        ],
-                      ),
                     );
                   },
                 );
-            return expand ? Expanded(child: recentList) : recentList;
+            return expand
+                ? Expanded(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: recentList,
+                    ),
+                  )
+                : recentList;
           },
         ),
       ],
@@ -1727,11 +1760,17 @@ class _TournamentSecondScreenViewState
     GroupMatch m,
     List<TournamentMatchEloChange> eloChanges,
   ) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      key: ValueKey(
+        'recent-result-${m.round}-'
+        '${m.homePlayer?.profileId ?? m.homePlayer?.name}-'
+        '${m.awayPlayer?.profileId ?? m.awayPlayer?.name}',
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF14202B),
-        border: Border.all(color: const Color(0xFF263D52)),
+        color: colors.surfaceContainerLow,
+        border: Border.all(color: colors.outlineVariant.withAlpha(160)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1744,56 +1783,65 @@ class _TournamentSecondScreenViewState
               color: Colors.white,
               fontSize: 14,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E3A2E),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '${m.homeScore ?? 0} : ${m.awayScore ?? 0}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF86EFAC),
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              for (final change in eloChanges)
+          const SizedBox(height: 4),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF14202B),
+                    color: colors.primaryContainer,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF263D52)),
                   ),
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(text: '${change.rankingName}: '),
-                        _eloDeltaSpan(change.homeDelta),
-                        const TextSpan(text: ' / '),
-                        _eloDeltaSpan(change.awayDelta),
-                        const TextSpan(text: ' Elo'),
-                      ],
-                    ),
-                    style: const TextStyle(
-                      color: Color(0xFF70E0BA),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  child: Text(
+                    '${m.homeScore ?? 0} : ${m.awayScore ?? 0}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: colors.onPrimaryContainer,
+                      fontSize: 13,
                     ),
                   ),
                 ),
-            ],
+                for (final change in eloChanges)
+                  Container(
+                    margin: const EdgeInsets.only(left: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: colors.outlineVariant.withAlpha(160),
+                      ),
+                    ),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: '${change.rankingName}: '),
+                          _eloDeltaSpan(change.homeDelta),
+                          const TextSpan(text: ' / '),
+                          _eloDeltaSpan(change.awayDelta),
+                          const TextSpan(text: ' Elo'),
+                        ],
+                      ),
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1964,6 +2012,7 @@ class _TournamentSecondScreenViewState
       for (final section in sections)
         Builder(
           builder: (context) {
+            final colors = Theme.of(context).colorScheme;
             final matches = section.matches
                 .where((match) => match.hasPlayers)
                 .toList();
@@ -1975,7 +2024,7 @@ class _TournamentSecondScreenViewState
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF14202B),
+                color: colors.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -1988,15 +2037,15 @@ class _TournamentSecondScreenViewState
                     children: [
                       Text(
                         section.label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: colors.onSurface,
                           fontSize: 13,
                         ),
                       ),
                       Text(
                         '$played von $total Spielen',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Color(0xFF70E0BA),
                           fontWeight: FontWeight.bold,
                           fontSize: 12,

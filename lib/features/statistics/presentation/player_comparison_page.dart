@@ -6,8 +6,8 @@ import '../../rankings/domain/local_elo_calculator.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
+import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
-import 'widgets/player_elo_comparison_chart.dart';
 
 class PlayerComparisonPage extends StatefulWidget {
   const PlayerComparisonPage({
@@ -219,60 +219,68 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   final (leftStats, rightStats, elo) = data;
-                  final colors = Theme.of(context).colorScheme;
+                  final rows = _comparisonRows(
+                    leftStats: leftStats,
+                    rightStats: rightStats,
+                    leftId: left.id,
+                    rightId: right.id,
+                    elo: elo,
+                    ranking: ranking,
+                  );
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _playerSummary(
-                              left.displayName,
-                              leftStats,
-                              colors.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _playerSummary(
-                              right.displayName,
-                              rightStats,
-                              colors.tertiary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
                       Text(
-                        'Elo-Entwicklung${ranking == null ? '' : ' · ${ranking.name}'}',
+                        'Spielervergleich${ranking == null ? '' : ' · ${ranking.name}'}',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      if (elo == null)
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: [
+                            DataColumn(
+                              label: Text(
+                                left.displayName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const DataColumn(
+                              label: Text(
+                                'Kategorie',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
+                                right.displayName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                          rows: [
+                            for (final row in rows)
+                              DataRow(
+                                cells: [
+                                  DataCell(Text(row.left)),
+                                  DataCell(Text(row.category)),
+                                  DataCell(Text(row.right)),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (elo == null && eloRankings.isEmpty)
                         const Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: Text(
-                            'Für den Verlauf muss eine Elo-Rangliste ausgewählt sein.',
+                            'Für den Elo-Verlauf muss eine Elo-Rangliste angelegt sein.',
                           ),
-                        )
-                      else ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 8,
-                          children: [
-                            _legend(left.displayName, colors.primary),
-                            _legend(right.displayName, colors.tertiary),
-                          ],
                         ),
-                        const SizedBox(height: 8),
-                        PlayerEloComparisonChart(
-                          left: elo.history[left.id] ?? const [],
-                          right: elo.history[right.id] ?? const [],
-                          leftColor: colors.primary,
-                          rightColor: colors.tertiary,
-                          gridColor: colors.outlineVariant,
-                        ),
-                      ],
                     ],
                   );
                 },
@@ -307,38 +315,130 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     },
   );
 
-  Widget _playerSummary(
-    String name,
-    LocalPlayerStatistics stats,
-    Color accent,
-  ) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Text('${stats.matches} Spiele · ${stats.wins} Siege'),
-          Text('${stats.legWinRate.toStringAsFixed(1)} % Legquote'),
-          Text('${stats.tournaments} Turniere · ${stats.tournamentWins} Siege'),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: (stats.matchWinRate / 100).clamp(0.0, 1.0),
-            color: accent,
-            minHeight: 8,
-          ),
-        ],
+  List<({String category, String left, String right})> _comparisonRows({
+    required LocalPlayerStatistics leftStats,
+    required LocalPlayerStatistics rightStats,
+    required String leftId,
+    required String rightId,
+    required LocalEloSnapshot? elo,
+    required LocalRanking? ranking,
+  }) {
+    String percent(double value) => '${value.toStringAsFixed(1)} %';
+    final rows = <({String category, String left, String right})>[
+      (category: 'Elo aktuell', left: '', right: ''),
+      (
+        category: 'Spiele',
+        left: '${leftStats.matches}',
+        right: '${rightStats.matches}',
       ),
-    ),
-  );
+      (
+        category: 'Siege',
+        left: '${leftStats.wins}',
+        right: '${rightStats.wins}',
+      ),
+      (
+        category: 'Niederlagen',
+        left: '${leftStats.losses}',
+        right: '${rightStats.losses}',
+      ),
+      (
+        category: 'Unentschieden',
+        left: '${leftStats.draws}',
+        right: '${rightStats.draws}',
+      ),
+      (
+        category: 'Siegquote',
+        left: percent(leftStats.matchWinRate),
+        right: percent(rightStats.matchWinRate),
+      ),
+      (
+        category: 'Turniere',
+        left: '${leftStats.tournaments}',
+        right: '${rightStats.tournaments}',
+      ),
+      (
+        category: 'Turniersiege',
+        left: '${leftStats.tournamentWins}',
+        right: '${rightStats.tournamentWins}',
+      ),
+      (
+        category: 'Legs gewonnen / verloren',
+        left: '${leftStats.legsWon} / ${leftStats.legsLost}',
+        right: '${rightStats.legsWon} / ${rightStats.legsLost}',
+      ),
+      (
+        category: 'Legquote',
+        left: percent(leftStats.legWinRate),
+        right: percent(rightStats.legWinRate),
+      ),
+      (
+        category: 'Sets gewonnen / verloren',
+        left: '${leftStats.setsWon} / ${leftStats.setsLost}',
+        right: '${rightStats.setsWon} / ${rightStats.setsLost}',
+      ),
+      for (final type in BestPerformanceType.values)
+        (
+          category: _performanceCategory(type),
+          left:
+              '${leftStats.bestPerformances.where((item) => item.type == type).length}',
+          right:
+              '${rightStats.bestPerformances.where((item) => item.type == type).length}',
+        ),
+    ];
+    if (ranking == null) {
+      rows[0] = (category: 'Elo aktuell', left: '–', right: '–');
+      return rows;
+    }
 
-  Widget _legend(String name, Color color) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(width: 18, height: 4, color: color),
-      const SizedBox(width: 8),
-      Text(name),
-    ],
-  );
+    final entries = {
+      for (final player in elo?.entries ?? const <LocalEloPlayer>[])
+        player.id: player.rating,
+    };
+    rows[0] = (
+      category: 'Elo aktuell · ${ranking.name}',
+      left: '${entries[leftId] ?? ranking.startRating}',
+      right: '${entries[rightId] ?? ranking.startRating}',
+    );
+
+    final leftHistory = elo?.history[leftId] ?? const [];
+    final rightHistory = elo?.history[rightId] ?? const [];
+    final historyByKey = <String, Map<String, LocalEloHistoryItem>>{};
+    for (final (playerId, history) in [
+      (leftId, leftHistory),
+      (rightId, rightHistory),
+    ]) {
+      for (final item in history) {
+        final key = '${item.tournamentId}:${item.matchIndex}';
+        historyByKey.putIfAbsent(key, () => {})[playerId] = item;
+      }
+    }
+    final eventKeys = historyByKey.keys.toList()
+      ..sort((left, right) {
+        final leftItem = historyByKey[left]!.values.first;
+        final rightItem = historyByKey[right]!.values.first;
+        final date = leftItem.playedAt.compareTo(rightItem.playedAt);
+        return date == 0 ? left.compareTo(right) : date;
+      });
+    for (final key in eventKeys) {
+      final event = historyByKey[key]!;
+      final item = event.values.first;
+      final date =
+          '${item.playedAt.day.toString().padLeft(2, '0')}.'
+          '${item.playedAt.month.toString().padLeft(2, '0')}.'
+          '${item.playedAt.year}';
+      rows.add((
+        category: 'Elo-Verlauf · ${item.tournamentName} · $date',
+        left: event[leftId] == null ? '–' : '${event[leftId]!.ratingAfter}',
+        right: event[rightId] == null ? '–' : '${event[rightId]!.ratingAfter}',
+      ));
+    }
+    return rows;
+  }
+
+  String _performanceCategory(BestPerformanceType type) => switch (type) {
+    BestPerformanceType.score170 => '170+ Aufnahmen',
+    BestPerformanceType.score180 => '180er',
+    BestPerformanceType.highFinish => 'High Finishes',
+    BestPerformanceType.shortLeg => 'Shortlegs',
+  };
 }

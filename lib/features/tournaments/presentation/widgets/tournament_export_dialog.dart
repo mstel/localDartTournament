@@ -1,27 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../rankings/application/tournament_ranking_changes_service.dart';
 import '../../application/tournament_export.dart';
+import '../../application/tournament_completion_image_generator.dart';
 import '../../domain/tournament_models.dart';
 import '../../data/app_database.dart';
 import '../../data/tournament_storage.dart';
-import '../../../rankings/application/tournament_ranking_changes_service.dart';
+import '../../../../shared/utils/png_image_export.dart';
 
 class TournamentExportDialog {
   static Future<void> show(
     BuildContext context,
     CreatedTournament tournament, {
     Map<String, Object?>? resultSummary,
+    required TournamentCompletionImageData completionImageData,
     LocalAppDatabase? database,
     TournamentStorage? storage,
   }) async {
     final data = TournamentExport.encode(tournament);
-    var rankingChanges = const <Map<String, Object?>>[];
+    var changes = const <TournamentRankingPlayerChange>[];
     try {
-      rankingChanges = (await TournamentRankingChangesService(
+      changes = await TournamentRankingChangesService(
         database: database,
         storage: storage,
-      ).calculate(tournament)).map((change) => change.toExportJson()).toList();
+      ).calculate(tournament);
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -34,6 +37,21 @@ class TournamentExportDialog {
       }
     }
     if (!context.mounted) return;
+    final rankingChanges = changes
+        .map((change) => change.toExportJson())
+        .toList();
+    final imageData = TournamentCompletionImageData(
+      tournamentName: completionImageData.tournamentName,
+      tournamentType: completionImageData.tournamentType,
+      participantCount: completionImageData.participantCount,
+      matchCount: completionImageData.matchCount,
+      legCount: completionImageData.legCount,
+      averageLegsPerMatch: completionImageData.averageLegsPerMatch,
+      durationSummary: completionImageData.durationSummary,
+      podium: completionImageData.podium,
+      rankingChanges: changes,
+      bestPerformances: completionImageData.bestPerformances,
+    );
     final html = TournamentExport.html(
       tournament,
       resultSummary: resultSummary,
@@ -79,6 +97,25 @@ class TournamentExportDialog {
             },
             icon: const Icon(Icons.language),
             label: const Text('HTML kopieren'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              final bytes = await const TournamentCompletionImageGenerator()
+                  .generatePortraitPng(
+                    data: imageData,
+                    colorScheme: Theme.of(context).colorScheme,
+                  );
+              if (!context.mounted) return;
+              await exportPngImage(
+                context,
+                bytes: bytes,
+                fileName:
+                    'turnierabschluss-${tournament.name.trim().replaceAll(RegExp(r'\s+'), '-').toLowerCase()}.png',
+                successMessage: 'Turnierabschluss-Grafik exportiert.',
+              );
+            },
+            icon: const Icon(Icons.image_outlined),
+            label: const Text('Hochformat-Grafik exportieren'),
           ),
         ],
       ),

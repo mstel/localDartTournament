@@ -2353,33 +2353,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     List<TournamentPlayer> players,
     List<int?> slotOrder,
     int participantCount,
-  ) {
-    if (!_isValidPlayerSlotOrder(slotOrder, participantCount)) {
-      return players;
-    }
-
-    return [
-      for (final seed in slotOrder)
-        if (seed != null && seed <= players.length) players[seed - 1],
-    ];
-  }
-
-  bool _isValidPlayerSlotOrder(List<int?> slotOrder, int participantCount) {
-    if (participantCount < 1 || slotOrder.length != participantCount) {
-      return false;
-    }
-
-    final seen = <int>{};
-    for (final seed in slotOrder) {
-      if (seed == null || seed < 1 || seed > participantCount) {
-        return false;
-      }
-      if (!seen.add(seed)) {
-        return false;
-      }
-    }
-    return true;
-  }
+  ) => GroupDrawAssignment.orderPlayers(
+    players: players,
+    slotOrder: slotOrder,
+    participantCount: participantCount,
+  );
 
   QualificationPlan? _qualificationPlanForStage(TournamentStage stage) {
     if (stage.groupSizes.isEmpty || stage.qualifiedParticipantCount == null) {

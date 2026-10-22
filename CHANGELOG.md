@@ -1,3 +1,19 @@
+# 1.1.4+16
+
+- Replaces the player Elo comparison graph with a side-by-side comparison
+  table, and adds named ranking-position changes to tournament results.
+- Adds a portrait PNG export for completed tournaments, including podium,
+  Elo/ranking changes, league moves, and named highlights.
+- Refines dashboard and second-screen match cards, limits the visible latest
+  results to two cards with scrolling, and uses configured group sizes for
+  random group assignments.
+- Improves desktop update diagnostics: failed activation details and the log
+  location remain visible in the Updates panel.
+- Adds app auth callback redirects for registration, Google sign-in, and
+  password reset. Google provider credentials, redirect allowlisting, and
+  email delivery still require Supabase project configuration.
+- Keeps existing tournament database and backup formats unchanged.
+
 # Dart Tournament Manager 1.1.0+12
 
 ## Daten sicher neu aufsetzen und Synchronisierung bewusst aktivieren
