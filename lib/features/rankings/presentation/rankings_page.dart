@@ -1162,11 +1162,21 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   bool _absenceDecayEnabled = false;
   bool _inactivityDecayEnabled = false;
   bool _isDefaultForStatistics = false;
+  List<TextEditingController> _tierNames = [];
+  List<TextEditingController> _tierMinimums = [];
 
   @override
   void initState() {
     super.initState();
     final initial = widget.initial;
+    final initialTiers = initial?.effectiveTierBands ?? EloTier.values;
+    _tierNames = [
+      for (final tier in initialTiers) TextEditingController(text: tier.name),
+    ];
+    _tierMinimums = [
+      for (final tier in initialTiers)
+        TextEditingController(text: '${tier.minElo}'),
+    ];
     if (initial == null) return;
     _name.text = initial.name;
     _type = initial.type;
@@ -1216,6 +1226,12 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     _absenceDecayPoints.dispose();
     _inactivityGraceTournaments.dispose();
     _inactivityDecayPoints.dispose();
+    for (final controller in _tierNames) {
+      controller.dispose();
+    }
+    for (final controller in _tierMinimums) {
+      controller.dispose();
+    }
     for (final controller in _numbers.values) {
       controller.dispose();
     }
@@ -1267,7 +1283,11 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
         _dateError = null;
       }
     });
-    if (!_formKey.currentState!.validate() || _dateError != null) return;
+    if (!_formKey.currentState!.validate() ||
+        _dateError != null ||
+        !_validateTierBands()) {
+      return;
+    }
 
     Navigator.pop(
       context,
@@ -1294,6 +1314,7 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
         validFromDate: _fromDate,
         validToDate: _toDate,
         enableTiers: _enableTiers,
+        tierBands: _tierBandsFromInputs(),
         requireMinimumParticipations: _requireMinimumParticipations,
         minimumParticipations:
             int.tryParse(_minimumParticipations.text.trim()) ?? 1,
@@ -1308,6 +1329,63 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
         isDefaultForStatistics: _isDefaultForStatistics,
       ),
     );
+  }
+
+  List<EloTier> _tierBandsFromInputs() {
+    final tiers = [
+      for (var index = 0; index < _tierNames.length; index++)
+        EloTier.styled(
+          name: _tierNames[index].text.trim(),
+          minElo: int.tryParse(_tierMinimums[index].text.trim()) ?? 0,
+          index: index,
+        ),
+    ]..sort((left, right) => right.minElo.compareTo(left.minElo));
+    return tiers;
+  }
+
+  bool _validateTierBands() {
+    if (!_enableTiers) return true;
+    final tiers = _tierBandsFromInputs();
+    final valid =
+        tiers.isNotEmpty &&
+        tiers.last.minElo == 0 &&
+        tiers.every((tier) => tier.name.isNotEmpty && tier.minElo >= 0) &&
+        tiers.map((tier) => tier.minElo).toSet().length == tiers.length;
+    if (!valid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Bitte eindeutige Elo-Untergrenzen ab 0 und Namen für alle Tiers eingeben.',
+          ),
+        ),
+      );
+    }
+    return valid;
+  }
+
+  void _addTierBand() {
+    final highest = _tierBandsFromInputs().firstOrNull?.minElo ?? 0;
+    setState(() {
+      _tierNames.insert(0, TextEditingController(text: 'Neues Tier'));
+      _tierMinimums.insert(0, TextEditingController(text: '${highest + 100}'));
+    });
+  }
+
+  void _removeTierBand(int index) {
+    if (_tierNames.length <= 1) return;
+    setState(() {
+      _tierNames.removeAt(index).dispose();
+      _tierMinimums.removeAt(index).dispose();
+    });
+  }
+
+  String _tierBandSummary() {
+    final tiers = _tierBandsFromInputs();
+    return [
+      for (var index = 0; index < tiers.length; index++)
+        '${tiers[index].name} '
+            '${index == 0 ? 'ab ${tiers[index].minElo}' : '${tiers[index].minElo}–${tiers[index - 1].minElo - 1}'} Elo',
+    ].join(' · ');
   }
 
   @override
@@ -1603,13 +1681,75 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Auf- & Abstiegssystem (Elo-Tiers)'),
-                subtitle: const Text(
-                  'Spieler nach Elo in Ligen/Tiers einordnen:\n'
-                  '💎 Diamant (≥1200) · 🎖️ Platin (≥1100) · 🏆 Gold (≥1000) · 🛡️ Silber (≥900) · 🥉 Bronze (<900)',
-                ),
+                subtitle: Text(_tierBandSummary()),
                 value: _enableTiers,
                 onChanged: (val) => setState(() => _enableTiers = val),
               ),
+              if (_enableTiers) ...[
+                for (var index = 0; index < _tierNames.length; index++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextFormField(
+                            controller: _tierNames[index],
+                            decoration: InputDecoration(
+                              labelText: 'Tier ${index + 1}',
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            validator: (value) => (value ?? '').trim().isEmpty
+                                ? 'Bitte benennen.'
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _tierMinimums[index],
+                            keyboardType: TextInputType.number,
+                            enabled: index != _tierMinimums.length - 1,
+                            decoration: InputDecoration(
+                              labelText: index == _tierMinimums.length - 1
+                                  ? 'Ab 0 Elo'
+                                  : 'Ab Elo',
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            validator: (value) {
+                              if (index == _tierMinimums.length - 1) {
+                                return null;
+                              }
+                              final minimum = int.tryParse(
+                                (value ?? '').trim(),
+                              );
+                              return minimum == null || minimum < 1
+                                  ? 'Mindestens 1'
+                                  : null;
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Tier entfernen',
+                          onPressed: _tierNames.length <= 1
+                              ? null
+                              : () => _removeTierBand(index),
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                      ],
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _addTierBand,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Tier hinzufügen'),
+                  ),
+                ),
+              ],
             ],
           ],
         ),
@@ -1934,7 +2074,10 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
                       if (widget.ranking.enableTiers) ...[
                         const SizedBox(width: 8),
                         _TierBadge(
-                          tier: EloTier.fromElo(entries.entries[i].rating),
+                          tier: EloTier.fromElo(
+                            entries.entries[i].rating,
+                            tiers: widget.ranking.effectiveTierBands,
+                          ),
                         ),
                       ],
                     ],
@@ -1962,6 +2105,7 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
                           rankingName: widget.ranking.name,
                           history: entries.history[player.id] ?? const [],
                           enableTiers: widget.ranking.enableTiers,
+                          tierBands: widget.ranking.effectiveTierBands,
                         ),
                       ),
                     );
@@ -2123,12 +2267,14 @@ class PlayerEloHistoryPage extends StatelessWidget {
     required this.rankingName,
     required this.history,
     this.enableTiers = false,
+    this.tierBands = EloTier.values,
   });
 
   final LocalEloPlayer player;
   final String rankingName;
   final List<LocalEloHistoryItem> history;
   final bool enableTiers;
+  final List<EloTier> tierBands;
 
   @override
   Widget build(BuildContext context) {
@@ -2201,8 +2347,14 @@ class PlayerEloHistoryPage extends StatelessWidget {
                         if (enableTiers)
                           _StatChip(
                             label: 'Liga / Tier',
-                            value: EloTier.fromElo(player.rating).name,
-                            icon: EloTier.fromElo(player.rating).icon,
+                            value: EloTier.fromElo(
+                              player.rating,
+                              tiers: tierBands,
+                            ).name,
+                            icon: EloTier.fromElo(
+                              player.rating,
+                              tiers: tierBands,
+                            ).icon,
                           ),
                         _StatChip(
                           label: 'Matches',

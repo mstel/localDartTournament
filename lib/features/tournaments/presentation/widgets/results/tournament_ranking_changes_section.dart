@@ -168,12 +168,13 @@ class _TournamentRankingChangesSectionState
 
         final topGains = gains.take(3).toList();
         final topLosses = losses.take(3).toList();
-        final positionChanges = [...deltas]
-          ..sort((a, b) {
-            final aChange = a.positionChange ?? 0;
-            final bChange = b.positionChange ?? 0;
-            return bChange.compareTo(aChange);
-          });
+        final positionChanges =
+            deltas.where((change) => change.hasPositionChange).toList()
+              ..sort((a, b) {
+                final aChange = a.positionChange ?? 0;
+                final bChange = b.positionChange ?? 0;
+                return bChange.compareTo(aChange);
+              });
 
         final theme = Theme.of(context);
 

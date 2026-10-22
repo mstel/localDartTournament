@@ -178,7 +178,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                 initialValue: ranking?.id,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  labelText: 'Elo-Rangliste für den Verlauf',
+                  labelText: 'Elo-Rangliste',
                   border: OutlineInputBorder(),
                 ),
                 items: [
@@ -238,6 +238,13 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: DataTable(
+                          border: TableBorder(
+                            verticalInside: BorderSide(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
+                            ),
+                          ),
                           columns: [
                             DataColumn(
                               label: Text(
@@ -248,9 +255,13 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                               ),
                             ),
                             const DataColumn(
-                              label: Text(
-                                'Kategorie',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                              label: SizedBox(
+                                width: 210,
+                                child: Text(
+                                  'Kategorie',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ),
                             DataColumn(
@@ -267,7 +278,17 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                               DataRow(
                                 cells: [
                                   DataCell(Text(row.left)),
-                                  DataCell(Text(row.category)),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 210,
+                                      child: Text(
+                                        row.category,
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
                                   DataCell(Text(row.right)),
                                 ],
                               ),
@@ -278,7 +299,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                         const Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: Text(
-                            'Für den Elo-Verlauf muss eine Elo-Rangliste angelegt sein.',
+                            'Für den Elo-Vergleich muss eine Elo-Rangliste angelegt sein.',
                           ),
                         ),
                     ],
@@ -400,38 +421,6 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       right: '${entries[rightId] ?? ranking.startRating}',
     );
 
-    final leftHistory = elo?.history[leftId] ?? const [];
-    final rightHistory = elo?.history[rightId] ?? const [];
-    final historyByKey = <String, Map<String, LocalEloHistoryItem>>{};
-    for (final (playerId, history) in [
-      (leftId, leftHistory),
-      (rightId, rightHistory),
-    ]) {
-      for (final item in history) {
-        final key = '${item.tournamentId}:${item.matchIndex}';
-        historyByKey.putIfAbsent(key, () => {})[playerId] = item;
-      }
-    }
-    final eventKeys = historyByKey.keys.toList()
-      ..sort((left, right) {
-        final leftItem = historyByKey[left]!.values.first;
-        final rightItem = historyByKey[right]!.values.first;
-        final date = leftItem.playedAt.compareTo(rightItem.playedAt);
-        return date == 0 ? left.compareTo(right) : date;
-      });
-    for (final key in eventKeys) {
-      final event = historyByKey[key]!;
-      final item = event.values.first;
-      final date =
-          '${item.playedAt.day.toString().padLeft(2, '0')}.'
-          '${item.playedAt.month.toString().padLeft(2, '0')}.'
-          '${item.playedAt.year}';
-      rows.add((
-        category: 'Elo-Verlauf · ${item.tournamentName} · $date',
-        left: event[leftId] == null ? '–' : '${event[leftId]!.ratingAfter}',
-        right: event[rightId] == null ? '–' : '${event[rightId]!.ratingAfter}',
-      ));
-    }
     return rows;
   }
 

@@ -16,6 +16,7 @@ import '../../../statistics/domain/best_performance.dart';
 import '../widgets/run/best_performance_editor.dart';
 import 'challonge_archive_page.dart';
 import '../../application/tournament_timing.dart';
+import '../../application/tournament_duration_range.dart';
 import '../../application/tournament_completion_image_generator.dart';
 import '../widgets/results/tournament_ranking_assignment.dart';
 import '../widgets/results/tournament_ranking_changes_section.dart';
@@ -121,13 +122,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                           final averageLegsPerMatch = summary.matchCount == 0
                               ? 0.0
                               : summary.legCount / summary.matchCount;
-                          final expectedRange =
-                              tournament.plannedMinimumMinutes != null &&
-                                  tournament.plannedMinutes != null
-                              ? 'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinimumMinutes!))}–${formatDur(Duration(minutes: tournament.plannedMinutes!))}'
-                              : tournament.plannedMinutes == null
-                              ? null
-                              : 'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinutes!))}';
+                          final expectedRange = _expectedDurationRangeText();
                           return Column(
                             children: [
                               const SizedBox(height: 10),
@@ -178,7 +173,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                                     if (expectedRange != null)
                                       Tooltip(
                                         message:
-                                            'Geschätzte Turnierdauer: $expectedRange',
+                                            'Erwartete Spanne der Turnierdauer: $expectedRange',
                                         child: Text(
                                           expectedRange,
                                           key: const ValueKey(
@@ -301,6 +296,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
 
   Map<String, Object?> _exportSummary(_TournamentResultSummary summary) {
     final timing = TournamentTiming.durationSummary(tournament);
+    final expectedRange = _expectedDurationRange();
     return {
       'participantCount': summary.playerCount,
       'matchCount': summary.matchCount,
@@ -309,8 +305,8 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
           ? 0
           : summary.legCount / summary.matchCount,
       'actualDurationSeconds': timing?.totalDuration.inSeconds,
-      'expectedMinimumMinutes': tournament.plannedMinimumMinutes,
-      'expectedMaximumMinutes': tournament.plannedMinutes,
+      'expectedMinimumMinutes': expectedRange?.minimumMinutes,
+      'expectedMaximumMinutes': expectedRange?.maximumMinutes,
       'podium': [
         for (final stats in summary.ranking.take(3))
           {
@@ -332,15 +328,12 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     final timing = TournamentTiming.durationSummary(tournament);
     String formatDur(Duration duration) =>
         '${duration.inHours}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}';
+    final expectedRange = _expectedDurationRange();
     final durationParts = [
       if (timing != null) 'Tatsächlich: ${formatDur(timing.totalDuration)}',
-      if (tournament.plannedMinimumMinutes != null &&
-          tournament.plannedMinutes != null)
-        'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinimumMinutes!))}'
-            '–${formatDur(Duration(minutes: tournament.plannedMinutes!))}',
-      if (tournament.plannedMinimumMinutes == null &&
-          tournament.plannedMinutes != null)
-        'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinutes!))}',
+      if (expectedRange != null)
+        'Erwartet: ${formatDur(Duration(minutes: expectedRange.minimumMinutes))}'
+            '–${formatDur(Duration(minutes: expectedRange.maximumMinutes))}',
       if (timing?.averageMatchDuration != null)
         'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
     ];
@@ -368,6 +361,51 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       rankingChanges: const [],
       bestPerformances: performances,
     );
+  }
+
+  ({int minimumMinutes, int maximumMinutes})? _expectedDurationRange() {
+    final estimate = tournament.plannedMinutes;
+    if (estimate == null) return null;
+    final stages = <({int bestOfLegs, int matchCount})>[];
+    for (var index = 0; index < tournament.stages.length; index++) {
+      final stage = tournament.stages[index];
+      final matchCount = index < tournament.runStages.length
+          ? _matchesForRunStage(
+              tournament.runStages[index],
+            ).where((match) => match.hasPlayers).length
+          : 0;
+      stages.add((
+        bestOfLegs: stage.gameFormat.bestOfLegs,
+        matchCount: matchCount > 0 ? matchCount : 1,
+      ));
+    }
+    if (stages.isEmpty) return null;
+    return TournamentDurationRange.forEstimate(
+      estimatedMinutes: estimate,
+      matches: stages,
+    );
+  }
+
+  List<GroupMatch> _matchesForRunStage(TournamentRunStage stage) =>
+      switch (stage) {
+        GroupTournamentRunStage() => [
+          for (final group in stage.groups) ...[
+            ...group.matches,
+            ...group.knockoutRounds.expand((round) => round),
+            ...group.placementMatches,
+          ],
+        ],
+        KnockoutTournamentRunStage() => stage.matches,
+        _ => const [],
+      };
+
+  String? _expectedDurationRangeText() {
+    final range = _expectedDurationRange();
+    if (range == null) return null;
+    String formatDuration(int minutes) =>
+        '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}';
+    return 'Erwartet: ${formatDuration(range.minimumMinutes)}'
+        '–${formatDuration(range.maximumMinutes)}';
   }
 
   void _openPlayer(BuildContext context, TournamentPlayer player) {

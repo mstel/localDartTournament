@@ -247,6 +247,8 @@ class OperatorSignInDialog extends StatefulWidget {
 }
 
 class _OperatorSignInDialogState extends State<OperatorSignInDialog> {
+  static const _showSelfServiceAuthOptions = false;
+
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
@@ -450,12 +452,14 @@ class _OperatorSignInDialogState extends State<OperatorSignInDialog> {
                   ),
                 ),
               if (!_isResetMode && !_isRegisterMode) ...[
-                const Divider(height: 24),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _signInWithGoogle,
-                  icon: const Icon(Icons.g_mobiledata, size: 24),
-                  label: const Text('Mit Google anmelden'),
-                ),
+                if (_showSelfServiceAuthOptions) ...[
+                  const Divider(height: 24),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _signInWithGoogle,
+                    icon: const Icon(Icons.g_mobiledata, size: 24),
+                    label: const Text('Mit Google anmelden'),
+                  ),
+                ],
                 TextButton(
                   onPressed: _busy
                       ? null
@@ -466,16 +470,17 @@ class _OperatorSignInDialogState extends State<OperatorSignInDialog> {
                         }),
                   child: const Text('Passwort vergessen?'),
                 ),
-                TextButton(
-                  onPressed: _busy
-                      ? null
-                      : () => setState(() {
-                          _isRegisterMode = true;
-                          _errorMessage = null;
-                          _infoMessage = null;
-                        }),
-                  child: const Text('Registrieren'),
-                ),
+                if (_showSelfServiceAuthOptions)
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() {
+                            _isRegisterMode = true;
+                            _errorMessage = null;
+                            _infoMessage = null;
+                          }),
+                    child: const Text('Registrieren'),
+                  ),
               ],
               if (_isRegisterMode)
                 TextButton(

@@ -3,6 +3,7 @@ import 'package:dart_tournament_manager/features/tournaments/application/group_a
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_advancement_forecast_engine.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
+import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -77,6 +78,103 @@ void main() {
   }
 
   testWidgets(
+    'long player names stay on one row and reduce suggestions to five',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final players = [
+        for (var index = 1; index <= 8; index++)
+          TournamentPlayer.generated(index).copyWith(
+            name: 'Spielername mit außergewöhnlicher Länge Nummer $index',
+          ),
+      ];
+      final matches = [
+        for (var index = 0; index < 6; index++)
+          GroupMatch(
+            homePlayer: players[index],
+            awayPlayer: players[index + 1],
+            round: index + 1,
+          ),
+      ];
+      final tournament = CreatedTournament(
+        name: 'Langnamen',
+        players: players,
+        stages: const [
+          TournamentStage(
+            name: 'Gruppenphase',
+            type: 'groups',
+            groupSizes: [8],
+          ),
+        ],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppenphase',
+            groupPlayType: 'round_robin',
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: players,
+                matches: matches,
+              ),
+            ],
+            qualificationPlan: null,
+            tieBreakers: defaultGroupTieBreakers,
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Nächste Partien (5 Vorschläge)'), findsOneWidget);
+      final visibleTiles = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'second-screen-match-',
+            ),
+      );
+      expect(visibleTiles, findsNWidgets(5));
+      final tileDecoration =
+          tester.widget<Container>(visibleTiles.first).decoration!
+              as BoxDecoration;
+      expect(tileDecoration.color, TournamentDisplayPalette.card);
+      expect(
+        (tileDecoration.border! as Border).top.color,
+        TournamentDisplayPalette.border.withAlpha(150),
+      );
+      for (var index = 0; index < 5; index++) {
+        final playerTexts = tester
+            .widgetList<Text>(
+              find.descendant(
+                of: visibleTiles.at(index),
+                matching: find.byType(Text),
+              ),
+            )
+            .where((text) => text.data?.startsWith('Spielername') ?? false)
+            .toList();
+        expect(playerTexts, hasLength(1));
+        for (final text in playerTexts) {
+          expect(text.maxLines, 1);
+        }
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     '1920x1080 second screen shows recent results in two columns and scrolls',
     (tester) async {
       tester.view.physicalSize = const Size(1920, 1080);
@@ -113,10 +211,20 @@ void main() {
           ),
         ),
       );
+
       await tester.pump();
 
       final viewport = tester.getRect(
         find.byKey(const ValueKey('recent-results-scroll')),
+      );
+      final firstRecent = tester.widget<Container>(
+        find.byKey(const ValueKey('recent-result-3-A-D')),
+      );
+      final recentDecoration = firstRecent.decoration! as BoxDecoration;
+      expect(recentDecoration.color, TournamentDisplayPalette.card);
+      expect(
+        (recentDecoration.border! as Border).top.color,
+        TournamentDisplayPalette.border.withAlpha(150),
       );
       final resultRects = [
         for (final key in [

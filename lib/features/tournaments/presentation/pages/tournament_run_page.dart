@@ -29,6 +29,51 @@ class _LiveTournamentRunPage extends StatefulWidget {
   State<_LiveTournamentRunPage> createState() => _TournamentRunPageState();
 }
 
+class _TournamentClockStatus extends StatefulWidget {
+  const _TournamentClockStatus({required this.tournament});
+
+  final CreatedTournament tournament;
+
+  @override
+  State<_TournamentClockStatus> createState() => _TournamentClockStatusState();
+}
+
+class _TournamentClockStatusState extends State<_TournamentClockStatus> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tournament = widget.tournament;
+    final elapsed = TournamentTiming.snapshot(
+      tournament,
+      DateTime.now(),
+    ).elapsed;
+    final time =
+        '${elapsed.inHours.toString().padLeft(2, '0')}:'
+        '${(elapsed.inMinutes % 60).toString().padLeft(2, '0')}:'
+        '${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}';
+    final paused = tournament.isClockPaused;
+    return Text(
+      'Status: ${paused ? 'Pausiert' : 'Läuft aktiv'} · $time',
+      key: const ValueKey('tournament-clock-status'),
+    );
+  }
+}
+
 class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     with WidgetsBindingObserver {
   bool _leaving = false;
@@ -2770,22 +2815,43 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  TextField(
-                                    controller: _tournamentNameController,
-                                    maxLength: 100,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Turniername',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    onSubmitted: (_) => _saveTournamentName(),
-                                  ),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: FilledButton.icon(
-                                      onPressed: _saveTournamentName,
-                                      icon: const Icon(Icons.save_outlined),
-                                      label: const Text('Namen speichern'),
-                                    ),
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final field = TextField(
+                                        controller: _tournamentNameController,
+                                        maxLength: 100,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Turniername',
+                                          border: OutlineInputBorder(),
+                                          counterText: '',
+                                        ),
+                                        onSubmitted: (_) =>
+                                            _saveTournamentName(),
+                                      );
+                                      final saveButton = FilledButton.icon(
+                                        onPressed: _saveTournamentName,
+                                        icon: const Icon(Icons.save_outlined),
+                                        label: const Text('Namen speichern'),
+                                      );
+                                      if (constraints.maxWidth < 560) {
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            field,
+                                            const SizedBox(height: 8),
+                                            saveButton,
+                                          ],
+                                        );
+                                      }
+                                      return Row(
+                                        children: [
+                                          Expanded(flex: 3, child: field),
+                                          const SizedBox(width: 12),
+                                          saveButton,
+                                        ],
+                                      );
+                                    },
                                   ),
                                   const Divider(height: 28),
                                 ],
@@ -2816,10 +2882,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  Text(
-                                    widget.tournament.isClockPaused
-                                        ? 'Status: Pausiert'
-                                        : 'Status: Läuft aktiv',
+                                  _TournamentClockStatus(
+                                    tournament: widget.tournament,
                                   ),
                                   const SizedBox(height: 12),
                                   if (widget.tournament.finishedAt == null)
@@ -2882,6 +2946,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               [
                                                 '--second-screen',
                                                 widget.tournament.id,
+                                                '--parent-pid=$pid',
                                               ],
                                             );
                                             if (context.mounted) {

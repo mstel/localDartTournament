@@ -1,3 +1,5 @@
+import 'elo_tier.dart';
+
 enum RankingType { elo, series }
 
 class LocalRanking {
@@ -22,6 +24,7 @@ class LocalRanking {
     this.validFromDate,
     this.validToDate,
     this.enableTiers = false,
+    this.tierBands,
     this.requireMinimumParticipations = false,
     this.minimumParticipations = 1,
     this.allowDecayBelowStartRating = false,
@@ -54,6 +57,9 @@ class LocalRanking {
   final DateTime? validFromDate;
   final DateTime? validToDate;
   final bool enableTiers;
+  final List<EloTier>? tierBands;
+  List<EloTier> get effectiveTierBands =>
+      tierBands == null || tierBands!.isEmpty ? EloTier.values : tierBands!;
   final bool requireMinimumParticipations;
   final int minimumParticipations;
   final bool allowDecayBelowStartRating;
@@ -102,6 +108,8 @@ class LocalRanking {
     'validFromDate': validFromDate?.toIso8601String(),
     'validToDate': validToDate?.toIso8601String(),
     'enableTiers': enableTiers,
+    if (tierBands != null)
+      'tierBands': [for (final tier in tierBands!) tier.toJson()],
     'requireMinimumParticipations': requireMinimumParticipations,
     'minimumParticipations': minimumParticipations,
     'allowDecayBelowStartRating': allowDecayBelowStartRating,
@@ -137,6 +145,14 @@ class LocalRanking {
     validFromDate: DateTime.tryParse(json['validFromDate'] as String? ?? ''),
     validToDate: DateTime.tryParse(json['validToDate'] as String? ?? ''),
     enableTiers: json['enableTiers'] as bool? ?? false,
+    tierBands: (json['tierBands'] as List?)?.indexed
+        .map(
+          (entry) => EloTier.fromJson(
+            Map<String, Object?>.from(entry.$2 as Map),
+            entry.$1,
+          ),
+        )
+        .toList(),
     requireMinimumParticipations:
         json['requireMinimumParticipations'] as bool? ?? false,
     minimumParticipations: json['minimumParticipations'] as int? ?? 1,
@@ -171,6 +187,7 @@ class LocalRanking {
     DateTime? validFromDate,
     DateTime? validToDate,
     bool? enableTiers,
+    List<EloTier>? tierBands,
     bool? requireMinimumParticipations,
     int? minimumParticipations,
     bool? allowDecayBelowStartRating,
@@ -202,6 +219,7 @@ class LocalRanking {
     validFromDate: validFromDate ?? this.validFromDate,
     validToDate: validToDate ?? this.validToDate,
     enableTiers: enableTiers ?? this.enableTiers,
+    tierBands: tierBands ?? this.tierBands,
     requireMinimumParticipations:
         requireMinimumParticipations ?? this.requireMinimumParticipations,
     minimumParticipations: minimumParticipations ?? this.minimumParticipations,
