@@ -2374,11 +2374,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       0,
       (sum, size) => sum + size,
     );
-    final groupPlayers = _playersInStageOrder(
-      players,
-      stage.groupSlotOrder,
-      groupParticipantCount,
-    );
+    final groupPlayers = players.take(groupParticipantCount).toList();
 
     return GroupTournamentRunStage(
       name: stage.name,
@@ -2392,16 +2388,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       tieBreakers: stage.groupTieBreakers,
     );
   }
-
-  List<TournamentPlayer> _playersInStageOrder(
-    List<TournamentPlayer> players,
-    List<int?> slotOrder,
-    int participantCount,
-  ) => GroupDrawAssignment.orderPlayers(
-    players: players,
-    slotOrder: slotOrder,
-    participantCount: participantCount,
-  );
 
   QualificationPlan? _qualificationPlanForStage(TournamentStage stage) {
     if (stage.groupSizes.isEmpty || stage.qualifiedParticipantCount == null) {

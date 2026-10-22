@@ -57,10 +57,6 @@ class _RandomDrawDialogState extends State<_RandomDrawDialog>
 
   bool get _isComplete => _drawnSeeds.length == widget.participantLabels.length;
 
-  List<String> get _drawnPlayerNames => [
-    for (final seed in _drawnSeeds) widget.participantLabels[seed - 1],
-  ];
-
   List<int> _shuffledRemainingSeeds() {
     return List<int>.from(_remainingSeeds)..shuffle(_random);
   }
@@ -275,9 +271,10 @@ class _RandomDrawDialogState extends State<_RandomDrawDialog>
                           )
                         : _DrawGroupPreview(
                             groupSizes: widget.groupSizes,
-                            groups: GroupDrawAssignment.partition(
-                              _drawnPlayerNames,
-                              widget.groupSizes,
+                            groups: GroupDrawAssignment.partitionDraw(
+                              items: widget.participantLabels,
+                              slotOrder: _drawnSeeds,
+                              groupSizes: widget.groupSizes,
                             ),
                           ),
                   ),

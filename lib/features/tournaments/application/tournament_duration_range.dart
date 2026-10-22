@@ -1,6 +1,24 @@
 class TournamentDurationRange {
   const TournamentDurationRange._();
 
+  static String formatDuration(Duration duration) =>
+      formatMinutes(duration.inMinutes);
+
+  static String formatMinutes(int minutes) =>
+      '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}';
+
+  static String actualDurationLabel(Duration duration) =>
+      'Tatsächliche Turnierdauer: ${formatDuration(duration)}';
+
+  static String estimatedDurationLabel({
+    required int minimumMinutes,
+    required int maximumMinutes,
+  }) {
+    final averageMinutes = ((minimumMinutes + maximumMinutes) / 2).round();
+    return 'Geschätzte Turnierdauer: ${formatMinutes(averageMinutes)} '
+        '(${formatMinutes(minimumMinutes)}–${formatMinutes(maximumMinutes)})';
+  }
+
   static ({int minimumMinutes, int maximumMinutes}) forEstimate({
     required int estimatedMinutes,
     required Iterable<({int bestOfLegs, int matchCount})> matches,

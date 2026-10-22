@@ -117,8 +117,6 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                           final timing = TournamentTiming.durationSummary(
                             tournament,
                           );
-                          String formatDur(Duration d) =>
-                              '${d.inHours}:${(d.inMinutes % 60).toString().padLeft(2, '0')}';
                           final averageLegsPerMatch = summary.matchCount == 0
                               ? 0.0
                               : summary.legCount / summary.matchCount;
@@ -168,7 +166,9 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                                   children: [
                                     if (timing != null)
                                       Text(
-                                        'Tatsächlich: ${formatDur(timing.totalDuration)}',
+                                        TournamentDurationRange.actualDurationLabel(
+                                          timing.totalDuration,
+                                        ),
                                       ),
                                     if (expectedRange != null)
                                       Tooltip(
@@ -180,10 +180,6 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                                             'expected-duration-range',
                                           ),
                                         ),
-                                      ),
-                                    if (timing?.averageMatchDuration != null)
-                                      Text(
-                                        'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
                                       ),
                                     if (timing == null && expectedRange == null)
                                       const Text('Dauer: nicht erfasst'),
@@ -326,16 +322,15 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     List<BestPerformance> performances,
   ) {
     final timing = TournamentTiming.durationSummary(tournament);
-    String formatDur(Duration duration) =>
-        '${duration.inHours}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}';
     final expectedRange = _expectedDurationRange();
     final durationParts = [
-      if (timing != null) 'Tatsächlich: ${formatDur(timing.totalDuration)}',
+      if (timing != null)
+        TournamentDurationRange.actualDurationLabel(timing.totalDuration),
       if (expectedRange != null)
-        'Erwartet: ${formatDur(Duration(minutes: expectedRange.minimumMinutes))}'
-            '–${formatDur(Duration(minutes: expectedRange.maximumMinutes))}',
-      if (timing?.averageMatchDuration != null)
-        'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
+        TournamentDurationRange.estimatedDurationLabel(
+          minimumMinutes: expectedRange.minimumMinutes,
+          maximumMinutes: expectedRange.maximumMinutes,
+        ),
     ];
     return TournamentCompletionImageData(
       tournamentName: tournament.name,
@@ -346,7 +341,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       averageLegsPerMatch: summary.matchCount == 0
           ? 0
           : summary.legCount / summary.matchCount,
-      durationSummary: durationParts.join(' · '),
+      durationSummary: durationParts.join('\n'),
       podium: [
         for (var index = 0; index < podium.length; index++)
           TournamentCompletionPodiumEntry(
@@ -402,10 +397,10 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
   String? _expectedDurationRangeText() {
     final range = _expectedDurationRange();
     if (range == null) return null;
-    String formatDuration(int minutes) =>
-        '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}';
-    return 'Erwartet: ${formatDuration(range.minimumMinutes)}'
-        '–${formatDuration(range.maximumMinutes)}';
+    return TournamentDurationRange.estimatedDurationLabel(
+      minimumMinutes: range.minimumMinutes,
+      maximumMinutes: range.maximumMinutes,
+    );
   }
 
   void _openPlayer(BuildContext context, TournamentPlayer player) {

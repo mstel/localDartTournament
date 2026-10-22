@@ -10,12 +10,11 @@ void main() {
     ];
     const drawnSeeds = [2, 4, 1, 8, 3, 5, 7, 6];
 
-    final ordered = GroupDrawAssignment.orderPlayers(
-      players: players,
+    final groups = GroupDrawAssignment.partitionDraw(
+      items: players,
       slotOrder: drawnSeeds,
-      participantCount: 8,
+      groupSizes: const [4, 4],
     );
-    final groups = GroupDrawAssignment.partition(ordered, const [4, 4]);
 
     expect(groups.map((group) => group.map((player) => player.name).toList()), [
       ['Spieler 2', 'Spieler 4', 'Spieler 1', 'Spieler 8'],
@@ -38,17 +37,10 @@ void main() {
       );
       final restoredStage = TournamentStage.fromJson(stage.toJson());
 
-      final ordered = GroupDrawAssignment.orderPlayers(
-        players: players,
+      final groups = GroupDrawAssignment.partitionDraw(
+        items: players,
         slotOrder: restoredStage.groupSlotOrder,
-        participantCount: restoredStage.groupSizes.fold(
-          0,
-          (total, size) => total + size,
-        ),
-      );
-      final groups = GroupDrawAssignment.partition(
-        ordered,
-        restoredStage.groupSizes,
+        groupSizes: restoredStage.groupSizes,
       );
       final wheelPreviewGroups = GroupDrawAssignment.partition([
         for (final seed in restoredStage.groupSlotOrder) players[seed! - 1],

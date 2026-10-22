@@ -22,7 +22,9 @@ void main() {
               matchCount: 14,
               legCount: 41,
               averageLegsPerMatch: 2.9,
-              durationSummary: 'Erwartet: 2:00–3:00',
+              durationSummary:
+                  'Tatsächliche Turnierdauer: 2:34\n'
+                  'Geschätzte Turnierdauer: 2:30 (2:00–3:00)',
               podium: const [
                 TournamentCompletionPodiumEntry(
                   place: 1,

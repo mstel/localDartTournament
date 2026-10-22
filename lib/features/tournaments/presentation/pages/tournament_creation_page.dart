@@ -29,6 +29,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final List<String> _groupTieBreakers = List<String>.from(
     defaultGroupTieBreakers,
   );
+  final GroupTieBreakerPreferences _groupTieBreakerPreferences =
+      GroupTieBreakerPreferences();
+  Future<void> _groupTieBreakerSaveQueue = Future<void>.value();
+  bool _groupTieBreakersTouched = false;
   final List<int> _groupRoundRobinRepeats = [];
   final List<int?> _groupMaxGamesPerPlayer = [];
 
@@ -78,7 +82,45 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   void initState() {
     super.initState();
     _stageNameController.text = _defaultStageName();
+    unawaited(_loadGroupTieBreakers());
     unawaited(_applyDefaultRanking());
+  }
+
+  Future<void> _loadGroupTieBreakers() async {
+    try {
+      final saved = await _groupTieBreakerPreferences.load();
+      if (!mounted || _groupTieBreakersTouched) return;
+      setState(() {
+        _groupTieBreakers
+          ..clear()
+          ..addAll(saved);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tie-Breaker konnten nicht geladen werden: $error'),
+        ),
+      );
+    }
+  }
+
+  void _saveGroupTieBreakers() {
+    final selection = List<String>.from(_groupTieBreakers);
+    _groupTieBreakerSaveQueue = _groupTieBreakerSaveQueue.then((_) async {
+      try {
+        await _groupTieBreakerPreferences.save(selection);
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Tie-Breaker konnten nicht gespeichert werden: $error',
+            ),
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _applyDefaultRanking() async {
@@ -1697,11 +1739,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           (sum, size) => sum + size,
         );
         final groupPlayers = stage.groupSlotOrder.isNotEmpty
-            ? _playersInStageOrder(
-                incomingPlayers,
-                stage.groupSlotOrder,
-                groupParticipantCount,
-              )
+            ? incomingPlayers.take(groupParticipantCount).toList()
             : stage.groupDrawOnStart
             ? incomingPlayers.take(groupParticipantCount).toList()
             : const GroupPlayerAllocationEngine().allocate(
@@ -1779,16 +1817,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
     return runStages;
   }
-
-  List<TournamentPlayer> _playersInStageOrder(
-    List<TournamentPlayer> players,
-    List<int?> slotOrder,
-    int participantCount,
-  ) => GroupDrawAssignment.orderPlayers(
-    players: players,
-    slotOrder: slotOrder,
-    participantCount: participantCount,
-  );
 
   int _requiredRankAfterStage(
     int stageIndex,
@@ -2049,9 +2077,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
 
     setState(() {
+      _groupTieBreakersTouched = true;
       final moved = _groupTieBreakers.removeAt(index);
       _groupTieBreakers.insert(targetIndex, moved);
     });
+    _saveGroupTieBreakers();
   }
 
   @override

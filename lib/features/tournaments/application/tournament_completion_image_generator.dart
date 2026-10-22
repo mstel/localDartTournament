@@ -92,10 +92,11 @@ class TournamentCompletionImageGenerator {
     );
     final rankingSummaryHeight =
         112.0 + rankingRows * 48.0;
+    final summaryHeight = data.durationSummary.isEmpty ? 220.0 : 248.0;
     final height =
         padding * 2 +
         126 +
-        220 +
+        summaryHeight +
         sectionGap +
         92 +
         data.podium.length * 58 +
@@ -133,7 +134,6 @@ class TournamentCompletionImageGenerator {
     );
     y += 68;
 
-    final summaryHeight = 220.0;
     _section(canvas, padding, y, contentWidth, summaryHeight);
     _sectionTitle(canvas, 'Turnierübersicht', padding + 24, y + 20);
     const metricGap = 12.0;
@@ -167,6 +167,7 @@ class TournamentCompletionImageGenerator {
         maxWidth: contentWidth - 48,
         fontSize: 18,
         color: TournamentDisplayPalette.mutedText,
+        maxLines: 2,
       );
     }
     y += summaryHeight + sectionGap;
@@ -241,8 +242,8 @@ class TournamentCompletionImageGenerator {
           bold: true,
         );
         if (card.changes.isEmpty) {
-          _text(
-            canvas,
+        _text(
+          canvas,
           cardIndex == 0
               ? 'Keine Punktegewinne'
               : cardIndex == 1
@@ -382,6 +383,7 @@ class TournamentCompletionImageGenerator {
     required double maxWidth,
     required double fontSize,
     required Color color,
+    int maxLines = 1,
     bool bold = false,
   }) {
     final painter = TextPainter(
@@ -394,7 +396,7 @@ class TournamentCompletionImageGenerator {
         ),
       ),
       textDirection: TextDirection.ltr,
-      maxLines: 1,
+      maxLines: maxLines,
       ellipsis: '…',
     )..layout(maxWidth: maxWidth);
     painter.paint(canvas, offset);

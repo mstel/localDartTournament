@@ -7,9 +7,9 @@ import '../../league/domain/league_match.dart';
 
 const List<String> defaultGroupTieBreakers = [
   'points',
+  'headToHead',
   'legDifference',
   'legsFor',
-  'headToHead',
 ];
 
 String groupLabel(int groupNumber) {
@@ -26,7 +26,7 @@ String groupLabel(int groupNumber) {
 
 String tieBreakerLabel(String tieBreaker) {
   return switch (tieBreaker) {
-    'points' => 'Punkte',
+    'points' => 'Matchpunkte',
     'legDifference' => 'Leg-Differenz',
     'legsFor' => 'Gewonnene Legs',
     'headToHead' => 'Direkter Vergleich',
@@ -55,6 +55,22 @@ List<int> _intListFromJson(Object? value) {
     for (final item in value)
       if (item is int) item,
   ];
+}
+
+List<String> _groupTieBreakersFromJson(Object? value) {
+  final tieBreakers = _stringListFromJson(
+    value,
+    fallback: defaultGroupTieBreakers,
+  );
+  const previousDefault = ['points', 'legDifference', 'legsFor', 'headToHead'];
+  final isPreviousDefault =
+      tieBreakers.length == previousDefault.length &&
+      tieBreakers.asMap().entries.every(
+        (entry) => entry.value == previousDefault[entry.key],
+      );
+  return isPreviousDefault
+      ? List<String>.from(defaultGroupTieBreakers)
+      : tieBreakers;
 }
 
 List<int?> _nullableIntListFromJson(Object? value) {
@@ -146,10 +162,7 @@ TournamentRunStage _runStageFromJson(Map<String, dynamic> json) {
             json['qualificationPlan'] as Map<String, dynamic>,
           )
         : null,
-    tieBreakers: _stringListFromJson(
-      json['tieBreakers'],
-      fallback: defaultGroupTieBreakers,
-    ),
+    tieBreakers: _groupTieBreakersFromJson(json['tieBreakers']),
   );
 }
 
@@ -322,10 +335,7 @@ class TournamentStage {
       groupMaxGamesPerPlayer: _nullableIntListFromJson(
         json['groupMaxGamesPerPlayer'],
       ),
-      groupTieBreakers: _stringListFromJson(
-        json['groupTieBreakers'],
-        fallback: defaultGroupTieBreakers,
-      ),
+      groupTieBreakers: _groupTieBreakersFromJson(json['groupTieBreakers']),
       groupDrawOnStart: json['groupDrawOnStart'] as bool? ?? false,
       groupSlotOrder: _nullableIntListFromJson(json['groupSlotOrder']),
       knockoutParticipantCount: json['knockoutParticipantCount'] as int?,

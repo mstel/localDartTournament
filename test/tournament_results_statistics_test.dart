@@ -109,6 +109,8 @@ void main() {
     final tournament = resultsFixture()
       ..plannedMinimumMinutes = 184
       ..plannedMinutes = 220
+      ..startedAt = DateTime(2026, 1, 1, 10)
+      ..finishedAt = DateTime(2026, 1, 1, 12, 34)
       ..stages.add(
         const TournamentStage(
           name: 'Finale',
@@ -129,15 +131,21 @@ void main() {
     await tester.pumpAndSettle();
 
     final expectedRange = find.byKey(const ValueKey('expected-duration-range'));
-    expect(find.text('Erwartet: 2:56–4:24'), findsOneWidget);
+    expect(find.text('Tatsächliche Turnierdauer: 2:34'), findsOneWidget);
+    expect(
+      find.text('Geschätzte Turnierdauer: 3:40 (2:56–4:24)'),
+      findsOneWidget,
+    );
     final tooltipFinder = find.ancestor(
       of: expectedRange,
       matching: find.byType(Tooltip),
     );
     expect(
       tester.widget<Tooltip>(tooltipFinder.first).message,
-      'Erwartete Spanne der Turnierdauer: Erwartet: 2:56–4:24',
+      'Erwartete Spanne der Turnierdauer: '
+      'Geschätzte Turnierdauer: 3:40 (2:56–4:24)',
     );
+    expect(find.textContaining('Ø '), findsNothing);
     expect(tester.takeException(), isNull);
   });
   testWidgets(

@@ -1,3 +1,15 @@
+# 1.1.7+19
+
+- Applies the draw-wheel order consistently when building group assignments and
+  editing player positions.
+- Gives direct head-to-head results priority over aggregate leg difference by
+  default, migrates saved default ordering, and applies the same rule in
+  advancement forecasts.
+- Remembers the configured group tie-breaker order on the device and explains
+  each criterion in the tournament setup.
+- Labels actual tournament duration and shows the estimated range midpoint with
+  its minimum and maximum in the results view and PNG export.
+
 # 1.1.6+18
 
 - Improves second-screen match layouts, stage progress, and recent-result cards.
