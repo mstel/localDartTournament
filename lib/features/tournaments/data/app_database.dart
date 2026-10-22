@@ -1,10 +1,13 @@
 import '../../../shared/persistence/storage_access.dart';
+
 import 'dart:convert';
 import 'dart:math';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+
 import '../../../shared/persistence/app_data_directory.dart';
+
 import 'package:sqlite3/sqlite3.dart';
 
 import '../domain/tournament_models.dart';
@@ -13,7 +16,7 @@ import '../../rankings/domain/local_ranking.dart';
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 10;
+  static const schemaVersion = 11;
 
   final Directory? _baseDirectory;
 
@@ -33,7 +36,7 @@ class LocalAppDatabase {
       final database = await _openDatabase();
       try {
         final rows = database.select('''
-        SELECT id, display_name, country, city, darts_setup_json,
+        SELECT id, display_name, last_name, country, city, darts_setup_json,
                created_at, is_active
         FROM player_profiles
         WHERE is_active = 1
@@ -320,6 +323,7 @@ class LocalAppDatabase {
             profileId: profile.id,
             name: profile.displayName,
             isGenerated: false,
+            compactName: profile.compactDisplayName,
           ),
       ];
     });
@@ -328,7 +332,9 @@ class LocalAppDatabase {
   Future<File> databaseFile() => _databaseFile();
 
   Future<PlayerProfile> createPlayerProfile({
-    required String displayName,
+    String? displayName,
+    String? firstName,
+    String lastName = '',
     String country = '',
     String city = '',
     String dartsSetupJson = '',
@@ -339,7 +345,8 @@ class LocalAppDatabase {
         final now = DateTime.now();
         final profile = PlayerProfile(
           id: _newId(),
-          displayName: displayName.trim(),
+          firstName: (firstName ?? displayName ?? '').trim(),
+          lastName: lastName.trim(),
           country: country.trim(),
           city: city.trim(),
           dartsSetupJson: dartsSetupJson.trim(),
@@ -349,13 +356,14 @@ class LocalAppDatabase {
         database.execute(
           '''
         INSERT INTO player_profiles (
-          id, display_name, country, city, darts_setup_json,
+          id, display_name, last_name, country, city, darts_setup_json,
           created_at, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''',
           [
             profile.id,
-            profile.displayName,
+            profile.firstName,
+            profile.lastName,
             profile.country,
             profile.city,
             profile.dartsSetupJson,
@@ -378,11 +386,13 @@ class LocalAppDatabase {
         database.execute(
           '''
         UPDATE player_profiles
-        SET display_name = ?, country = ?, city = ?, darts_setup_json = ?
+        SET display_name = ?, last_name = ?, country = ?, city = ?,
+            darts_setup_json = ?
         WHERE id = ?
         ''',
           [
-            profile.displayName.trim(),
+            profile.firstName.trim(),
+            profile.lastName.trim(),
             profile.country.trim(),
             profile.city.trim(),
             profile.dartsSetupJson.trim(),
@@ -425,7 +435,7 @@ class LocalAppDatabase {
           'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
         );
       }
-      if (version > 0 && version < schemaVersion - 1) {
+      if (version > 0 && version < schemaVersion - 2) {
         throw StateError(
           'Lokale Datenbank-Version $version kann nicht sicher migriert werden. '
           'Die Datei wurde nicht verändert. Bitte erstelle eine Kopie der '
@@ -456,6 +466,10 @@ class LocalAppDatabase {
     try {
       if (currentVersion == schemaVersion - 1) {
         database.execute(
+          "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
+        );
+      } else if (currentVersion == schemaVersion - 2) {
+        database.execute(
           'ALTER TABLE local_rankings ADD COLUMN custom_order INTEGER NOT NULL DEFAULT 0',
         );
         final rankings = database.select(
@@ -467,6 +481,9 @@ class LocalAppDatabase {
             [index, rankings[index]['id']],
           );
         }
+        database.execute(
+          "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
+        );
       } else {
         if (currentVersion > 0) {
           final oldTables = database.select(
@@ -505,6 +522,7 @@ class LocalAppDatabase {
         country TEXT NOT NULL DEFAULT '',
         city TEXT NOT NULL DEFAULT '',
         darts_setup_json TEXT NOT NULL DEFAULT '',
+        last_name TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         is_active INTEGER NOT NULL DEFAULT 1
       );
@@ -553,18 +571,21 @@ class LocalAppDatabase {
 class PlayerProfile {
   const PlayerProfile({
     required this.id,
-    required this.displayName,
+    String? displayName,
+    String? firstName,
+    this.lastName = '',
     required this.country,
     required this.city,
     required this.dartsSetupJson,
     required this.createdAt,
     required this.isActive,
-  });
+  }) : firstName = firstName ?? displayName ?? '';
 
   factory PlayerProfile.fromRow(Row row) {
     return PlayerProfile(
       id: row['id'] as String? ?? '',
-      displayName: row['display_name'] as String? ?? '',
+      firstName: row['display_name'] as String? ?? '',
+      lastName: row['last_name'] as String? ?? '',
       country: row['country'] as String? ?? '',
       city: row['city'] as String? ?? '',
       dartsSetupJson: row['darts_setup_json'] as String? ?? '',
@@ -576,7 +597,10 @@ class PlayerProfile {
   }
 
   final String id;
-  final String displayName;
+  final String firstName;
+  final String lastName;
+  String get displayName =>
+      [firstName, lastName].where((part) => part.trim().isNotEmpty).join(' ');
   final String country;
   final String city;
   final String dartsSetupJson;
@@ -594,6 +618,12 @@ class PlayerProfile {
   }
 
   String get nickname => _metadata['nickname'] as String? ?? '';
+  String get compactDisplayName {
+    if (nickname.trim().isNotEmpty) return nickname.trim();
+    if (lastName.trim().isEmpty) return firstName;
+    return '$firstName ${lastName.trim()[0]}.';
+  }
+
   String get birthdate => _metadata['birthdate'] as String? ?? '';
   String get scoliaId => _metadata['scoliaId'] as String? ?? '';
   String get autodartsName => _metadata['autodartsName'] as String? ?? '';
@@ -619,13 +649,16 @@ class PlayerProfile {
 
   PlayerProfile copyWith({
     String? displayName,
+    String? firstName,
+    String? lastName,
     String? country,
     String? city,
     String? dartsSetupJson,
   }) {
     return PlayerProfile(
       id: id,
-      displayName: displayName ?? this.displayName,
+      firstName: firstName ?? displayName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
       country: country ?? this.country,
       city: city ?? this.city,
       dartsSetupJson: dartsSetupJson ?? this.dartsSetupJson,

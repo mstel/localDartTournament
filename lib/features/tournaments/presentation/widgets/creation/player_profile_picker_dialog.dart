@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../data/app_database.dart';
 
 class PlayerProfilePickerDialog extends StatefulWidget {
@@ -11,7 +12,8 @@ class PlayerProfilePickerDialog extends StatefulWidget {
 
   final List<PlayerProfile> profiles;
   final Set<String> selectedProfileIds;
-  final Future<PlayerProfile> Function(String name)? createPlayer;
+  final Future<PlayerProfile> Function(String firstName, String lastName)?
+  createPlayer;
 
   @override
   State<PlayerProfilePickerDialog> createState() =>
@@ -20,18 +22,21 @@ class PlayerProfilePickerDialog extends StatefulWidget {
 
 class PlayerProfilePickerDialogState extends State<PlayerProfilePickerDialog> {
   late final _profiles = [...widget.profiles];
-  final _name = TextEditingController();
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
   bool _busy = false;
   String? _error;
   @override
   void dispose() {
-    _name.dispose();
+    _firstName.dispose();
+    _lastName.dispose();
     super.dispose();
   }
 
   Future<void> _create() async {
-    final name = _name.text.trim();
-    if (name.isEmpty || name.length > 80) {
+    final firstName = _firstName.text.trim();
+    final lastName = _lastName.text.trim();
+    if (firstName.isEmpty || firstName.length > 80 || lastName.length > 80) {
       setState(
         () => _error = 'Bitte einen Namen mit 1 bis 80 Zeichen eingeben.',
       );
@@ -42,18 +47,18 @@ class PlayerProfilePickerDialogState extends State<PlayerProfilePickerDialog> {
       _error = null;
     });
     try {
-      final profile = await widget.createPlayer!(name);
+      final profile = await widget.createPlayer!(firstName, lastName);
       if (!mounted) return;
       setState(() {
         _profiles.add(profile);
         _selectedProfileIds.add(profile.id);
-        _name.clear();
+        _firstName.clear();
+        _lastName.clear();
       });
     } catch (_) {
       if (mounted) {
         setState(
-          () => _error =
-              'Spieler konnte nicht angelegt werden. Verbindung und Berechtigung prüfen.',
+          () => _error = 'Spieler konnte nicht angelegt werden. Verbindung und Berechtigung prüfen.',
         );
       }
     } finally {
@@ -95,16 +100,20 @@ class PlayerProfilePickerDialogState extends State<PlayerProfilePickerDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.createPlayer != null) ...[
-                  const Text(
-                    'Neuen lokalen Spieler anlegen.',
-                  ),
+                  const Text('Neuen lokalen Spieler anlegen.'),
                   TextField(
-                    controller: _name,
+                    controller: _firstName,
                     enabled: !_busy,
                     maxLength: 80,
                     decoration: const InputDecoration(
-                      labelText: 'Name des neuen Spielers',
+                      labelText: 'Vorname des neuen Spielers',
                     ),
+                  ),
+                  TextField(
+                    controller: _lastName,
+                    enabled: !_busy,
+                    maxLength: 80,
+                    decoration: const InputDecoration(labelText: 'Nachname'),
                     onSubmitted: _busy ? null : (_) => _create(),
                   ),
                   FilledButton.icon(

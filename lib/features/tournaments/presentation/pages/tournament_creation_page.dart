@@ -1033,8 +1033,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         context: context,
         builder: (context) => PlayerProfilePickerDialog(
           profiles: profiles,
-          createPlayer: (name) =>
-              _database.createPlayerProfile(displayName: name),
+          createPlayer: (firstName, lastName) => _database.createPlayerProfile(
+            firstName: firstName,
+            lastName: lastName,
+          ),
           selectedProfileIds: {
             for (final player in _players.expand((p) => p.individuals))
               if (player.profileId != null) player.profileId!,
@@ -1058,6 +1060,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     profileId: profile.id,
                     name: profile.displayName,
                     isGenerated: false,
+                    compactName: profile.compactDisplayName,
                   ),
                 )
                 .where(
@@ -1098,9 +1101,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _players.removeAt(source);
       });
     } on ArgumentError catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${e.message}')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${e.message}')));
     }
   }
 
@@ -1659,9 +1661,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         .toList();
     final ratingsByPlayer = <String, List<int>>{};
     for (final ranking in rankings) {
-      final snapshot = await LocalRankingEloService(
-        database: _database,
-      ).calculate(ranking);
+      final snapshot = await LocalRankingEloService(database: _database)
+          .calculate(ranking);
       for (final entry in snapshot.entries) {
         ratingsByPlayer.putIfAbsent(entry.id, () => []).add(entry.rating);
       }
@@ -1691,12 +1692,18 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         stages: sourceStages,
       );
       if (stage.type == 'groups') {
+        final groupParticipantCount = stage.groupSizes.fold<int>(
+          0,
+          (sum, size) => sum + size,
+        );
         final groupPlayers = stage.groupSlotOrder.isNotEmpty
             ? _playersInStageOrder(
                 incomingPlayers,
                 stage.groupSlotOrder,
-                stage.groupSizes.fold<int>(0, (sum, size) => sum + size),
+                groupParticipantCount,
               )
+            : stage.groupDrawOnStart
+            ? incomingPlayers.take(groupParticipantCount).toList()
             : const GroupPlayerAllocationEngine().allocate(
                 players: incomingPlayers,
                 groupSizes: stage.groupSizes,
@@ -2352,9 +2359,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     setState(() {
                       _selectedStageType = value;
                       _finalEndsTournament = value != 'kratzer';
-                      _kratzerLives = _lossLimitForStageType(
-                        value,
-                      ).clamp(2, 10);
+                      _kratzerLives = _lossLimitForStageType(value)
+                          .clamp(2, 10);
                       _setDefaultStageNameIfNeeded(value);
                     });
                   },
@@ -2571,8 +2577,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     ),
                     trailing: ExpertSetupSection(
                       title: 'Qualifikation im Detail',
-                      summary:
-                          'Plätze, Best-of-Vergleich und automatische Anpassung',
+                      summary: 'Plätze, Best-of-Vergleich und automatische Anpassung',
                       children: [
                         _GroupQualificationSetup(
                           groupSizes: groupSizes,

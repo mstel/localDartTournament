@@ -59,10 +59,14 @@ class _LeaguePlayerPickerState extends State<LeaguePlayerPicker> {
                 }
                 final query = _search.text.trim().toLowerCase();
                 final profiles = (snapshot.data ?? const <PlayerProfile>[])
-                    .where((profile) =>
-                        profile.isActive &&
-                        (query.isEmpty ||
-                            profile.displayName.toLowerCase().contains(query)))
+                    .where(
+                      (profile) =>
+                          profile.isActive &&
+                          (query.isEmpty ||
+                              profile.displayName.toLowerCase().contains(
+                                query,
+                              )),
+                    )
                     .toList();
                 if (profiles.isEmpty) {
                   return const Center(child: Text('Keine Spieler gefunden.'));
@@ -77,11 +81,14 @@ class _LeaguePlayerPickerState extends State<LeaguePlayerPicker> {
                       title: Text(profile.displayName),
                       onTap: () => Navigator.pop(
                         context,
-                        LeaguePlayerChoice(TournamentPlayer(
-                          name: profile.displayName,
-                          profileId: profile.id,
-                          isGenerated: false,
-                        )),
+                        LeaguePlayerChoice(
+                          TournamentPlayer(
+                            name: profile.displayName,
+                            profileId: profile.id,
+                            isGenerated: false,
+                            compactName: profile.compactDisplayName,
+                          ),
+                        ),
                       ),
                     );
                   },

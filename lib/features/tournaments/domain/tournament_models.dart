@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'player_withdrawal.dart';
 import 'imported_tournament_archive.dart';
 import '../../statistics/domain/best_performance.dart';
@@ -167,6 +168,7 @@ class TournamentPlayer {
     this.profileId,
     required this.name,
     required this.isGenerated,
+    this.compactName,
     this.members = const [],
   });
 
@@ -175,6 +177,7 @@ class TournamentPlayer {
       profileId: json['profileId'] as String?,
       name: json['name'] as String? ?? '',
       isGenerated: json['isGenerated'] as bool? ?? false,
+      compactName: json['compactName'] as String?,
       members: (json['members'] as List? ?? const [])
           .map(
             (e) =>
@@ -191,6 +194,19 @@ class TournamentPlayer {
   final String? profileId;
   final String name;
   final bool isGenerated;
+  final String? compactName;
+  String get shortDisplayName {
+    if (isTeam) {
+      return members.map((player) => player.shortDisplayName).join(' / ');
+    }
+    final compact = compactName?.trim();
+    if (compact != null && compact.isNotEmpty) return compact;
+    if (isGenerated) return name;
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length < 2) return name;
+    return '${parts.first} ${parts.last[0]}.';
+  }
+
   final List<TournamentPlayer> members;
   bool get isTeam => members.isNotEmpty;
   List<TournamentPlayer> get individuals =>
@@ -216,11 +232,13 @@ class TournamentPlayer {
     String? profileId,
     String? name,
     bool? isGenerated,
+    String? compactName,
   }) {
     return TournamentPlayer(
       profileId: profileId ?? this.profileId,
       name: name ?? this.name,
       isGenerated: isGenerated ?? this.isGenerated,
+      compactName: compactName ?? this.compactName,
       members: members,
     );
   }
@@ -230,6 +248,7 @@ class TournamentPlayer {
       if (profileId != null) 'profileId': profileId,
       'name': name,
       'isGenerated': isGenerated,
+      if (compactName != null) 'compactName': compactName,
       if (isTeam) 'members': members.map((p) => p.toJson()).toList(),
     };
   }
@@ -240,15 +259,20 @@ class TournamentPlayer {
         other.profileId == profileId &&
         other.name == name &&
         other.isGenerated == isGenerated &&
+        other.compactName == compactName &&
         other.members.length == members.length &&
-        Iterable<int>.generate(
-          members.length,
-        ).every((i) => members[i] == other.members[i]);
+        Iterable<int>.generate(members.length)
+            .every((i) => members[i] == other.members[i]);
   }
 
   @override
-  int get hashCode =>
-      Object.hash(profileId, name, isGenerated, Object.hashAll(members));
+  int get hashCode => Object.hash(
+    profileId,
+    name,
+    isGenerated,
+    compactName,
+    Object.hashAll(members),
+  );
 }
 
 class TournamentStage {
@@ -529,9 +553,9 @@ class CreatedTournament {
         json['withdrawals'],
         PlayerWithdrawal.fromJson,
       ),
-      blockedBoards: _intListFromJson(
-        json['blockedBoards'],
-      ).where((b) => b >= 1 && b <= 64).toSet(),
+      blockedBoards: _intListFromJson(json['blockedBoards'])
+          .where((b) => b >= 1 && b <= 64)
+          .toSet(),
       startedAt: _dateTimeFromJson(json['startedAt']),
       finishedAt: _dateTimeFromJson(json['finishedAt']),
       pausedAt: _dateTimeFromJson(json['pausedAt']),
@@ -540,9 +564,8 @@ class CreatedTournament {
       plannedMinutes: json['plannedMinutes'] as int?,
       plannedMatches: json['plannedMatches'] as int?,
       plannedMatchEndSeconds: _intListFromJson(json['plannedMatchEndSeconds']),
-      completedStageIndexes: _intListFromJson(
-        json['completedStageIndexes'],
-      ).toSet(),
+      completedStageIndexes: _intListFromJson(json['completedStageIndexes'])
+          .toSet(),
     );
   }
 

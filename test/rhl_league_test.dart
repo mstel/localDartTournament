@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -66,7 +67,7 @@ void main() {
       final restored = (await storage.loadTournaments()).single;
       expect(restored.leagueMatch!.toJson(), league.toJson());
       expect(await File('${file.path}.v8.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 26);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 27);
     },
   );
   test('legacy tournaments remain ordinary tournaments', () {

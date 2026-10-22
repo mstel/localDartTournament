@@ -3,6 +3,26 @@ import 'package:dart_tournament_manager/features/tournaments/domain/tournament_m
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('preserves every drawn slot when splitting the draw into groups', () {
+    final players = [
+      for (var index = 1; index <= 8; index++)
+        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+    ];
+    const drawnSeeds = [2, 4, 1, 8, 3, 5, 7, 6];
+
+    final ordered = GroupDrawAssignment.orderPlayers(
+      players: players,
+      slotOrder: drawnSeeds,
+      participantCount: 8,
+    );
+    final groups = GroupDrawAssignment.partition(ordered, const [4, 4]);
+
+    expect(groups.map((group) => group.map((player) => player.name).toList()), [
+      ['Spieler 2', 'Spieler 4', 'Spieler 1', 'Spieler 8'],
+      ['Spieler 3', 'Spieler 5', 'Spieler 7', 'Spieler 6'],
+    ]);
+  });
+
   test(
     'persisted draw order partitions players using configured group sizes',
     () {

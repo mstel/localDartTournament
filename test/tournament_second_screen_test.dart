@@ -77,18 +77,37 @@ void main() {
   }
 
   testWidgets(
-    '1920x1080 second screen shows exactly two full recent results and scrolls',
+    '1920x1080 second screen shows recent results in two columns and scrolls',
     (tester) async {
       tester.view.physicalSize = const Size(1920, 1080);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
+      final tournament = _tournament();
+      final group =
+          (tournament.runStages.first as GroupTournamentRunStage).groups.first;
+      group.matches.addAll([
+        GroupMatch(
+          homePlayer: group.players[1],
+          awayPlayer: group.players[3],
+          round: 7,
+          homeLegs: 2,
+          awayLegs: 0,
+        ),
+        GroupMatch(
+          homePlayer: group.players[2],
+          awayPlayer: group.players[3],
+          round: 8,
+          homeLegs: 2,
+          awayLegs: 0,
+        ),
+      ]);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: TournamentSecondScreenView(
-              tournament: _tournament(),
+              tournament: tournament,
               isStandaloneWindow: true,
             ),
           ),
@@ -100,7 +119,12 @@ void main() {
         find.byKey(const ValueKey('recent-results-scroll')),
       );
       final resultRects = [
-        for (final key in ['recent-result-3-A-D', 'recent-result-2-A-C'])
+        for (final key in [
+          'recent-result-8-C-D',
+          'recent-result-7-B-D',
+          'recent-result-3-A-D',
+          'recent-result-2-A-C',
+        ])
           tester.getRect(find.byKey(ValueKey(key))),
       ];
       final fullyVisible = resultRects
@@ -110,7 +134,7 @@ void main() {
           )
           .length;
 
-      expect(fullyVisible, 2);
+      expect(fullyVisible, 4);
       expect(find.byKey(const ValueKey('recent-result-1-A-B')), findsNothing);
       final scrollable = tester.state<ScrollableState>(
         find
@@ -266,7 +290,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shows a separate progress row for each group', (tester) async {
+  testWidgets('shows one progress bar per stage and group match counts', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -300,8 +326,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('1. Gruppenphase · Gruppe A'), findsOneWidget);
-    expect(find.text('1. Gruppenphase · Gruppe B'), findsOneWidget);
+    expect(find.text('1. Gruppenphase'), findsOneWidget);
+    expect(find.text('1. Gruppenphase · Gruppe A'), findsNothing);
+    expect(find.text('3/6 gespielt'), findsOneWidget);
+    expect(find.text('0/1 gespielt'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 

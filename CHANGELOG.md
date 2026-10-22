@@ -1,3 +1,15 @@
+# 1.1.6+18
+
+- Improves second-screen match layouts, stage progress, and recent-result cards.
+- Shows ranking changes more compactly in tournament results and the PNG
+  export.
+- Adds first and last names to player profiles, with compact match-card names.
+- Fixes random group assignments when using the draw wheel.
+- Restores safe automatic sync resumption and queues sync requests that arrive
+  during an active synchronization.
+- Migrates player profiles to store last names and updates tournament archive
+  schema to support compact player names.
+
 # 1.1.4+16
 
 - Replaces the player Elo comparison graph with a side-by-side comparison

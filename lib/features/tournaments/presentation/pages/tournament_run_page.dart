@@ -380,8 +380,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     } catch (_) {
       if (!mounted) return;
       setState(
-        () => _directorSaveError =
-            'Änderungen sind noch nicht sicher gespeichert. Bitte erneut speichern.',
+        () => _directorSaveError = 'Änderungen sind noch nicht sicher gespeichert. Bitte erneut speichern.',
       );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2580,6 +2579,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       qualificationAutoAdjust: stage.qualificationAutoAdjust,
       qualifiedParticipantCount: stage.qualifiedParticipantCount,
       qualificationSummary: stage.qualificationSummary,
+      finalEndsTournament: stage.finalEndsTournament,
+      knockoutLives: stage.knockoutLives,
+      placementPlaces: stage.placementPlaces,
+      gameFormat: stage.gameFormat,
     );
   }
 
@@ -2882,15 +2885,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               ],
                                             );
                                             if (context.mounted) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'TV-Anzeige im separaten Fenster geöffnet. Ziehe das Fenster auf den 2. Monitor und maximiere es.',
-                                                  ),
-                                                ),
-                                              );
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                        'TV-Anzeige im separaten Fenster geöffnet. Ziehe das Fenster auf den 2. Monitor und maximiere es.',
+                                                      ),
+                                                    ),
+                                                  );
                                             }
                                           } catch (_) {
                                             if (context.mounted) {

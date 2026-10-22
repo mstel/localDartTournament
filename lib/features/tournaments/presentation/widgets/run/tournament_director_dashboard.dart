@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../../application/tournament_flow_priority.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
@@ -72,8 +74,7 @@ class _TournamentDirectorDashboardState
     } catch (_) {
       if (mounted) {
         setState(
-          () => _actionError =
-              'Aktion fehlgeschlagen. Verbindung und Berechtigung prüfen und erneut versuchen.',
+          () => _actionError = 'Aktion fehlgeschlagen. Verbindung und Berechtigung prüfen und erneut versuchen.',
         );
       }
     } finally {
@@ -220,12 +221,12 @@ class _TournamentDirectorDashboardState
           ),
           const SizedBox(height: 4),
           Text(
-            '${match.homePlayer?.name ?? 'Freilos'} · '
-            '${match.awayPlayer?.name ?? 'Freilos'}',
+            '${match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
+            '${match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           if (showResult) ...[

@@ -64,6 +64,29 @@ class TournamentCompletionImageGenerator {
     final leagueMoves = data.rankingChanges
         .where((change) => change.hasTierChange)
         .toList();
+    final rankingNames = data.rankingChanges
+        .map((change) => change.rankingName)
+        .where((name) => name.trim().isNotEmpty)
+        .toSet()
+        .join(', ');
+    final gains =
+        data.rankingChanges.where((change) => change.delta > 0).toList()
+          ..sort((left, right) => right.delta.compareTo(left.delta));
+    final losses =
+        data.rankingChanges.where((change) => change.delta < 0).toList()
+          ..sort((left, right) => left.delta.compareTo(right.delta));
+    final positions = [...data.rankingChanges]
+      ..sort(
+        (left, right) =>
+            (right.positionChange ?? 0).compareTo(left.positionChange ?? 0),
+      );
+    final rankingRows = [
+      gains.take(3).length,
+      losses.take(3).length,
+      positions.take(3).length,
+    ].reduce((left, right) => left > right ? left : right);
+    final rankingSummaryHeight =
+        112.0 + (rankingRows > 0 ? rankingRows : 1) * 48.0;
     final height =
         padding * 2 +
         126 +
@@ -72,8 +95,7 @@ class TournamentCompletionImageGenerator {
         92 +
         data.podium.length * 58 +
         sectionGap +
-        92 +
-        data.rankingChanges.length * 58 +
+        rankingSummaryHeight +
         (leagueMoves.isEmpty ? 0 : sectionGap + 92 + leagueMoves.length * 58) +
         sectionGap +
         92 +
@@ -178,40 +200,98 @@ class TournamentCompletionImageGenerator {
       padding,
       y,
       contentWidth,
-      92 + data.rankingChanges.length * 58,
+      rankingSummaryHeight,
       colorScheme,
     );
     _sectionTitle(
       canvas,
-      'Elo und Ranglistenplätze',
+      'Änderungen der Rangliste'
+      '${rankingNames.isEmpty ? '' : ' · $rankingNames'}',
       padding + 24,
       y + 20,
       colorScheme,
     );
-    for (var index = 0; index < data.rankingChanges.length; index++) {
-      final change = data.rankingChanges[index];
-      final elo = '${change.delta >= 0 ? '+' : ''}${change.delta} Elo';
-      final positions =
-          change.rankingPositionBefore == null ||
-              change.rankingPositionAfter == null
-          ? 'Platzierung nicht verfügbar'
-          : 'Platz ${change.rankingPositionBefore} → ${change.rankingPositionAfter}';
-      final movement = switch (change.positionChange) {
-        final value? when value > 0 => '↑ $positions',
-        final value? when value < 0 => '↓ $positions',
-        0 => '↔ $positions',
-        _ => '– $positions',
-      };
+    final cardGap = 12.0;
+    final cardWidth = (contentWidth - 48 - cardGap * 2) / 3;
+    final cardTop = y + 58;
+    final cardHeight = rankingSummaryHeight - 74;
+    final rankingCards = [
+      (
+        title: 'Größter Punktezuwachs',
+        changes: gains.take(3).toList(),
+        value: (TournamentRankingPlayerChange change) => '+${change.delta} Elo',
+      ),
+      (
+        title: 'Größter Punkteverlust',
+        changes: losses.take(3).toList(),
+        value: (TournamentRankingPlayerChange change) => '${change.delta} Elo',
+      ),
+      (
+        title: 'Ranglistenplätze',
+        changes: positions.take(3).toList(),
+        value: (TournamentRankingPlayerChange change) {
+          final before = change.rankingPositionBefore;
+          final after = change.rankingPositionAfter;
+          return before == null || after == null ? '–' : '$before → $after';
+        },
+      ),
+    ];
+    for (var cardIndex = 0; cardIndex < rankingCards.length; cardIndex++) {
+      final card = rankingCards[cardIndex];
+      final cardX = padding + 24 + cardIndex * (cardWidth + cardGap);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(cardX, cardTop, cardWidth, cardHeight),
+          const Radius.circular(12),
+        ),
+        Paint()..color = colorScheme.surface,
+      );
       _text(
         canvas,
-        '${change.rankingName} · ${change.playerName} · $elo · $movement',
-        Offset(padding + 24, y + 66 + index * 58),
-        maxWidth: contentWidth - 48,
-        fontSize: 18,
-        color: colorScheme.onSurface,
+        card.title,
+        Offset(cardX + 12, cardTop + 12),
+        maxWidth: cardWidth - 24,
+        fontSize: 17,
+        color: colorScheme.primary,
+        bold: true,
       );
+      if (card.changes.isEmpty) {
+        _text(
+          canvas,
+          cardIndex == 0
+              ? 'Keine Punktegewinne'
+              : cardIndex == 1
+              ? 'Keine Punkteverluste'
+              : 'Keine Platzierungsänderungen',
+          Offset(cardX + 12, cardTop + 48),
+          maxWidth: cardWidth - 24,
+          fontSize: 15,
+          color: colorScheme.onSurfaceVariant,
+        );
+      } else {
+        for (var index = 0; index < card.changes.length; index++) {
+          final change = card.changes[index];
+          final rowTop = cardTop + 44 + index * 48;
+          _text(
+            canvas,
+            '${index + 1}. ${change.playerName}',
+            Offset(cardX + 12, rowTop),
+            maxWidth: cardWidth - 24,
+            fontSize: 15,
+            color: colorScheme.onSurface,
+          );
+          _text(
+            canvas,
+            card.value(change),
+            Offset(cardX + 12, rowTop + 20),
+            maxWidth: cardWidth - 24,
+            fontSize: 14,
+            color: colorScheme.onSurfaceVariant,
+          );
+        }
+      }
     }
-    y += 92 + data.rankingChanges.length * 58 + sectionGap;
+    y += rankingSummaryHeight + sectionGap;
 
     if (leagueMoves.isNotEmpty) {
       _section(

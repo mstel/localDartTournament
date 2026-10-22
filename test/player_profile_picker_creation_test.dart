@@ -20,7 +20,8 @@ class PlayerPickerCreationPreview extends StatelessWidget {
     body: PlayerProfilePickerDialog(
       profiles: [profile('old', 'Alexandra mit langem Spielernamen')],
       selectedProfileIds: const {'old'},
-      createPlayer: (name) async => profile('new', name),
+      createPlayer: (firstName, lastName) async =>
+          profile('new', '$firstName $lastName'.trim()),
     ),
   );
 }
@@ -55,9 +56,9 @@ void main() {
                     builder: (_) => PlayerProfilePickerDialog(
                       profiles: [profile('old', 'Alex')],
                       selectedProfileIds: const {'old'},
-                      createPlayer: (name) async {
+                      createPlayer: (firstName, lastName) async {
                         if (reject) throw StateError('denied');
-                        return profile('new', name);
+                        return profile('new', '$firstName $lastName'.trim());
                       },
                     ),
                   );
@@ -69,7 +70,7 @@ void main() {
       );
       await tester.tap(find.text('Öffnen'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Neuer Spieler');
+      await tester.enterText(find.byType(TextField).first, 'Neuer Spieler');
       await tester.tap(find.text('Neuen Spieler anlegen'));
       await tester.pumpAndSettle();
       expect(find.text('Neuer Spieler'), findsOneWidget);

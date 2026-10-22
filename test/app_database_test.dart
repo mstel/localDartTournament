@@ -67,6 +67,33 @@ void main() {
     expect(profiles.any((profile) => profile.id == created.id), isFalse);
   });
 
+  test('stores surnames and provides full and compact player names', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'dart_tournament_manager_player_names_test_',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+
+    final database = LocalAppDatabase(baseDirectory: directory);
+    final profile = await database.createPlayerProfile(
+      firstName: 'Max',
+      lastName: 'Mustermann',
+      dartsSetupJson: PlayerProfile.encodeMetadata(nickname: 'The Dart'),
+    );
+
+    expect(profile.displayName, 'Max Mustermann');
+    expect(profile.compactDisplayName, 'The Dart');
+    expect(profile.copyWith(dartsSetupJson: '{}').compactDisplayName, 'Max M.');
+
+    final loaded = (await database.loadPlayerProfiles()).single;
+    expect(loaded.firstName, 'Max');
+    expect(loaded.lastName, 'Mustermann');
+    expect(loaded.displayName, 'Max Mustermann');
+    expect(loaded.compactDisplayName, 'The Dart');
+    final tournamentPlayer = (await database.loadTournamentPlayers()).single;
+    expect(tournamentPlayer.name, 'Max Mustermann');
+    expect(tournamentPlayer.shortDisplayName, 'The Dart');
+  });
+
   test('stores local rankings and their assigned player profiles', () async {
     final directory = await Directory.systemTemp.createTemp(
       'dart_local_rankings_test_',
@@ -138,6 +165,17 @@ void main() {
     final file = File('${directory.path}/app_database.sqlite');
     final oldDatabase = sqlite3.open(file.path);
     oldDatabase.execute('''
+      CREATE TABLE player_profiles (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        country TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        darts_setup_json TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+    oldDatabase.execute('''
       CREATE TABLE local_rankings (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -169,12 +207,56 @@ void main() {
     expect(rankings.map((ranking) => ranking.startRating), [1150, 1250]);
 
     await database.saveLocalRankingOrder(['z', 'a']);
-    rankings = await LocalAppDatabase(
-      baseDirectory: directory,
-    ).loadLocalRankings();
+    rankings = await LocalAppDatabase(baseDirectory: directory)
+        .loadLocalRankings();
     expect(rankings.map((ranking) => ranking.id), ['z', 'a']);
     expect(rankings.map((ranking) => ranking.customOrder), [0, 1]);
   });
+
+  test(
+    'adds surname column to schema 10 without changing player data',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'dart_player_surname_migration_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final file = File('${directory.path}/app_database.sqlite');
+      final oldDatabase = sqlite3.open(file.path);
+      oldDatabase.execute('''
+      CREATE TABLE player_profiles (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        country TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        darts_setup_json TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+      oldDatabase.execute(
+        "INSERT INTO player_profiles (id, display_name, created_at) "
+        "VALUES ('legacy', 'Max Mustermann', '2026-01-01T00:00:00.000')",
+      );
+      oldDatabase.execute('PRAGMA user_version = 10');
+      oldDatabase.close();
+
+      final profiles = await LocalAppDatabase(baseDirectory: directory)
+          .loadPlayerProfiles();
+
+      expect(profiles.single.displayName, 'Max Mustermann');
+      expect(profiles.single.lastName, isEmpty);
+      expect(
+        directory.listSync().whereType<File>().any(
+          (candidate) => candidate.path.contains('.v10.'),
+        ),
+        isTrue,
+      );
+      final migrated = sqlite3.open(file.path, mode: OpenMode.readOnly);
+      expect(migrated.select('PRAGMA user_version').single.values.single, 11);
+      migrated.close();
+    },
+  );
 
   test('rejects unknown old SQLite schema without changing its data', () async {
     final directory = await Directory.systemTemp.createTemp(
@@ -217,12 +299,14 @@ void main() {
       profileId: 'profile-1',
       name: 'Anna Check',
       isGenerated: false,
+      compactName: 'Ace',
     );
 
     final restored = TournamentPlayer.fromJson(player.toJson());
 
     expect(restored.profileId, 'profile-1');
     expect(restored.name, 'Anna Check');
+    expect(restored.shortDisplayName, 'Ace');
     expect(restored.isGenerated, isFalse);
   });
 }

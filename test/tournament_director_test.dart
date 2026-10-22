@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:dart_tournament_manager/features/tournaments/data/tournament_sto
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
+
 import 'order_of_play_test.dart' show fixture;
 
 class DirectorPreview extends StatefulWidget {
@@ -88,9 +90,8 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(scale)),
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
               child: child!,
             ),
             home: RepaintBoundary(
@@ -204,7 +205,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 26);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 27);
     },
   );
   testWidgets('director dashboard survives width changes', (tester) async {

@@ -178,10 +178,6 @@ class _TournamentSecondScreenViewState
 
     final allMatches = TournamentTiming.matches(t);
     final playedMatches = allMatches.where((m) => m.hasResult).toList();
-    final totalMatches = allMatches.where((m) => m.hasPlayers).length;
-    final pct = totalMatches > 0
-        ? ((playedMatches.length / totalMatches) * 100).round()
-        : 0;
 
     final viewWidget = Container(
       decoration: BoxDecoration(
@@ -272,9 +268,7 @@ class _TournamentSecondScreenViewState
                     activeIndex: activeIndex,
                     activeStage: activeStage,
                     timing: timing,
-                    progressPercent: pct,
                     playedMatches: playedMatches,
-                    totalMatches: totalMatches,
                   ),
           ),
         ],
@@ -293,9 +287,7 @@ class _TournamentSecondScreenViewState
     required int activeIndex,
     required TournamentRunStage? activeStage,
     required TimingSnapshot timing,
-    required int progressPercent,
     required List<GroupMatch> playedMatches,
-    required int totalMatches,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -324,10 +316,6 @@ class _TournamentSecondScreenViewState
                 _buildProgressAndBestPerformancesPanel(
                   context: context,
                   t: t,
-                  timing: timing,
-                  progressPercent: progressPercent,
-                  playedMatches: playedMatches,
-                  totalMatches: totalMatches,
                   expand: false,
                 ),
                 const SizedBox(height: 16),
@@ -377,10 +365,6 @@ class _TournamentSecondScreenViewState
                     child: _buildProgressAndBestPerformancesPanel(
                       context: context,
                       t: t,
-                      timing: timing,
-                      progressPercent: progressPercent,
-                      playedMatches: playedMatches,
-                      totalMatches: totalMatches,
                       expand: true,
                     ),
                   ),
@@ -965,6 +949,12 @@ class _TournamentSecondScreenViewState
   }) {
     final standings = _calculateGroupStandings(group, tieBreakers);
     final fixedPlaces = qualificationPlan?.fixedPerGroup ?? 2;
+    final playedMatches = group.matches
+        .where((match) => match.hasPlayers && match.hasResult)
+        .length;
+    final totalMatches = group.matches
+        .where((match) => match.hasPlayers)
+        .length;
 
     return Container(
       constraints: BoxConstraints(
@@ -992,6 +982,14 @@ class _TournamentSecondScreenViewState
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
                   color: Color(0xFF70E0BA),
+                ),
+              ),
+              Text(
+                '$playedMatches/$totalMatches gespielt',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF70E0BA),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               Text(
@@ -1454,19 +1452,32 @@ class _TournamentSecondScreenViewState
             ),
           );
 
-    final matchTiles = Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        for (var i = 0; i < suggestions.length; i++)
-          _buildMatchTile(
-            context,
-            suggestions[i],
-            isPreferred: flowPriority.prioritizedMatches.contains(
-              suggestions[i],
-            ),
-          ),
-      ],
+    final matchTiles = LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 10.0;
+        final columns = constraints.maxWidth >= 740
+            ? 3
+            : constraints.maxWidth >= 460
+            ? 2
+            : 1;
+        final tileWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (var i = 0; i < suggestions.length; i++)
+              _buildMatchTile(
+                context,
+                suggestions[i],
+                width: tileWidth,
+                isPreferred: flowPriority.prioritizedMatches.contains(
+                  suggestions[i],
+                ),
+              ),
+          ],
+        );
+      },
     );
     final matchesContent = matches.isEmpty
         ? const Center(
@@ -1548,13 +1559,14 @@ class _TournamentSecondScreenViewState
   Widget _buildMatchTile(
     BuildContext context,
     GroupMatch match, {
+    required double width,
     required bool isPreferred,
   }) {
     final isRunning = match.boardNumber != null;
     final colors = Theme.of(context).colorScheme;
 
     return Container(
-      constraints: const BoxConstraints(minWidth: 240, maxWidth: 340),
+      width: width,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: isPreferred
@@ -1628,7 +1640,8 @@ class _TournamentSecondScreenViewState
           ),
           const SizedBox(height: 6),
           Text(
-            '${match.homePlayer?.name ?? "Offen"} vs. ${match.awayPlayer?.name ?? "Offen"}',
+            '${match.homePlayer?.shortDisplayName ?? "Offen"} - '
+            '${match.awayPlayer?.shortDisplayName ?? "Offen"}',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -1692,40 +1705,49 @@ class _TournamentSecondScreenViewState
                   future: _eloChanges,
                   builder: (context, snapshot) {
                     final itemExtent =
-                        82 * MediaQuery.textScalerOf(context).scale(1) + 8;
-                    return SizedBox(
-                      height: itemExtent * 2,
-                      child: snapshot.hasError
-                          ? const Center(
-                              child: Text(
-                                'Ranglistenänderungen konnten nicht geladen werden.',
-                                style: TextStyle(color: Colors.amber),
-                              ),
-                            )
-                          : recent.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Noch keine beendeten Partien vorhanden.',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                            )
-                          : ListView.builder(
-                              key: const ValueKey('recent-results-scroll'),
-                              itemExtent: itemExtent,
-                              itemCount: recent.length,
-                              itemBuilder: (context, index) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: _buildRecentMatchRow(
-                                  context,
-                                  recent[index],
-                                  _changesForMatch(
-                                    t,
-                                    recent[index],
-                                    snapshot.data,
+                        72 * MediaQuery.textScalerOf(context).scale(1);
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        final columns = constraints.maxWidth >= 560 ? 2 : 1;
+                        return SizedBox(
+                          height: itemExtent * 2 + 8,
+                          child: snapshot.hasError
+                              ? const Center(
+                                  child: Text(
+                                    'Ranglistenänderungen konnten nicht geladen werden.',
+                                    style: TextStyle(color: Colors.amber),
                                   ),
+                                )
+                              : recent.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'Noch keine beendeten Partien vorhanden.',
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                )
+                              : GridView.builder(
+                                  key: const ValueKey('recent-results-scroll'),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: columns,
+                                        mainAxisExtent: itemExtent,
+                                        crossAxisSpacing: 8,
+                                        mainAxisSpacing: 8,
+                                      ),
+                                  itemCount: recent.length,
+                                  itemBuilder: (context, index) =>
+                                      _buildRecentMatchRow(
+                                        context,
+                                        recent[index],
+                                        _changesForMatch(
+                                          t,
+                                          recent[index],
+                                          snapshot.data,
+                                        ),
+                                      ),
                                 ),
-                              ),
-                            ),
+                        );
+                      },
                     );
                   },
                 );
@@ -1777,7 +1799,8 @@ class _TournamentSecondScreenViewState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${m.homePlayer?.name ?? "?"} – ${m.awayPlayer?.name ?? "?"}',
+            '${m.homePlayer?.shortDisplayName ?? "?"} - '
+            '${m.awayPlayer?.shortDisplayName ?? "?"}',
             style: const TextStyle(
               fontWeight: FontWeight.bold,
               color: Colors.white,
@@ -1868,10 +1891,6 @@ class _TournamentSecondScreenViewState
   Widget _buildProgressAndBestPerformancesPanel({
     required BuildContext context,
     required CreatedTournament t,
-    required TimingSnapshot timing,
-    required int progressPercent,
-    required List<GroupMatch> playedMatches,
-    required int totalMatches,
     bool expand = true,
   }) {
     // Gather best performances from all matches
@@ -1916,9 +1935,9 @@ class _TournamentSecondScreenViewState
     final breakdownContent = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Fortschritt nach Etappen · $progressPercent% Gesamt',
-          style: const TextStyle(
+        const Text(
+          'Fortschritt nach Etappen',
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 13,
             color: Colors.white70,
@@ -1998,95 +2017,68 @@ class _TournamentSecondScreenViewState
   }
 
   List<Widget> _buildStageProgressItems(TournamentRunStage stage, int index) {
-    final sections = stage is GroupTournamentRunStage && stage.groups.length > 1
-        ? [
-            for (final group in stage.groups)
-              (
-                label: '${index + 1}. ${stage.name} · ${group.name}',
-                matches: group.matches,
-              ),
-          ]
-        : [(label: '${index + 1}. ${stage.name}', matches: _matchesOf(stage))];
-
     return [
-      for (final section in sections)
-        Builder(
-          builder: (context) {
-            final colors = Theme.of(context).colorScheme;
-            final matches = section.matches
-                .where((match) => match.hasPlayers)
-                .toList();
-            final played = matches.where((match) => match.hasResult).length;
-            final total = matches.length;
-            final percent = total > 0 ? ((played / total) * 100).round() : 0;
+      Builder(
+        builder: (context) {
+          final matches = _matchesOf(
+            stage,
+          ).where((match) => match.hasPlayers).toList();
+          final played = matches.where((match) => match.hasResult).length;
+          final total = matches.length;
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      Text(
-                        section.label,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: colors.onSurface,
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        '$played von $total Spielen',
-                        style: TextStyle(
-                          color: Color(0xFF70E0BA),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF142B40),
+              border: Border.all(color: const Color(0xFF244B6B)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${index + 1}. ${stage.name}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 13,
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: total > 0
-                                ? (played / total).clamp(0.0, 1.0)
-                                : 0.0,
-                            minHeight: 6,
-                            backgroundColor: Colors.white12,
-                            valueColor: const AlwaysStoppedAnimation(
-                              Color(0xFF70E0BA),
-                            ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: total > 0
+                              ? (played / total).clamp(0.0, 1.0)
+                              : 0.0,
+                          minHeight: 6,
+                          backgroundColor: const Color(0xFF20384D),
+                          valueColor: const AlwaysStoppedAnimation(
+                            Color(0xFFC4A96F),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '$percent%',
-                        style: const TextStyle(
-                          color: Color(0xFF70E0BA),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$played/$total gespielt',
+                      style: const TextStyle(
+                        color: Color(0xFFC4A96F),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     ];
   }
 
