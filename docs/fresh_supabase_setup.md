@@ -32,8 +32,22 @@ flutter run `
 ```
 
 Die Zugangsdaten im App-Build müssen zum eigenen Supabase-Projekt gehören.
-Release-Builds benötigen dieselben Werte als Build-Konfiguration; der eigene
-Release-Workflow ist noch nicht eingerichtet.
+Der GitHub-Actions-Releaseworkflow baut die App für das konfigurierte
+Supabase-Projekt und verwendet dafür die Repository-Variable
+`SUPABASE_PUBLISHABLE_KEY`. Eine heruntergeladene EXE lässt sich nicht nachträglich
+auf ein anderes Supabase-Projekt umstellen; dafür muss sie mit dessen URL und
+Publishable Key neu gebaut werden. Ein Service-Role-Key gehört niemals in einen
+App-Build.
+
+Ein weiterer Windows-PC benötigt weder Flutter noch einen eigenen Build: Die
+EXE kann sich über das Internet mit genau dem Supabase-Projekt verbinden, für
+das sie gebaut wurde. Dafür muss dort ein Betreiberkonto unter
+**Authentication → Users** manuell angelegt und bestätigt sein; angemeldet wird
+sich mit dessen E-Mail-Adresse und Passwort, nicht mit dem Passwort für das
+Supabase-Dashboard oder einem API-Key. Die Synchronisierung funktioniert erst,
+wenn auch das Schema aus `fresh_sync_schema.sql` samt Storage-Regeln im selben
+Projekt eingerichtet ist. Ohne ein dort angelegtes Benutzerkonto gibt es keine
+Selbstregistrierung über die App.
 
 Die Backup-Richtlinien beschränken Lesen, Erstellen, Ersetzen und Löschen auf
 den Ordner des angemeldeten Betreiberkontos. Es werden keine alten

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../application/tournament_duration_range.dart';
 import '../../domain/tournament_format_planner.dart';
 import 'planning_match_breakdown_view.dart';
 
@@ -14,41 +15,36 @@ class PlanningSuggestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    var totalEst = 0.0;
-    var totalMin = 0.0;
-    var totalMax = 0.0;
-    if (suggestion.configurations.isNotEmpty) {
-      for (var i = 0; i < suggestion.configurations.length; i++) {
-        final stage = suggestion.configurations[i];
-        final bo = stage.gameFormat.bestOfLegs;
-        final count = i < suggestion.stageMatchCounts.length ? suggestion.stageMatchCounts[i] : 1;
-        final minLegs = bo ~/ 2 + 1;
-        final maxLegs = bo;
-        final estLegs = (minLegs + maxLegs) / 2.0;
-        totalEst += count * estLegs;
-        totalMin += count * minLegs;
-        totalMax += count * maxLegs;
-      }
-    } else {
-      for (final stage in suggestion.stages) {
-        final bo = stage.format.bestOfLegs;
-        final minLegs = bo ~/ 2 + 1;
-        final maxLegs = bo;
-        final estLegs = (minLegs + maxLegs) / 2.0;
-        totalEst += estLegs;
-        totalMin += minLegs;
-        totalMax += maxLegs;
-      }
-    }
-    final minRatio = totalEst > 0 ? (totalMin / totalEst) : 0.8;
-    final maxRatio = totalEst > 0 ? (totalMax / totalEst) : 1.2;
-    final minMinutes = (suggestion.estimatedMinutes * minRatio).round();
-    final maxMinutes = (suggestion.estimatedMinutes * maxRatio).round();
+    final durationRange = TournamentDurationRange.forEstimate(
+      estimatedMinutes: suggestion.estimatedMinutes,
+      matches: suggestion.configurations.isNotEmpty
+          ? [
+              for (
+                var index = 0;
+                index < suggestion.configurations.length;
+                index++
+              )
+                (
+                  bestOfLegs:
+                      suggestion.configurations[index].gameFormat.bestOfLegs,
+                  matchCount: index < suggestion.stageMatchCounts.length
+                      ? suggestion.stageMatchCounts[index]
+                      : 1,
+                ),
+            ]
+          : [
+              for (final stage in suggestion.stages)
+                (bestOfLegs: stage.format.bestOfLegs, matchCount: 1),
+            ],
+    );
+    final minMinutes = durationRange.minimumMinutes;
+    final maxMinutes = durationRange.maximumMinutes;
     final minH = minMinutes ~/ 60;
     final minM = minMinutes % 60;
     final maxH = maxMinutes ~/ 60;
     final maxM = maxMinutes % 60;
-    final spanText = 'Spanne: ${minH > 0 ? '$minH h ' : ''}$minM min – ${maxH > 0 ? '$maxH h ' : ''}$maxM min';
+    final spanText =
+        'Spanne: ${minH > 0 ? '$minH h ' : ''}$minM min – ${maxH > 0 ? '$maxH h ' : ''}$maxM min';
     final estH = suggestion.estimatedMinutes ~/ 60;
     final estM = suggestion.estimatedMinutes % 60;
     final durationText = 'ca. ${estH > 0 ? '$estH h ' : ''}$estM min';
@@ -67,10 +63,7 @@ class PlanningSuggestionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Fix 1.3: Titel + Dauer prominent an erster Stelle
-                    Text(
-                      suggestion.title,
-                      style: theme.textTheme.titleMedium,
-                    ),
+                    Text(suggestion.title, style: theme.textTheme.titleMedium),
                     const SizedBox(height: 2),
                     Wrap(
                       spacing: 8,
@@ -90,14 +83,21 @@ class PlanningSuggestionCard extends StatelessWidget {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.primaryContainer,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             suggestion.configurations.isNotEmpty
-                                ? suggestion.configurations.first.gameFormat.label
+                                ? suggestion
+                                      .configurations
+                                      .first
+                                      .gameFormat
+                                      .label
                                 : suggestion.format.label,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.onPrimaryContainer,
@@ -112,42 +112,50 @@ class PlanningSuggestionCard extends StatelessWidget {
                     // Fix 1.4: Qualifikationspfeile nur anzeigen wo sie relevant sind
                     // (nicht für die letzte/einzige Etappe eines mehrstufigen Turniers)
                     if (suggestion.configurations.isNotEmpty) ...[
-                      for (var i = 0;
-                          i < suggestion.configurations.length;
-                          i++) ...[
-                        Builder(builder: (context) {
-                          final stage = suggestion.configurations[i];
-                          final isLast =
-                              i == suggestion.configurations.length - 1;
-                          final participants = stage.type == 'groups'
-                              ? stage.groupSizes
-                                    .fold<int>(0, (a, b) => a + b)
-                              : stage.knockoutParticipantCount;
-                          // Fix 1.4: Kein "→ X weiter" bei der letzten Etappe
-                          final qualifier = (!isLast &&
-                                  suggestion.configurations.length > 1)
-                              ? ' → ${stage.qualifiedParticipantCount ?? 1} weiter'
-                              : '';
-                          return Text(
-                            '${stage.name}: ${stage.gameFormat.label} · $participants Spieler$qualifier',
-                          );
-                        }),
+                      for (
+                        var i = 0;
+                        i < suggestion.configurations.length;
+                        i++
+                      ) ...[
+                        Builder(
+                          builder: (context) {
+                            final stage = suggestion.configurations[i];
+                            final isLast =
+                                i == suggestion.configurations.length - 1;
+                            final participants = stage.type == 'groups'
+                                ? stage.groupSizes.fold<int>(0, (a, b) => a + b)
+                                : stage.knockoutParticipantCount;
+                            // Fix 1.4: Kein "→ X weiter" bei der letzten Etappe
+                            final qualifier =
+                                (!isLast &&
+                                    suggestion.configurations.length > 1)
+                                ? ' → ${stage.qualifiedParticipantCount ?? 1} weiter'
+                                : '';
+                            return Text(
+                              '${stage.name}: ${stage.gameFormat.label} · $participants Spieler$qualifier',
+                            );
+                          },
+                        ),
                       ],
                       // Fix 1.5: Leg-Spanne aus stageMatchCounts + format
-                      for (var i = 0;
-                          i < suggestion.stageMatchCounts.length;
-                          i++) ...[
-                        Builder(builder: (context) {
-                          final stage = suggestion.configurations[i];
-                          final matchCount = suggestion.stageMatchCounts[i];
-                          final bo = stage.gameFormat.bestOfLegs;
-                          final minLegs = (bo ~/ 2 + 1);
-                          final maxLegs = bo;
-                          return Text(
-                            '${i + 1}. ${stage.name}: $matchCount Spiele · $minLegs–$maxLegs Legs/Spiel',
-                            style: theme.textTheme.bodySmall,
-                          );
-                        }),
+                      for (
+                        var i = 0;
+                        i < suggestion.stageMatchCounts.length;
+                        i++
+                      ) ...[
+                        Builder(
+                          builder: (context) {
+                            final stage = suggestion.configurations[i];
+                            final matchCount = suggestion.stageMatchCounts[i];
+                            final bo = stage.gameFormat.bestOfLegs;
+                            final minLegs = (bo ~/ 2 + 1);
+                            final maxLegs = bo;
+                            return Text(
+                              '${i + 1}. ${stage.name}: $matchCount Spiele · $minLegs–$maxLegs Legs/Spiel',
+                              style: theme.textTheme.bodySmall,
+                            );
+                          },
+                        ),
                       ],
                     ],
 
@@ -179,8 +187,9 @@ class PlanningSuggestionCard extends StatelessWidget {
                         ),
                       ),
 
-                    for (final stage in suggestion.configurations
-                        .where((s) => s.groupPlayType == 'swiss'))
+                    for (final stage in suggestion.configurations.where(
+                      (s) => s.groupPlayType == 'swiss',
+                    ))
                       Text(
                         'Swiss: ${stage.groupRoundRobinRepeats.join(" / ")} Runden – wartet auf alle Partien je Runde.',
                         style: theme.textTheme.bodySmall,

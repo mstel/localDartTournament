@@ -1,11 +1,11 @@
-import 'dart:io';
-
 import 'package:dart_tournament_manager/features/rankings/application/tournament_ranking_changes_service.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/elo_tier.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
 
 void main() {
   test(
@@ -96,4 +96,36 @@ void main() {
       expect(ben.positionChange, -1);
     },
   );
+
+  test('unchanged and unranked players have no ranking movement', () {
+    const unchanged = TournamentRankingPlayerChange(
+      playerProfileId: 'anna',
+      playerName: 'Anna',
+      delta: 0,
+      ratingBefore: 900,
+      ratingAfter: 900,
+      tierBefore: EloTier.silber,
+      tierAfter: EloTier.silber,
+      enableTiers: false,
+      rankingName: 'Vereinsrangliste',
+      rankingPositionBefore: 8,
+      rankingPositionAfter: 8,
+    );
+    const unranked = TournamentRankingPlayerChange(
+      playerProfileId: 'ben',
+      playerName: 'Ben',
+      delta: 20,
+      ratingBefore: 800,
+      ratingAfter: 820,
+      tierBefore: EloTier.bronze,
+      tierAfter: EloTier.bronze,
+      enableTiers: false,
+      rankingName: 'Vereinsrangliste',
+      rankingPositionBefore: null,
+      rankingPositionAfter: null,
+    );
+
+    expect(unchanged.hasPositionChange, isFalse);
+    expect(unranked.hasPositionChange, isFalse);
+  });
 }

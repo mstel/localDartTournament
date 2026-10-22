@@ -38,6 +38,7 @@ class TournamentRankingPlayerChange {
       rankingPositionBefore == null || rankingPositionAfter == null
       ? null
       : rankingPositionBefore! - rankingPositionAfter!;
+  bool get hasPositionChange => positionChange != null && positionChange != 0;
 
   Map<String, Object?> toExportJson() => {
     'rankingName': rankingName,
@@ -121,8 +122,14 @@ class TournamentRankingChangesService {
             delta: delta,
             ratingBefore: ratingBefore,
             ratingAfter: ratingAfter,
-            tierBefore: EloTier.fromElo(ratingBefore),
-            tierAfter: EloTier.fromElo(ratingAfter),
+            tierBefore: EloTier.fromElo(
+              ratingBefore,
+              tiers: ranking.effectiveTierBands,
+            ),
+            tierAfter: EloTier.fromElo(
+              ratingAfter,
+              tiers: ranking.effectiveTierBands,
+            ),
             enableTiers: ranking.enableTiers,
             rankingName: ranking.name,
             rankingPositionBefore: beforePositions[entry.key],

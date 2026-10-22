@@ -30,8 +30,12 @@ void main() {
         ordered,
         restoredStage.groupSizes,
       );
+      final wheelPreviewGroups = GroupDrawAssignment.partition([
+        for (final seed in restoredStage.groupSlotOrder) players[seed! - 1],
+      ], restoredStage.groupSizes);
 
       expect(groups.map((group) => group.length), [3, 2]);
+      expect(wheelPreviewGroups, groups);
       expect(
         groups.map((group) => group.map((player) => player.name).toList()),
         [

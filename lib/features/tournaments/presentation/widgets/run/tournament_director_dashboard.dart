@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../../shared/theme/tournament_display_palette.dart';
 import '../../../application/tournament_flow_priority.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
@@ -170,16 +171,21 @@ class _TournamentDirectorDashboardState
     final colors = theme.colorScheme;
     final match = entry.match;
     return Container(
+      key: ValueKey(
+        'director-match-tile-${showResult ? 'result' : 'next'}-'
+        '${match.round}-${match.homePlayer?.name}-${match.awayPlayer?.name}',
+      ),
       width: width,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: isPriority
-            ? colors.tertiaryContainer.withAlpha(48)
-            : colors.surfaceContainerLow,
+            ? TournamentDisplayPalette.cardEmphasis
+            : TournamentDisplayPalette.card,
         border: Border.all(
           color: isPriority
-              ? colors.tertiary.withAlpha(100)
-              : colors.outlineVariant.withAlpha(100),
+              ? TournamentDisplayPalette.accent.withAlpha(180)
+              : TournamentDisplayPalette.border.withAlpha(150),
+          width: isPriority ? 1.5 : 1,
         ),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -191,7 +197,7 @@ class _TournamentDirectorDashboardState
               Icon(
                 showResult ? Icons.check_circle_outline : Icons.sports_score,
                 size: 18,
-                color: colors.onSurfaceVariant,
+                color: TournamentDisplayPalette.mutedText,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -200,7 +206,9 @@ class _TournamentDirectorDashboardState
                       ? entry.origin
                       : 'Etappe ${entry.stageIndex + 1}'
                             '${match.boardNumber == null ? '' : ' · Board ${match.boardNumber}'}',
-                  style: theme.textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: TournamentDisplayPalette.mutedText,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -211,7 +219,7 @@ class _TournamentDirectorDashboardState
                   child: Text(
                     '!',
                     style: theme.textTheme.titleMedium?.copyWith(
-                      color: colors.tertiary,
+                      color: TournamentDisplayPalette.accent,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -224,6 +232,7 @@ class _TournamentDirectorDashboardState
             '${match.awayPlayer?.name ?? 'Freilos'}',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
+              color: TournamentDisplayPalette.text,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -232,7 +241,9 @@ class _TournamentDirectorDashboardState
             const SizedBox(height: 4),
             Text(
               '${match.homeLegs ?? 0}:${match.awayLegs ?? 0}',
-              style: theme.textTheme.titleMedium,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: TournamentDisplayPalette.text,
+              ),
             ),
             for (final performance in match.bestPerformances.take(2))
               Text(
@@ -460,22 +471,21 @@ class _TournamentDirectorDashboardState
       if (flowNotices.isNotEmpty)
         Builder(
           builder: (context) {
-            final colors = Theme.of(context).colorScheme;
             final notice = flowNotices[_noticeIndex % flowNotices.length];
             return Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: colors.tertiaryContainer,
+                color: TournamentDisplayPalette.card,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: colors.tertiary),
+                border: Border.all(color: TournamentDisplayPalette.border),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     Icons.priority_high,
-                    color: colors.onTertiaryContainer,
+                    color: TournamentDisplayPalette.accent,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -483,7 +493,7 @@ class _TournamentDirectorDashboardState
                     child: Text(
                       notice,
                       style: TextStyle(
-                        color: colors.onTertiaryContainer,
+                        color: TournamentDisplayPalette.text,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

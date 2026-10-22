@@ -103,6 +103,43 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('expected duration shows the range around the estimate', (
+    tester,
+  ) async {
+    final tournament = resultsFixture()
+      ..plannedMinimumMinutes = 184
+      ..plannedMinutes = 220
+      ..stages.add(
+        const TournamentStage(
+          name: 'Finale',
+          type: 'single_knockout',
+          gameFormat: TournamentGameFormat(bestOfLegs: 3),
+          knockoutParticipantCount: 2,
+        ),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentResultsPage(
+          tournament: tournament,
+          database: _EmptyRankingDatabase(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final expectedRange = find.byKey(const ValueKey('expected-duration-range'));
+    expect(find.text('Erwartet: 2:56–4:24'), findsOneWidget);
+    final tooltipFinder = find.ancestor(
+      of: expectedRange,
+      matching: find.byType(Tooltip),
+    );
+    expect(
+      tester.widget<Tooltip>(tooltipFinder.first).message,
+      'Erwartete Spanne der Turnierdauer: Erwartet: 2:56–4:24',
+    );
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'manual results retain player stats without invented scorer highlights',
     (tester) async {

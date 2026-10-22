@@ -1,8 +1,10 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/theme/tournament_display_palette.dart';
 import '../../rankings/application/tournament_ranking_changes_service.dart';
 import '../../statistics/domain/best_performance.dart';
 
@@ -55,7 +57,6 @@ class TournamentCompletionImageGenerator {
 
   Future<Uint8List> generatePortraitPng({
     required TournamentCompletionImageData data,
-    required ColorScheme colorScheme,
   }) async {
     const width = 1080.0;
     const padding = 56.0;
@@ -64,6 +65,19 @@ class TournamentCompletionImageGenerator {
     final leagueMoves = data.rankingChanges
         .where((change) => change.hasTierChange)
         .toList();
+    final gains =
+        data.rankingChanges.where((change) => change.delta > 0).toList()
+          ..sort((left, right) => right.delta.compareTo(left.delta));
+    final losses =
+        data.rankingChanges.where((change) => change.delta < 0).toList()
+          ..sort((left, right) => left.delta.compareTo(right.delta));
+    final positionChanges = data.rankingChanges
+        .where((change) => change.hasPositionChange)
+        .toList();
+    final rankingSectionRows = math.max(
+      1,
+      math.max(gains.length, losses.length),
+    );
     final height =
         padding * 2 +
         126 +
@@ -73,7 +87,10 @@ class TournamentCompletionImageGenerator {
         data.podium.length * 58 +
         sectionGap +
         92 +
-        data.rankingChanges.length * 58 +
+        rankingSectionRows * 58 +
+        (positionChanges.isEmpty
+            ? 0
+            : sectionGap + 92 + positionChanges.length * 58) +
         (leagueMoves.isEmpty ? 0 : sectionGap + 92 + leagueMoves.length * 58) +
         sectionGap +
         92 +
@@ -82,7 +99,7 @@ class TournamentCompletionImageGenerator {
     final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, width, height));
     canvas.drawRect(
       Rect.fromLTWH(0, 0, width, height),
-      Paint()..color = colorScheme.surface,
+      Paint()..color = TournamentDisplayPalette.background,
     );
 
     var y = padding;
@@ -92,7 +109,7 @@ class TournamentCompletionImageGenerator {
       Offset(padding, y),
       maxWidth: contentWidth,
       fontSize: 42,
-      color: colorScheme.onSurface,
+      color: TournamentDisplayPalette.text,
       bold: true,
     );
     y += 58;
@@ -102,19 +119,13 @@ class TournamentCompletionImageGenerator {
       Offset(padding, y),
       maxWidth: contentWidth,
       fontSize: 22,
-      color: colorScheme.onSurfaceVariant,
+      color: TournamentDisplayPalette.mutedText,
     );
     y += 68;
 
     final summaryHeight = 220.0;
-    _section(canvas, padding, y, contentWidth, summaryHeight, colorScheme);
-    _sectionTitle(
-      canvas,
-      'Turnierübersicht',
-      padding + 24,
-      y + 20,
-      colorScheme,
-    );
+    _section(canvas, padding, y, contentWidth, summaryHeight);
+    _sectionTitle(canvas, 'Turnierübersicht', padding + 24, y + 20);
     const metricGap = 12.0;
     final metricWidth = (contentWidth - 48 - metricGap) / 2;
     final metrics = [
@@ -134,7 +145,7 @@ class TournamentCompletionImageGenerator {
         Offset(x, top),
         maxWidth: metricWidth,
         fontSize: 21,
-        color: colorScheme.onSurface,
+        color: TournamentDisplayPalette.text,
         bold: true,
       );
     }
@@ -145,90 +156,113 @@ class TournamentCompletionImageGenerator {
         Offset(padding + 24, y + 180),
         maxWidth: contentWidth - 48,
         fontSize: 18,
-        color: colorScheme.onSurfaceVariant,
+        color: TournamentDisplayPalette.mutedText,
       );
     }
     y += summaryHeight + sectionGap;
 
-    _section(
-      canvas,
-      padding,
-      y,
-      contentWidth,
-      92 + data.podium.length * 58,
-      colorScheme,
-    );
-    _sectionTitle(canvas, 'Podium', padding + 24, y + 20, colorScheme);
+    _section(canvas, padding, y, contentWidth, 92 + data.podium.length * 58);
+    _sectionTitle(canvas, 'Podium', padding + 24, y + 20);
     for (var index = 0; index < data.podium.length; index++) {
       final entry = data.podium[index];
       _text(
         canvas,
         '${entry.place}. ${entry.playerName} · ${entry.wins} Siege · '
         '${entry.losses} Niederlagen · ${entry.legsFor}:${entry.legsAgainst} Legs',
-        Offset(padding + 24, y + 66 + index * 58),
+        Offset(padding + 24, y + 66.0 + index * 58.0),
         maxWidth: contentWidth - 48,
         fontSize: 19,
-        color: colorScheme.onSurface,
+        color: TournamentDisplayPalette.text,
       );
     }
     y += 92 + data.podium.length * 58 + sectionGap;
 
-    _section(
+    final rankingSectionHeight = 92.0 + rankingSectionRows * 58.0;
+    _section(canvas, padding, y, contentWidth, rankingSectionHeight);
+    _sectionTitle(canvas, 'Änderungen der Rangliste', padding + 24, y + 20);
+    const columnGap = 24.0;
+    final columnWidth = (contentWidth - 48 - columnGap) / 2;
+    final leftX = padding + 24;
+    final rightX = leftX + columnWidth + columnGap;
+    _text(
       canvas,
-      padding,
-      y,
-      contentWidth,
-      92 + data.rankingChanges.length * 58,
-      colorScheme,
+      'Größter Punktezuwachs',
+      Offset(leftX, y + 62),
+      maxWidth: columnWidth,
+      fontSize: 19,
+      color: TournamentDisplayPalette.accent,
+      bold: true,
     );
-    _sectionTitle(
+    _text(
       canvas,
-      'Elo und Ranglistenplätze',
-      padding + 24,
-      y + 20,
-      colorScheme,
+      'Größter Punkteverlust',
+      Offset(rightX, y + 62),
+      maxWidth: columnWidth,
+      fontSize: 19,
+      color: TournamentDisplayPalette.accent,
+      bold: true,
     );
-    for (var index = 0; index < data.rankingChanges.length; index++) {
-      final change = data.rankingChanges[index];
-      final elo = '${change.delta >= 0 ? '+' : ''}${change.delta} Elo';
-      final positions =
-          change.rankingPositionBefore == null ||
-              change.rankingPositionAfter == null
-          ? 'Platzierung nicht verfügbar'
-          : 'Platz ${change.rankingPositionBefore} → ${change.rankingPositionAfter}';
-      final movement = switch (change.positionChange) {
-        final value? when value > 0 => '↑ $positions',
-        final value? when value < 0 => '↓ $positions',
-        0 => '↔ $positions',
-        _ => '– $positions',
-      };
+    for (var index = 0; index < rankingSectionRows; index++) {
+      final gain = index < gains.length ? gains[index] : null;
+      final loss = index < losses.length ? losses[index] : null;
       _text(
         canvas,
-        '${change.rankingName} · ${change.playerName} · $elo · $movement',
-        Offset(padding + 24, y + 66 + index * 58),
-        maxWidth: contentWidth - 48,
-        fontSize: 18,
-        color: colorScheme.onSurface,
+        gain == null
+            ? (index == 0 && gains.isEmpty ? 'Keine Punktegewinne' : '')
+            : '${gain.rankingName} · ${gain.playerName} · +${gain.delta} Elo '
+                  '(${gain.ratingBefore} → ${gain.ratingAfter})',
+        Offset(leftX, y + 94.0 + index * 58.0),
+        maxWidth: columnWidth,
+        fontSize: 17,
+        color: gain == null
+            ? TournamentDisplayPalette.mutedText
+            : TournamentDisplayPalette.text,
+      );
+      _text(
+        canvas,
+        loss == null
+            ? (index == 0 && losses.isEmpty ? 'Keine Punkteverluste' : '')
+            : '${loss.rankingName} · ${loss.playerName} · ${loss.delta} Elo '
+                  '(${loss.ratingBefore} → ${loss.ratingAfter})',
+        Offset(rightX, y + 94.0 + index * 58.0),
+        maxWidth: columnWidth,
+        fontSize: 17,
+        color: loss == null
+            ? TournamentDisplayPalette.mutedText
+            : TournamentDisplayPalette.text,
       );
     }
-    y += 92 + data.rankingChanges.length * 58 + sectionGap;
+    y += rankingSectionHeight + sectionGap;
 
-    if (leagueMoves.isNotEmpty) {
+    if (positionChanges.isNotEmpty) {
       _section(
         canvas,
         padding,
         y,
         contentWidth,
-        92 + leagueMoves.length * 58,
-        colorScheme,
+        92 + positionChanges.length * 58,
       );
-      _sectionTitle(
-        canvas,
-        'Liga-Auf- und Abstiege',
-        padding + 24,
-        y + 20,
-        colorScheme,
-      );
+      _sectionTitle(canvas, 'Ranglistenplätze', padding + 24, y + 20);
+      for (var index = 0; index < positionChanges.length; index++) {
+        final change = positionChanges[index];
+        final movedUp = change.positionChange! > 0;
+        _text(
+          canvas,
+          '${movedUp ? '↑' : '↓'} ${change.rankingName} · '
+          '${change.playerName} · Platz ${change.rankingPositionBefore} '
+          '→ ${change.rankingPositionAfter}',
+          Offset(padding + 24, y + 66.0 + index * 58.0),
+          maxWidth: contentWidth - 48,
+          fontSize: 18,
+          color: TournamentDisplayPalette.text,
+        );
+      }
+      y += 92 + positionChanges.length * 58 + sectionGap;
+    }
+
+    if (leagueMoves.isNotEmpty) {
+      _section(canvas, padding, y, contentWidth, 92 + leagueMoves.length * 58);
+      _sectionTitle(canvas, 'Liga-Auf- und Abstiege', padding + 24, y + 20);
       for (var index = 0; index < leagueMoves.length; index++) {
         final change = leagueMoves[index];
         final promoted = change.isPromotion;
@@ -236,10 +270,10 @@ class TournamentCompletionImageGenerator {
           canvas,
           '${promoted ? '↑' : '↓'} ${change.rankingName} · '
           '${change.playerName} · ${change.tierBefore.name} → ${change.tierAfter.name}',
-          Offset(padding + 24, y + 66 + index * 58),
+          Offset(padding + 24, y + 66.0 + index * 58.0),
           maxWidth: contentWidth - 48,
           fontSize: 18,
-          color: colorScheme.onSurface,
+          color: TournamentDisplayPalette.text,
         );
       }
       y += 92 + leagueMoves.length * 58 + sectionGap;
@@ -251,15 +285,8 @@ class TournamentCompletionImageGenerator {
       y,
       contentWidth,
       92 + data.bestPerformances.length * 54,
-      colorScheme,
     );
-    _sectionTitle(
-      canvas,
-      'Benannte Bestleistungen',
-      padding + 24,
-      y + 20,
-      colorScheme,
-    );
+    _sectionTitle(canvas, 'Benannte Bestleistungen', padding + 24, y + 20);
     if (data.bestPerformances.isEmpty) {
       _text(
         canvas,
@@ -267,7 +294,7 @@ class TournamentCompletionImageGenerator {
         Offset(padding + 24, y + 66),
         maxWidth: contentWidth - 48,
         fontSize: 18,
-        color: colorScheme.onSurfaceVariant,
+        color: TournamentDisplayPalette.mutedText,
       );
     } else {
       for (var index = 0; index < data.bestPerformances.length; index++) {
@@ -276,10 +303,10 @@ class TournamentCompletionImageGenerator {
           canvas,
           '${performance.playerName} · ${_performanceLabel(performance.type)}'
           '${performance.value == null ? '' : ' · ${performance.value}'}',
-          Offset(padding + 24, y + 66 + index * 54),
+          Offset(padding + 24, y + 66.0 + index * 54.0),
           maxWidth: contentWidth - 48,
           fontSize: 18,
-          color: colorScheme.onSurface,
+          color: TournamentDisplayPalette.text,
         );
       }
     }
@@ -297,30 +324,29 @@ class TournamentCompletionImageGenerator {
     double y,
     double width,
     double height,
-    ColorScheme colors,
   ) {
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, y, width, height),
-        const Radius.circular(18),
-      ),
-      Paint()..color = colors.surfaceContainerHigh,
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x, y, width, height),
+      const Radius.circular(18),
     );
+    canvas
+      ..drawRRect(rect, Paint()..color = TournamentDisplayPalette.card)
+      ..drawRRect(
+        rect,
+        Paint()
+          ..color = TournamentDisplayPalette.border
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
   }
 
-  void _sectionTitle(
-    Canvas canvas,
-    String text,
-    double x,
-    double y,
-    ColorScheme colors,
-  ) => _text(
+  void _sectionTitle(Canvas canvas, String text, double x, double y) => _text(
     canvas,
     text,
     Offset(x, y),
     maxWidth: 900,
     fontSize: 26,
-    color: colors.primary,
+    color: TournamentDisplayPalette.accent,
     bold: true,
   );
 

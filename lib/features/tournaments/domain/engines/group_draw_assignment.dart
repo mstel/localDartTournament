@@ -27,10 +27,7 @@ class GroupDrawAssignment {
     ];
   }
 
-  static List<List<TournamentPlayer>> partition(
-    List<TournamentPlayer> players,
-    List<int> groupSizes,
-  ) {
+  static List<List<T>> partition<T>(List<T> players, List<int> groupSizes) {
     var playerIndex = 0;
     return [
       for (final groupSize in groupSizes)

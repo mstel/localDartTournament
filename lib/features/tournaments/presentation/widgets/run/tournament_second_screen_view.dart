@@ -7,6 +7,8 @@ import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime;
 import 'package:flutter/services.dart';
 
+import '../../../../../shared/theme/tournament_display_palette.dart';
+
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/qualification_certainty.dart';
@@ -1419,6 +1421,9 @@ class _TournamentSecondScreenViewState
         }
       }
     }
+    final visibleSuggestions = _requiresFewerSuggestions(context, suggestions)
+        ? suggestions.take(5).toList()
+        : suggestions;
     final priorityNotice = flowPriority.notices.isEmpty
         ? null
         : flowPriority.notices[_priorityNoticeIndex %
@@ -1428,8 +1433,8 @@ class _TournamentSecondScreenViewState
         : Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF30291D),
-              border: Border.all(color: const Color(0xFF75613C)),
+              color: TournamentDisplayPalette.card,
+              border: Border.all(color: TournamentDisplayPalette.border),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -1437,14 +1442,14 @@ class _TournamentSecondScreenViewState
                 const Icon(
                   Icons.priority_high,
                   size: 18,
-                  color: Color(0xFFC4A96F),
+                  color: TournamentDisplayPalette.accent,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     priorityNotice,
                     style: const TextStyle(
-                      color: Color(0xFFD2C09B),
+                      color: TournamentDisplayPalette.text,
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
@@ -1458,12 +1463,12 @@ class _TournamentSecondScreenViewState
       spacing: 10,
       runSpacing: 10,
       children: [
-        for (var i = 0; i < suggestions.length; i++)
+        for (var i = 0; i < visibleSuggestions.length; i++)
           _buildMatchTile(
             context,
-            suggestions[i],
+            visibleSuggestions[i],
             isPreferred: flowPriority.prioritizedMatches.contains(
-              suggestions[i],
+              visibleSuggestions[i],
             ),
           ),
       ],
@@ -1483,7 +1488,7 @@ class _TournamentSecondScreenViewState
                 FadeTransition(opacity: animation, child: child),
             child: KeyedSubtree(
               key: ValueKey(
-                suggestions
+                visibleSuggestions
                     .map(
                       (match) =>
                           '${match.label}:${match.homePlayer?.profileId ?? match.homePlayer?.name}:'
@@ -1503,12 +1508,12 @@ class _TournamentSecondScreenViewState
             const Icon(
               Icons.sports_esports,
               size: 20,
-              color: Color(0xFF70E0BA),
+              color: TournamentDisplayPalette.accent,
             ),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                'Nächste Partien (${suggestions.length} Vorschläge)',
+                'Nächste Partien (${visibleSuggestions.length} Vorschläge)',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -1545,27 +1550,58 @@ class _TournamentSecondScreenViewState
     );
   }
 
+  bool _requiresFewerSuggestions(
+    BuildContext context,
+    List<GroupMatch> suggestions,
+  ) {
+    if (suggestions.length < 6) return false;
+    final textScaler = MediaQuery.textScalerOf(context);
+    final textDirection = Directionality.of(context);
+    for (final match in suggestions) {
+      for (final name in [
+        match.homePlayer?.name ?? 'Offen',
+        match.awayPlayer?.name ?? 'Offen',
+      ]) {
+        final painter = TextPainter(
+          text: TextSpan(
+            text: name,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          textDirection: textDirection,
+          textScaler: textScaler,
+          maxLines: 1,
+        )..layout();
+        if (painter.width > 320) return true;
+      }
+    }
+    return false;
+  }
+
   Widget _buildMatchTile(
     BuildContext context,
     GroupMatch match, {
     required bool isPreferred,
   }) {
     final isRunning = match.boardNumber != null;
-    final colors = Theme.of(context).colorScheme;
 
     return Container(
+      key: ValueKey(
+        'second-screen-match-${match.round}-'
+        '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
+        '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
+      ),
       constraints: const BoxConstraints(minWidth: 240, maxWidth: 340),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: isPreferred
-            ? colors.tertiaryContainer.withAlpha(48)
-            : colors.surfaceContainerLow,
+            ? TournamentDisplayPalette.cardEmphasis
+            : TournamentDisplayPalette.card,
         border: Border.all(
           color: isPreferred
-              ? colors.tertiary.withAlpha(160)
+              ? TournamentDisplayPalette.accent.withAlpha(180)
               : isRunning
-              ? colors.primary
-              : colors.outlineVariant.withAlpha(160),
+              ? TournamentDisplayPalette.accent
+              : TournamentDisplayPalette.border.withAlpha(150),
           width: isPreferred || isRunning ? 1.5 : 1,
         ),
         borderRadius: BorderRadius.circular(8),
@@ -1583,8 +1619,8 @@ class _TournamentSecondScreenViewState
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: isRunning
-                      ? colors.primaryContainer
-                      : colors.surfaceContainerHighest,
+                      ? TournamentDisplayPalette.cardEmphasis
+                      : TournamentDisplayPalette.background,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -1595,15 +1631,18 @@ class _TournamentSecondScreenViewState
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: isRunning
-                        ? colors.onPrimaryContainer
-                        : colors.onSurfaceVariant,
+                        ? TournamentDisplayPalette.accent
+                        : TournamentDisplayPalette.mutedText,
                   ),
                 ),
               ),
               if (match.label != null && match.label!.isNotEmpty)
                 Text(
                   match.label!,
-                  style: const TextStyle(fontSize: 11, color: Colors.white54),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: TournamentDisplayPalette.mutedText,
+                  ),
                 ),
               if (isPreferred)
                 const Wrap(
@@ -1612,13 +1651,13 @@ class _TournamentSecondScreenViewState
                   children: [
                     Icon(
                       Icons.priority_high,
-                      color: Color(0xFFC4A96F),
+                      color: TournamentDisplayPalette.accent,
                       size: 18,
                     ),
                     Text(
                       '!',
                       style: TextStyle(
-                        color: Color(0xFFD2C09B),
+                        color: TournamentDisplayPalette.accent,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1628,12 +1667,23 @@ class _TournamentSecondScreenViewState
           ),
           const SizedBox(height: 6),
           Text(
-            '${match.homePlayer?.name ?? "Offen"} vs. ${match.awayPlayer?.name ?? "Offen"}',
+            match.homePlayer?.name ?? 'Offen',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: colors.onSurface,
+              color: TournamentDisplayPalette.text,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            match.awayPlayer?.name ?? 'Offen',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: TournamentDisplayPalette.text,
+            ),
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -1760,7 +1810,6 @@ class _TournamentSecondScreenViewState
     GroupMatch m,
     List<TournamentMatchEloChange> eloChanges,
   ) {
-    final colors = Theme.of(context).colorScheme;
     return Container(
       key: ValueKey(
         'recent-result-${m.round}-'
@@ -1769,8 +1818,10 @@ class _TournamentSecondScreenViewState
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        border: Border.all(color: colors.outlineVariant.withAlpha(160)),
+        color: TournamentDisplayPalette.card,
+        border: Border.all(
+          color: TournamentDisplayPalette.border.withAlpha(150),
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1797,14 +1848,15 @@ class _TournamentSecondScreenViewState
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: colors.primaryContainer,
+                    color: TournamentDisplayPalette.cardEmphasis,
                     borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: TournamentDisplayPalette.border),
                   ),
                   child: Text(
                     '${m.homeScore ?? 0} : ${m.awayScore ?? 0}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: colors.onPrimaryContainer,
+                      color: TournamentDisplayPalette.accent,
                       fontSize: 13,
                     ),
                   ),
@@ -1817,10 +1869,10 @@ class _TournamentSecondScreenViewState
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: colors.surfaceContainerLow,
+                      color: TournamentDisplayPalette.cardEmphasis,
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color: colors.outlineVariant.withAlpha(160),
+                        color: TournamentDisplayPalette.border.withAlpha(150),
                       ),
                     ),
                     child: Text.rich(
@@ -1834,7 +1886,7 @@ class _TournamentSecondScreenViewState
                         ],
                       ),
                       style: TextStyle(
-                        color: colors.onSurfaceVariant,
+                        color: TournamentDisplayPalette.mutedText,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),

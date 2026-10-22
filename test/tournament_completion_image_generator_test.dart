@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:dart_tournament_manager/features/rankings/application/tournament_ranking_changes_service.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/elo_tier.dart';
@@ -6,7 +7,6 @@ import 'package:dart_tournament_manager/features/rankings/domain/elo_tier.dart'
     show EloTier;
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_completion_image_generator.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -55,7 +55,6 @@ void main() {
                 ),
               ],
             ),
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
           );
       final data = ByteData.sublistView(bytes);
 
@@ -71,6 +70,17 @@ void main() {
       ]);
       expect(data.getUint32(16, Endian.big), 1080);
       expect(data.getUint32(20, Endian.big), greaterThan(1000));
+
+      final codec = await ui.instantiateImageCodec(bytes);
+      final image = (await codec.getNextFrame()).image;
+      final rgba = (await image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      ))!;
+      expect(rgba.getUint8(0), 0x0D);
+      expect(rgba.getUint8(1), 0x13);
+      expect(rgba.getUint8(2), 0x18);
+      image.dispose();
+      codec.dispose();
     },
   );
 }

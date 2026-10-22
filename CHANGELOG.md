@@ -1,3 +1,24 @@
+# 1.1.5+17
+
+- Refines player comparison with centered category labels and separators, and
+  removes the Elo history chart from that view.
+- Aligns tournament dashboard and second-screen colors with the dark blue and
+  subtle gold display palette; constrains upcoming match suggestions to two
+  lines and shows only as many as fit.
+- Shows only actual ranking-place changes in tournament results and exports.
+  The tournament PNG uses the dark blue palette, groups point gains and losses,
+  and reports the expected duration range.
+- Keeps random draw assignments consistent with configured group sizes.
+- Improves tournament settings with a compact name/save layout and a visible
+  running or paused clock time.
+- Reuses and focuses an already-open Windows second-screen window, and closes
+  it when the main application exits.
+- Makes Elo tier names and rating boundaries configurable per ranking while
+  retaining default tiers for existing rankings.
+- Hides self-service registration and Google sign-in; operator accounts are
+  managed manually in Supabase.
+- Preserves existing tournament database schema and backup formats.
+
 # 1.1.4+16
 
 - Replaces the player Elo comparison graph with a side-by-side comparison

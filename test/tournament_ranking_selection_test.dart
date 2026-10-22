@@ -95,6 +95,39 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('tournament settings show a compact name field and live clock', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = fixture()
+      ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'))
+      ..startedAt = DateTime.now().subtract(
+        const Duration(minutes: 3, seconds: 12),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: TournamentRunPage(tournament: tournament)),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final nameField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.labelText == 'Turniername',
+    );
+    final saveButton = find.widgetWithText(FilledButton, 'Namen speichern');
+    expect(
+      tester.getRect(nameField).right,
+      lessThan(tester.getRect(saveButton).left),
+    );
+    expect(find.textContaining('Status: Läuft aktiv · 00:03:'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
 
 class _RecordingTournamentStorage extends TournamentStorage {
