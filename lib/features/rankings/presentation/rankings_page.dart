@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../application/ranking_year_review_image_generator.dart';
 import '../application/ranking_standings_image_generator.dart';
 
@@ -34,13 +35,25 @@ class RankingsPage extends StatefulWidget {
 enum _YearReviewMode { ranking, player }
 
 class RankingYearReviewPage extends StatefulWidget {
-  const RankingYearReviewPage({super.key});
+  const RankingYearReviewPage({
+    super.key,
+    LocalAppDatabase? database,
+    TournamentStorage? tournamentStorage,
+  }) : _database = database,
+       _tournamentStorage = tournamentStorage;
+
+  final LocalAppDatabase? _database;
+  final TournamentStorage? _tournamentStorage;
+
   @override
   State<RankingYearReviewPage> createState() => _RankingYearReviewPageState();
 }
 
 class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
-  final _database = LocalAppDatabase();
+  late final LocalAppDatabase _database =
+      widget._database ?? LocalAppDatabase();
+  late final TournamentStorage _tournamentStorage =
+      widget._tournamentStorage ?? TournamentStorage();
   late final Future<List<LocalRanking>> _rankings = _database
       .loadLocalRankings();
   late final Future<List<PlayerProfile>> _players = _database
@@ -56,10 +69,20 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
   void _selectRanking(LocalRanking? ranking) {
     setState(() {
       _selectedRanking = ranking;
+      final namedYear = ranking == null ? null : _yearInName(ranking.name);
+      if (namedYear != null) _year = namedYear;
       _rankingReview = ranking == null
           ? null
-          : const RankingYearReviewService().calculate(ranking, _year);
+          : RankingYearReviewService(
+              database: _database,
+              tournamentStorage: _tournamentStorage,
+            ).calculate(ranking, _year);
     });
+  }
+
+  int? _yearInName(String name) {
+    final match = RegExp(r'\b(19|20|21)\d{2}\b').firstMatch(name);
+    return match == null ? null : int.tryParse(match.group(0)!);
   }
 
   void _selectPlayer(PlayerProfile? player) {
@@ -67,7 +90,10 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
       _selectedPlayer = player;
       _playerReview = player == null
           ? null
-          : const LocalStatisticsService().forPlayers({player.id}, year: _year);
+          : LocalStatisticsService(
+              database: _database,
+              storage: _tournamentStorage,
+            ).forPlayers({player.id}, year: _year);
     });
   }
 
@@ -130,10 +156,11 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
   @override
   Widget build(BuildContext context) {
     final currentYear = DateTime.now().year;
-    final years = List<int>.generate(
-      currentYear - 1999,
-      (index) => currentYear - index,
-    );
+    final years = <int>{
+      for (var year = currentYear; year >= 2000; year--) year,
+      if (_year != null && _year! < 2000) _year!,
+      if (_year != null && _year! > currentYear) _year!,
+    }.toList()..sort((a, b) => b.compareTo(a));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Jahresrückblick')),
@@ -148,15 +175,21 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
           }
           final (rankings, players) = snapshot.data!;
           final currentSelectedRanking =
-              _selectedRanking ?? (rankings.isNotEmpty ? rankings.first : null);
+              _selectedRanking ??
+              (rankings.isEmpty
+                  ? null
+                  : rankings.firstWhere(
+                      (ranking) => ranking.isDefaultForStatistics,
+                      orElse: () => rankings.first,
+                    ));
           if (_selectedRanking == null && rankings.isNotEmpty) {
-            _rankingReview ??= const RankingYearReviewService().calculate(
-              rankings.first,
-              _year,
-            );
+            _rankingReview ??= RankingYearReviewService(
+              database: _database,
+              tournamentStorage: _tournamentStorage,
+            ).calculate(currentSelectedRanking!, _year);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted && _selectedRanking == null) {
-                _selectRanking(rankings.first);
+                _selectRanking(currentSelectedRanking);
               }
             });
           }
@@ -790,6 +823,43 @@ class _RankingsPageState extends State<RankingsPage> {
   RankingSortMode _sortMode = RankingSortMode.alphabetical;
   bool _saving = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _restoreSortMode();
+  }
+
+  Future<void> _restoreSortMode() async {
+    final preferences = await SharedPreferences.getInstance();
+    final stored = preferences.getString('ranking_sort_mode');
+    RankingSortMode? mode;
+    for (final value in RankingSortMode.values) {
+      if (value.name == stored) mode = value;
+    }
+    if (mode != null && mounted) setState(() => _sortMode = mode!);
+  }
+
+  Future<void> _setSortMode(RankingSortMode mode) async {
+    setState(() => _sortMode = mode);
+    try {
+      final saved = await (await SharedPreferences.getInstance()).setString(
+        'ranking_sort_mode',
+        mode.name,
+      );
+      if (!saved) {
+        throw StateError('Die Sortierung konnte nicht gespeichert werden.');
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sortierung konnte nicht gespeichert werden: $error'),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _create() async {
     final ranking = await showDialog<LocalRanking>(
       context: context,
@@ -956,7 +1026,7 @@ class _RankingsPageState extends State<RankingsPage> {
                     DropdownMenuItem(value: mode, child: Text(mode.label)),
                 ],
                 onChanged: (mode) {
-                  if (mode != null) setState(() => _sortMode = mode);
+                  if (mode != null) _setSortMode(mode);
                 },
               ),
               if (snapshot.hasData && snapshot.data!.isEmpty)
@@ -1064,6 +1134,10 @@ class _RankingEditorDialog extends StatefulWidget {
 class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
+  final _minimumParticipations = TextEditingController(text: '1');
+  final _absenceDecayPoints = TextEditingController(text: '5');
+  final _inactivityGraceTournaments = TextEditingController(text: '3');
+  final _inactivityDecayPoints = TextEditingController(text: '5');
   RankingType _type = RankingType.elo;
   DateTime? _fromDate;
   DateTime? _toDate;
@@ -1083,6 +1157,11 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     'Punkte je Bestleistung': TextEditingController(text: '1'),
   };
   bool _enableTiers = false;
+  bool _requireMinimumParticipations = false;
+  bool _allowDecayBelowStartRating = false;
+  bool _absenceDecayEnabled = false;
+  bool _inactivityDecayEnabled = false;
+  bool _isDefaultForStatistics = false;
 
   @override
   void initState() {
@@ -1092,6 +1171,15 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     _name.text = initial.name;
     _type = initial.type;
     _enableTiers = initial.enableTiers;
+    _requireMinimumParticipations = initial.requireMinimumParticipations;
+    _minimumParticipations.text = '${initial.minimumParticipations}';
+    _allowDecayBelowStartRating = initial.allowDecayBelowStartRating;
+    _absenceDecayEnabled = initial.absenceDecayEnabled;
+    _absenceDecayPoints.text = '${initial.absenceDecayPoints}';
+    _inactivityDecayEnabled = initial.inactivityDecayEnabled;
+    _inactivityGraceTournaments.text = '${initial.inactivityGraceTournaments}';
+    _inactivityDecayPoints.text = '${initial.inactivityDecayPoints}';
+    _isDefaultForStatistics = initial.isDefaultForStatistics;
     _fromDate =
         initial.validFromDate ??
         (initial.validFromYear == null
@@ -1124,10 +1212,21 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   @override
   void dispose() {
     _name.dispose();
+    _minimumParticipations.dispose();
+    _absenceDecayPoints.dispose();
+    _inactivityGraceTournaments.dispose();
+    _inactivityDecayPoints.dispose();
     for (final controller in _numbers.values) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  String? _nonNegativeIntegerValidator(String? value) {
+    final parsed = int.tryParse((value ?? '').trim());
+    return parsed == null || parsed < 0
+        ? 'Bitte eine nicht negative ganze Zahl eingeben.'
+        : null;
   }
 
   int _value(String label) => int.tryParse(_numbers[label]!.text.trim()) ?? 0;
@@ -1195,6 +1294,18 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
         validFromDate: _fromDate,
         validToDate: _toDate,
         enableTiers: _enableTiers,
+        requireMinimumParticipations: _requireMinimumParticipations,
+        minimumParticipations:
+            int.tryParse(_minimumParticipations.text.trim()) ?? 1,
+        allowDecayBelowStartRating: _allowDecayBelowStartRating,
+        absenceDecayEnabled: _absenceDecayEnabled,
+        absenceDecayPoints: int.tryParse(_absenceDecayPoints.text.trim()) ?? 0,
+        inactivityDecayEnabled: _inactivityDecayEnabled,
+        inactivityGraceTournaments:
+            int.tryParse(_inactivityGraceTournaments.text.trim()) ?? 0,
+        inactivityDecayPoints:
+            int.tryParse(_inactivityDecayPoints.text.trim()) ?? 0,
+        isDefaultForStatistics: _isDefaultForStatistics,
       ),
     );
   }
@@ -1259,6 +1370,16 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
               validator: (value) => (value ?? '').trim().isEmpty
                   ? 'Bitte einen Namen eingeben.'
                   : null,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Als Standard markieren'),
+              subtitle: const Text(
+                'Wird im Jahresrückblick vorausgewählt und für neue Turniere verwendet.',
+              ),
+              value: _isDefaultForStatistics,
+              onChanged: (value) =>
+                  setState(() => _isDefaultForStatistics = value),
             ),
             const SizedBox(height: 20),
             Text(
@@ -1368,6 +1489,116 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
                   ),
                 ),
             if (_type == RankingType.elo) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Automatischer Verfall',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Verfall unter der Startwertung erlauben'),
+                subtitle: const Text(
+                  'Wenn deaktiviert, kann Inaktivitätsverfall die Wertung nicht unter den Startwert senken.',
+                ),
+                value: _allowDecayBelowStartRating,
+                onChanged: (value) =>
+                    setState(() => _allowDecayBelowStartRating = value),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Punkteverlust bei verpassten Turnieren'),
+                subtitle: const Text(
+                  'Der Verlust wird unter den teilnehmenden Mitgliedern dieser Rangliste verteilt.',
+                ),
+                value: _absenceDecayEnabled,
+                onChanged: (value) =>
+                    setState(() => _absenceDecayEnabled = value),
+              ),
+              if (_absenceDecayEnabled)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: TextFormField(
+                    controller: _absenceDecayPoints,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Punkte je verpasstem Turnier',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    validator: _nonNegativeIntegerValidator,
+                  ),
+                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Zusätzlicher Verlust bei längerer Inaktivität',
+                ),
+                subtitle: const Text(
+                  'Nach der Schonfrist wird für jedes weitere verpasste Turnier ein zusätzlicher Verlust verteilt.',
+                ),
+                value: _inactivityDecayEnabled,
+                onChanged: (value) =>
+                    setState(() => _inactivityDecayEnabled = value),
+              ),
+              if (_inactivityDecayEnabled) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: TextFormField(
+                    controller: _inactivityGraceTournaments,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Schonfrist: verpasste Turniere',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    validator: _nonNegativeIntegerValidator,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: TextFormField(
+                    controller: _inactivityDecayPoints,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Zusätzliche Punkte je Turnier danach',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    validator: _nonNegativeIntegerValidator,
+                  ),
+                ),
+              ],
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Spieler erst ab X Turnierteilnahmen werten'),
+                subtitle: const Text(
+                  'Begegnungen eines Spielers werden erst berücksichtigt, wenn er die Mindestanzahl erreicht hat.',
+                ),
+                value: _requireMinimumParticipations,
+                onChanged: (value) =>
+                    setState(() => _requireMinimumParticipations = value),
+              ),
+              if (_requireMinimumParticipations)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: TextFormField(
+                    controller: _minimumParticipations,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Mindestens teilgenommene Turniere',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    validator: (value) {
+                      final count = int.tryParse((value ?? '').trim());
+                      return count == null || count < 1
+                          ? 'Bitte mindestens 1 Turnier eingeben.'
+                          : null;
+                    },
+                  ),
+                ),
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

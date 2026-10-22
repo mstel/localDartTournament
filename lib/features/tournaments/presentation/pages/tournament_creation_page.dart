@@ -10,6 +10,7 @@ class TournamentCreationPage extends StatefulWidget {
 class _TournamentCreationPageState extends State<TournamentCreationPage> {
   bool _showEntryChoices = true;
   bool _countsForRanking = false;
+  bool _rankingSetupTouched = false;
   final List<String> _localRankingIds = [];
   final _tournamentNameController = TextEditingController();
   final _playerNameController = TextEditingController();
@@ -77,6 +78,26 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   void initState() {
     super.initState();
     _stageNameController.text = _defaultStageName();
+    unawaited(_applyDefaultRanking());
+  }
+
+  Future<void> _applyDefaultRanking() async {
+    final rankings = await _localRankings;
+    if (!mounted || _rankingSetupTouched) return;
+    LocalRanking? preferred;
+    for (final ranking in rankings) {
+      if (ranking.isDefaultForStatistics) {
+        preferred = ranking;
+        break;
+      }
+    }
+    if (preferred == null) return;
+    setState(() {
+      _countsForRanking = true;
+      _localRankingIds
+        ..clear()
+        ..add(preferred!.id);
+    });
   }
 
   @override
@@ -717,12 +738,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _manualKnockoutSlotOrder = null;
         _knockoutDrawOnStart = false;
       }
-    });
-  }
-
-  void _setGroupDrawOnStart(bool enabled) {
-    setState(() {
-      _groupDrawOnStart = enabled;
     });
   }
 
@@ -1367,6 +1382,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             '${stage.extraQualifierCount ?? 0}';
         _autoAdjustQualification = stage.qualificationAutoAdjust;
         _groupDrawOnStart = stage.groupDrawOnStart;
+        _groupAllocationMode = stage.groupDrawOnStart
+            ? GroupPlayerAllocationMode.random
+            : GroupPlayerAllocationMode.strengthLevels;
       } else {
         _selectedExtraGroups.clear();
         _groupPlayTypes.clear();
@@ -2132,6 +2150,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   ),
                   value: _countsForRanking,
                   onChanged: (value) => setState(() {
+                    _rankingSetupTouched = true;
                     _countsForRanking = value;
                     if (!value) _localRankingIds.clear();
                   }),
@@ -2167,6 +2186,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                                   title: Text(ranking.name),
                                   value: _localRankingIds.contains(ranking.id),
                                   onChanged: (selected) => setState(() {
+                                    _rankingSetupTouched = true;
                                     if (selected == true) {
                                       _localRankingIds.add(ranking.id);
                                     } else {
@@ -2463,6 +2483,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     title: 'Gruppenoptionen',
                     summary:
                         'Verteilung, Spieltypen, Auslosung und Wiederholungen',
+                    initiallyExpanded: true,
                     children: [
                       DropdownButtonFormField<GroupPlayerAllocationMode>(
                         key: const ValueKey('group-player-allocation'),
@@ -2484,12 +2505,18 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           ),
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.random,
-                            child: Text('Zufällig verteilen'),
+                            child: Text(
+                              'Zufällig verteilen · Auslosungsrad beim Start',
+                            ),
                           ),
                         ],
                         onChanged: (mode) {
                           if (mode != null) {
-                            setState(() => _groupAllocationMode = mode);
+                            setState(() {
+                              _groupAllocationMode = mode;
+                              _groupDrawOnStart =
+                                  mode == GroupPlayerAllocationMode.random;
+                            });
                           }
                         },
                       ),
@@ -2504,11 +2531,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         groupSizes: groupSizes,
                         playTypes: _playTypesForGroupSizes(groupSizes),
                         onChanged: _setGroupPlayType,
-                      ),
-                      const SizedBox(height: 12),
-                      _GroupDrawSetup(
-                        enabled: _groupDrawOnStart,
-                        onChanged: _setGroupDrawOnStart,
                       ),
                       if (_playTypesForGroupSizes(groupSizes).any(
                         (type) => type == 'round_robin' || type == 'swiss',

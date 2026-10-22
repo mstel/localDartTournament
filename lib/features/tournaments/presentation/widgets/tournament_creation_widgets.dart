@@ -1076,27 +1076,6 @@ class _GroupEliminationPreviewSection extends StatelessWidget {
   }
 }
 
-class _GroupDrawSetup extends StatelessWidget {
-  const _GroupDrawSetup({required this.enabled, required this.onChanged});
-
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      key: const ValueKey('group-draw-on-start-switch'),
-      contentPadding: EdgeInsets.zero,
-      title: const Text('Gruppen per Auslosungsrad einteilen'),
-      subtitle: const Text(
-        'Beim Turnierstart wird per Rad gezogen, in welcher Reihenfolge die Spieler auf die Gruppen verteilt werden.',
-      ),
-      value: enabled,
-      onChanged: onChanged,
-    );
-  }
-}
-
 class _GroupEliminationPreviewCard extends StatelessWidget {
   const _GroupEliminationPreviewCard({
     required this.groupNumber,

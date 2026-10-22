@@ -82,21 +82,51 @@ class LocalAppDatabase {
                     )
                     .first['next_order']
                 as int;
-      database.execute(
-        '''INSERT INTO local_rankings(
-             id, name, ranking_type, config_json, custom_order
-           )
-           VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET name=excluded.name,
-             ranking_type=excluded.ranking_type, config_json=excluded.config_json''',
-        [
-          ranking.id,
-          ranking.name.trim(),
-          ranking.type.name,
-          jsonEncode(ranking.toJson()),
-          customOrder,
-        ],
-      );
+      database.execute('BEGIN');
+      try {
+        if (ranking.isDefaultForStatistics) {
+          for (final row in database.select(
+            'SELECT id, config_json FROM local_rankings WHERE id != ?',
+            [ranking.id],
+          )) {
+            final config = LocalRanking.fromJson(
+              Map<String, Object?>.from(
+                jsonDecode(row['config_json'] as String) as Map,
+              ),
+            );
+            if (config.isDefaultForStatistics) {
+              database.execute(
+                'UPDATE local_rankings SET config_json = ? WHERE id = ?',
+                [
+                  jsonEncode(
+                    config.copyWith(isDefaultForStatistics: false).toJson(),
+                  ),
+                  row['id'],
+                ],
+              );
+            }
+          }
+        }
+        database.execute(
+          '''INSERT INTO local_rankings(
+               id, name, ranking_type, config_json, custom_order
+             )
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name=excluded.name,
+               ranking_type=excluded.ranking_type, config_json=excluded.config_json''',
+          [
+            ranking.id,
+            ranking.name.trim(),
+            ranking.type.name,
+            jsonEncode(ranking.toJson()),
+            customOrder,
+          ],
+        );
+        database.execute('COMMIT');
+      } catch (_) {
+        database.execute('ROLLBACK');
+        rethrow;
+      }
       StorageAccess.markLocalDataChanged();
     } finally {
       database.close();

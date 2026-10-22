@@ -294,6 +294,10 @@ class _TournamentDirectorDashboardState
         .take(6)
         .map((assignment) => assignment.entry)
         .toList();
+    final resultEntryOrder = {
+      for (var index = 0; index < state.entries.length; index++)
+        state.entries[index].match: index,
+    };
     final recentResults =
         state.entries
             .where(
@@ -304,11 +308,21 @@ class _TournamentDirectorDashboardState
             )
             .toList()
           ..sort((a, b) {
-            final aTime = a.match.finishedAt;
-            final bTime = b.match.finishedAt;
-            if (aTime == null) return bTime == null ? 0 : 1;
-            if (bTime == null) return -1;
-            return bTime.compareTo(aTime);
+            final aTime =
+                a.match.finishedAt ??
+                a.match.startedAt ??
+                t.startedAt ??
+                t.createdAt;
+            final bTime =
+                b.match.finishedAt ??
+                b.match.startedAt ??
+                t.startedAt ??
+                t.createdAt;
+            final timeComparison = bTime.compareTo(aTime);
+            if (timeComparison != 0) return timeComparison;
+            return (resultEntryOrder[b.match] ?? 0).compareTo(
+              resultEntryOrder[a.match] ?? 0,
+            );
           });
     final latestResults = recentResults.take(4).toList();
     final bestPerformances = [
@@ -376,6 +390,7 @@ class _TournamentDirectorDashboardState
                           tournament: t,
                           isStandaloneWindow: true,
                           showNextStagePreviewInitially: true,
+                          onClose: () => Navigator.of(context).pop(),
                         ),
                       ),
                     ),
@@ -406,8 +421,6 @@ class _TournamentDirectorDashboardState
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           Text('${active.length - completed} offen'),
-          Text('${state.schedule.running.length} laufen gerade'),
-          Text('${state.freeBoards.length} Boards frei'),
           Text(
             t.startedAt == null
                 ? 'Turnieruhr nicht gestartet'

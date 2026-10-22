@@ -818,9 +818,6 @@ void main() {
       '2',
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Gruppenoptionen'));
-    await tester.pumpAndSettle();
-
     await tester.ensureVisible(
       find.byKey(
         const ValueKey('round-robin-repeat-plus-2'),
@@ -1057,8 +1054,6 @@ void main() {
       find.byKey(const ValueKey('group-count-field')),
       '1',
     );
-    await tester.tap(find.text('Gruppenoptionen'));
-    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(
         const ValueKey('group-qualifier-count-field'),
@@ -1123,9 +1118,6 @@ void main() {
       '2',
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Gruppenoptionen'));
-    await tester.pumpAndSettle();
-
     await tester.ensureVisible(
       find.byKey(
         const ValueKey('group-play-type-2-round_robin'),

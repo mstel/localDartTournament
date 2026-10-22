@@ -50,6 +50,7 @@ class _TournamentSecondScreenViewState
   Timer? _clockTimer;
   int _clockTicks = 0;
   int _priorityNoticeIndex = 0;
+  int _nextMatchIndex = 0;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
@@ -66,6 +67,7 @@ class _TournamentSecondScreenViewState
         setState(() {
           _clockTicks++;
           if (_clockTicks % 8 == 0) _priorityNoticeIndex++;
+          if (_clockTicks % 5 == 0) _nextMatchIndex++;
         });
       }
     });
@@ -133,6 +135,14 @@ class _TournamentSecondScreenViewState
       return;
     }
     await SystemNavigator.pop();
+  }
+
+  void _returnFromPreview() {
+    if (widget.showNextStagePreviewInitially && widget.onClose != null) {
+      widget.onClose!();
+      return;
+    }
+    setState(() => _showNextStagePreview = false);
   }
 
   String _formatDuration(Duration d) {
@@ -353,7 +363,7 @@ class _TournamentSecondScreenViewState
                   ),
                   const SizedBox(height: 12),
                   Expanded(
-                    flex: 4,
+                    flex: 5,
                     child: _buildRecentMatchesAndEloPanel(
                       context,
                       t,
@@ -363,7 +373,7 @@ class _TournamentSecondScreenViewState
                   ),
                   const SizedBox(height: 12),
                   Expanded(
-                    flex: 5,
+                    flex: 4,
                     child: _buildProgressAndBestPerformancesPanel(
                       context: context,
                       t: t,
@@ -560,7 +570,7 @@ class _TournamentSecondScreenViewState
             ),
           ),
           FilledButton.icon(
-            onPressed: () => setState(() => _showNextStagePreview = false),
+            onPressed: _returnFromPreview,
             icon: const Icon(Icons.arrow_back),
             label: const Text('Zur Übersichtsansicht zurückkehren'),
           ),
@@ -574,7 +584,7 @@ class _TournamentSecondScreenViewState
         Expanded(child: _buildBracketPreview(t, stage, stageIndex)),
         const SizedBox(height: 8),
         FilledButton.icon(
-          onPressed: () => setState(() => _showNextStagePreview = false),
+          onPressed: _returnFromPreview,
           icon: const Icon(Icons.arrow_back),
           label: const Text('Zur Übersichtsansicht zurückkehren'),
         ),
@@ -1383,6 +1393,32 @@ class _TournamentSecondScreenViewState
       if (priority != 0) return priority;
       return (plannedOrder[a] ?? 1 << 30).compareTo(plannedOrder[b] ?? 1 << 30);
     });
+    final prioritizedMatches = matches
+        .where(flowPriority.prioritizedMatches.contains)
+        .toList();
+    final otherMatches = matches
+        .where((match) => !flowPriority.prioritizedMatches.contains(match))
+        .toList();
+    final suggestions = <GroupMatch>[];
+    final prioritySlots = min(6, prioritizedMatches.length);
+    if (prioritizedMatches.length > 6) {
+      for (var index = 0; index < 6; index++) {
+        suggestions.add(
+          prioritizedMatches[(_nextMatchIndex + index) %
+              prioritizedMatches.length],
+        );
+      }
+    } else {
+      suggestions.addAll(prioritizedMatches);
+      final otherSlots = min(6 - prioritySlots, otherMatches.length);
+      if (otherSlots > 0) {
+        for (var index = 0; index < otherSlots; index++) {
+          suggestions.add(
+            otherMatches[(_nextMatchIndex + index) % otherMatches.length],
+          );
+        }
+      }
+    }
     final priorityNotice = flowPriority.notices.isEmpty
         ? null
         : flowPriority.notices[_priorityNoticeIndex %
@@ -1429,12 +1465,12 @@ class _TournamentSecondScreenViewState
             spacing: 10,
             runSpacing: 10,
             children: [
-              for (var i = 0; i < matches.take(8).length; i++)
+              for (var i = 0; i < suggestions.length; i++)
                 _buildMatchTile(
                   context,
-                  matches[i],
+                  suggestions[i],
                   isPreferred: flowPriority.prioritizedMatches.contains(
-                    matches[i],
+                    suggestions[i],
                   ),
                 ),
             ],
@@ -1453,7 +1489,7 @@ class _TournamentSecondScreenViewState
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                'Aktuelle & nächste Begegnungen (${t.boardCount} Boards)',
+                'Nächste Partien (${suggestions.length} Vorschläge)',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -1588,7 +1624,20 @@ class _TournamentSecondScreenViewState
     List<GroupMatch> playedMatches, {
     bool expand = true,
   }) {
-    final recent = playedMatches.reversed.take(6).toList();
+    final enteredOrder = {
+      for (var index = 0; index < playedMatches.length; index++)
+        playedMatches[index]: index,
+    };
+    final recent = playedMatches.toList()
+      ..sort((left, right) {
+        final leftDate =
+            left.finishedAt ?? left.startedAt ?? t.startedAt ?? t.createdAt;
+        final rightDate =
+            right.finishedAt ?? right.startedAt ?? t.startedAt ?? t.createdAt;
+        final dateComparison = rightDate.compareTo(leftDate);
+        if (dateComparison != 0) return dateComparison;
+        return (enteredOrder[right] ?? 0).compareTo(enteredOrder[left] ?? 0);
+      });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1797,6 +1846,24 @@ class _TournamentSecondScreenViewState
     final shortLegs = allPerformances
         .where((p) => p.type == BestPerformanceType.shortLeg)
         .toList();
+    final bestHighFinish = highFinishes.isEmpty
+        ? null
+        : highFinishes.reduce(
+            (left, right) =>
+                (left.value ?? 0) >= (right.value ?? 0) ? left : right,
+          );
+    final bestShortLeg = shortLegs.isEmpty
+        ? null
+        : shortLegs.reduce(
+            (left, right) =>
+                (left.value ?? 99) <= (right.value ?? 99) ? left : right,
+          );
+    String namesFor(List<BestPerformance> performances) => performances
+        .map((performance) => performance.playerName.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .take(3)
+        .join(', ');
 
     final breakdownContent = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1841,22 +1908,26 @@ class _TournamentSecondScreenViewState
                   _buildHighlightItem(
                     '170+',
                     '${oneSeventies.length}x geworfen',
+                    player: namesFor(oneSeventies),
                   ),
                   _buildHighlightItem(
                     '180er',
                     '${oneEighties.length}x geworfen',
+                    player: namesFor(oneEighties),
                   ),
                   _buildHighlightItem(
                     'High Finish',
-                    highFinishes.isNotEmpty
-                        ? '${highFinishes.map((p) => p.value ?? 100).reduce(max)} Punkte'
-                        : '–',
+                    bestHighFinish == null
+                        ? '–'
+                        : '${bestHighFinish.value ?? 100} Punkte',
+                    player: bestHighFinish?.playerName,
                   ),
                   _buildHighlightItem(
                     'Bestes Shortleg',
-                    shortLegs.isNotEmpty
-                        ? '${shortLegs.map((p) => p.value ?? 18).reduce(min)} Darts'
-                        : '–',
+                    bestShortLeg == null
+                        ? '–'
+                        : '${bestShortLeg.value ?? 18} Darts',
+                    player: bestShortLeg?.playerName,
                   ),
                 ],
               ),
@@ -1970,7 +2041,7 @@ class _TournamentSecondScreenViewState
     ];
   }
 
-  Widget _buildHighlightItem(String label, String value) {
+  Widget _buildHighlightItem(String label, String value, {String? player}) {
     return Column(
       children: [
         Text(
@@ -1986,6 +2057,12 @@ class _TournamentSecondScreenViewState
             color: Color(0xFF70E0BA),
           ),
         ),
+        if (player != null && player.trim().isNotEmpty)
+          Text(
+            player,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11, color: Colors.white70),
+          ),
       ],
     );
   }

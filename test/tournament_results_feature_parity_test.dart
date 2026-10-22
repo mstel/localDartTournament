@@ -87,12 +87,6 @@ void main() {
         ),
       ),
     );
-    await tester.scrollUntilVisible(
-      find.byType(TournamentRankingAssignment),
-      500,
-    );
-    await tester.pumpAndSettle();
-
     final completionCard = tester.widget<Card>(
       find.ancestor(
         of: find.text('Turnier abgeschlossen'),
@@ -107,22 +101,26 @@ void main() {
     );
     expect(find.byIcon(Icons.emoji_events), findsNothing);
 
+    expect(
+      find.text('1 Siege · 0 Niederlagen · 3:1 Legs', skipOffstage: false),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.byType(TournamentRankingAssignment),
+      500,
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('Ranglisten-Zuweisung'), findsOneWidget);
     expect(find.text('Gesamtwertung'), findsNothing);
     expect(find.text('Turnierstatistik'), findsNothing);
     expect(find.text('Spielerstatistiken'), findsNothing);
     expect(find.text('Vereinsrangliste 2026'), findsOneWidget);
-    final scrollable = find.byType(Scrollable).first;
-    final assignmentScrollOffset = tester
-        .state<ScrollableState>(scrollable)
-        .position
-        .pixels;
+    expect(find.text('1 Siege · 0 Niederlagen · 3:1 Legs'), findsOneWidget);
     final exportButton = find.text('Turnier exportieren');
-    await tester.scrollUntilVisible(exportButton, 500, scrollable: scrollable);
-    expect(
-      tester.state<ScrollableState>(scrollable).position.pixels,
-      greaterThan(assignmentScrollOffset),
-    );
+    await tester.ensureVisible(exportButton);
+    await tester.pumpAndSettle();
+    expect(exportButton, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

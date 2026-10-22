@@ -237,6 +237,14 @@ class _ResultDialogState extends State<ResultDialog> {
     super.dispose();
   }
 
+  void _selectInitialZero(TextEditingController controller) {
+    if (controller.text != '0') return;
+    controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: controller.text.length,
+    );
+  }
+
   void _save() {
     final homeLegs = int.tryParse(_homeLegsController.text);
     final awayLegs = int.tryParse(_awayLegsController.text);
@@ -313,6 +321,7 @@ class _ResultDialogState extends State<ResultDialog> {
                   child: TextField(
                     key: const ValueKey('home-legs-field'),
                     controller: _homeLegsController,
+                    onTap: () => _selectInitialZero(_homeLegsController),
                     keyboardType: TextInputType.number,
                     inputFormatters: [
                       _ScoreLimitInputFormatter(
@@ -331,6 +340,7 @@ class _ResultDialogState extends State<ResultDialog> {
                   child: TextField(
                     key: const ValueKey('away-legs-field'),
                     controller: _awayLegsController,
+                    onTap: () => _selectInitialZero(_awayLegsController),
                     keyboardType: TextInputType.number,
                     inputFormatters: [
                       _ScoreLimitInputFormatter(

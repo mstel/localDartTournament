@@ -15,7 +15,11 @@ class LocalRankingEloService {
 
   Future<LocalEloSnapshot> calculate(LocalRanking ranking) async {
     if (ranking.type != RankingType.elo) {
-      throw ArgumentError.value(ranking.type, 'ranking.type', 'Not an Elo ranking');
+      throw ArgumentError.value(
+        ranking.type,
+        'ranking.type',
+        'Not an Elo ranking',
+      );
     }
     final ids = await _database.loadRankingPlayerIds(ranking.id);
     final profiles = await _database.loadPlayerProfiles();
@@ -36,6 +40,15 @@ class LocalRankingEloService {
       proPlayerK: ranking.proPlayerK,
       matchesBeforeNormal: ranking.matchesBeforeNormal,
       proRatingThreshold: ranking.proRatingThreshold,
+      minimumParticipationTournaments: ranking.requireMinimumParticipations
+          ? ranking.minimumParticipations
+          : 0,
+      allowDecayBelowStartRating: ranking.allowDecayBelowStartRating,
+      absenceDecayEnabled: ranking.absenceDecayEnabled,
+      absenceDecayPoints: ranking.absenceDecayPoints,
+      inactivityDecayEnabled: ranking.inactivityDecayEnabled,
+      inactivityGraceTournaments: ranking.inactivityGraceTournaments,
+      inactivityDecayPoints: ranking.inactivityDecayPoints,
       validFromYear: ranking.validFromYear,
       validToYear: ranking.validToYear,
       validFromDate: ranking.validFromDate,

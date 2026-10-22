@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/tournament_models.dart';
-import '../../../../rankings/domain/local_ranking.dart';
 import '../../../../rankings/domain/elo_tier.dart';
-import '../../../../rankings/application/local_ranking_elo_service.dart';
+import '../../../../rankings/application/tournament_ranking_changes_service.dart';
 import '../../../data/app_database.dart';
 import '../../../data/tournament_storage.dart';
 
@@ -24,37 +23,10 @@ class TournamentRankingChangesSection extends StatefulWidget {
       _TournamentRankingChangesSectionState();
 }
 
-class _PlayerRankingDelta {
-  const _PlayerRankingDelta({
-    required this.playerProfileId,
-    required this.playerName,
-    required this.delta,
-    required this.ratingBefore,
-    required this.ratingAfter,
-    required this.tierBefore,
-    required this.tierAfter,
-    required this.enableTiers,
-    required this.rankingName,
-  });
-
-  final String playerProfileId;
-  final String playerName;
-  final int delta;
-  final int ratingBefore;
-  final int ratingAfter;
-  final EloTier tierBefore;
-  final EloTier tierAfter;
-  final bool enableTiers;
-  final String rankingName;
-
-  bool get hasTierChange => enableTiers && tierBefore != tierAfter;
-  bool get isPromotion => hasTierChange && ratingAfter > ratingBefore;
-}
-
 class _TournamentRankingChangesSectionState
     extends State<TournamentRankingChangesSection>
     with SingleTickerProviderStateMixin {
-  late Future<List<_PlayerRankingDelta>> _deltasFuture;
+  late Future<List<TournamentRankingPlayerChange>> _deltasFuture;
   late String _rankingFingerprint;
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
@@ -94,76 +66,23 @@ class _TournamentRankingChangesSectionState
     super.dispose();
   }
 
-  Future<List<_PlayerRankingDelta>> _calculateDeltas() async {
-    final t = widget.tournament;
-    final db = widget.database ?? LocalAppDatabase();
-    final allRankings = await db.loadLocalRankings();
-    final eloRankings = allRankings
-        .where(
-          (ranking) =>
-              t.countsForRanking &&
-              ranking.type == RankingType.elo &&
-              t.rankingIds.contains(ranking.id),
-        )
-        .toList();
-
-    if (eloRankings.isEmpty) return const [];
-
-    final result = <_PlayerRankingDelta>[];
-
-    for (final ranking in eloRankings) {
-      try {
-        final service = LocalRankingEloService(
-          database: db,
-          tournamentStorage: widget.storage,
-        );
-        final snapshot = await service.calculate(ranking);
-
-        for (final entry in snapshot.history.entries) {
-          final items = entry.value
-              .where((item) => item.tournamentName == t.name)
-              .toList();
-          if (items.isEmpty) continue;
-
-          final totalDelta = items.fold<int>(0, (sum, i) => sum + i.delta);
-          final firstItem = items.first;
-          final lastItem = items.last;
-          final ratingBefore = firstItem.ratingAfter - firstItem.delta;
-          final ratingAfter = lastItem.ratingAfter;
-          final playerName =
-              snapshot.entries
-                  .where((p) => p.id == entry.key)
-                  .firstOrNull
-                  ?.name ??
-              entry.key;
-
-          result.add(
-            _PlayerRankingDelta(
-              playerProfileId: entry.key,
-              playerName: playerName,
-              delta: totalDelta,
-              ratingBefore: ratingBefore,
-              ratingAfter: ratingAfter,
-              tierBefore: EloTier.fromElo(ratingBefore),
-              tierAfter: EloTier.fromElo(ratingAfter),
-              enableTiers: ranking.enableTiers,
-              rankingName: ranking.name,
-            ),
-          );
-        }
-      } catch (_) {
-        // Continue with other rankings if calculation fails
-      }
-    }
-
-    return result;
-  }
+  Future<List<TournamentRankingPlayerChange>> _calculateDeltas() =>
+      TournamentRankingChangesService(
+        database: widget.database,
+        storage: widget.storage,
+      ).calculate(widget.tournament);
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<_PlayerRankingDelta>>(
+    return FutureBuilder<List<TournamentRankingPlayerChange>>(
       future: _deltasFuture,
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Text('Ranglistenänderungen konnten nicht geladen werden.'),
+          );
+        }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox.shrink();
         }
@@ -247,11 +166,29 @@ class _TournamentRankingChangesSectionState
                                 ),
                                 const SizedBox(width: 6),
                                 Expanded(
-                                  child: Text(
-                                    '${change.rankingName} · ${change.playerName}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${change.rankingName} · ${change.playerName}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${change.delta > 0 ? "+" : ""}${change.delta} Elo '
+                                        '(${change.ratingBefore} → ${change.ratingAfter})',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: change.delta > 0
+                                              ? Colors.green
+                                              : change.delta < 0
+                                              ? Colors.red
+                                              : theme.colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 _MiniTierBadge(tier: change.tierBefore),
@@ -260,18 +197,6 @@ class _TournamentRankingChangesSectionState
                                   child: Icon(Icons.arrow_forward, size: 14),
                                 ),
                                 _MiniTierBadge(tier: change.tierAfter),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${change.delta > 0 ? "+" : ""}${change.delta} Elo',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: change.delta > 0
-                                        ? Colors.green
-                                        : change.delta < 0
-                                        ? Colors.red
-                                        : theme.colorScheme.onSurface,
-                                  ),
-                                ),
                               ],
                             ),
                           ),
@@ -342,11 +267,13 @@ class _TournamentRankingChangesSectionState
                                       ),
                                     ),
                                     Text(
-                                      '+${topGains[i].delta}',
+                                      '+${topGains[i].delta} '
+                                      '(${topGains[i].ratingBefore} → '
+                                      '${topGains[i].ratingAfter})',
                                       style: const TextStyle(
                                         color: Colors.green,
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 13,
+                                        fontSize: 11,
                                       ),
                                     ),
                                   ],
@@ -414,11 +341,13 @@ class _TournamentRankingChangesSectionState
                                       ),
                                     ),
                                     Text(
-                                      '${topLosses[i].delta}',
+                                      '${topLosses[i].delta} '
+                                      '(${topLosses[i].ratingBefore} → '
+                                      '${topLosses[i].ratingAfter})',
                                       style: const TextStyle(
                                         color: Colors.red,
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 13,
+                                        fontSize: 11,
                                       ),
                                     ),
                                   ],

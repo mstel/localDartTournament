@@ -20,6 +20,8 @@ void main() {
     final summary = estimator.preview([group], 1, parameters)!;
     expect(summary.totalMatches, 6);
     expect(summary.minimumMatches, 3);
+    expect(summary.minimumMinutes, 150);
+    expect(estimator.preview([group], 2, parameters)!.minimumMinutes, 75);
     expect(estimator.preview([group], 4, parameters)!.totalMatches, 6);
     final before = group.toJson();
     final one = estimator.estimate([group], 1, parameters)!;
@@ -87,5 +89,24 @@ void main() {
       7500,
     ]);
     expect(estimator.estimate([], 2, parameters), isNull);
+  });
+  test('variable elimination uses a match-count lower bound for duration', () {
+    const doubleKo = TournamentStage(
+      name: 'Double KO',
+      type: 'double_knockout',
+      knockoutParticipantCount: 4,
+      knockoutBracketSize: 4,
+      knockoutLives: 2,
+      gameFormat: TournamentGameFormat(bestOfLegs: 3),
+    );
+
+    final oneBoard = estimator.preview([doubleKo], 1, parameters)!;
+    final twoBoards = estimator.preview([doubleKo], 2, parameters)!;
+
+    expect(oneBoard.variableMatches, isTrue);
+    expect(oneBoard.minimumMinutes, 75);
+    expect(twoBoards.minimumMinutes, 50);
+    expect(oneBoard.minimumMinutes, lessThanOrEqualTo(oneBoard.minutes));
+    expect(twoBoards.minimumMinutes, lessThanOrEqualTo(twoBoards.minutes));
   });
 }

@@ -1,6 +1,7 @@
 import '../../../shared/widgets/sport_menu.dart';
 import '../../../shared/widgets/sport_page_heading.dart';
 import '../../statistics/presentation/local_player_statistics_page.dart';
+import '../../statistics/presentation/player_comparison_page.dart';
 import '../../rankings/presentation/rankings_page.dart';
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'package:flutter/material.dart';
@@ -211,6 +212,21 @@ class _PlayersPageState extends State<PlayersPage> {
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => const RankingYearReviewPage(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.compare_arrows_outlined),
+                      title: const Text('Spieler vergleichen'),
+                      subtitle: const Text(
+                        'Spielwerte und Elo-Entwicklung zweier Spieler gegenüberstellen.',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const PlayerComparisonPage(),
                         ),
                       ),
                     ),

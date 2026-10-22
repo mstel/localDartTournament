@@ -64,6 +64,7 @@ class TournamentTiming {
                         const TournamentGameFormat(bestOfLegs: 5),
                       ))
                   .ceil();
+          tournament.plannedMinimumMinutes = tournament.plannedMinutes;
           tournament.plannedMatches = games.where((m) => m.hasPlayers).length;
           final matchMinutes = TournamentFormatPlanner(
             parameters: parameters,
@@ -79,6 +80,7 @@ class TournamentTiming {
             parameters,
           );
           tournament.plannedMinutes = estimate?.minutes;
+          tournament.plannedMinimumMinutes = estimate?.minimumMinutes;
           tournament.plannedMatches = estimate?.totalMatches;
           tournament.plannedMatchEndSeconds = estimate?.matchEndSeconds ?? [];
         }
@@ -190,19 +192,23 @@ class TournamentTiming {
     if (tournament.startedAt == null || tournament.finishedAt != null) return;
     final now = DateTime.now();
     if (tournament.pausedAt != null) {
-      tournament.totalPausedSeconds +=
-          now.difference(tournament.pausedAt!).inSeconds;
+      tournament.totalPausedSeconds += now
+          .difference(tournament.pausedAt!)
+          .inSeconds;
       tournament.pausedAt = null;
     } else {
       tournament.pausedAt = now;
     }
   }
 
-  static TournamentDurationSummary? durationSummary(CreatedTournament tournament) {
+  static TournamentDurationSummary? durationSummary(
+    CreatedTournament tournament,
+  ) {
     if (tournament.startedAt == null) return null;
     final games = matches(tournament);
-    final playedGames =
-        games.where((m) => m.hasResult && !m.isAnnulled).toList();
+    final playedGames = games
+        .where((m) => m.hasResult && !m.isAnnulled)
+        .toList();
     final playedCount = playedGames.length;
 
     DateTime? end = tournament.finishedAt;
@@ -212,10 +218,7 @@ class TournamentTiming {
           last >= 0 && tournament.completedStageIndexes.contains(last);
       if (complete) {
         final ends =
-            playedGames
-                .map((m) => m.finishedAt)
-                .whereType<DateTime>()
-                .toList()
+            playedGames.map((m) => m.finishedAt).whereType<DateTime>().toList()
               ..sort();
         end = ends.isNotEmpty ? ends.last : tournament.updatedAt;
       }
@@ -223,21 +226,21 @@ class TournamentTiming {
     final referenceEnd = end ?? DateTime.now();
     int pausedSeconds = tournament.totalPausedSeconds;
     if (tournament.pausedAt != null && end == null) {
-      pausedSeconds +=
-          DateTime.now().difference(tournament.pausedAt!).inSeconds;
+      pausedSeconds += DateTime.now()
+          .difference(tournament.pausedAt!)
+          .inSeconds;
     }
     final rawSeconds = referenceEnd.difference(tournament.startedAt!).inSeconds;
     final totalDuration = Duration(seconds: max(0, rawSeconds - pausedSeconds));
 
-    final measured =
-        playedGames
-            .where(
-              (m) =>
-                  m.startedAt != null &&
-                  m.finishedAt != null &&
-                  !m.finishedAt!.isBefore(m.startedAt!),
-            )
-            .toList();
+    final measured = playedGames
+        .where(
+          (m) =>
+              m.startedAt != null &&
+              m.finishedAt != null &&
+              !m.finishedAt!.isBefore(m.startedAt!),
+        )
+        .toList();
     Duration? avgDuration;
     if (measured.isNotEmpty) {
       final totalMatchSecs = measured.fold<int>(

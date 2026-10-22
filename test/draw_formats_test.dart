@@ -113,6 +113,43 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
   });
+  testWidgets('selects the initial zero when a result field is tapped', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => ResultDialog(
+                  match: GroupMatch(
+                    round: 1,
+                    homePlayer: TournamentPlayer.generated(1),
+                    awayPlayer: TournamentPlayer.generated(2),
+                  ),
+                ),
+              ),
+              child: const Text('Öffnen'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Öffnen'));
+    await tester.pumpAndSettle();
+    final homeField = find.byKey(const ValueKey('home-legs-field'));
+    await tester.tap(homeField);
+
+    final controller = tester.widget<TextField>(homeField).controller!;
+    expect(controller.text, '0');
+    expect(
+      controller.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 1),
+    );
+  });
+
   testWidgets('Bo4 accepts 2:2 but rejects unfinished 1:1', (tester) async {
     MatchResult? result;
     await tester.pumpWidget(

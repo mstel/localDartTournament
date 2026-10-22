@@ -54,7 +54,6 @@ class _TournamentFormatPlannerDialogState
   final Set<String> _enabledModes = {
     'groups:round_robin',
     'groups:double_round_robin',
-    'groups:limited_round_robin',
   };
 
   static const _modeDescriptions = <String, String>{
@@ -98,7 +97,10 @@ class _TournamentFormatPlannerDialogState
     final curM = int.tryParse(_minMinutes.text) ?? 0;
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: curH.clamp(0, 23), minute: curM.clamp(0, 59)),
+      initialTime: TimeOfDay(
+        hour: curH.clamp(0, 23),
+        minute: curM.clamp(0, 59),
+      ),
       helpText: 'Mindestdauer auswählen',
       confirmText: 'Übernehmen',
       cancelText: 'Abbrechen',
@@ -121,7 +123,10 @@ class _TournamentFormatPlannerDialogState
     final curM = int.tryParse(_maxMinutes.text) ?? 0;
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: curH.clamp(0, 23), minute: curM.clamp(0, 59)),
+      initialTime: TimeOfDay(
+        hour: curH.clamp(0, 23),
+        minute: curM.clamp(0, 59),
+      ),
       helpText: 'Maximaldauer auswählen',
       confirmText: 'Übernehmen',
       cancelText: 'Abbrechen',
@@ -144,7 +149,10 @@ class _TournamentFormatPlannerDialogState
     final curM = int.tryParse(_targetMinutes.text) ?? 0;
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: curH.clamp(0, 23), minute: curM.clamp(0, 59)),
+      initialTime: TimeOfDay(
+        hour: curH.clamp(0, 23),
+        minute: curM.clamp(0, 59),
+      ),
       helpText: 'Wunschdauer auswählen',
       confirmText: 'Übernehmen',
       cancelText: 'Abbrechen',
@@ -232,8 +240,9 @@ class _TournamentFormatPlannerDialogState
     // Parse target duration (hours + minutes)
     final th = int.tryParse(_targetHours.text.trim());
     final tm = int.tryParse(_targetMinutes.text.trim());
-    final targetTotalMinutes =
-        _useTargetDuration ? ((th ?? 0) * 60 + (tm ?? 0)) : null;
+    final targetTotalMinutes = _useTargetDuration
+        ? ((th ?? 0) * 60 + (tm ?? 0))
+        : null;
     if (_useTargetDuration &&
         (th == null ||
             tm == null ||
@@ -242,8 +251,7 @@ class _TournamentFormatPlannerDialogState
             targetTotalMinutes! < 1 ||
             targetTotalMinutes > 525600)) {
       setState(() {
-        _targetError =
-            'Gültige Dauer eingeben (max. 365 Tage). Minuten: 0–59.';
+        _targetError = 'Gültige Dauer eingeben (max. 365 Tage). Minuten: 0–59.';
         _suggestions = null;
       });
       return;
@@ -646,7 +654,8 @@ class _TournamentFormatPlannerDialogState
                     isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Gewünschte letzte Etappe',
-                      helperText: 'Legt fest, mit welchem Format das Turnier enden soll.',
+                      helperText:
+                          'Legt fest, mit welchem Format das Turnier enden soll.',
                     ),
                     items: const [
                       DropdownMenuItem(
@@ -784,12 +793,21 @@ class _TournamentFormatPlannerDialogState
                       border: OutlineInputBorder(),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 1, child: Text('1 Leg (Single Leg)')),
-                      DropdownMenuItem(value: 3, child: Text('Best of 3 Legs (Standard)')),
+                      DropdownMenuItem(
+                        value: 1,
+                        child: Text('1 Leg (Single Leg)'),
+                      ),
+                      DropdownMenuItem(
+                        value: 3,
+                        child: Text('Best of 3 Legs (Standard)'),
+                      ),
                       DropdownMenuItem(value: 5, child: Text('Best of 5 Legs')),
                       DropdownMenuItem(value: 7, child: Text('Best of 7 Legs')),
                       DropdownMenuItem(value: 9, child: Text('Best of 9 Legs')),
-                      DropdownMenuItem(value: 11, child: Text('Best of 11 Legs')),
+                      DropdownMenuItem(
+                        value: 11,
+                        child: Text('Best of 11 Legs'),
+                      ),
                     ],
                     onChanged: _calculating
                         ? null
@@ -847,8 +865,14 @@ class _TournamentFormatPlannerDialogState
                 ],
               ),
               ExpansionTile(
-                title: const Text('So entsteht die Schätzung', style: TextStyle(fontSize: 14)),
-                subtitle: const Text('Spieldistanz, Zeitansatz und weitere Etappen', style: TextStyle(fontSize: 12)),
+                title: const Text(
+                  'So entsteht die Schätzung',
+                  style: TextStyle(fontSize: 14),
+                ),
+                subtitle: const Text(
+                  'Spieldistanz, Zeitansatz und weitere Etappen',
+                  style: TextStyle(fontSize: 12),
+                ),
                 leading: const Icon(Icons.info_outline, size: 20),
                 initiallyExpanded: false,
                 children: const [
@@ -874,7 +898,8 @@ class _TournamentFormatPlannerDialogState
                 const SizedBox(height: 12),
                 if (_suggestions!.isEmpty)
                   Text(
-                    _requireGroupPhase && (int.tryParse(_players.text.trim()) ?? 0) < 3
+                    _requireGroupPhase &&
+                            (int.tryParse(_players.text.trim()) ?? 0) < 3
                         ? 'Keine Gruppenaufteilung möglich: Jede Gruppe benötigt mindestens 3 Spieler.'
                         : 'Keine passende Turnierform im gewählten Zeitfenster gefunden. Bitte Dauer anpassen oder weitere Spielarten zulassen.',
                   ),

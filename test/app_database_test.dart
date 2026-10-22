@@ -98,6 +98,37 @@ void main() {
     expect(await database.loadRankingPlayerIds(ranking.id), isEmpty);
   });
 
+  test('keeps only one ranking marked as the statistics default', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'dart_local_ranking_default_test_',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final database = LocalAppDatabase(baseDirectory: directory);
+
+    await database.saveLocalRanking(
+      const LocalRanking(
+        id: 'first',
+        name: 'First',
+        isDefaultForStatistics: true,
+      ),
+    );
+    await database.saveLocalRanking(
+      const LocalRanking(
+        id: 'second',
+        name: 'Second',
+        isDefaultForStatistics: true,
+      ),
+    );
+
+    final rankings = await database.loadLocalRankings();
+    expect(
+      rankings
+          .where((ranking) => ranking.isDefaultForStatistics)
+          .map((r) => r.id),
+      ['second'],
+    );
+  });
+
   test('migrates existing rankings and persists their custom order', () async {
     final directory = await Directory.systemTemp.createTemp(
       'dart_local_rankings_order_migration_test_',

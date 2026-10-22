@@ -7,11 +7,13 @@ import 'package:dart_tournament_manager/features/tournaments/data/app_database.d
 import 'package:dart_tournament_manager/shared/persistence/storage_access.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('ranking sort modes and custom order are easy to change', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({});
     tester.view.physicalSize = const Size(800, 600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -77,6 +79,7 @@ void main() {
   testWidgets('custom reordering controls fit on a phone at large text', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({});
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);

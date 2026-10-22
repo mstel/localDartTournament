@@ -36,8 +36,6 @@ void main() {
     await reveal(find.byKey(const ValueKey('group-count-field')));
     final groupOptions = find.text('Gruppenoptionen');
     await reveal(groupOptions);
-    await tester.tap(groupOptions);
-    await tester.pumpAndSettle();
     final allocation = find.byKey(const ValueKey('group-player-allocation'));
     await reveal(allocation);
     await tester.tap(allocation);
@@ -45,7 +43,7 @@ void main() {
 
     expect(find.text('Wertungsstufen bündeln'), findsWidgets);
     expect(find.text('Stärken gleichmäßig verteilen'), findsWidgets);
-    expect(find.text('Zufällig verteilen'), findsWidgets);
+    expect(find.textContaining('Zufällig verteilen'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

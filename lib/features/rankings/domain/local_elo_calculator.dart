@@ -9,6 +9,18 @@ const int defaultNormalPlayerK = 15;
 const int defaultMatchesBeforeNormal = 10;
 const int defaultProRatingThreshold = 2400;
 
+typedef _PendingRankedMatch = ({
+  CreatedTournament tournament,
+  GroupMatch match,
+  int matchIndex,
+});
+
+typedef _EloReplayEvent = ({
+  DateTime date,
+  CreatedTournament tournament,
+  _PendingRankedMatch? match,
+});
+
 int eloDelta(
   int rating,
   int opponentRating,
@@ -97,6 +109,13 @@ class LocalEloCalculator {
     int proPlayerK = defaultNormalPlayerK,
     int matchesBeforeNormal = defaultMatchesBeforeNormal,
     int proRatingThreshold = defaultProRatingThreshold,
+    int minimumParticipationTournaments = 0,
+    bool allowDecayBelowStartRating = false,
+    bool absenceDecayEnabled = false,
+    int absenceDecayPoints = 0,
+    bool inactivityDecayEnabled = false,
+    int inactivityGraceTournaments = 0,
+    int inactivityDecayPoints = 0,
     int? validFromYear,
     int? validToYear,
     DateTime? validFromDate,
@@ -118,7 +137,7 @@ class LocalEloCalculator {
         final time = _date(a).compareTo(_date(b));
         return time == 0 ? a.id.compareTo(b.id) : time;
       });
-    final pending = [
+    final rankedMatches = <_PendingRankedMatch>[
       for (final tournament in ordered)
         if (tournament.countsForRanking &&
             tournament.rankingIds.contains(rankingId) &&
@@ -145,7 +164,7 @@ class LocalEloCalculator {
                 matchIndex: indexedMatch.key,
               ),
     ];
-    pending.sort((a, b) {
+    rankedMatches.sort((a, b) {
       final time = _matchDate(
         a.tournament,
         a.match,
@@ -155,16 +174,162 @@ class LocalEloCalculator {
       if (tid != 0) return tid;
       return a.match.round.compareTo(b.match.round);
     });
-    for (final row in pending) {
-      final tournament = row.tournament;
-      final match = row.match;
-      final date = _matchDate(tournament, match);
+    final tournamentParticipants = <String, Set<String>>{};
+    final tournamentsPlayed = <String, Set<String>>{};
+    for (final row in rankedMatches) {
+      final homeId =
+          row.match.homePlayer!.profileId ?? row.match.homePlayer!.name;
+      final awayId =
+          row.match.awayPlayer!.profileId ?? row.match.awayPlayer!.name;
+      if (homeId == awayId) continue;
+      final homeRule = PlayerWithdrawalService.policy(
+        row.tournament,
+        row.match.homePlayer!,
+      );
+      final awayRule = PlayerWithdrawalService.policy(
+        row.tournament,
+        row.match.awayPlayer!,
+      );
+      if (entries.containsKey(homeId) &&
+          (homeRule?.countForRanking ?? true) &&
+          (awayRule?.countOpponentsForRanking ?? true)) {
+        (tournamentParticipants[row.tournament.id] ??= <String>{}).add(homeId);
+        (tournamentsPlayed[homeId] ??= <String>{}).add(row.tournament.id);
+      }
+      if (entries.containsKey(awayId) &&
+          (awayRule?.countForRanking ?? true) &&
+          (homeRule?.countOpponentsForRanking ?? true)) {
+        (tournamentParticipants[row.tournament.id] ??= <String>{}).add(awayId);
+        (tournamentsPlayed[awayId] ??= <String>{}).add(row.tournament.id);
+      }
+    }
+    final eligiblePlayers = minimumParticipationTournaments == 0
+        ? entries.keys.toSet()
+        : tournamentsPlayed.entries
+              .where(
+                (entry) =>
+                    entry.value.length >= minimumParticipationTournaments,
+              )
+              .map((entry) => entry.key)
+              .toSet();
+    final pending = rankedMatches.where((row) {
+      final homeId =
+          row.match.homePlayer!.profileId ?? row.match.homePlayer!.name;
+      final awayId =
+          row.match.awayPlayer!.profileId ?? row.match.awayPlayer!.name;
+      return eligiblePlayers.contains(homeId) &&
+          eligiblePlayers.contains(awayId);
+    }).toList();
+    final replayEvents = <_EloReplayEvent>[];
+    for (final tournamentId in tournamentParticipants.keys) {
+      final tournamentRows = rankedMatches
+          .where((row) => row.tournament.id == tournamentId)
+          .toList();
+      final tournament = tournamentRows.first.tournament;
+      final firstDate = tournamentRows
+          .map((row) => _matchDate(tournament, row.match))
+          .reduce((left, right) => left.isBefore(right) ? left : right);
+      replayEvents.add((date: firstDate, tournament: tournament, match: null));
+    }
+    replayEvents.addAll([
+      for (final row in pending)
+        (
+          date: _matchDate(row.tournament, row.match),
+          tournament: row.tournament,
+          match: row,
+        ),
+    ]);
+    replayEvents.sort((left, right) {
+      final dateComparison = left.date.compareTo(right.date);
+      if (dateComparison != 0) return dateComparison;
+      final tournamentComparison = left.tournament.id.compareTo(
+        right.tournament.id,
+      );
+      if (tournamentComparison != 0) return tournamentComparison;
+      if (left.match == null) return right.match == null ? 0 : -1;
+      if (right.match == null) return 1;
+      return left.match!.matchIndex.compareTo(right.match!.matchIndex);
+    });
+    final missedTournamentStreaks = <String, int>{};
+    for (final event in replayEvents) {
+      final tournament = event.tournament;
       if (now != null &&
           validFromYear == null &&
           validToYear == null &&
-          date.year != now.year) {
+          event.date.year != now.year) {
         continue;
       }
+      final participants = (tournamentParticipants[tournament.id] ?? const {})
+          .intersection(eligiblePlayers);
+      if (event.match == null) {
+        for (final player in entries.values) {
+          if (!eligiblePlayers.contains(player.id)) continue;
+          if (participants.contains(player.id)) {
+            missedTournamentStreaks[player.id] = 0;
+            continue;
+          }
+          final missedCount = (missedTournamentStreaks[player.id] ?? 0) + 1;
+          missedTournamentStreaks[player.id] = missedCount;
+          var requestedLoss = absenceDecayEnabled
+              ? max(0, absenceDecayPoints)
+              : 0;
+          if (inactivityDecayEnabled &&
+              missedCount > inactivityGraceTournaments) {
+            requestedLoss += max(0, inactivityDecayPoints);
+          }
+          final recipients =
+              participants
+                  .where((id) => id != player.id && entries.containsKey(id))
+                  .toList()
+                ..sort();
+          if (requestedLoss == 0 || recipients.isEmpty) continue;
+          final floor = allowDecayBelowStartRating ? 0 : startRating;
+          final actualLoss = min(requestedLoss, max(0, player.rating - floor));
+          if (actualLoss == 0) continue;
+          player.rating -= actualLoss;
+          (history[player.id] ??= []).add(
+            LocalEloHistoryItem(
+              tournamentId: tournament.id,
+              matchIndex: -1,
+              playedAt: event.date,
+              tournamentName: tournament.name,
+              opponentName: 'Turnierverfall',
+              score: '-$actualLoss',
+              delta: -actualLoss,
+              ratingAfter: player.rating,
+              kFactor: 0,
+              expectedScore: 0,
+            ),
+          );
+          final share = actualLoss ~/ recipients.length;
+          var remainder = actualLoss % recipients.length;
+          for (final id in recipients) {
+            final recipient = entries[id]!;
+            final gain = share + (remainder > 0 ? 1 : 0);
+            if (remainder > 0) remainder--;
+            recipient.rating += gain;
+            if (gain == 0) continue;
+            (history[id] ??= []).add(
+              LocalEloHistoryItem(
+                tournamentId: tournament.id,
+                matchIndex: -1,
+                playedAt: event.date,
+                tournamentName: tournament.name,
+                opponentName: player.name,
+                score: '+$gain',
+                delta: gain,
+                ratingAfter: recipient.rating,
+                kFactor: 0,
+                expectedScore: 0,
+              ),
+            );
+          }
+        }
+        continue;
+      }
+      final row = event.match!;
+      final match = row.match;
+      final date = event.date;
       final homeId = match.homePlayer!.profileId ?? match.homePlayer!.name;
       final awayId = match.awayPlayer!.profileId ?? match.awayPlayer!.name;
       if (homeId == awayId) continue;
@@ -280,8 +445,11 @@ class LocalEloCalculator {
         );
       }
     }
-    final result = entries.values.where((e) => e.matches > 0).toList()
-      ..sort((a, b) => b.rating.compareTo(a.rating));
+    final result =
+        entries.values
+            .where((e) => e.matches > 0 || e.rating != startRating)
+            .toList()
+          ..sort((a, b) => b.rating.compareTo(a.rating));
     return LocalEloSnapshot(result, history, matchDeltas: matchDeltas);
   }
 

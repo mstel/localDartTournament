@@ -1,3 +1,5 @@
+import 'dart:math' show min;
+
 import '../../../tournament_workspace.dart' show ProductionTournamentRuntime;
 import '../domain/tournament_models.dart';
 import '../domain/tournament_format_planner.dart';
@@ -12,11 +14,13 @@ class ConfigurationEstimate {
     this.variableMatches, [
     this.matchEndSeconds = const [],
     this.waitMinutes = 0,
+    this.minimumMinutes = 0,
   ]);
   final int minutes, totalMatches, minimumMatches;
   final bool variableMatches;
   final List<int> matchEndSeconds;
   final double waitMinutes;
+  final int minimumMinutes;
 }
 
 /// Uses an isolated production runtime; never mutates or saves the draft.
@@ -57,6 +61,7 @@ class ConfigurationDurationEstimator {
     final matchEndSeconds = <int>[];
     var totalMatches = 0;
     var minimumMatches = 0;
+    var minimumDurationMinutes = 0.0;
     var allParticipantsReachStage = true;
     var variableMatches = false;
     var hasScheduledBlocks = false;
@@ -70,6 +75,12 @@ class ConfigurationDurationEstimator {
         config,
         List.generate(count, (i) => TournamentPlayer.generated(i + 1)),
       );
+      final minimumStageMatches = _minimumStageMatchCount(config, stage);
+      if (minimumStageMatches > 0) {
+        minimumDurationMinutes +=
+            (minimumStageMatches / boards).ceil() *
+            planner.estimatedMatchMinutes(config.gameFormat);
+      }
       tournament.runStages.add(stage);
       runtime.activate(index);
       runtime.advance();
@@ -184,14 +195,57 @@ class ConfigurationDurationEstimator {
       }
       hasScheduledBlocks = hasScheduledBlocks || blocks > 0;
     }
+    final estimatedMinutes = (minutes - 1e-9).ceil();
+    final minimumEstimate = variableMatches
+        ? min(minimumDurationMinutes.ceil(), estimatedMinutes).toInt()
+        : estimatedMinutes;
     return ConfigurationEstimate(
-      (minutes - 1e-9).ceil(),
+      estimatedMinutes,
       totalMatches,
       minimumMatches,
       variableMatches,
       matchEndSeconds..sort(),
       waitMinutes,
+      minimumEstimate,
     );
+  }
+
+  int _minimumStageMatchCount(
+    TournamentStage config,
+    TournamentRunStage stage,
+  ) {
+    if (stage is GroupTournamentRunStage) {
+      var matches = 0;
+      for (var index = 0; index < stage.groups.length; index++) {
+        final group = stage.groups[index];
+        if (group.playType == 'round_robin' || group.playType == 'swiss') {
+          matches += group.matches.where((match) => match.hasPlayers).length;
+          continue;
+        }
+        final qualifiers = index < config.fixedQualifiersByGroup.length
+            ? config.fixedQualifiersByGroup[index].clamp(
+                1,
+                group.players.length,
+              )
+            : 1;
+        matches += _minimumEliminationMatches(
+          group.players.length,
+          qualifiers,
+          group.eliminationLossLimit,
+        );
+      }
+      return matches;
+    }
+    return _minimumEliminationMatches(
+      config.knockoutParticipantCount ?? 0,
+      (config.qualifiedParticipantCount ?? 1).clamp(1, 1000000),
+      config.lossLimit,
+    );
+  }
+
+  int _minimumEliminationMatches(int players, int qualifiers, int lives) {
+    if (players <= qualifiers) return 0;
+    return ((players - qualifiers) * lives + 1) ~/ 2;
   }
 
   // A safe lower bound, including the shortest winning path with byes.

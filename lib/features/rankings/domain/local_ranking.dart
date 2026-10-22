@@ -22,6 +22,15 @@ class LocalRanking {
     this.validFromDate,
     this.validToDate,
     this.enableTiers = false,
+    this.requireMinimumParticipations = false,
+    this.minimumParticipations = 1,
+    this.allowDecayBelowStartRating = false,
+    this.absenceDecayEnabled = false,
+    this.absenceDecayPoints = 5,
+    this.inactivityDecayEnabled = false,
+    this.inactivityGraceTournaments = 3,
+    this.inactivityDecayPoints = 5,
+    this.isDefaultForStatistics = false,
     this.customOrder = 0,
   });
 
@@ -45,6 +54,15 @@ class LocalRanking {
   final DateTime? validFromDate;
   final DateTime? validToDate;
   final bool enableTiers;
+  final bool requireMinimumParticipations;
+  final int minimumParticipations;
+  final bool allowDecayBelowStartRating;
+  final bool absenceDecayEnabled;
+  final int absenceDecayPoints;
+  final bool inactivityDecayEnabled;
+  final int inactivityGraceTournaments;
+  final int inactivityDecayPoints;
+  final bool isDefaultForStatistics;
   final int customOrder;
 
   bool includesTournamentYear(int year) =>
@@ -84,6 +102,15 @@ class LocalRanking {
     'validFromDate': validFromDate?.toIso8601String(),
     'validToDate': validToDate?.toIso8601String(),
     'enableTiers': enableTiers,
+    'requireMinimumParticipations': requireMinimumParticipations,
+    'minimumParticipations': minimumParticipations,
+    'allowDecayBelowStartRating': allowDecayBelowStartRating,
+    'absenceDecayEnabled': absenceDecayEnabled,
+    'absenceDecayPoints': absenceDecayPoints,
+    'inactivityDecayEnabled': inactivityDecayEnabled,
+    'inactivityGraceTournaments': inactivityGraceTournaments,
+    'inactivityDecayPoints': inactivityDecayPoints,
+    'isDefaultForStatistics': isDefaultForStatistics,
   };
 
   factory LocalRanking.fromJson(Map<String, Object?> json) => LocalRanking(
@@ -110,6 +137,17 @@ class LocalRanking {
     validFromDate: DateTime.tryParse(json['validFromDate'] as String? ?? ''),
     validToDate: DateTime.tryParse(json['validToDate'] as String? ?? ''),
     enableTiers: json['enableTiers'] as bool? ?? false,
+    requireMinimumParticipations:
+        json['requireMinimumParticipations'] as bool? ?? false,
+    minimumParticipations: json['minimumParticipations'] as int? ?? 1,
+    allowDecayBelowStartRating:
+        json['allowDecayBelowStartRating'] as bool? ?? false,
+    absenceDecayEnabled: json['absenceDecayEnabled'] as bool? ?? false,
+    absenceDecayPoints: json['absenceDecayPoints'] as int? ?? 5,
+    inactivityDecayEnabled: json['inactivityDecayEnabled'] as bool? ?? false,
+    inactivityGraceTournaments: json['inactivityGraceTournaments'] as int? ?? 3,
+    inactivityDecayPoints: json['inactivityDecayPoints'] as int? ?? 5,
+    isDefaultForStatistics: json['isDefaultForStatistics'] as bool? ?? false,
   );
 
   LocalRanking copyWith({
@@ -133,6 +171,15 @@ class LocalRanking {
     DateTime? validFromDate,
     DateTime? validToDate,
     bool? enableTiers,
+    bool? requireMinimumParticipations,
+    int? minimumParticipations,
+    bool? allowDecayBelowStartRating,
+    bool? absenceDecayEnabled,
+    int? absenceDecayPoints,
+    bool? inactivityDecayEnabled,
+    int? inactivityGraceTournaments,
+    int? inactivityDecayPoints,
+    bool? isDefaultForStatistics,
     int? customOrder,
   }) => LocalRanking(
     id: id ?? this.id,
@@ -155,6 +202,20 @@ class LocalRanking {
     validFromDate: validFromDate ?? this.validFromDate,
     validToDate: validToDate ?? this.validToDate,
     enableTiers: enableTiers ?? this.enableTiers,
+    requireMinimumParticipations:
+        requireMinimumParticipations ?? this.requireMinimumParticipations,
+    minimumParticipations: minimumParticipations ?? this.minimumParticipations,
+    allowDecayBelowStartRating:
+        allowDecayBelowStartRating ?? this.allowDecayBelowStartRating,
+    absenceDecayEnabled: absenceDecayEnabled ?? this.absenceDecayEnabled,
+    absenceDecayPoints: absenceDecayPoints ?? this.absenceDecayPoints,
+    inactivityDecayEnabled:
+        inactivityDecayEnabled ?? this.inactivityDecayEnabled,
+    inactivityGraceTournaments:
+        inactivityGraceTournaments ?? this.inactivityGraceTournaments,
+    inactivityDecayPoints: inactivityDecayPoints ?? this.inactivityDecayPoints,
+    isDefaultForStatistics:
+        isDefaultForStatistics ?? this.isDefaultForStatistics,
     customOrder: customOrder ?? this.customOrder,
   );
 }

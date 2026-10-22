@@ -66,13 +66,20 @@ void main() {
       await tester.tap(find.text('Einstellungen'));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
+      await tester.ensureVisible(find.text('Ranglistenoptionen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ranglistenoptionen'));
+      await tester.pump(const Duration(milliseconds: 500));
       final setting = find.widgetWithText(
         SwitchListTile,
-        'Für Rangliste/n berücksichtigen',
+        'Für Rangliste berücksichtigen',
       );
+      await tester.ensureVisible(setting);
+      await tester.pump();
       expect(tester.widget<SwitchListTile>(setting).value, isTrue);
+      final onChanged = tester.widget<SwitchListTile>(setting).onChanged!;
 
-      await tester.tap(setting);
+      onChanged(false);
       await tester.pump();
       expect(tournament.countsForRanking, isFalse);
       expect(tournament.rankingIds, isEmpty);

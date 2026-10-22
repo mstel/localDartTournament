@@ -99,6 +99,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   String? _directorSaveError;
 
   Future<void> _renamePlayer(TournamentPlayer player) async {
+    if (player.profileId != null) return;
     final controller = TextEditingController(text: player.name);
     final newName = await showDialog<String>(
       context: context,
@@ -2806,84 +2807,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     ),
                                   ),
                                   const Divider(height: 28),
-                                  if (widget.tournament.leagueMatch == null)
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text(
-                                        'Für Rangliste/n berücksichtigen',
-                                      ),
-                                      subtitle: const Text(
-                                        'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
-                                      ),
-                                      value: widget.tournament.countsForRanking,
-                                      onChanged: _savingRankingSelection
-                                          ? null
-                                          : (value) => _saveRankingSelection(
-                                              countsForRanking: value,
-                                              rankingIds: value
-                                                  ? widget.tournament.rankingIds
-                                                  : const [],
-                                            ),
-                                    ),
-                                  if (_savingRankingSelection)
-                                    const LinearProgressIndicator(),
-                                  if (widget.tournament.countsForRanking &&
-                                      widget.tournament.leagueMatch == null)
-                                    FutureBuilder<List<LocalRanking>>(
-                                      future: _localRankings,
-                                      builder: (context, snapshot) {
-                                        if (snapshot.hasError) {
-                                          return Text(
-                                            'Ranglisten konnten nicht geladen werden: ${snapshot.error}',
-                                          );
-                                        }
-                                        if (!snapshot.hasData) {
-                                          return const LinearProgressIndicator();
-                                        }
-                                        final rankings = snapshot.data!;
-                                        if (rankings.isEmpty) {
-                                          return const Text(
-                                            'Lege zuerst eine Rangliste im Hauptmenü an.',
-                                          );
-                                        }
-                                        return Column(
-                                          children: [
-                                            for (final ranking in rankings)
-                                              CheckboxListTile(
-                                                contentPadding: EdgeInsets.zero,
-                                                title: Text(ranking.name),
-                                                value: widget
-                                                    .tournament
-                                                    .rankingIds
-                                                    .contains(ranking.id),
-                                                onChanged:
-                                                    _savingRankingSelection
-                                                    ? null
-                                                    : (selected) {
-                                                        final ids =
-                                                            List<String>.from(
-                                                              widget
-                                                                  .tournament
-                                                                  .rankingIds,
-                                                            );
-                                                        if (selected == true) {
-                                                          ids.add(ranking.id);
-                                                        } else {
-                                                          ids.remove(
-                                                            ranking.id,
-                                                          );
-                                                        }
-                                                        _saveRankingSelection(
-                                                          countsForRanking:
-                                                              true,
-                                                          rankingIds: ids,
-                                                        );
-                                                      },
-                                              ),
-                                          ],
-                                        );
-                                      },
-                                    ),
                                 ],
                               ),
                             ),
@@ -3061,6 +2984,99 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                             ),
                           const SizedBox(height: 12),
+                          if (widget.tournament.leagueMatch == null)
+                            Card(
+                              child: ExpansionTile(
+                                initiallyExpanded: false,
+                                leading: const Icon(Icons.leaderboard_outlined),
+                                title: const Text('Ranglistenoptionen'),
+                                subtitle: const Text(
+                                  'Wertung und zugewiesene Ranglisten',
+                                ),
+                                childrenPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                children: [
+                                  SwitchListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text(
+                                      'Für Rangliste berücksichtigen',
+                                    ),
+                                    subtitle: const Text(
+                                      'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
+                                    ),
+                                    value: widget.tournament.countsForRanking,
+                                    onChanged: _savingRankingSelection
+                                        ? null
+                                        : (value) => _saveRankingSelection(
+                                            countsForRanking: value,
+                                            rankingIds: value
+                                                ? widget.tournament.rankingIds
+                                                : const [],
+                                          ),
+                                  ),
+                                  if (_savingRankingSelection)
+                                    const LinearProgressIndicator(),
+                                  if (widget.tournament.countsForRanking)
+                                    FutureBuilder<List<LocalRanking>>(
+                                      future: _localRankings,
+                                      builder: (context, snapshot) {
+                                        if (snapshot.hasError) {
+                                          return Text(
+                                            'Ranglisten konnten nicht geladen werden: ${snapshot.error}',
+                                          );
+                                        }
+                                        if (!snapshot.hasData) {
+                                          return const LinearProgressIndicator();
+                                        }
+                                        final rankings = snapshot.data!;
+                                        if (rankings.isEmpty) {
+                                          return const Text(
+                                            'Lege zuerst eine Rangliste im Hauptmenü an.',
+                                          );
+                                        }
+                                        return Column(
+                                          children: [
+                                            for (final ranking in rankings)
+                                              CheckboxListTile(
+                                                contentPadding: EdgeInsets.zero,
+                                                title: Text(ranking.name),
+                                                value: widget
+                                                    .tournament
+                                                    .rankingIds
+                                                    .contains(ranking.id),
+                                                onChanged:
+                                                    _savingRankingSelection
+                                                    ? null
+                                                    : (selected) {
+                                                        final ids =
+                                                            List<String>.from(
+                                                              widget
+                                                                  .tournament
+                                                                  .rankingIds,
+                                                            );
+                                                        if (selected == true) {
+                                                          ids.add(ranking.id);
+                                                        } else {
+                                                          ids.remove(
+                                                            ranking.id,
+                                                          );
+                                                        }
+                                                        _saveRankingSelection(
+                                                          countsForRanking:
+                                                              true,
+                                                          rankingIds: ids,
+                                                        );
+                                                      },
+                                              ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 12),
                           // 4. Spieler verwalten
                           Card(
                             child: ExpansionTile(
@@ -3079,29 +3095,38 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                   ListTile(
                                     contentPadding: EdgeInsets.zero,
                                     title: Text(player.name),
-                                    subtitle:
-                                        PlayerWithdrawalService.policy(
+                                    subtitle: Wrap(
+                                      spacing: 8,
+                                      runSpacing: 2,
+                                      children: [
+                                        if (PlayerWithdrawalService.policy(
                                               widget.tournament,
                                               player,
-                                            ) ==
-                                            null
-                                        ? null
-                                        : const Text(
+                                            ) !=
+                                            null)
+                                          const Text(
                                             'Ausgeschieden / Zurückgezogen',
                                             style: TextStyle(color: Colors.red),
                                           ),
+                                        if (player.profileId != null)
+                                          const Text(
+                                            'Name aus Spielerkartei · Umbenennen gesperrt',
+                                          ),
+                                      ],
+                                    ),
                                     trailing: Wrap(
                                       spacing: 4,
                                       children: [
-                                        IconButton(
-                                          tooltip: 'Spieler umbenennen',
-                                          icon: const Icon(
-                                            Icons.edit_outlined,
-                                            size: 20,
+                                        if (player.profileId == null)
+                                          IconButton(
+                                            tooltip: 'Spieler umbenennen',
+                                            icon: const Icon(
+                                              Icons.edit_outlined,
+                                              size: 20,
+                                            ),
+                                            onPressed: () =>
+                                                _renamePlayer(player),
                                           ),
-                                          onPressed: () =>
-                                              _renamePlayer(player),
-                                        ),
                                         if (widget.tournament.finishedAt ==
                                                 null &&
                                             PlayerWithdrawalService.policy(

@@ -66,7 +66,7 @@ void main() {
       final restored = (await storage.loadTournaments()).single;
       expect(restored.leagueMatch!.toJson(), league.toJson());
       expect(await File('${file.path}.v8.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 25);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 26);
     },
   );
   test('legacy tournaments remain ordinary tournaments', () {

@@ -47,6 +47,10 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     }
     final summary = _TournamentResultSummary.fromTournament(tournament);
     final podium = summary.ranking.take(3).toList();
+    final performances = [
+      for (final entry in _resultMatches(tournament))
+        ...entry.match.bestPerformances,
+    ];
     return Scaffold(
       appBar: AppBar(
         title: const Text('Turnierergebnisse'),
@@ -108,25 +112,68 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                       ),
                       Builder(
                         builder: (context) {
-                          final summary = TournamentTiming.durationSummary(
+                          final timing = TournamentTiming.durationSummary(
                             tournament,
                           );
-                          String formatDur(Duration d) => d.inHours > 0
-                              ? '${d.inHours}h ${d.inMinutes % 60}m'
-                              : '${d.inMinutes}m';
-                          final duration =
-                              summary == null || summary.playedMatches == 0
-                              ? 'Dauer: nicht erfasst'
-                              : 'Dauer: ${formatDur(summary.totalDuration)} · '
-                                    '${summary.playedMatches} ${summary.playedMatches == 1 ? "Match" : "Matches"}'
-                                    '${summary.averageMatchDuration != null ? " · Ø ${formatDur(summary.averageMatchDuration!)} / Match" : ""}';
-                          return Text(
-                            duration,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                          String formatDur(Duration d) =>
+                              '${d.inHours}:${(d.inMinutes % 60).toString().padLeft(2, '0')}';
+                          final averageLegsPerMatch = summary.matchCount == 0
+                              ? 0.0
+                              : summary.legCount / summary.matchCount;
+                          final expectedRange =
+                              tournament.plannedMinimumMinutes != null &&
+                                  tournament.plannedMinutes != null
+                              ? 'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinimumMinutes!))}–${formatDur(Duration(minutes: tournament.plannedMinutes!))}'
+                              : tournament.plannedMinutes == null
+                              ? null
+                              : 'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinutes!))}';
+                          final durationLines = [
+                            if (timing != null)
+                              'Tatsächlich: ${formatDur(timing.totalDuration)}',
+                            ?expectedRange,
+                            if (timing?.averageMatchDuration != null)
+                              'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
+                          ];
+                          return Column(
+                            children: [
+                              const SizedBox(height: 10),
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 16,
+                                runSpacing: 6,
+                                children: [
+                                  _CompletionMetric(
+                                    label: 'Teilnehmer',
+                                    value: '${summary.playerCount}',
+                                  ),
+                                  _CompletionMetric(
+                                    label: 'Begegnungen',
+                                    value: '${summary.matchCount}',
+                                  ),
+                                  _CompletionMetric(
+                                    label: 'Gespielte Legs',
+                                    value: '${summary.legCount}',
+                                  ),
+                                  _CompletionMetric(
+                                    label: 'Legs / Match',
+                                    value: averageLegsPerMatch.toStringAsFixed(
+                                      1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                durationLines.isEmpty
+                                    ? 'Dauer: nicht erfasst'
+                                    : durationLines.join(' · '),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
                           );
                         },
                       ),
@@ -203,9 +250,19 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                 storage: widget.storage,
               ),
             ],
+            if (performances.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _BestPerformancesSummary(performances: performances),
+            ],
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: () => TournamentExportDialog.show(context, tournament),
+              onPressed: () => TournamentExportDialog.show(
+                context,
+                tournament,
+                resultSummary: _exportSummary(summary),
+                database: widget.database,
+                storage: widget.storage,
+              ),
               icon: const Icon(Icons.ios_share),
               label: const Text('Turnier exportieren'),
             ),
@@ -213,6 +270,31 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
         ),
       ),
     );
+  }
+
+  Map<String, Object?> _exportSummary(_TournamentResultSummary summary) {
+    final timing = TournamentTiming.durationSummary(tournament);
+    return {
+      'participantCount': summary.playerCount,
+      'matchCount': summary.matchCount,
+      'legCount': summary.legCount,
+      'averageLegsPerMatch': summary.matchCount == 0
+          ? 0
+          : summary.legCount / summary.matchCount,
+      'actualDurationSeconds': timing?.totalDuration.inSeconds,
+      'expectedMinimumMinutes': tournament.plannedMinimumMinutes,
+      'expectedMaximumMinutes': tournament.plannedMinutes,
+      'podium': [
+        for (final stats in summary.ranking.take(3))
+          {
+            'name': stats.player.name,
+            'wins': stats.wins,
+            'losses': stats.losses,
+            'legsFor': stats.legsFor,
+            'legsAgainst': stats.legsAgainst,
+          },
+      ],
+    };
   }
 
   void _openPlayer(BuildContext context, TournamentPlayer player) {
@@ -285,6 +367,13 @@ class _Podium extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${ranking[index].wins} Siege · ${ranking[index].losses} Niederlagen · '
+                      '${ranking[index].legsFor}:${ranking[index].legsAgainst} Legs',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
@@ -293,6 +382,63 @@ class _Podium extends StatelessWidget {
       ],
     );
   }
+}
+
+class _CompletionMetric extends StatelessWidget {
+  const _CompletionMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(
+        value,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+      ),
+      Text(label, style: const TextStyle(color: Colors.white)),
+    ],
+  );
+}
+
+class _BestPerformancesSummary extends StatelessWidget {
+  const _BestPerformancesSummary({required this.performances});
+
+  final List<BestPerformance> performances;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'Bestleistungen',
+        style: Theme.of(
+          context,
+        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 8),
+      Card(
+        child: Column(
+          children: [
+            for (final performance in performances)
+              ListTile(
+                leading: const Icon(Icons.military_tech_outlined),
+                title: Text('${performance.playerName} · ${performance.label}'),
+                trailing: performance.value == null
+                    ? null
+                    : Text('${performance.value}'),
+              ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _RankingRow extends StatelessWidget {

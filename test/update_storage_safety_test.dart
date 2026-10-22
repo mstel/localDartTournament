@@ -59,7 +59,7 @@ void main() {
   test(
     'unknown tournament version reports its version and remains untouched',
     () async {
-      const content = '{"schemaVersion":26,"tournaments":[]}';
+      const content = '{"schemaVersion":27,"tournaments":[]}';
       await file.writeAsString(content);
       final storage = TournamentStorage(file: file);
 
@@ -67,8 +67,8 @@ void main() {
         await storage.loadTournaments();
         fail('A future storage version must not be interpreted as supported.');
       } on FormatException catch (error) {
-        expect(error.message, contains('Version 26'));
-        expect(error.message, contains('1 bis 25'));
+        expect(error.message, contains('Version 27'));
+        expect(error.message, contains('1 bis 26'));
       }
 
       await expectLater(
@@ -114,7 +114,7 @@ void main() {
       );
 
       final saved = jsonDecode(await file.readAsString());
-      expect(saved['schemaVersion'], 25);
+      expect(saved['schemaVersion'], 26);
       expect(saved['playerStatistics'], {'total': 7});
       expect((saved['tournaments'] as List).length, 2);
       expect(
@@ -147,7 +147,10 @@ void main() {
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            allOf(contains('Sicherung fehlt'), contains('${file.path}.v22.bak')),
+            allOf(
+              contains('Sicherung fehlt'),
+              contains('${file.path}.v22.bak'),
+            ),
           ),
         ),
       );

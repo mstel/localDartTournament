@@ -84,10 +84,12 @@ void main() {
   test('expected progress follows concurrent blocks and survives saving', () {
     final t = fixture()
       ..startedAt = start
+      ..plannedMinimumMinutes = 30
       ..plannedMinutes = 75
       ..plannedMatches = 6
       ..plannedMatchEndSeconds = [1500, 1500, 3000, 3000, 4500, 4500];
     final copy = CreatedTournament.fromJson(t.toJson());
+    expect(copy.plannedMinimumMinutes, 30);
     expect(
       TournamentTiming.snapshot(
         copy,
