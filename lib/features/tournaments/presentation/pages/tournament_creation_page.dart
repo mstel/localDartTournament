@@ -1426,7 +1426,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _bestOfQualifierCountController.text =
             '${stage.extraQualifierCount ?? 0}';
         _autoAdjustQualification = stage.qualificationAutoAdjust;
-        _groupDrawOnStart = stage.groupDrawOnStart;
+        _groupDrawOnStart = false;
         _groupAllocationMode = stage.groupDrawOnStart
             ? GroupPlayerAllocationMode.random
             : GroupPlayerAllocationMode.strengthLevels;
@@ -1741,9 +1741,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           (sum, size) => sum + size,
         );
         final groupPlayers = stage.groupSlotOrder.isNotEmpty
-            ? incomingPlayers.take(groupParticipantCount).toList()
-            : stage.groupDrawOnStart
-            ? incomingPlayers.take(groupParticipantCount).toList()
+            ? GroupDrawAssignment.orderPlayers(
+                players: incomingPlayers,
+                slotOrder: stage.groupSlotOrder,
+                participantCount: groupParticipantCount,
+              )
             : const GroupPlayerAllocationEngine().allocate(
                 players: incomingPlayers,
                 groupSizes: stage.groupSizes,
@@ -2499,8 +2501,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   const SizedBox(height: 12),
                   ExpertSetupSection(
                     title: 'Gruppenoptionen',
-                    summary:
-                        'Verteilung, Spieltypen, Auslosung und Wiederholungen',
+                    summary: 'Verteilung, Spieltypen und Wiederholungen',
                     initiallyExpanded: true,
                     children: [
                       DropdownButtonFormField<GroupPlayerAllocationMode>(
@@ -2523,17 +2524,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           ),
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.random,
-                            child: Text(
-                              'Zufällig verteilen · Auslosungsrad beim Start',
-                            ),
+                            child: Text('Zufällig verteilen'),
                           ),
                         ],
                         onChanged: (mode) {
                           if (mode != null) {
                             setState(() {
                               _groupAllocationMode = mode;
-                              _groupDrawOnStart =
-                                  mode == GroupPlayerAllocationMode.random;
+                              _groupDrawOnStart = false;
                             });
                           }
                         },

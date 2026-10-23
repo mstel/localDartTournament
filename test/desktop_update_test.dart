@@ -267,6 +267,26 @@ void main() {
       },
     );
   }
+
+  Future<ProcessResult> runWindowsScriptFile(File script) {
+    final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+    final powershell = p.join(
+      systemRoot,
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    );
+    return Process.run(powershell, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      script.path,
+    ]);
+  }
+
   test(
     'Windows package ZIP accepts PowerShell backslash entry paths',
     () async {
@@ -404,8 +424,15 @@ void main() {
         failureFile: failureFile,
         originalExe: fallbackExe,
       );
+      final restartScript = File(p.join(temp.path, 'restart script.ps1'));
+      await restartScript.writeAsBytes([
+        0xEF,
+        0xBB,
+        0xBF,
+        ...utf8.encode(command),
+      ]);
 
-      final result = await runWindowsScript(command);
+      final result = await runWindowsScriptFile(restartScript);
 
       expect(result.exitCode, 0, reason: '${result.stderr}\n${result.stdout}');
       expect(

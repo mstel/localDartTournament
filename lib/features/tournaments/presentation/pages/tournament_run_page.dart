@@ -3096,12 +3096,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  const Text(
-                                    'Für den Vereinsheim-TV oder Beamer: Zeigt Tabellen, Spielansetzungen, '
-                                    'Ergebnisse und Turnieruhr automatisch rotierend im Vollbild an. '
-                                    'So können Ergebnisse am Laptop eingetragen werden, ohne die Anzeige zu stören.',
-                                  ),
-                                  const SizedBox(height: 12),
                                   Wrap(
                                     spacing: 8,
                                     runSpacing: 8,
@@ -3150,20 +3144,31 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           'In separatem Fenster öffnen (für 2. Monitor)',
                                         ),
                                       ),
-                                      OutlinedButton.icon(
+                                      IconButton(
+                                        tooltip:
+                                            'Information zum 2. Bildschirm',
                                         onPressed: () => showDialog<void>(
                                           context: context,
-                                          builder: (ctx) => Dialog.fullscreen(
-                                            child: TournamentSecondScreenView(
-                                              tournament: widget.tournament,
-                                              isStandaloneWindow: true,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text(
+                                              '2. Bildschirm (TV-Anzeige)',
                                             ),
+                                            content: const Text(
+                                              'Öffnet die Tabellen, Spielansetzungen, Ergebnisse und Turnieruhr '
+                                              'in einem eigenen Fenster. Ziehe dieses Fenster auf den zweiten '
+                                              'Monitor und maximiere es. Ergebnisse kannst du weiterhin hier '
+                                              'am Hauptbildschirm eintragen.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context).pop(),
+                                                child: const Text('Schließen'),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        icon: const Icon(Icons.fullscreen),
-                                        label: const Text(
-                                          'Hier im Vollbild-Dialog öffnen',
-                                        ),
+                                        icon: const Icon(Icons.help_outline),
                                       ),
                                     ],
                                   ),
@@ -3429,6 +3434,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ],
                             ),
                           ),
+                          const GoveeAmbiencePanel(),
                         ],
                       )
                     else if (_stageViewMode == StageViewMode.players)

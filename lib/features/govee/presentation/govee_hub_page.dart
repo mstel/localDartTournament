@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import '../data/govee_api.dart';
-import '../domain/govee_device.dart';
+
+import '../data/govee_api_key_storage.dart';
 
 class GoveeHubPage extends StatefulWidget {
-  const GoveeHubPage({super.key, this.api});
-  final GoveeApi? api;
+  const GoveeHubPage({super.key, this.storage});
+
+  final GoveeApiKeyStorage? storage;
 
   @override
   State<GoveeHubPage> createState() => _GoveeHubPageState();
@@ -13,267 +13,120 @@ class GoveeHubPage extends StatefulWidget {
 
 class _GoveeHubPageState extends State<GoveeHubPage> {
   final _keyController = TextEditingController();
-  final _selectedDevices = <int, String>{};
-  List<GoveeDevice> _devices = const [];
+  late final GoveeApiKeyStorage _storage =
+      widget.storage ?? GoveeApiKeyStorage();
+  bool _loading = true;
+  bool _saving = false;
+  bool _hasSavedKey = false;
   String? _error;
-  bool _loading = false;
-  final _busyStrips = <int>{};
-  late final GoveeApi _api = widget.api ?? GoveeApi(client: http.Client());
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   void dispose() {
     _keyController.clear();
     _keyController.dispose();
-    if (widget.api == null) _api.close();
     super.dispose();
   }
 
-  Future<void> _loadDevices() async {
+  Future<void> _load() async {
+    try {
+      final key = await _storage.load();
+      if (!mounted) return;
+      _keyController.text = key ?? '';
+      setState(() {
+        _hasSavedKey = key?.isNotEmpty == true;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'API-Key konnte nicht geladen werden: $error';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _save() async {
     final key = _keyController.text.trim();
     if (key.isEmpty) {
-      setState(() => _error = 'Bitte den Govee API-Key eingeben.');
+      setState(() => _error = 'Bitte einen Govee API-Key eingeben.');
       return;
     }
     setState(() {
-      _loading = true;
+      _saving = true;
       _error = null;
     });
     try {
-      final devices = await _api.devices(key);
+      await _storage.save(key);
       if (!mounted) return;
-      setState(() {
-        _devices = devices;
-        _selectedDevices.clear();
-        for (var i = 0; i < 4 && i < devices.length; i++) {
-          _selectedDevices[i] = devices[i].id;
-        }
-        if (devices.isEmpty) _error = 'Keine farbsteuerbaren Geräte gefunden.';
-      });
+      setState(() => _hasSavedKey = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Govee API-Key auf diesem Gerät gespeichert.'),
+        ),
+      );
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = 'Speichern fehlgeschlagen: $error');
     } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _apply(int strip, int? rgb, {int? kelvin}) async {
-    final id = _selectedDevices[strip];
-    final device = _devices.where((item) => item.id == id).firstOrNull;
-    if (device == null) return;
-    setState(() {
-      _busyStrips.add(strip);
-      _error = null;
-    });
-    try {
-      if (kelvin != null) {
-        if (!device.supportsTemperature) {
-          throw const GoveeApiException(
-            'Dieses Gerät unterstützt keine Farbtemperatur.',
-          );
-        }
-        await _api.setTemperature(
-          apiKey: _keyController.text.trim(),
-          device: device,
-          kelvin: kelvin,
-        );
-      } else if (rgb != null) {
-        if (!device.supportsRgb) {
-          throw const GoveeApiException(
-            'Dieses Gerät unterstützt keine RGB-Farben.',
-          );
-        }
-        await _api.setRgb(
-          apiKey: _keyController.text.trim(),
-          device: device,
-          rgb: rgb,
-        );
-      }
-    } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
-    } finally {
-      if (mounted) setState(() => _busyStrips.remove(strip));
-    }
-  }
-
-  Future<void> _applyScene(int scene) async {
-    for (final strip in _selectedDevices.keys) {
-      final device = _devices.where((item) => item.id == _selectedDevices[strip]).firstOrNull;
-      if (device == null) continue;
-      if (scene == 1) {
-        // Szene 1: Warmes Ambiente
-        if (device.supportsTemperature) {
-          await _apply(strip, null, kelvin: 3000);
-        } else if (device.supportsRgb) {
-          await _apply(strip, 0xFFB347);
-        }
-      } else if (scene == 2) {
-        // Szene 2: Wettkampf / Fokus
-        if (device.supportsTemperature) {
-          await _apply(strip, null, kelvin: 5000);
-        } else if (device.supportsRgb) {
-          await _apply(strip, 0x1E90FF);
-        }
-      }
+      if (mounted) setState(() => _saving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Govee Licht-Hub')),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const Text('API-Key bleibt nur für diese Sitzung im Speicher.'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _keyController,
-            obscureText: true,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: const InputDecoration(
-              labelText: 'Govee API-Key',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            onPressed: _loading ? null : _loadDevices,
-            icon: _loading
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-            label: const Text('Lichtstreifen laden'),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ],
-          if (_devices.isNotEmpty && _selectedDevices.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Card(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Ambiente-Szenen (alle Streifen)',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.tonalIcon(
-                          onPressed: _busyStrips.isNotEmpty ? null : () => _applyScene(1),
-                          icon: const Icon(Icons.wb_sunny_outlined),
-                          label: const Text('Szene 1 (Warmes Ambiente)'),
-                        ),
-                        FilledButton.tonalIcon(
-                          onPressed: _busyStrips.isNotEmpty ? null : () => _applyScene(2),
-                          icon: const Icon(Icons.sports_score_outlined),
-                          label: const Text('Szene 2 (Wettkampf / Fokus)'),
-                        ),
-                      ],
-                    ),
-                  ],
+    appBar: AppBar(title: const Text('Govee API-Key')),
+    body: _loading
+        ? const Center(child: CircularProgressIndicator())
+        : ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              const Text(
+                'Speichere hier den API-Key für die Govee-Geräte dieses Geräts. '
+                'Die Geräteauswahl und Lichtfarben findest du in den Einstellungen '
+                'eines geöffneten Turniers unter „Ambiente Einstellungen“.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _keyController,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                enabled: !_saving,
+                decoration: InputDecoration(
+                  labelText: 'Govee API-Key',
+                  border: const OutlineInputBorder(),
+                  helperText: _hasSavedKey
+                      ? 'Ein API-Key ist auf diesem Gerät gespeichert.'
+                      : 'Der API-Key bleibt nach dem Neustart verfügbar.',
                 ),
               ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          for (var strip = 0; strip < 4; strip++) _stripCard(strip),
-        ],
-      ),
-    ),
-  );
-
-  Widget _stripCard(int index) {
-    final current = _selectedDevices[index];
-    final available = _devices
-        .where(
-          (device) =>
-              !_selectedDevices.entries.any(
-                (entry) => entry.key != index && entry.value == device.id,
-              ) ||
-              device.id == current,
-        )
-        .toList();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Lichtstreifen ${index + 1}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              isExpanded: true,
-              initialValue: available.any((device) => device.id == current)
-                  ? current
-                  : null,
-              decoration: const InputDecoration(
-                labelText: 'Govee-Gerät',
-                border: OutlineInputBorder(),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(_saving ? 'Speichert …' : 'API-Key speichern'),
+                ),
               ),
-              items: [
-                for (final device in available)
-                  DropdownMenuItem(
-                    value: device.id,
-                    child: Text('${device.name} · ${device.sku}'),
-                  ),
-              ],
-              onChanged: (value) => setState(() {
-                if (value == null) {
-                  _selectedDevices.remove(index);
-                } else {
-                  _selectedDevices[index] = value;
-                }
-              }),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _colorButton(index, 'Szene 1', 0xFFB347, kelvin: 3000),
-                _colorButton(index, 'Szene 2', 0x1E90FF, kelvin: 5000),
-                _colorButton(index, 'Türkis', 0x40E0D0),
-                _colorButton(index, 'Grün', 0x00FF00),
-                _colorButton(index, 'Rot', 0xFF0000),
-                _colorButton(index, 'Kaltweiß', null, kelvin: 6500),
-              ],
-            ),
-            if (_busyStrips.contains(index)) const LinearProgressIndicator(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _colorButton(int strip, String label, int? rgb, {int? kelvin}) {
-    final device = _devices
-        .where((item) => item.id == _selectedDevices[strip])
-        .firstOrNull;
-    final supportsColor = kelvin == null
-        ? device?.supportsRgb == true
-        : device?.supportsTemperature == true;
-    return OutlinedButton(
-      onPressed: _busyStrips.contains(strip) || !supportsColor
-          ? null
-          : () => _apply(strip, rgb, kelvin: kelvin),
-      child: Text(label),
-    );
-  }
+            ],
+          ),
+  );
 }

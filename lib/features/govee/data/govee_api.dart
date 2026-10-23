@@ -21,7 +21,12 @@ class GoveeApi {
     return (body['data'] as List<dynamic>? ?? const [])
         .whereType<Map>()
         .map((item) => GoveeDevice.fromJson(Map<String, dynamic>.from(item)))
-        .where((device) => device.supportsRgb || device.supportsTemperature)
+        .where(
+          (device) =>
+              device.supportsRgb ||
+              device.supportsTemperature ||
+              device.rainbowScene != null,
+        )
         .toList(growable: false);
   }
 
@@ -50,6 +55,20 @@ class GoveeApi {
       'type': 'devices.capabilities.color_setting',
       'instance': 'colorTemperatureK',
       'value': kelvin,
+    },
+  );
+
+  Future<void> setScene({
+    required String apiKey,
+    required GoveeDevice device,
+    required GoveeScene scene,
+  }) => _control(
+    apiKey: apiKey,
+    device: device,
+    capability: {
+      'type': 'devices.capabilities.dynamic_scene',
+      'instance': 'lightScene',
+      'value': scene.sceneId,
     },
   );
 

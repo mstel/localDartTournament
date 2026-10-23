@@ -1,3 +1,13 @@
+# 1.2.3+24
+
+- Replaces group-creation wheel assignment with random group distribution and
+  adds a standalone draw wheel with manual assignment and text/image exports.
+- Stores the Govee API key on-device and adds tournament ambience controls for
+  supported colors and rainbow scenes.
+- Moves second-screen help into a compact help action.
+- Starts the Windows updater through its persisted PowerShell restart script
+  with explicit script encoding and execution policy.
+
 # 1.2.2+23
 
 - Recovers accepted group draw assignments from the persisted draw order even

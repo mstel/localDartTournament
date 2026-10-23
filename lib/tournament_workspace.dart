@@ -42,6 +42,7 @@ import 'features/tournaments/presentation/widgets/creation/configuration_duratio
 import 'features/tournaments/presentation/widgets/creation/creation_entry_choices.dart';
 import 'features/tournaments/application/tournament_timing.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
+import 'features/govee/presentation/govee_ambience_panel.dart';
 import 'features/statistics/presentation/tournament_match_statistics_page.dart';
 import 'features/tournaments/application/expanded_format_planner.dart';
 import 'features/tournaments/presentation/widgets/planning_suggestion_list.dart';
