@@ -275,7 +275,7 @@ class StageMatchCountPreview extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
+        color: colorScheme.surface,
         border: Border.all(color: colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -325,7 +325,7 @@ class GroupTieBreakerSetup extends StatelessWidget {
   });
 
   final List<String> tieBreakers;
-  final void Function(int index, int direction) onMoveTieBreaker;
+  final Future<void> Function(int index, int direction) onMoveTieBreaker;
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +370,7 @@ class GroupTieBreakerSetup extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       onPressed: index == 0
                           ? null
-                          : () => onMoveTieBreaker(index, -1),
+                          : () async => onMoveTieBreaker(index, -1),
                       icon: const Icon(Icons.keyboard_arrow_up),
                       tooltip: 'Tie-Breaker nach oben',
                     ),
@@ -382,7 +382,7 @@ class GroupTieBreakerSetup extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       onPressed: index == tieBreakers.length - 1
                           ? null
-                          : () => onMoveTieBreaker(index, 1),
+                          : () async => onMoveTieBreaker(index, 1),
                       icon: const Icon(Icons.keyboard_arrow_down),
                       tooltip: 'Tie-Breaker nach unten',
                     ),

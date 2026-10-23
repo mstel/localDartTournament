@@ -1143,8 +1143,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _players.removeAt(source);
       });
     } on ArgumentError catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${e.message}')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${e.message}')));
     }
   }
 
@@ -1703,8 +1704,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         .toList();
     final ratingsByPlayer = <String, List<int>>{};
     for (final ranking in rankings) {
-      final snapshot = await LocalRankingEloService(database: _database)
-          .calculate(ranking);
+      final snapshot = await LocalRankingEloService(
+        database: _database,
+      ).calculate(ranking);
       for (final entry in snapshot.entries) {
         ratingsByPlayer.putIfAbsent(entry.id, () => []).add(entry.rating);
       }
@@ -2070,7 +2072,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     });
   }
 
-  void _moveGroupTieBreaker(int index, int direction) {
+  Future<void> _moveGroupTieBreaker(int index, int direction) async {
     final targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= _groupTieBreakers.length) {
       return;
@@ -2082,6 +2084,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       _groupTieBreakers.insert(targetIndex, moved);
     });
     _saveGroupTieBreakers();
+    await _groupTieBreakerSaveQueue;
   }
 
   @override
@@ -2367,8 +2370,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     setState(() {
                       _selectedStageType = value;
                       _finalEndsTournament = value != 'kratzer';
-                      _kratzerLives = _lossLimitForStageType(value)
-                          .clamp(2, 10);
+                      _kratzerLives = _lossLimitForStageType(
+                        value,
+                      ).clamp(2, 10);
                       _setDefaultStageNameIfNeeded(value);
                     });
                   },
@@ -2585,7 +2589,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     ),
                     trailing: ExpertSetupSection(
                       title: 'Qualifikation im Detail',
-                      summary: 'Plätze, Best-of-Vergleich und automatische Anpassung',
+                      summary:
+                          'Plätze, Best-of-Vergleich und automatische Anpassung',
                       children: [
                         _GroupQualificationSetup(
                           groupSizes: groupSizes,

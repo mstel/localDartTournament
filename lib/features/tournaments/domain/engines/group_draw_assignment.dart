@@ -9,6 +9,17 @@ class GroupDrawAssignment {
     required List<int> groupSizes,
   }) {
     final participantCount = groupSizes.fold<int>(0, (sum, size) => sum + size);
+    if (slotOrder.isNotEmpty &&
+        !_isValidSlotOrder(
+          slotOrder,
+          participantCount: participantCount,
+          itemCount: items.length,
+        )) {
+      throw FormatException(
+        'Die gespeicherte Gruppenauslosung passt nicht zu den '
+        'Gruppengrößen ($participantCount Plätze).',
+      );
+    }
     return partition(
       slotOrder.isEmpty
           ? items
@@ -19,6 +30,29 @@ class GroupDrawAssignment {
             ),
       groupSizes,
     );
+  }
+
+  static bool _isValidSlotOrder(
+    List<int?> slotOrder, {
+    required int participantCount,
+    required int itemCount,
+  }) {
+    if (participantCount < 1 ||
+        slotOrder.length != participantCount ||
+        itemCount < participantCount) {
+      return false;
+    }
+
+    final seen = <int>{};
+    for (final seed in slotOrder) {
+      if (seed == null ||
+          seed < 1 ||
+          seed > participantCount ||
+          !seen.add(seed)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static List<List<T?>> previewPartitionDraw<T>({

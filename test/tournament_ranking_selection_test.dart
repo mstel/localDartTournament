@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_run_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/creation/stage_setup_widgets.dart'
+    show GroupTieBreakerSetup;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
@@ -128,6 +130,61 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets(
+    'running group tie-breakers update tournament and runtime stages',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final storage = _RecordingTournamentStorage();
+      final tournament = fixture()
+        ..plannedMinutes = 60
+        ..stages.add(
+          const TournamentStage(
+            name: 'Gruppen',
+            type: 'groups',
+            groupSizes: [6],
+          ),
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TournamentRunPage(
+            tournament: tournament,
+            runController: TournamentRunController(storage: storage),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('Einstellungen'));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.ensureVisible(find.text('Ranglistenoptionen'));
+      await tester.pump();
+      await tester.tap(find.text('Ranglistenoptionen'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final tieBreakerSetup = tester.widget<GroupTieBreakerSetup>(
+        find.byType(GroupTieBreakerSetup),
+      );
+      expect(tieBreakerSetup.tieBreakers, hasLength(4));
+      await tieBreakerSetup.onMoveTieBreaker(1, -1);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final expected = ['headToHead', 'points', 'legDifference', 'legsFor'];
+      expect(tournament.stages.single.groupTieBreakers, expected);
+      expect(
+        (tournament.runStages.single as GroupTournamentRunStage).tieBreakers,
+        expected,
+      );
+      expect(
+        (await storage.loadTournaments()).single.stages.single.groupTieBreakers,
+        expected,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
 
 class _RecordingTournamentStorage extends TournamentStorage {

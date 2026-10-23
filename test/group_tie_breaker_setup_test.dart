@@ -27,7 +27,7 @@ void main() {
             body: SingleChildScrollView(
               child: GroupTieBreakerSetup(
                 tieBreakers: defaultGroupTieBreakers,
-                onMoveTieBreaker: (_, _) {},
+                onMoveTieBreaker: (_, _) async {},
               ),
             ),
           ),

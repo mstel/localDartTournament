@@ -22,6 +22,37 @@ void main() {
     ]);
   });
 
+  test('rejects a stale draw instead of silently restoring default groups', () {
+    final players = [
+      for (var index = 1; index <= 8; index++)
+        TournamentPlayer.generated(index),
+    ];
+
+    expect(
+      () => GroupDrawAssignment.partitionDraw(
+        items: players,
+        slotOrder: const [2, 3, 5, 7],
+        groupSizes: const [4, 4],
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('draw completion survives tournament stage serialization', () {
+    final stage = TournamentStage(
+      name: 'Gruppen',
+      type: 'groups',
+      groupDrawOnStart: true,
+      groupSlotOrder: const [2, 3, 5, 7, 1, 4, 6, 8],
+      groupDrawCompleted: true,
+    );
+
+    final restored = TournamentStage.fromJson(stage.toJson());
+
+    expect(restored.groupDrawCompleted, isTrue);
+    expect(restored.groupSlotOrder, [2, 3, 5, 7, 1, 4, 6, 8]);
+  });
+
   test(
     'persisted draw order partitions players using configured group sizes',
     () {

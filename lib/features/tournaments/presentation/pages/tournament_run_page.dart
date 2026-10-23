@@ -425,7 +425,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     } catch (_) {
       if (!mounted) return;
       setState(
-        () => _directorSaveError = 'Änderungen sind noch nicht sicher gespeichert. Bitte erneut speichern.',
+        () => _directorSaveError =
+            'Änderungen sind noch nicht sicher gespeichert. Bitte erneut speichern.',
       );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -509,6 +510,60 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (mounted) {
         setState(() => _savingRankingSelection = false);
       }
+    }
+  }
+
+  Future<void> _moveGroupTieBreaker(int index, int direction) async {
+    if (_viewStageIndex != _activeStageIndex ||
+        _activeStageIndex >= widget.tournament.stages.length ||
+        _completedStageIndexes.contains(_activeStageIndex)) {
+      return;
+    }
+    final stage = widget.tournament.stages[_activeStageIndex];
+    if (stage.type != 'groups') return;
+    final target = index + direction;
+    if (index < 0 ||
+        index >= stage.groupTieBreakers.length ||
+        target < 0 ||
+        target >= stage.groupTieBreakers.length) {
+      return;
+    }
+    final tieBreakers = List<String>.from(stage.groupTieBreakers);
+    final moved = tieBreakers.removeAt(index);
+    tieBreakers.insert(target, moved);
+    final runStage = widget.tournament.runStages[_activeStageIndex];
+    final updatedRunStage = runStage is GroupTournamentRunStage
+        ? GroupTournamentRunStage(
+            name: runStage.name,
+            groupPlayType: runStage.groupPlayType,
+            groups: runStage.groups,
+            qualificationPlan: runStage.qualificationPlan,
+            tieBreakers: List.unmodifiable(tieBreakers),
+          )
+        : runStage;
+
+    setState(() {
+      widget.tournament.stages[_activeStageIndex] = stage.copyWith(
+        groupTieBreakers: List.unmodifiable(tieBreakers),
+      );
+      widget.tournament.runStages[_activeStageIndex] = updatedRunStage;
+    });
+    await _saveTieBreakerChange(_activeStageIndex, stage, runStage);
+  }
+
+  Future<void> _saveTieBreakerChange(
+    int stageIndex,
+    TournamentStage previousStage,
+    TournamentRunStage previousRunStage,
+  ) async {
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        widget.tournament.stages[stageIndex] = previousStage;
+        widget.tournament.runStages[stageIndex] = previousRunStage;
+      });
     }
   }
 
@@ -2532,7 +2587,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   bool _stageNeedsStartDraw(TournamentStage stage) {
     if (stage.type == 'groups') {
-      return stage.groupDrawOnStart && stage.groupSlotOrder.isEmpty;
+      return stage.groupDrawOnStart && !stage.groupDrawCompleted;
     }
 
     return _isKnockoutStageType(stage.type) &&
@@ -2580,46 +2635,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   TournamentStage _copyStageWithStartDraw(
     TournamentStage stage,
     List<int?> slotOrder,
-  ) {
-    return TournamentStage(
-      name: stage.name,
-      type: stage.type,
-      groupCount: stage.groupCount,
-      groupSizes: stage.groupSizes,
-      groupPlayType: stage.groupPlayType,
-      groupPlayTypes: stage.groupPlayTypes,
-      groupRoundRobinRepeats: stage.groupRoundRobinRepeats,
-      groupMaxGamesPerPlayer: stage.groupMaxGamesPerPlayer,
-      groupTieBreakers: stage.groupTieBreakers,
-      groupDrawOnStart: stage.groupDrawOnStart,
-      groupSlotOrder: stage.type == 'groups'
-          ? List.unmodifiable(slotOrder)
-          : stage.groupSlotOrder,
-      knockoutParticipantCount: stage.knockoutParticipantCount,
-      knockoutBracketSize: stage.knockoutBracketSize,
-      knockoutByeCount: stage.knockoutByeCount,
-      knockoutSlotOrder: stage.type == 'groups'
-          ? stage.knockoutSlotOrder
-          : List.unmodifiable(slotOrder),
-      knockoutSeedingMode: stage.knockoutSeedingMode,
-      knockoutDrawOnStart: stage.knockoutDrawOnStart,
-      qualifiersByGroup: stage.qualifiersByGroup,
-      fixedQualifiersByGroup: stage.fixedQualifiersByGroup,
-      extraQualifierRank: stage.extraQualifierRank,
-      extraQualifierCount: stage.extraQualifierCount,
-      qualificationAutoAdjust: stage.qualificationAutoAdjust,
-      qualifiedParticipantCount: stage.qualifiedParticipantCount,
-      qualificationSummary: stage.qualificationSummary,
-      finalEndsTournament: stage.finalEndsTournament,
-      knockoutLives: stage.knockoutLives,
-      placementPlaces: stage.placementPlaces,
-      gameFormat: stage.gameFormat,
-    );
-  }
+  ) => stage.type == 'groups'
+      ? stage.copyWith(
+          groupSlotOrder: List.unmodifiable(slotOrder),
+          groupDrawCompleted: true,
+        )
+      : stage.copyWith();
 
   Future<void> _completeCurrentStage() async {
     final nextStageIndex = _activeStageIndex + 1;
     final hasNextStage = nextStageIndex < widget.tournament.runStages.length;
+    final completedStageIndex = _activeStageIndex;
+    final previousViewStageIndex = _viewStageIndex;
+    final wasReopenedForCorrections = widget.tournament.reopenedForCorrections;
     final advancingPlayers = hasNextStage
         ? _advancingPlayersFromStage(
             widget.tournament.runStages[_activeStageIndex],
@@ -2636,13 +2664,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
 
       _completedStageIndexes.add(_activeStageIndex);
+      if (!hasNextStage) {
+        widget.tournament.reopenedForCorrections = false;
+      }
       if (hasNextStage) {
         _activeStageIndex++;
       }
       _viewStageIndex = _activeStageIndex;
     });
     _advanceKnockoutWinners();
-    await _saveTournamentProgress();
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (wasReopenedForCorrections && !hasNextStage) {
+        setState(() {
+          widget.tournament.reopenedForCorrections = true;
+          widget.tournament.finishedAt = null;
+          _completedStageIndexes.remove(completedStageIndex);
+          widget.tournament.completedStageIndexes.remove(completedStageIndex);
+          _viewStageIndex = previousViewStageIndex;
+        });
+      }
+      rethrow;
+    }
     if (!mounted) {
       return;
     }
@@ -2936,14 +2980,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               ],
                                             );
                                             if (context.mounted) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                        'TV-Anzeige im separaten Fenster geöffnet. Ziehe das Fenster auf den 2. Monitor und maximiere es.',
-                                                      ),
-                                                    ),
-                                                  );
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'TV-Anzeige im separaten Fenster geöffnet. Ziehe das Fenster auf den 2. Monitor und maximiere es.',
+                                                  ),
+                                                ),
+                                              );
                                             }
                                           } catch (_) {
                                             if (context.mounted) {
@@ -3104,6 +3149,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         );
                                       },
                                     ),
+                                  if (_activeStageIndex <
+                                          widget.tournament.stages.length &&
+                                      widget
+                                              .tournament
+                                              .stages[_activeStageIndex]
+                                              .type ==
+                                          'groups') ...[
+                                    const Divider(height: 28),
+                                    Text(
+                                      'Tie-Breaker · ${widget.tournament.stages[_activeStageIndex].name}',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    GroupTieBreakerSetup(
+                                      tieBreakers: widget
+                                          .tournament
+                                          .stages[_activeStageIndex]
+                                          .groupTieBreakers,
+                                      onMoveTieBreaker: _moveGroupTieBreaker,
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),

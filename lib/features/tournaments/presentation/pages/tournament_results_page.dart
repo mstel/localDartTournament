@@ -1,6 +1,6 @@
 import '../../../../shared/widgets/sport_menu.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
-    show ProductionTournamentRuntime;
+    show ProductionTournamentRuntime, TournamentRunPage;
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import '../../domain/engines/placement_engine.dart';
 import '../../domain/knockout_round_names.dart';
@@ -16,6 +16,7 @@ import '../../../statistics/domain/best_performance.dart';
 import '../widgets/run/best_performance_editor.dart';
 import 'challonge_archive_page.dart';
 import '../../application/tournament_timing.dart';
+import '../../application/tournament_run_controller.dart';
 import '../../application/tournament_duration_range.dart';
 import '../../application/tournament_completion_image_generator.dart';
 import '../widgets/results/tournament_ranking_assignment.dart';
@@ -67,12 +68,13 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: 'Hauptmenü',
-            onPressed: () =>
-                Navigator.of(context).popUntil((route) => route.isFirst),
-            icon: const Icon(Icons.home_outlined),
-          ),
+          if (tournament.stages.isNotEmpty &&
+              tournament.importedArchive == null)
+            IconButton(
+              tooltip: 'Einstellungen',
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: _showSettings,
+            ),
         ],
       ),
       body: SafeArea(
@@ -288,6 +290,84 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _reopenTournament() async {
+    final lastStageIndex = tournament.stages.length - 1;
+    if (lastStageIndex < 0 || tournament.reopenedForCorrections) return;
+
+    final previousFinishedAt = tournament.finishedAt;
+    final previousPausedAt = tournament.pausedAt;
+    final previousActiveStageIndex = tournament.activeStageIndex;
+    final previousCompletedStages = Set<int>.from(
+      tournament.completedStageIndexes,
+    );
+    final controller = TournamentRunController(storage: widget.storage);
+    tournament
+      ..finishedAt = null
+      ..pausedAt ??= DateTime.now()
+      ..reopenedForCorrections = true;
+
+    try {
+      await controller.saveProgress(
+        tournament: tournament,
+        activeStageIndex: lastStageIndex,
+        completedStageIndexes: {...previousCompletedStages}
+          ..remove(lastStageIndex),
+      );
+    } catch (error) {
+      tournament
+        ..finishedAt = previousFinishedAt
+        ..pausedAt = previousPausedAt
+        ..reopenedForCorrections = false
+        ..activeStageIndex = previousActiveStageIndex;
+      tournament.completedStageIndexes
+        ..clear()
+        ..addAll(previousCompletedStages);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Turnier konnte nicht geöffnet werden: $error'),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement<void, void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TournamentRunPage(
+          tournament: tournament,
+          runController: controller,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSettings() async {
+    final reopen = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Einstellungen'),
+        content: const Text(
+          'Das Turnier wird mit allen Ergebnissen erneut geöffnet. '
+          'Die Turnieruhr bleibt pausiert.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.replay),
+            label: const Text('Turnier erneut öffnen'),
+          ),
+        ],
+      ),
+    );
+    if (reopen == true) await _reopenTournament();
   }
 
   Map<String, Object?> _exportSummary(_TournamentResultSummary summary) {

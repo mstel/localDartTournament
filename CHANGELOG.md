@@ -1,3 +1,14 @@
+# 1.2.0+21
+
+- Persists accepted group draws as completed, applies their exact slot order to
+  runtime groups, and reports stale draw data instead of reverting to default
+  group assignments.
+- Adds editable group tie-breakers to the running tournament settings and
+  applies the selected order to the active standings and forecasts.
+- Allows completed tournaments to be reopened with their results and settings
+  intact, the clock paused, and the final completion action available again.
+- Uses the regular surface color for the stage match-count preview.
+
 # 1.1.8+20
 
 - Shows only drawn players in the group assignment preview; undrawn group

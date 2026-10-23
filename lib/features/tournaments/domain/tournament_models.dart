@@ -274,8 +274,9 @@ class TournamentPlayer {
         other.isGenerated == isGenerated &&
         other.compactName == compactName &&
         other.members.length == members.length &&
-        Iterable<int>.generate(members.length)
-            .every((i) => members[i] == other.members[i]);
+        Iterable<int>.generate(
+          members.length,
+        ).every((i) => members[i] == other.members[i]);
   }
 
   @override
@@ -304,6 +305,7 @@ class TournamentStage {
     this.groupTieBreakers = defaultGroupTieBreakers,
     this.groupDrawOnStart = false,
     this.groupSlotOrder = const [],
+    this.groupDrawCompleted = false,
     this.knockoutParticipantCount,
     this.knockoutBracketSize,
     this.knockoutByeCount = 0,
@@ -321,6 +323,7 @@ class TournamentStage {
   });
 
   factory TournamentStage.fromJson(Map<String, dynamic> json) {
+    final groupSlotOrder = _nullableIntListFromJson(json['groupSlotOrder']);
     return TournamentStage(
       name: json['name'] as String? ?? '',
       type: json['type'] as String? ?? 'groups',
@@ -337,7 +340,9 @@ class TournamentStage {
       ),
       groupTieBreakers: _groupTieBreakersFromJson(json['groupTieBreakers']),
       groupDrawOnStart: json['groupDrawOnStart'] as bool? ?? false,
-      groupSlotOrder: _nullableIntListFromJson(json['groupSlotOrder']),
+      groupSlotOrder: groupSlotOrder,
+      groupDrawCompleted:
+          json['groupDrawCompleted'] as bool? ?? groupSlotOrder.isNotEmpty,
       knockoutParticipantCount: json['knockoutParticipantCount'] as int?,
       knockoutBracketSize: json['knockoutBracketSize'] as int?,
       knockoutByeCount: json['knockoutByeCount'] as int? ?? 0,
@@ -386,6 +391,7 @@ class TournamentStage {
   final List<String> groupTieBreakers;
   final bool groupDrawOnStart;
   final List<int?> groupSlotOrder;
+  final bool groupDrawCompleted;
   final int? knockoutParticipantCount;
   final int? knockoutBracketSize;
   final int knockoutByeCount;
@@ -417,6 +423,7 @@ class TournamentStage {
       'groupTieBreakers': groupTieBreakers,
       'groupDrawOnStart': groupDrawOnStart,
       'groupSlotOrder': groupSlotOrder,
+      'groupDrawCompleted': groupDrawCompleted,
       'knockoutParticipantCount': knockoutParticipantCount,
       'knockoutBracketSize': knockoutBracketSize,
       'knockoutByeCount': knockoutByeCount,
@@ -433,6 +440,42 @@ class TournamentStage {
       'gameFormat': gameFormat.toJson(),
     };
   }
+
+  TournamentStage copyWith({
+    List<String>? groupTieBreakers,
+    List<int?>? groupSlotOrder,
+    bool? groupDrawCompleted,
+  }) => TournamentStage(
+    name: name,
+    type: type,
+    finalEndsTournament: finalEndsTournament,
+    knockoutLives: knockoutLives,
+    placementPlaces: placementPlaces,
+    groupCount: groupCount,
+    groupSizes: groupSizes,
+    groupPlayType: groupPlayType,
+    groupPlayTypes: groupPlayTypes,
+    groupRoundRobinRepeats: groupRoundRobinRepeats,
+    groupMaxGamesPerPlayer: groupMaxGamesPerPlayer,
+    groupTieBreakers: groupTieBreakers ?? this.groupTieBreakers,
+    groupDrawOnStart: groupDrawOnStart,
+    groupSlotOrder: groupSlotOrder ?? this.groupSlotOrder,
+    groupDrawCompleted: groupDrawCompleted ?? this.groupDrawCompleted,
+    knockoutParticipantCount: knockoutParticipantCount,
+    knockoutBracketSize: knockoutBracketSize,
+    knockoutByeCount: knockoutByeCount,
+    knockoutSlotOrder: knockoutSlotOrder,
+    knockoutSeedingMode: knockoutSeedingMode,
+    knockoutDrawOnStart: knockoutDrawOnStart,
+    qualifiersByGroup: qualifiersByGroup,
+    fixedQualifiersByGroup: fixedQualifiersByGroup,
+    extraQualifierRank: extraQualifierRank,
+    extraQualifierCount: extraQualifierCount,
+    qualificationAutoAdjust: qualificationAutoAdjust,
+    qualifiedParticipantCount: qualifiedParticipantCount,
+    qualificationSummary: qualificationSummary,
+    gameFormat: gameFormat,
+  );
 }
 
 /// Das tatsächlich gespielte Format einer Etappe. Es ist bewusst unabhängig
@@ -519,6 +562,7 @@ class CreatedTournament {
     this.startedAt,
     this.finishedAt,
     this.pausedAt,
+    this.reopenedForCorrections = false,
     this.totalPausedSeconds = 0,
     this.plannedMinimumMinutes,
     this.plannedMinutes,
@@ -563,19 +607,21 @@ class CreatedTournament {
         json['withdrawals'],
         PlayerWithdrawal.fromJson,
       ),
-      blockedBoards: _intListFromJson(json['blockedBoards'])
-          .where((b) => b >= 1 && b <= 64)
-          .toSet(),
+      blockedBoards: _intListFromJson(
+        json['blockedBoards'],
+      ).where((b) => b >= 1 && b <= 64).toSet(),
       startedAt: _dateTimeFromJson(json['startedAt']),
       finishedAt: _dateTimeFromJson(json['finishedAt']),
       pausedAt: _dateTimeFromJson(json['pausedAt']),
+      reopenedForCorrections: json['reopenedForCorrections'] as bool? ?? false,
       totalPausedSeconds: json['totalPausedSeconds'] as int? ?? 0,
       plannedMinimumMinutes: json['plannedMinimumMinutes'] as int?,
       plannedMinutes: json['plannedMinutes'] as int?,
       plannedMatches: json['plannedMatches'] as int?,
       plannedMatchEndSeconds: _intListFromJson(json['plannedMatchEndSeconds']),
-      completedStageIndexes: _intListFromJson(json['completedStageIndexes'])
-          .toSet(),
+      completedStageIndexes: _intListFromJson(
+        json['completedStageIndexes'],
+      ).toSet(),
     );
   }
 
@@ -596,6 +642,7 @@ class CreatedTournament {
   final List<PlayerWithdrawal> withdrawals;
   final Set<int> blockedBoards;
   DateTime? startedAt, finishedAt, pausedAt;
+  bool reopenedForCorrections;
   int totalPausedSeconds;
   bool get isClockPaused => pausedAt != null;
   int? plannedMinimumMinutes;
@@ -626,6 +673,7 @@ class CreatedTournament {
       'startedAt': startedAt?.toUtc().toIso8601String(),
       'finishedAt': finishedAt?.toUtc().toIso8601String(),
       if (pausedAt != null) 'pausedAt': pausedAt?.toUtc().toIso8601String(),
+      if (reopenedForCorrections) 'reopenedForCorrections': true,
       if (totalPausedSeconds > 0) 'totalPausedSeconds': totalPausedSeconds,
       if (plannedMinimumMinutes != null)
         'plannedMinimumMinutes': plannedMinimumMinutes,
