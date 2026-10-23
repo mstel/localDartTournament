@@ -802,16 +802,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         stageIndex >= widget.tournament.runStages.length) {
       return;
     }
-    final stage = widget.tournament.stages[stageIndex];
+    var stage = widget.tournament.stages[stageIndex];
     final runStage = widget.tournament.runStages[stageIndex];
     if (stage.type != 'groups' ||
         !stage.groupDrawOnStart ||
-        !stage.groupDrawCompleted ||
         stage.groupSlotOrder.isEmpty ||
-        runStage is! GroupTournamentRunStage ||
-        !GroupPositionEditor.canEdit(runStage)) {
+        runStage is! GroupTournamentRunStage) {
       return;
     }
+    if (!stage.groupDrawCompleted) {
+      stage = stage.copyWith(groupDrawCompleted: true);
+      widget.tournament.stages[stageIndex] = stage;
+    }
+    if (!GroupPositionEditor.canEdit(runStage)) return;
+
     final expected = _buildRunStageFromPlayers(
       stage,
       _incomingPlayersForStage(stageIndex),
@@ -2719,7 +2723,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   bool _stageNeedsStartDraw(TournamentStage stage) {
     if (stage.type == 'groups') {
-      return stage.groupDrawOnStart && !stage.groupDrawCompleted;
+      return stage.groupDrawOnStart &&
+          !stage.groupDrawCompleted &&
+          stage.groupSlotOrder.isEmpty;
     }
 
     return _isKnockoutStageType(stage.type) &&

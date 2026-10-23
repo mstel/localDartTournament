@@ -1,3 +1,9 @@
+# 1.2.2+23
+
+- Recovers accepted group draw assignments from the persisted draw order even
+  when the completion flag is stale, repairs the flag, and avoids reopening
+  the wheel.
+
 # 1.2.1+22
 
 - Uses the final group's configured tie-breaker order for the completed
