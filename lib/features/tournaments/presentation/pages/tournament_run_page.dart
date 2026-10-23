@@ -80,6 +80,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _allowPop = false;
   bool _backgrounded = false;
   bool _savingRankingSelection = false;
+  bool _savingTieBreakerSettings = false;
+  int? _tieBreakerDraftStageIndex;
+  List<String> _tieBreakerDraft = const [];
   Future<void> _checkpoint() => _runController.saveProgress(
     tournament: widget.tournament,
     activeStageIndex: _activeStageIndex,
@@ -392,6 +395,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     _viewStageIndex = _activeStageIndex;
     _completedStageIndexes.addAll(widget.tournament.completedStageIndexes);
     widget.tournament.startedAt ??= DateTime.now();
+    _restoreCompletedGroupDrawForActiveStage();
     _advanceKnockoutWinners();
     _ensureGroupDeciders();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -513,57 +517,111 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  Future<void> _moveGroupTieBreaker(int index, int direction) async {
+  List<String> _tieBreakersForActiveStage() {
+    if (_activeStageIndex >= widget.tournament.stages.length) {
+      return const [];
+    }
+    if (_tieBreakerDraftStageIndex == _activeStageIndex) {
+      return _tieBreakerDraft;
+    }
+    return widget.tournament.stages[_activeStageIndex].groupTieBreakers;
+  }
+
+  bool get _hasPendingTieBreakerChanges {
+    if (_tieBreakerDraftStageIndex != _activeStageIndex ||
+        _activeStageIndex >= widget.tournament.stages.length) {
+      return false;
+    }
+    final saved = widget.tournament.stages[_activeStageIndex].groupTieBreakers;
+    final draft = _tieBreakerDraft;
+    return saved.length != draft.length ||
+        List.generate(
+          saved.length,
+          (index) => index,
+        ).any((index) => saved[index] != draft[index]);
+  }
+
+  Future<void> _moveGroupTieBreakerDraft(int index, int direction) async {
     if (_viewStageIndex != _activeStageIndex ||
         _activeStageIndex >= widget.tournament.stages.length ||
+        _savingTieBreakerSettings ||
         _completedStageIndexes.contains(_activeStageIndex)) {
       return;
     }
     final stage = widget.tournament.stages[_activeStageIndex];
     if (stage.type != 'groups') return;
     final target = index + direction;
+    final current = _tieBreakersForActiveStage();
     if (index < 0 ||
-        index >= stage.groupTieBreakers.length ||
+        index >= current.length ||
         target < 0 ||
-        target >= stage.groupTieBreakers.length) {
+        target >= current.length) {
       return;
     }
-    final tieBreakers = List<String>.from(stage.groupTieBreakers);
+    final tieBreakers = List<String>.from(current);
     final moved = tieBreakers.removeAt(index);
     tieBreakers.insert(target, moved);
-    final runStage = widget.tournament.runStages[_activeStageIndex];
-    final updatedRunStage = runStage is GroupTournamentRunStage
-        ? GroupTournamentRunStage(
-            name: runStage.name,
-            groupPlayType: runStage.groupPlayType,
-            groups: runStage.groups,
-            qualificationPlan: runStage.qualificationPlan,
-            tieBreakers: List.unmodifiable(tieBreakers),
-          )
-        : runStage;
-
     setState(() {
-      widget.tournament.stages[_activeStageIndex] = stage.copyWith(
-        groupTieBreakers: List.unmodifiable(tieBreakers),
-      );
-      widget.tournament.runStages[_activeStageIndex] = updatedRunStage;
+      _tieBreakerDraftStageIndex = _activeStageIndex;
+      _tieBreakerDraft = List.unmodifiable(tieBreakers);
     });
-    await _saveTieBreakerChange(_activeStageIndex, stage, runStage);
   }
 
-  Future<void> _saveTieBreakerChange(
-    int stageIndex,
-    TournamentStage previousStage,
-    TournamentRunStage previousRunStage,
-  ) async {
+  Future<void> _applyGroupTieBreakerDraft() async {
+    final stageIndex = _activeStageIndex;
+    if (!_hasPendingTieBreakerChanges ||
+        _savingTieBreakerSettings ||
+        stageIndex >= widget.tournament.runStages.length ||
+        _viewStageIndex != stageIndex ||
+        _completedStageIndexes.contains(stageIndex)) {
+      return;
+    }
+    final previousStage = widget.tournament.stages[stageIndex];
+    final previousRunStage = widget.tournament.runStages[stageIndex];
+    if (previousRunStage is! GroupTournamentRunStage) return;
+    final tieBreakers = List<String>.unmodifiable(_tieBreakerDraft);
+    final updatedStage = previousStage.copyWith(groupTieBreakers: tieBreakers);
+    final updatedRunStage = GroupTournamentRunStage(
+      name: previousRunStage.name,
+      groupPlayType: previousRunStage.groupPlayType,
+      groups: previousRunStage.groups,
+      qualificationPlan: previousRunStage.qualificationPlan,
+      tieBreakers: tieBreakers,
+    );
+    setState(() {
+      _savingTieBreakerSettings = true;
+      widget.tournament.stages[stageIndex] = updatedStage;
+      widget.tournament.runStages[stageIndex] = updatedRunStage;
+    });
     try {
-      await _saveTournamentProgress(propagateError: true);
-    } catch (_) {
+      await _runController.saveProgress(
+        tournament: widget.tournament,
+        activeStageIndex: _activeStageIndex,
+        completedStageIndexes: _completedStageIndexes,
+      );
       if (!mounted) return;
       setState(() {
+        _savingTieBreakerSettings = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tie-Breaker übernommen. Tabelle und Prognose wurden aktualisiert.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _savingTieBreakerSettings = false;
         widget.tournament.stages[stageIndex] = previousStage;
         widget.tournament.runStages[stageIndex] = previousRunStage;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tie-Breaker konnten nicht gespeichert werden: $error'),
+        ),
+      );
     }
   }
 
@@ -700,11 +758,85 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     setState(() {
       changed = GroupPositionEditor.swap(stage, pair[0], pair[1]);
       if (changed) {
+        _persistGroupArrangementInDrawOrder(stage);
         _advanceKnockoutWinners();
         _ensureGroupDeciders();
       }
     });
     if (changed) await _saveTournamentProgress();
+  }
+
+  void _persistGroupArrangementInDrawOrder(GroupTournamentRunStage runStage) {
+    final stageIndex = _activeStageIndex;
+    if (stageIndex >= widget.tournament.stages.length) return;
+    final stage = widget.tournament.stages[stageIndex];
+    if (!stage.groupDrawOnStart || !stage.groupDrawCompleted) return;
+    final incomingPlayers = _incomingPlayersForStage(stageIndex);
+    if (stage.groupSizes.length != runStage.groups.length) return;
+    final slotOrder = <int?>[];
+    for (
+      var groupIndex = 0;
+      groupIndex < runStage.groups.length;
+      groupIndex++
+    ) {
+      final group = runStage.groups[groupIndex];
+      final groupSize = stage.groupSizes[groupIndex];
+      if (group.players.length > groupSize) return;
+      for (final player in group.players) {
+        final playerIndex = incomingPlayers.indexOf(player);
+        if (playerIndex < 0) return;
+        slotOrder.add(playerIndex + 1);
+      }
+      slotOrder.addAll(
+        List<int?>.filled(groupSize - group.players.length, null),
+      );
+    }
+    widget.tournament.stages[stageIndex] = stage.copyWith(
+      groupSlotOrder: List.unmodifiable(slotOrder),
+    );
+  }
+
+  void _restoreCompletedGroupDrawForActiveStage() {
+    final stageIndex = _activeStageIndex;
+    if (stageIndex >= widget.tournament.stages.length ||
+        stageIndex >= widget.tournament.runStages.length) {
+      return;
+    }
+    final stage = widget.tournament.stages[stageIndex];
+    final runStage = widget.tournament.runStages[stageIndex];
+    if (stage.type != 'groups' ||
+        !stage.groupDrawOnStart ||
+        !stage.groupDrawCompleted ||
+        stage.groupSlotOrder.isEmpty ||
+        runStage is! GroupTournamentRunStage ||
+        !GroupPositionEditor.canEdit(runStage)) {
+      return;
+    }
+    final expected = _buildRunStageFromPlayers(
+      stage,
+      _incomingPlayersForStage(stageIndex),
+    );
+    if (expected is! GroupTournamentRunStage ||
+        expected.groups.length != runStage.groups.length) {
+      return;
+    }
+    final hasDifferentAssignments = List.generate(expected.groups.length, (
+      groupIndex,
+    ) {
+      final expectedPlayers = expected.groups[groupIndex].players;
+      final savedPlayers = runStage.groups[groupIndex].players;
+      return expectedPlayers.length != savedPlayers.length ||
+          List.generate(
+            expectedPlayers.length,
+            (playerIndex) => playerIndex,
+          ).any(
+            (playerIndex) =>
+                expectedPlayers[playerIndex] != savedPlayers[playerIndex],
+          );
+    }).any((different) => different);
+    if (hasDifferentAssignments) {
+      widget.tournament.runStages[stageIndex] = expected;
+    }
   }
 
   Future<void> _swapKnockoutRunSlots(
@@ -3149,33 +3281,75 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         );
                                       },
                                     ),
-                                  if (_activeStageIndex <
-                                          widget.tournament.stages.length &&
-                                      widget
-                                              .tournament
-                                              .stages[_activeStageIndex]
-                                              .type ==
-                                          'groups') ...[
-                                    const Divider(height: 28),
-                                    Text(
-                                      'Tie-Breaker · ${widget.tournament.stages[_activeStageIndex].name}',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleSmall,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    GroupTieBreakerSetup(
-                                      tieBreakers: widget
-                                          .tournament
-                                          .stages[_activeStageIndex]
-                                          .groupTieBreakers,
-                                      onMoveTieBreaker: _moveGroupTieBreaker,
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
                           const SizedBox(height: 12),
+                          if (widget.tournament.leagueMatch == null &&
+                              _activeStageIndex <
+                                  widget.tournament.stages.length &&
+                              widget
+                                      .tournament
+                                      .stages[_activeStageIndex]
+                                      .type ==
+                                  'groups')
+                            Card(
+                              child: ExpansionTile(
+                                initiallyExpanded: false,
+                                leading: const Icon(Icons.swap_vert),
+                                title: const Text('Tie Breaker Einstellungen'),
+                                subtitle: const Text(
+                                  'Reihenfolge für Gleichstände in dieser Etappe',
+                                ),
+                                childrenPadding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  16,
+                                ),
+                                children: [
+                                  Text(
+                                    'Tie-Breaker · ${widget.tournament.stages[_activeStageIndex].name}',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  GroupTieBreakerSetup(
+                                    tieBreakers: _tieBreakersForActiveStage(),
+                                    onMoveTieBreaker: _moveGroupTieBreakerDraft,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: FilledButton.icon(
+                                      onPressed:
+                                          _hasPendingTieBreakerChanges &&
+                                              !_savingTieBreakerSettings &&
+                                              _viewStageIndex ==
+                                                  _activeStageIndex &&
+                                              !_completedStageIndexes.contains(
+                                                _activeStageIndex,
+                                              )
+                                          ? _applyGroupTieBreakerDraft
+                                          : null,
+                                      icon: _savingTieBreakerSettings
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(Icons.check),
+                                      label: const Text('Übernehmen'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (widget.tournament.leagueMatch == null)
+                            const SizedBox(height: 12),
                           // 4. Spieler verwalten
                           Card(
                             child: ExpansionTile(

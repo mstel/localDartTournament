@@ -6,6 +6,7 @@ import 'package:dart_tournament_manager/features/tournaments/data/tournament_sto
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/creation/stage_setup_widgets.dart'
     show GroupTieBreakerSetup;
+import 'package:dart_tournament_manager/features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
@@ -132,9 +133,9 @@ void main() {
   });
 
   testWidgets(
-    'running group tie-breakers update tournament and runtime stages',
+    'running group tie-breakers are applied from a separate settings panel',
     (tester) async {
-      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.physicalSize = const Size(1440, 1400);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final storage = _RecordingTournamentStorage();
@@ -159,19 +160,37 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.tap(find.text('Einstellungen'));
       await tester.pump(const Duration(milliseconds: 500));
-      await tester.ensureVisible(find.text('Ranglistenoptionen'));
+      await tester.ensureVisible(find.text('Tie Breaker Einstellungen'));
       await tester.pump();
-      await tester.tap(find.text('Ranglistenoptionen'));
+      await tester.tap(find.text('Tie Breaker Einstellungen'));
       await tester.pump(const Duration(milliseconds: 500));
 
       final tieBreakerSetup = tester.widget<GroupTieBreakerSetup>(
         find.byType(GroupTieBreakerSetup),
       );
       expect(tieBreakerSetup.tieBreakers, hasLength(4));
+      final expected = List<String>.from(tieBreakerSetup.tieBreakers);
+      final first = expected.removeAt(1);
+      expected.insert(0, first);
       await tieBreakerSetup.onMoveTieBreaker(1, -1);
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
 
-      final expected = ['headToHead', 'points', 'legDifference', 'legsFor'];
+      expect(
+        tester
+            .widget<GroupTieBreakerSetup>(find.byType(GroupTieBreakerSetup))
+            .tieBreakers,
+        expected,
+      );
+      expect(tournament.stages.single.groupTieBreakers, isNot(expected));
+      expect(
+        (tournament.runStages.single as GroupTournamentRunStage).tieBreakers,
+        isNot(expected),
+      );
+      final applyButton = find.widgetWithText(FilledButton, 'Übernehmen');
+      final applyAction = tester.widget<FilledButton>(applyButton).onPressed;
+      expect(applyAction, isNotNull);
+      applyAction!();
+      await tester.pump(const Duration(milliseconds: 500));
       expect(tournament.stages.single.groupTieBreakers, expected);
       expect(
         (tournament.runStages.single as GroupTournamentRunStage).tieBreakers,
@@ -181,10 +200,123 @@ void main() {
         (await storage.loadTournaments()).single.stages.single.groupTieBreakers,
         expected,
       );
+      expect(
+        find.text(
+          'Tie-Breaker übernommen. Tabelle und Prognose wurden aktualisiert.',
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('final results use the current group tie-breaker order', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final players = [
+      for (var index = 1; index <= 4; index++)
+        TournamentPlayer.generated(index),
+    ];
+    final a = players[0];
+    final b = players[1];
+    final c = players[2];
+    final d = players[3];
+    final matches = [
+      GroupMatch(
+        homePlayer: a,
+        awayPlayer: b,
+        homeLegs: 2,
+        awayLegs: 1,
+        round: 1,
+      ),
+      GroupMatch(
+        homePlayer: a,
+        awayPlayer: c,
+        homeLegs: 1,
+        awayLegs: 0,
+        round: 1,
+      ),
+      GroupMatch(
+        homePlayer: a,
+        awayPlayer: d,
+        homeLegs: 1,
+        awayLegs: 0,
+        round: 1,
+      ),
+      GroupMatch(
+        homePlayer: b,
+        awayPlayer: c,
+        homeLegs: 3,
+        awayLegs: 0,
+        round: 1,
+      ),
+      GroupMatch(
+        homePlayer: b,
+        awayPlayer: d,
+        homeLegs: 3,
+        awayLegs: 0,
+        round: 1,
+      ),
+      GroupMatch(
+        homePlayer: c,
+        awayPlayer: d,
+        homeLegs: 1,
+        awayLegs: 0,
+        round: 1,
+      ),
+    ];
+    final stage = TournamentStage(
+      name: 'Gruppenphase',
+      type: 'groups',
+      groupSizes: const [4],
+      groupTieBreakers: const [
+        'headToHead',
+        'points',
+        'legDifference',
+        'legsFor',
+      ],
+    );
+    final tournament = CreatedTournament(
+      name: 'Abschlusstest',
+      players: players,
+      stages: [stage],
+      runStages: [
+        GroupTournamentRunStage(
+          name: stage.name,
+          groupPlayType: 'round_robin',
+          qualificationPlan: null,
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: players,
+              matches: matches,
+            ),
+          ],
+          tieBreakers: stage.groupTieBreakers,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: TournamentResultsPage(tournament: tournament)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final podiumNames = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data)
+        .where((text) => players.any((player) => player.name == text))
+        .toList();
+    expect(podiumNames.take(2), ['Spieler 1', 'Spieler 2']);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
 
 class _RecordingTournamentStorage extends TournamentStorage {

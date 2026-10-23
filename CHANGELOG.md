@@ -1,3 +1,13 @@
+# 1.2.1+22
+
+- Uses the final group's configured tie-breaker order for the completed
+  tournament results and podium.
+- Moves live group tie-breaker editing into its own settings panel with a
+  separate apply action and save feedback.
+- Restores accepted wheel assignments from their saved slot order when opening
+  an untouched group stage, and persists subsequent manual group-position
+  changes in that order.
+
 # 1.2.0+21
 
 - Persists accepted group draws as completed, applies their exact slot order to

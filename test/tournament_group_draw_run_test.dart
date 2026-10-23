@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_run_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -15,7 +17,7 @@ void main() {
       addTearDown(tester.view.reset);
       final tournament = _tournament();
       final storage = _MemoryTournamentStorage();
-      final controller = TournamentRunController(storage: storage);
+      final controller = _RecordingRunController(storage);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -59,10 +61,17 @@ void main() {
       );
       expect(tournament.stages.single.groupDrawCompleted, isTrue);
 
-      final restored = CreatedTournament.fromJson(
-        Map<String, dynamic>.from(tournament.toJson()),
-      );
+      expect(storage.savedTournament, isNotNull);
+      final restored = CreatedTournament.fromJson(storage.savedTournament!);
       expect(restored.stages.single.groupDrawCompleted, isTrue);
+      expect(
+        (restored.runStages.single as GroupTournamentRunStage).groups
+            .map((group) => group.players.map((player) => player.name).toList())
+            .toList(),
+        [drawnNames.take(4).toList(), drawnNames.skip(4).toList()],
+      );
+      restored.runStages[0] = _tournament().runStages.single;
+      await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpWidget(
         MaterialApp(
           home: TournamentRunPage(
@@ -71,14 +80,21 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Auslosung: Gruppenphase'), findsNothing);
+      expect(
+        (restored.runStages.single as GroupTournamentRunStage).groups
+            .map((group) => group.players.map((player) => player.name).toList())
+            .toList(),
+        [drawnNames.take(4).toList(), drawnNames.skip(4).toList()],
+      );
 
       await tester.tap(find.text('Einstellungen'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.ensureVisible(find.text('Gruppen verwalten'));
       await tester.tap(find.text('Bearbeiten'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       for (final name in drawnNames) {
         expect(find.text(name), findsOneWidget);
       }
@@ -134,6 +150,31 @@ CreatedTournament _tournament() {
 }
 
 class _MemoryTournamentStorage extends TournamentStorage {
+  Map<String, dynamic>? savedTournament;
+
   @override
-  Future<void> saveTournament(CreatedTournament tournament) async {}
+  Future<void> saveTournament(CreatedTournament tournament) async {
+    savedTournament = Map<String, dynamic>.from(
+      jsonDecode(jsonEncode(tournament.toJson())) as Map,
+    );
+  }
+}
+
+class _RecordingRunController extends TournamentRunController {
+  _RecordingRunController(this.storage);
+
+  final _MemoryTournamentStorage storage;
+
+  @override
+  Future<void> saveProgress({
+    required CreatedTournament tournament,
+    required int activeStageIndex,
+    required Set<int> completedStageIndexes,
+  }) async {
+    tournament.activeStageIndex = activeStageIndex;
+    tournament.completedStageIndexes
+      ..clear()
+      ..addAll(completedStageIndexes);
+    await storage.saveTournament(tournament);
+  }
 }

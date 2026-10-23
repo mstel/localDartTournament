@@ -3,6 +3,7 @@ import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime, TournamentRunPage;
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import '../../domain/engines/placement_engine.dart';
+import '../../domain/engines/group_standings_engine.dart';
 import '../../domain/knockout_round_names.dart';
 import 'package:flutter/material.dart';
 
@@ -1156,6 +1157,15 @@ class _TournamentResultSummary {
               .standings(finalStage.groups.single, finalStage.tieBreakers)
               .map((s) => s.player)
               .toList()
+        : finalStage is GroupTournamentRunStage && finalStage.groups.length == 1
+        ? const GroupStandingsEngine()
+              .calculate(
+                finalStage.groups.single,
+                finalStage.tieBreakers,
+                tournament: tournament,
+              )
+              .map((standing) => standing.player)
+              .toList()
         : const <TournamentPlayer>[];
     final ranking = <_PlayerResultStats>[];
     for (final player in finalStageRanking) {
@@ -1174,6 +1184,9 @@ class _TournamentResultSummary {
       playerCount: tournament.players.length,
       rankingHint: finalStage is KnockoutTournamentRunStage
           ? 'Die Platzierung folgt dem finalen K.-o.-Baum; die Balken zeigen gewonnene Legs im gesamten Turnier.'
+          : finalStage is GroupTournamentRunStage &&
+                finalStage.groups.length == 1
+          ? 'Die Platzierung folgt den Tie-Breaker-Einstellungen der finalen Gruppenphase.'
           : 'Die Platzierung folgt den Gesamtwerten aus allen eingetragenen Spielen.',
     );
   }
