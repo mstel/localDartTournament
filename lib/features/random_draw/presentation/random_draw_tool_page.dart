@@ -20,8 +20,6 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
   final _playersController = TextEditingController();
   final _random = Random.secure();
   final _drawnPlayers = <int>[];
-  final _groupAssignments = <int, int>{};
-  final _groupNameControllers = <TextEditingController>[];
   late final AnimationController _spinController;
   Animation<double>? _spinAnimation;
   double _rotation = 0;
@@ -32,7 +30,6 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
   @override
   void initState() {
     super.initState();
-    _syncGroupNameControllers(2);
     _spinController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3200),
@@ -44,9 +41,6 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     _spinController.dispose();
     _groupCountController.dispose();
     _playersController.dispose();
-    for (final controller in _groupNameControllers) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -61,20 +55,19 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     return value != null && value >= 1 && value <= 32 ? value : null;
   }
 
-  List<String> get _groupNames => [
-    for (var index = 0; index < _groupNameControllers.length; index++)
-      _groupNameControllers[index].text.trim().isEmpty
-          ? _defaultGroupName(index)
-          : _groupNameControllers[index].text.trim(),
-  ];
-
   bool get _drawComplete =>
       _players.isNotEmpty && _drawnPlayers.length == _players.length;
 
-  bool get _allAssigned =>
-      _drawComplete && _groupAssignments.length == _players.length;
+  List<String> get _remainingPlayers => [
+    for (var index = 0; index < _players.length; index++)
+      if (!_drawnPlayers.contains(index)) _players[index],
+  ];
 
-  String _defaultGroupName(int index) {
+  List<String> _groupNames(int count) => [
+    for (var index = 0; index < count; index++) _groupName(index),
+  ];
+
+  String _groupName(int index) {
     var value = index + 1;
     var label = '';
     while (value > 0) {
@@ -85,21 +78,8 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     return 'Gruppe $label';
   }
 
-  void _syncGroupNameControllers(int count) {
-    while (_groupNameControllers.length < count) {
-      final index = _groupNameControllers.length;
-      _groupNameControllers.add(
-        TextEditingController(text: _defaultGroupName(index)),
-      );
-    }
-    while (_groupNameControllers.length > count) {
-      _groupNameControllers.removeLast().dispose();
-    }
-  }
-
   void _resetDraw() {
     _drawnPlayers.clear();
-    _groupAssignments.clear();
     _selectedPlayer = null;
     _inputError = null;
   }
@@ -107,7 +87,6 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
   void _onGroupCountChanged(String text) {
     final count = int.tryParse(text.trim());
     if (count != null && count >= 1 && count <= 32) {
-      _syncGroupNameControllers(count);
       _resetDraw();
     } else {
       _inputError = 'Bitte 1 bis 32 Gruppen angeben.';
@@ -145,8 +124,9 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     if (remaining.isEmpty) return;
 
     final selected = remaining[_random.nextInt(remaining.length)];
-    final segmentAngle = 2 * pi / _players.length;
-    final selectedCenter = (selected + 0.5) * segmentAngle;
+    final selectedWheelIndex = remaining.indexOf(selected);
+    final segmentAngle = 2 * pi / remaining.length;
+    final selectedCenter = (selectedWheelIndex + 0.5) * segmentAngle;
     final targetRotation =
         (_rotation / (2 * pi)).ceil() * 2 * pi +
         4 * 2 * pi -
@@ -171,35 +151,24 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     });
   }
 
-  void _autoAssign() {
-    if (!_drawComplete || _groupCount == null) return;
-    setState(() {
-      _groupAssignments
-        ..clear()
-        ..addEntries([
-          for (var index = 0; index < _drawnPlayers.length; index++)
-            MapEntry(_drawnPlayers[index], index % _groupCount!),
-        ]);
-    });
-  }
+  List<List<String?>> _groupSlots() => RandomDrawAssignment.groupSlots(
+    drawnPlayers: [for (final index in _drawnPlayers) _players[index]],
+    groupCount: _groupCount ?? 1,
+    totalPlayerCount: _players.length,
+  );
 
-  List<List<String>> _assignedGroups() {
-    final groups = List.generate(_groupNames.length, (_) => <String>[]);
-    for (final playerIndex in _drawnPlayers) {
-      final groupIndex = _groupAssignments[playerIndex];
-      if (groupIndex != null && groupIndex < groups.length) {
-        groups[groupIndex].add(_players[playerIndex]);
-      }
-    }
-    return groups;
-  }
+  List<List<String>> _assignedGroups() => [
+    for (final group in _groupSlots()) [for (final player in group) ?player],
+  ];
+
+  List<String> get _groupNamesForExport => _groupNames(_groupCount ?? 1);
 
   Future<void> _copyText() async {
     try {
       await Clipboard.setData(
         ClipboardData(
           text: RandomDrawAssignment.formatText(
-            groupNames: _groupNames,
+            groupNames: _groupNamesForExport,
             groups: _assignedGroups(),
           ),
         ),
@@ -222,7 +191,7 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     try {
       final bytes = await const RandomDrawImageGenerator().generate(
         title: 'Turnierauslosung',
-        groupNames: _groupNames,
+        groupNames: _groupNamesForExport,
         groups: _assignedGroups(),
       );
       if (!mounted) return;
@@ -250,307 +219,292 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          'Unabhängige Ziehung ohne Turnier- oder Gruppenautomatik. '
-          'Die Gruppe jedes gezogenen Namens bestimmst du selbst oder lässt '
-          'sie gleichmäßig zuordnen.',
+          'Ziehe die Namen zufällig. Jeder gezogene Name wird aus dem Rad '
+          'entfernt und der Reihe nach in die Gruppenplätze eingetragen.',
         ),
         const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final groupCountField = TextField(
-                      controller: _groupCountController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Anzahl der Gruppen',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: _onGroupCountChanged,
-                    );
-                    final playersField = TextField(
-                      controller: _playersController,
-                      minLines: 4,
-                      maxLines: 10,
-                      decoration: const InputDecoration(
-                        labelText: 'Spielernamen',
-                        hintText: 'Ein Name pro Zeile',
-                        helperText:
-                            'Zeilen, Kommas oder Semikolons trennen Namen.',
-                        border: OutlineInputBorder(),
-                        alignLabelWithHint: true,
-                      ),
-                      onChanged: _onPlayersChanged,
-                    );
-                    if (constraints.maxWidth < 600) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          groupCountField,
-                          const SizedBox(height: 12),
-                          for (
-                            var index = 0;
-                            index < _groupNameControllers.length;
-                            index++
-                          ) ...[
-                            TextField(
-                              key: ValueKey('draw-group-name-$index'),
-                              controller: _groupNameControllers[index],
-                              decoration: InputDecoration(
-                                labelText: 'Name ${_defaultGroupName(index)}',
-                                border: const OutlineInputBorder(),
-                              ),
-                              onChanged: (_) => setState(() {}),
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                          const SizedBox(height: 4),
-                          playersField,
-                        ],
-                      );
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(width: 300, child: groupCountField),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 8,
-                          children: [
-                            for (
-                              var index = 0;
-                              index < _groupNameControllers.length;
-                              index++
-                            )
-                              SizedBox(
-                                width: 260,
-                                child: TextField(
-                                  key: ValueKey('draw-group-name-$index'),
-                                  controller: _groupNameControllers[index],
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        'Name ${_defaultGroupName(index)}',
-                                    border: const OutlineInputBorder(),
-                                  ),
-                                  onChanged: (_) => setState(() {}),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        playersField,
-                      ],
-                    );
-                  },
-                ),
-                if (_inputError != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _inputError!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  _selectedPlayer == null
-                      ? 'Bereit zur Ziehung'
-                      : 'Zuletzt gezogen: ${_players[_selectedPlayer!]}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                Center(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final size = min(constraints.maxWidth, 380.0);
-                      return AnimatedBuilder(
-                        animation: _spinController,
-                        builder: (context, _) => SizedBox.square(
-                          dimension: size,
-                          child: CustomPaint(
-                            painter: _DrawToolWheelPainter(
-                              names: _players,
-                              drawnPlayers: _drawnPlayers.toSet(),
-                              selectedPlayer: _selectedPlayer,
-                              rotation: _spinAnimation?.value ?? _rotation,
-                              colors: Theme.of(context).colorScheme,
-                            ),
-                            child: const SizedBox.expand(),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '${_drawnPlayers.length} von ${_players.length} gezogen',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                FilledButton.icon(
-                  onPressed: _spinning || _drawComplete ? null : _spin,
-                  icon: const Icon(Icons.casino_outlined),
-                  label: Text(
-                    _drawnPlayers.isEmpty ? 'Rad drehen' : 'Nächsten ziehen',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (_drawComplete) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 900) {
+              return Column(
+                key: const ValueKey('random-draw-workspace-stacked'),
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Gruppen befüllen',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _autoAssign,
-                    icon: const Icon(Icons.shuffle),
-                    label: const Text('Automatisch gleichmäßig verteilen'),
-                  ),
-                  for (final playerIndex in _drawnPlayers)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(_players[playerIndex]),
-                      trailing: SizedBox(
-                        width: min(
-                          MediaQuery.sizeOf(context).width * 0.48,
-                          220,
-                        ),
-                        child: DropdownButtonFormField<int>(
-                          key: ValueKey(
-                            'draw-player-group-$playerIndex-'
-                            '${_groupAssignments[playerIndex]}',
-                          ),
-                          initialValue: _groupAssignments[playerIndex],
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Gruppe',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                          hint: const Text('Zuordnen'),
-                          items: [
-                            for (
-                              var groupIndex = 0;
-                              groupIndex < _groupNames.length;
-                              groupIndex++
-                            )
-                              DropdownMenuItem(
-                                value: groupIndex,
-                                child: Text(
-                                  _groupNames[groupIndex],
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setState(
-                              () => _groupAssignments[playerIndex] = value,
-                            );
-                          },
-                        ),
-                      ),
-                    ),
+                  _configurationCard(),
+                  const SizedBox(height: 12),
+                  _wheelCard(),
+                  const SizedBox(height: 12),
+                  _groupsCard(),
+                  if (_drawComplete) ...[
+                    const SizedBox(height: 12),
+                    _exportActions(),
+                  ],
                 ],
-              ),
-            ),
-          ),
-          if (_allAssigned) ...[
-            const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, constraints) => Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  for (var index = 0; index < _groupNames.length; index++)
-                    SizedBox(
-                      width: constraints.maxWidth < 560
-                          ? constraints.maxWidth
-                          : (constraints.maxWidth - 12) / 2,
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                _groupNames[index],
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              for (final player in _assignedGroups()[index])
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(player),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              );
+            }
+            return Row(
+              key: const ValueKey('random-draw-workspace-wide'),
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                OutlinedButton.icon(
-                  onPressed: _copyText,
-                  icon: const Icon(Icons.copy),
-                  label: const Text('Text kopieren'),
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    children: [
+                      _configurationCard(),
+                      const SizedBox(height: 12),
+                      _wheelCard(),
+                    ],
+                  ),
                 ),
-                FilledButton.icon(
-                  onPressed: _exportImage,
-                  icon: const Icon(Icons.image_outlined),
-                  label: const Text('Grafik exportieren'),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    children: [
+                      _groupsCard(),
+                      if (_drawComplete) ...[
+                        const SizedBox(height: 12),
+                        _exportActions(),
+                      ],
+                    ],
+                  ),
                 ),
               ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
+
+  Widget _configurationCard() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _groupCountController,
+              enabled: _drawnPlayers.isEmpty && !_spinning,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Anzahl der Gruppen',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: _onGroupCountChanged,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _playersController,
+            enabled: _drawnPlayers.isEmpty && !_spinning,
+            minLines: 3,
+            maxLines: 8,
+            decoration: const InputDecoration(
+              labelText: 'Spielernamen',
+              hintText: 'Namen mit Kommas trennen',
+              helperText:
+                  'Kommas, Semikolons oder Zeilen trennen Namen. '
+                  'Nach der ersten Ziehung ist die Liste gesperrt.',
+              border: OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+            onChanged: _onPlayersChanged,
+          ),
+          if (_inputError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _inputError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
         ],
-      ],
+      ),
     ),
+  );
+
+  Widget _wheelCard() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _selectedPlayer == null
+                ? 'Bereit zur Ziehung'
+                : 'Zuletzt gezogen: ${_players[_selectedPlayer!]}',
+            key: const ValueKey('random-draw-last-selected'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final size = min(constraints.maxWidth, 380.0);
+                final remaining = _remainingPlayers;
+                final selectedWheelIndex = _selectedPlayer == null
+                    ? null
+                    : [
+                        for (var index = 0; index < _players.length; index++)
+                          if (!_drawnPlayers.contains(index)) index,
+                      ].indexOf(_selectedPlayer!);
+                return Semantics(
+                  container: true,
+                  label: 'Im Rad: ${remaining.join(', ')}',
+                  child: AnimatedBuilder(
+                    animation: _spinController,
+                    builder: (context, _) => SizedBox.square(
+                      dimension: size,
+                      child: CustomPaint(
+                        key: const ValueKey('random-draw-wheel'),
+                        painter: _DrawToolWheelPainter(
+                          names: remaining,
+                          selectedPlayer:
+                              selectedWheelIndex == null ||
+                                  selectedWheelIndex < 0
+                              ? null
+                              : selectedWheelIndex,
+                          rotation: _spinAnimation?.value ?? _rotation,
+                          colors: Theme.of(context).colorScheme,
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${_drawnPlayers.length} von ${_players.length} gezogen · '
+            '${_remainingPlayers.length} noch im Rad',
+            key: const ValueKey('random-draw-progress'),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: _spinning || _drawComplete ? null : _spin,
+            icon: const Icon(Icons.casino_outlined),
+            label: Text(
+              _drawnPlayers.isEmpty ? 'Rad drehen' : 'Nächsten ziehen',
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _groupsCard() {
+    final slots = _groupSlots();
+    final names = _groupNames(slots.length);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Gruppenzuweisung',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 620 ? 2 : 1;
+                final gap = 8.0;
+                final tileWidth =
+                    (constraints.maxWidth - (columns - 1) * gap) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (
+                      var groupIndex = 0;
+                      groupIndex < slots.length;
+                      groupIndex++
+                    )
+                      SizedBox(
+                        width: tileWidth,
+                        child: _groupCard(names[groupIndex], slots[groupIndex]),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _groupCard(String name, List<String?> players) => Card(
+    margin: EdgeInsets.zero,
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(name, style: Theme.of(context).textTheme.titleSmall),
+          if (players.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('Keine Spielerplätze'),
+            ),
+          for (var index = 0; index < players.length; index++)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  players[index] ?? 'Spieler ${index + 1}',
+                  key: ValueKey('draw-slot-$name-$index'),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _exportActions() => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      OutlinedButton.icon(
+        onPressed: _copyText,
+        icon: const Icon(Icons.copy),
+        label: const Text('Text kopieren'),
+      ),
+      FilledButton.icon(
+        onPressed: _exportImage,
+        icon: const Icon(Icons.image_outlined),
+        label: const Text('Grafik exportieren'),
+      ),
+    ],
   );
 }
 
 class _DrawToolWheelPainter extends CustomPainter {
   const _DrawToolWheelPainter({
     required this.names,
-    required this.drawnPlayers,
     required this.selectedPlayer,
     required this.rotation,
     required this.colors,
   });
 
   final List<String> names;
-  final Set<int> drawnPlayers;
   final int? selectedPlayer;
   final double rotation;
   final ColorScheme colors;
@@ -597,9 +551,7 @@ class _DrawToolWheelPainter extends CustomPainter {
         text: TextSpan(
           text: names[index],
           style: TextStyle(
-            color: drawnPlayers.contains(index)
-                ? colors.onSurface.withValues(alpha: 0.48)
-                : colors.onSurface,
+            color: colors.onSurface,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             fontSize: names.length > 24
                 ? 8
@@ -644,7 +596,6 @@ class _DrawToolWheelPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DrawToolWheelPainter oldDelegate) =>
       oldDelegate.names != names ||
-      oldDelegate.drawnPlayers != drawnPlayers ||
       oldDelegate.selectedPlayer != selectedPlayer ||
       oldDelegate.rotation != rotation ||
       oldDelegate.colors != colors;

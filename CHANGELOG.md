@@ -1,3 +1,11 @@
+# 2.0.0+25
+
+- Removes each drawn name from the wheel and locks the draw setup after the
+  first spin.
+- Shows fixed group slots beside the wheel on wide screens and fills them in
+  draw order, completing each group from top to bottom with no manual
+  reassignment.
+
 # 1.2.3+24
 
 - Replaces group-creation wheel assignment with random group distribution and

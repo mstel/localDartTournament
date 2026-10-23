@@ -5,18 +5,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('round-robin assignment balances drawn players between groups', () {
+  test('group slots fill top-to-bottom before moving to the next group', () {
     expect(
-      RandomDrawAssignment.distributeRoundRobin(
+      RandomDrawAssignment.groupSlots(
         drawnPlayers: ['Ada', 'Bert', 'Cem', 'Dora', 'Emil'],
         groupCount: 3,
+        totalPlayerCount: 8,
       ),
       [
-        ['Ada', 'Dora'],
-        ['Bert', 'Emil'],
-        ['Cem'],
+        ['Ada', 'Bert', 'Cem'],
+        ['Dora', 'Emil', null],
+        [null, null],
       ],
     );
+  });
+
+  test('group slot capacities divide players evenly in group order', () {
+    final slots = RandomDrawAssignment.groupSlots(
+      drawnPlayers: const [],
+      groupCount: 8,
+      totalPlayerCount: 32,
+    );
+
+    expect(slots, hasLength(8));
+    expect(slots.map((group) => group.length), everyElement(4));
+    expect(slots.expand((group) => group), everyElement(isNull));
   });
 
   test('text export uses provided group names and player order', () {
@@ -73,13 +86,22 @@ void main() {
 
       expect(find.text('Anzahl der Gruppen'), findsOneWidget);
       expect(find.text('Spielernamen'), findsOneWidget);
+      expect(
+        find.byKey(
+          ValueKey(
+            size.width >= 900
+                ? 'random-draw-workspace-wide'
+                : 'random-draw-workspace-stacked',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Gruppenzuweisung'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('draw tool supports manual input, spinning and auto assignment', (
-    tester,
-  ) async {
+  testWidgets('draw fills locked group slots in draw order', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -87,34 +109,92 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: RandomDrawToolPage()));
     await tester.enterText(
       find.widgetWithText(TextField, 'Anzahl der Gruppen'),
-      '2',
+      '8',
     );
     await tester.enterText(
       find.widgetWithText(TextField, 'Spielernamen'),
-      'Ada\nBert\nCem\nDora',
+      List.generate(32, (index) => 'Spieler ${index + 1}').join(', '),
     );
     await tester.pump();
 
-    for (var index = 0; index < 4; index++) {
+    expect(find.text('Gruppe H'), findsOneWidget);
+    expect(find.byKey(const ValueKey('draw-slot-Gruppe A-3')), findsOneWidget);
+    expect(find.text('Spieler 4'), findsWidgets);
+    expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+
+    final drawnOrder = <String>[];
+    for (var index = 0; index < 32; index++) {
       final button = find.text(index == 0 ? 'Rad drehen' : 'Nächsten ziehen');
       await tester.ensureVisible(button);
       await tester.pumpAndSettle();
       await tester.tap(button);
       await tester.pumpAndSettle();
+      if (index < 5) {
+        final selected = tester
+            .widget<Text>(
+              find.byKey(const ValueKey('random-draw-last-selected')),
+            )
+            .data!
+            .replaceFirst('Zuletzt gezogen: ', '');
+        drawnOrder.add(selected);
+
+        if (index == 0) {
+          expect(
+            find.bySemanticsLabel(
+              'Im Rad: ${List.generate(32, (playerIndex) => 'Spieler ${playerIndex + 1}').where((name) => name != selected).join(', ')}',
+            ),
+            findsOneWidget,
+          );
+        }
+      }
     }
-    expect(find.text('Gruppen befüllen'), findsOneWidget);
 
-    final autoAssign = find.text('Automatisch gleichmäßig verteilen');
-    await tester.ensureVisible(autoAssign);
-    await tester.pumpAndSettle();
-    await tester.tap(autoAssign);
-    await tester.pumpAndSettle();
-
-    final groupFields = tester.widgetList<DropdownButtonFormField<int>>(
-      find.byType(DropdownButtonFormField<int>),
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Spielernamen'))
+          .enabled,
+      isFalse,
     );
-    expect(groupFields, hasLength(4));
-    expect(groupFields.every((field) => field.initialValue != null), isTrue);
+    expect(
+      tester
+          .widget<TextField>(
+            find.widgetWithText(TextField, 'Anzahl der Gruppen'),
+          )
+          .enabled,
+      isFalse,
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('draw-slot-Gruppe A-0')))
+          .data,
+      drawnOrder[0],
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('draw-slot-Gruppe A-1')))
+          .data,
+      drawnOrder[1],
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('draw-slot-Gruppe A-2')))
+          .data,
+      drawnOrder[2],
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('draw-slot-Gruppe A-3')))
+          .data,
+      drawnOrder[3],
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('draw-slot-Gruppe B-0')))
+          .data,
+      drawnOrder[4],
+    );
+    expect(find.text('Text kopieren'), findsOneWidget);
+    expect(find.text('Grafik exportieren'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
