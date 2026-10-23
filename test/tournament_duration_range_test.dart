@@ -7,14 +7,14 @@ void main() {
       TournamentDurationRange.actualDurationLabel(
         const Duration(hours: 2, minutes: 34),
       ),
-      'Tatsächliche Turnierdauer: 2:34',
+      'Tatsächliche Turnierdauer: 2h 34m',
     );
     expect(
       TournamentDurationRange.estimatedDurationLabel(
         minimumMinutes: 176,
         maximumMinutes: 264,
       ),
-      'Geschätzte Turnierdauer: 3:40 (2:56–4:24)',
+      'Geschätzte Turnierdauer: 3h 40m (2h 56m–4h 24m)',
     );
   });
 }

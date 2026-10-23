@@ -21,6 +21,33 @@ class GroupDrawAssignment {
     );
   }
 
+  static List<List<T?>> previewPartitionDraw<T>({
+    required List<T> items,
+    required List<int> drawnSeeds,
+    required List<int> groupSizes,
+  }) {
+    final groups = [for (final size in groupSizes) List<T?>.filled(size, null)];
+    final participantCount = groupSizes.fold<int>(0, (sum, size) => sum + size);
+    if (drawnSeeds.length > participantCount) return groups;
+
+    final seen = <int>{};
+    for (var drawIndex = 0; drawIndex < drawnSeeds.length; drawIndex++) {
+      final seed = drawnSeeds[drawIndex];
+      if (seed < 1 || seed > items.length || !seen.add(seed)) return groups;
+
+      var slotIndex = drawIndex;
+      for (final group in groups) {
+        if (slotIndex < group.length) {
+          group[slotIndex] = items[seed - 1];
+          break;
+        }
+        slotIndex -= group.length;
+      }
+    }
+
+    return groups;
+  }
+
   static List<TournamentPlayer> orderPlayers({
     required List<TournamentPlayer> players,
     required List<int?> slotOrder,

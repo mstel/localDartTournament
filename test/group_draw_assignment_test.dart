@@ -57,4 +57,51 @@ void main() {
       );
     },
   );
+
+  test('draw preview reveals only players already drawn', () {
+    final players = [
+      'Bernd',
+      'Burkhard',
+      'Christian',
+      'Daniel',
+      'Dietmar',
+      'Friedel',
+      'Jan',
+      'Johannes',
+    ];
+
+    expect(
+      GroupDrawAssignment.previewPartitionDraw(
+        items: players,
+        drawnSeeds: const [],
+        groupSizes: const [4, 4],
+      ),
+      [
+        [null, null, null, null],
+        [null, null, null, null],
+      ],
+    );
+    expect(
+      GroupDrawAssignment.previewPartitionDraw(
+        items: players,
+        drawnSeeds: const [8, 1, 7, 5],
+        groupSizes: const [4, 4],
+      ),
+      [
+        ['Johannes', 'Bernd', 'Jan', 'Dietmar'],
+        [null, null, null, null],
+      ],
+    );
+    expect(
+      GroupDrawAssignment.partitionDraw(
+        items: players,
+        slotOrder: const [8, 1, 7, 5, 6, 4, 2, 3],
+        groupSizes: const [4, 4],
+      ),
+      [
+        ['Johannes', 'Bernd', 'Jan', 'Dietmar'],
+        ['Friedel', 'Daniel', 'Burkhard', 'Christian'],
+      ],
+    );
+  });
 }

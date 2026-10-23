@@ -4,8 +4,12 @@ class TournamentDurationRange {
   static String formatDuration(Duration duration) =>
       formatMinutes(duration.inMinutes);
 
-  static String formatMinutes(int minutes) =>
-      '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}';
+  static String formatMinutes(int minutes) {
+    final hours = minutes ~/ 60;
+    final remainingMinutes = minutes % 60;
+    if (hours == 0) return '${remainingMinutes}m';
+    return '${hours}h ${remainingMinutes}m';
+  }
 
   static String actualDurationLabel(Duration duration) =>
       'Tatsächliche Turnierdauer: ${formatDuration(duration)}';

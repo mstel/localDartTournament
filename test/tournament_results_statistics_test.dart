@@ -131,9 +131,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final expectedRange = find.byKey(const ValueKey('expected-duration-range'));
-    expect(find.text('Tatsächliche Turnierdauer: 2:34'), findsOneWidget);
+    expect(find.text('Tatsächliche Turnierdauer: 2h 34m'), findsOneWidget);
     expect(
-      find.text('Geschätzte Turnierdauer: 3:40 (2:56–4:24)'),
+      find.text('Geschätzte Turnierdauer: 3h 40m (2h 56m–4h 24m)'),
       findsOneWidget,
     );
     final tooltipFinder = find.ancestor(
@@ -143,7 +143,7 @@ void main() {
     expect(
       tester.widget<Tooltip>(tooltipFinder.first).message,
       'Erwartete Spanne der Turnierdauer: '
-      'Geschätzte Turnierdauer: 3:40 (2:56–4:24)',
+      'Geschätzte Turnierdauer: 3h 40m (2h 56m–4h 24m)',
     );
     expect(find.textContaining('Ø '), findsNothing);
     expect(tester.takeException(), isNull);

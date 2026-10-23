@@ -271,9 +271,9 @@ class _RandomDrawDialogState extends State<_RandomDrawDialog>
                           )
                         : _DrawGroupPreview(
                             groupSizes: widget.groupSizes,
-                            groups: GroupDrawAssignment.partitionDraw(
+                            groups: GroupDrawAssignment.previewPartitionDraw(
                               items: widget.participantLabels,
-                              slotOrder: _drawnSeeds,
+                              drawnSeeds: _drawnSeeds,
                               groupSizes: widget.groupSizes,
                             ),
                           ),
@@ -460,7 +460,7 @@ class _DrawGroupPreview extends StatelessWidget {
   const _DrawGroupPreview({required this.groupSizes, required this.groups});
 
   final List<int> groupSizes;
-  final List<List<String>> groups;
+  final List<List<String?>> groups;
 
   @override
   Widget build(BuildContext context) {
@@ -511,20 +511,18 @@ class _DrawGroupPreview extends StatelessWidget {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: slot < groups[groupIndex].length
+                                color: groups[groupIndex][slot] != null
                                     ? colorScheme.primaryContainer
                                     : colorScheme.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                  color: slot < groups[groupIndex].length
+                                  color: groups[groupIndex][slot] != null
                                       ? colorScheme.primary
                                       : colorScheme.outlineVariant,
                                 ),
                               ),
                               child: Text(
-                                slot < groups[groupIndex].length
-                                    ? groups[groupIndex][slot]
-                                    : 'Platz ${slot + 1}',
+                                groups[groupIndex][slot] ?? 'Platz ${slot + 1}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),

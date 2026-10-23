@@ -1,3 +1,10 @@
+# 1.1.8+20
+
+- Shows only drawn players in the group assignment preview; undrawn group
+  slots remain placeholders, and accepted assignments follow the wheel order.
+- Adds explicit hour and minute units to actual and estimated tournament
+  durations in results and the PNG export.
+
 # 1.1.7+19
 
 - Applies the draw-wheel order consistently when building group assignments and
