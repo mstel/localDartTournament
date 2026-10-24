@@ -35,9 +35,16 @@ class LocalRankingSeriesService {
   final LocalAppDatabase _database;
   final TournamentStorage? _tournamentStorage;
 
-  Future<List<LocalSeriesEntry>> calculate(LocalRanking ranking) async {
+  Future<List<LocalSeriesEntry>> calculate(
+    LocalRanking ranking, {
+    Iterable<CreatedTournament>? tournaments,
+  }) async {
     if (ranking.type != RankingType.series) {
-      throw ArgumentError.value(ranking.type, 'ranking.type', 'Not a series ranking');
+      throw ArgumentError.value(
+        ranking.type,
+        'ranking.type',
+        'Not a series ranking',
+      );
     }
     final ids = (await _database.loadRankingPlayerIds(ranking.id)).toSet();
     final profiles = await _database.loadPlayerProfiles();
@@ -45,17 +52,24 @@ class LocalRankingSeriesService {
       for (final player in profiles)
         if (ids.contains(player.id)) player.id: _SeriesCounters(),
     };
-    final tournaments = await (_tournamentStorage ?? TournamentStorage())
-        .loadTournaments();
+    final source =
+        tournaments ??
+        await (_tournamentStorage ?? TournamentStorage()).loadTournaments();
 
-    for (final tournament in tournaments) {
+    for (final tournament in source) {
       if (!tournament.countsForRanking ||
           !tournament.rankingIds.contains(ranking.id) ||
-          !ranking.includesTournamentDate((tournament.finishedAt ?? tournament.createdAt).toLocal())) {
+          !ranking.includesTournamentDate(
+            (tournament.finishedAt ?? tournament.createdAt).toLocal(),
+          )) {
         continue;
       }
       final participants = tournament.players
-          .where((player) => player.profileId != null && counters.containsKey(player.profileId))
+          .where(
+            (player) =>
+                player.profileId != null &&
+                counters.containsKey(player.profileId),
+          )
           .map((player) => player.profileId!)
           .toSet();
       for (final id in participants) {
@@ -79,9 +93,15 @@ class LocalRankingSeriesService {
         }
       }
       final places = _tournamentPlaces(tournament);
-      if (places.isNotEmpty && counters.containsKey(places[0])) counters[places[0]]!.firstPlaces++;
-      if (places.length > 1 && counters.containsKey(places[1])) counters[places[1]]!.secondPlaces++;
-      if (places.length > 2 && counters.containsKey(places[2])) counters[places[2]]!.thirdPlaces++;
+      if (places.isNotEmpty && counters.containsKey(places[0])) {
+        counters[places[0]]!.firstPlaces++;
+      }
+      if (places.length > 1 && counters.containsKey(places[1])) {
+        counters[places[1]]!.secondPlaces++;
+      }
+      if (places.length > 2 && counters.containsKey(places[2])) {
+        counters[places[2]]!.thirdPlaces++;
+      }
     }
 
     final entries = [
@@ -89,7 +109,8 @@ class LocalRankingSeriesService {
         if (counters[player.id] case final count?)
           LocalSeriesEntry(
             player: player,
-            points: count.participations * ranking.participationPoints +
+            points:
+                count.participations * ranking.participationPoints +
                 count.setsWon * ranking.setWinPoints +
                 count.firstPlaces * ranking.firstPlacePoints +
                 count.secondPlaces * ranking.secondPlacePoints +
@@ -148,7 +169,9 @@ class LocalRankingSeriesService {
         ?finalMatch.winner?.profileId,
         ?finalMatch.loser?.profileId,
       ];
-      for (final match in _placementMatches(tournament).where((m) => m.placementRank == 3 && m.hasResult)) {
+      for (final match in _placementMatches(
+        tournament,
+      ).where((m) => m.placementRank == 3 && m.hasResult)) {
         final id = match.winner?.profileId;
         if (id != null && !result.contains(id)) result.add(id);
       }
@@ -159,26 +182,38 @@ class LocalRankingSeriesService {
     final legDifference = <String, int>{};
     for (final match in _matches(tournament).toSet()) {
       if (!match.hasResult || match.withdrawalIgnored) continue;
-      final home = match.homePlayer?.profileId, away = match.awayPlayer?.profileId;
+      final home = match.homePlayer?.profileId,
+          away = match.awayPlayer?.profileId;
       if (home == null || away == null) continue;
       wins.putIfAbsent(home, () => 0);
       wins.putIfAbsent(away, () => 0);
       final winner = match.winner?.profileId;
-      if (winner != null) wins.update(winner, (value) => value + 1, ifAbsent: () => 1);
+      if (winner != null) {
+        wins.update(winner, (value) => value + 1, ifAbsent: () => 1);
+      }
       for (final (player, won, lost) in [
         (home, match.homeLegs ?? 0, match.awayLegs ?? 0),
         (away, match.awayLegs ?? 0, match.homeLegs ?? 0),
       ]) {
         legsFor.update(player, (value) => value + won, ifAbsent: () => won);
-        legDifference.update(player, (value) => value + won - lost, ifAbsent: () => won - lost);
+        legDifference.update(
+          player,
+          (value) => value + won - lost,
+          ifAbsent: () => won - lost,
+        );
       }
     }
-    final result = wins.keys.toList()..sort((a, b) {
-      final byWins = (wins[b] ?? 0).compareTo(wins[a] ?? 0);
-      if (byWins != 0) return byWins;
-      final byDifference = (legDifference[b] ?? 0).compareTo(legDifference[a] ?? 0);
-      return byDifference != 0 ? byDifference : (legsFor[b] ?? 0).compareTo(legsFor[a] ?? 0);
-    });
+    final result = wins.keys.toList()
+      ..sort((a, b) {
+        final byWins = (wins[b] ?? 0).compareTo(wins[a] ?? 0);
+        if (byWins != 0) return byWins;
+        final byDifference = (legDifference[b] ?? 0).compareTo(
+          legDifference[a] ?? 0,
+        );
+        return byDifference != 0
+            ? byDifference
+            : (legsFor[b] ?? 0).compareTo(legsFor[a] ?? 0);
+      });
     return result.take(3).toList();
   }
 }

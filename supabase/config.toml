@@ -1,2 +1,5 @@
 [functions.calendar-reminders]
 verify_jwt = true
+
+[functions.website-read-model]
+verify_jwt = true

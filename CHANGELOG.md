@@ -1,3 +1,15 @@
+# 2.0.1+26
+
+- Adds a versioned read-only website data snapshot for authenticated access to
+  player profiles, ranking standings, statistics, best performances and
+  completed tournaments.
+- Publishes the website snapshot as part of the existing account-scoped
+  Supabase synchronization without changing or replacing the existing backup.
+- Adds a JWT-protected GET Edge Function that uses the caller's Storage RLS
+  permissions and never exposes write operations or a service-role key.
+- Documents deployment and server-side consumption from the separate Astro
+  website project.
+
 # 2.0.0+25
 
 - Removes each drawn name from the wheel and locks the draw setup after the

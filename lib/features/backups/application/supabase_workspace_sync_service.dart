@@ -10,6 +10,7 @@ import '../../../shared/persistence/app_data_directory.dart';
 import '../../../shared/persistence/storage_access.dart';
 import '../data/backup_service.dart';
 import '../data/supabase_backup_repository.dart';
+import '../../website/application/website_read_model_service.dart';
 
 /// Keeps one private complete workspace per authenticated Supabase account.
 /// Local edits are uploaded after a short debounce; a newer remote snapshot is
@@ -55,10 +56,12 @@ class SupabaseWorkspaceSyncService {
       path.join(accountDirectory.path, 'supabase_sync_state.json'),
     );
     final localWorkspaceExists =
-        await File(path.join(accountDirectory.path, 'tournaments.json'))
-            .exists() ||
-        await File(path.join(accountDirectory.path, 'app_database.sqlite'))
-            .exists();
+        await File(
+          path.join(accountDirectory.path, 'tournaments.json'),
+        ).exists() ||
+        await File(
+          path.join(accountDirectory.path, 'app_database.sqlite'),
+        ).exists();
     final legacyDirectory = await appDataDirectory(
       includeSupabaseAccount: false,
     );
@@ -268,7 +271,8 @@ class SupabaseWorkspaceSyncService {
 
   Future<void> synchronize() async {
     if (_localOnlyPreview) {
-      status.value = 'Lokaler Testmodus · automatische Cloud-Synchronisierung ist deaktiviert';
+      status.value =
+          'Lokaler Testmodus · automatische Cloud-Synchronisierung ist deaktiviert';
       return;
     }
     if (_pausePending) return;
@@ -288,7 +292,8 @@ class SupabaseWorkspaceSyncService {
     try {
       final state = await _readState();
       if (state['syncPaused'] == true) {
-        status.value = 'Synchronisierung pausiert · neuer lokaler Datenstand bleibt auf diesem Gerät';
+        status.value =
+            'Synchronisierung pausiert · neuer lokaler Datenstand bleibt auf diesem Gerät';
         return;
       }
       if (!await _repository.hasBackup()) {
@@ -311,12 +316,16 @@ class SupabaseWorkspaceSyncService {
       if (remoteIsNewer) {
         status.value = 'Lade neueren Datenstand aus Supabase …';
         await (await BackupService.create()).restore(remote, restartApp: false);
+        await _publishWebsiteReadModel();
         await _writeState({
           'dirty': false,
           'lastSyncedAt': remote.createdAt.toUtc().toIso8601String(),
         });
         status.value = 'Aktueller Datenstand aus Supabase geladen';
       } else {
+        if (!await _repository.hasWebsiteReadModel()) {
+          await _publishWebsiteReadModel();
+        }
         status.value = 'Mit Supabase synchronisiert';
       }
     } catch (error) {
@@ -354,11 +363,17 @@ class SupabaseWorkspaceSyncService {
   Future<void> _push(Map<String, dynamic> state) async {
     status.value = 'Sichere Änderungen in Supabase …';
     final timestamp = await _repository.upload(await BackupService.create());
+    await _publishWebsiteReadModel();
     await _writeState({
       'dirty': false,
       'lastSyncedAt': timestamp.toUtc().toIso8601String(),
     });
     status.value = 'Mit Supabase synchronisiert';
+  }
+
+  Future<void> _publishWebsiteReadModel() async {
+    final readModel = await WebsiteReadModelService().create();
+    await _repository.uploadWebsiteReadModel(readModel);
   }
 
   /// User-confirmed resolution for simultaneous offline changes.
@@ -409,7 +424,8 @@ class SupabaseWorkspaceSyncService {
       state['dirty'] = true;
       state['lastLocalChangeAt'] = DateTime.now().toUtc().toIso8601String();
       await _writeState(state);
-      status.value = 'Synchronisierung pausiert · neuer lokaler Datenstand bleibt auf diesem Gerät';
+      status.value =
+          'Synchronisierung pausiert · neuer lokaler Datenstand bleibt auf diesem Gerät';
     } finally {
       _pausePending = false;
     }

@@ -44,12 +44,41 @@ class LocalStatisticsService {
   Future<LocalPlayerStatistics> forPlayers(Set<String> ids, {int? year}) async {
     final database = this.database ?? LocalAppDatabase();
     final localProfiles = await database.loadPlayerProfiles();
+    final tournaments = await (storage ?? TournamentStorage())
+        .loadTournaments();
+    return _forPlayers(
+      ids,
+      year: year,
+      localProfiles: localProfiles,
+      tournaments: tournaments,
+    );
+  }
+
+  Future<LocalPlayerStatistics> forPlayersFromTournaments(
+    Set<String> ids,
+    Iterable<CreatedTournament> tournaments, {
+    int? year,
+  }) async {
+    final localProfiles = await (database ?? LocalAppDatabase())
+        .loadPlayerProfiles();
+    return _forPlayers(
+      ids,
+      year: year,
+      localProfiles: localProfiles,
+      tournaments: tournaments,
+    );
+  }
+
+  Future<LocalPlayerStatistics> _forPlayers(
+    Set<String> ids, {
+    required int? year,
+    required List<PlayerProfile> localProfiles,
+    required Iterable<CreatedTournament> tournaments,
+  }) async {
     final profileByName = <String, String>{
       for (final profile in localProfiles)
         profile.displayName.trim().toLowerCase(): profile.id,
     };
-    final tournaments = await (storage ?? TournamentStorage())
-        .loadTournaments();
     final playedTournamentIds = <String>{};
     var matches = 0, wins = 0, losses = 0, draws = 0, tournamentWins = 0;
     var legsWon = 0, legsLost = 0, legsDrawn = 0, setsWon = 0, setsLost = 0;
