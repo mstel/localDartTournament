@@ -29,12 +29,60 @@ class _LiveTournamentRunPage extends StatefulWidget {
   State<_LiveTournamentRunPage> createState() => _TournamentRunPageState();
 }
 
+class _TournamentClockStatus extends StatefulWidget {
+  const _TournamentClockStatus({required this.tournament});
+
+  final CreatedTournament tournament;
+
+  @override
+  State<_TournamentClockStatus> createState() => _TournamentClockStatusState();
+}
+
+class _TournamentClockStatusState extends State<_TournamentClockStatus> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tournament = widget.tournament;
+    final elapsed = TournamentTiming.snapshot(
+      tournament,
+      DateTime.now(),
+    ).elapsed;
+    final time =
+        '${elapsed.inHours.toString().padLeft(2, '0')}:'
+        '${(elapsed.inMinutes % 60).toString().padLeft(2, '0')}:'
+        '${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}';
+    final paused = tournament.isClockPaused;
+    return Text(
+      'Status: ${paused ? 'Pausiert' : 'Läuft aktiv'} · $time',
+      key: const ValueKey('tournament-clock-status'),
+    );
+  }
+}
+
 class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     with WidgetsBindingObserver {
   bool _leaving = false;
   bool _allowPop = false;
   bool _backgrounded = false;
   bool _savingRankingSelection = false;
+  bool _savingTieBreakerSettings = false;
+  int? _tieBreakerDraftStageIndex;
+  List<String> _tieBreakerDraft = const [];
   Future<void> _checkpoint() => _runController.saveProgress(
     tournament: widget.tournament,
     activeStageIndex: _activeStageIndex,
@@ -347,6 +395,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     _viewStageIndex = _activeStageIndex;
     _completedStageIndexes.addAll(widget.tournament.completedStageIndexes);
     widget.tournament.startedAt ??= DateTime.now();
+    _restoreCompletedGroupDrawForActiveStage();
     _advanceKnockoutWinners();
     _ensureGroupDeciders();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -465,6 +514,114 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (mounted) {
         setState(() => _savingRankingSelection = false);
       }
+    }
+  }
+
+  List<String> _tieBreakersForActiveStage() {
+    if (_activeStageIndex >= widget.tournament.stages.length) {
+      return const [];
+    }
+    if (_tieBreakerDraftStageIndex == _activeStageIndex) {
+      return _tieBreakerDraft;
+    }
+    return widget.tournament.stages[_activeStageIndex].groupTieBreakers;
+  }
+
+  bool get _hasPendingTieBreakerChanges {
+    if (_tieBreakerDraftStageIndex != _activeStageIndex ||
+        _activeStageIndex >= widget.tournament.stages.length) {
+      return false;
+    }
+    final saved = widget.tournament.stages[_activeStageIndex].groupTieBreakers;
+    final draft = _tieBreakerDraft;
+    return saved.length != draft.length ||
+        List.generate(
+          saved.length,
+          (index) => index,
+        ).any((index) => saved[index] != draft[index]);
+  }
+
+  Future<void> _moveGroupTieBreakerDraft(int index, int direction) async {
+    if (_viewStageIndex != _activeStageIndex ||
+        _activeStageIndex >= widget.tournament.stages.length ||
+        _savingTieBreakerSettings ||
+        _completedStageIndexes.contains(_activeStageIndex)) {
+      return;
+    }
+    final stage = widget.tournament.stages[_activeStageIndex];
+    if (stage.type != 'groups') return;
+    final target = index + direction;
+    final current = _tieBreakersForActiveStage();
+    if (index < 0 ||
+        index >= current.length ||
+        target < 0 ||
+        target >= current.length) {
+      return;
+    }
+    final tieBreakers = List<String>.from(current);
+    final moved = tieBreakers.removeAt(index);
+    tieBreakers.insert(target, moved);
+    setState(() {
+      _tieBreakerDraftStageIndex = _activeStageIndex;
+      _tieBreakerDraft = List.unmodifiable(tieBreakers);
+    });
+  }
+
+  Future<void> _applyGroupTieBreakerDraft() async {
+    final stageIndex = _activeStageIndex;
+    if (!_hasPendingTieBreakerChanges ||
+        _savingTieBreakerSettings ||
+        stageIndex >= widget.tournament.runStages.length ||
+        _viewStageIndex != stageIndex ||
+        _completedStageIndexes.contains(stageIndex)) {
+      return;
+    }
+    final previousStage = widget.tournament.stages[stageIndex];
+    final previousRunStage = widget.tournament.runStages[stageIndex];
+    if (previousRunStage is! GroupTournamentRunStage) return;
+    final tieBreakers = List<String>.unmodifiable(_tieBreakerDraft);
+    final updatedStage = previousStage.copyWith(groupTieBreakers: tieBreakers);
+    final updatedRunStage = GroupTournamentRunStage(
+      name: previousRunStage.name,
+      groupPlayType: previousRunStage.groupPlayType,
+      groups: previousRunStage.groups,
+      qualificationPlan: previousRunStage.qualificationPlan,
+      tieBreakers: tieBreakers,
+    );
+    setState(() {
+      _savingTieBreakerSettings = true;
+      widget.tournament.stages[stageIndex] = updatedStage;
+      widget.tournament.runStages[stageIndex] = updatedRunStage;
+    });
+    try {
+      await _runController.saveProgress(
+        tournament: widget.tournament,
+        activeStageIndex: _activeStageIndex,
+        completedStageIndexes: _completedStageIndexes,
+      );
+      if (!mounted) return;
+      setState(() {
+        _savingTieBreakerSettings = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tie-Breaker übernommen. Tabelle und Prognose wurden aktualisiert.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _savingTieBreakerSettings = false;
+        widget.tournament.stages[stageIndex] = previousStage;
+        widget.tournament.runStages[stageIndex] = previousRunStage;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tie-Breaker konnten nicht gespeichert werden: $error'),
+        ),
+      );
     }
   }
 
@@ -601,11 +758,89 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     setState(() {
       changed = GroupPositionEditor.swap(stage, pair[0], pair[1]);
       if (changed) {
+        _persistGroupArrangementInDrawOrder(stage);
         _advanceKnockoutWinners();
         _ensureGroupDeciders();
       }
     });
     if (changed) await _saveTournamentProgress();
+  }
+
+  void _persistGroupArrangementInDrawOrder(GroupTournamentRunStage runStage) {
+    final stageIndex = _activeStageIndex;
+    if (stageIndex >= widget.tournament.stages.length) return;
+    final stage = widget.tournament.stages[stageIndex];
+    if (!stage.groupDrawOnStart || !stage.groupDrawCompleted) return;
+    final incomingPlayers = _incomingPlayersForStage(stageIndex);
+    if (stage.groupSizes.length != runStage.groups.length) return;
+    final slotOrder = <int?>[];
+    for (
+      var groupIndex = 0;
+      groupIndex < runStage.groups.length;
+      groupIndex++
+    ) {
+      final group = runStage.groups[groupIndex];
+      final groupSize = stage.groupSizes[groupIndex];
+      if (group.players.length > groupSize) return;
+      for (final player in group.players) {
+        final playerIndex = incomingPlayers.indexOf(player);
+        if (playerIndex < 0) return;
+        slotOrder.add(playerIndex + 1);
+      }
+      slotOrder.addAll(
+        List<int?>.filled(groupSize - group.players.length, null),
+      );
+    }
+    widget.tournament.stages[stageIndex] = stage.copyWith(
+      groupSlotOrder: List.unmodifiable(slotOrder),
+    );
+  }
+
+  void _restoreCompletedGroupDrawForActiveStage() {
+    final stageIndex = _activeStageIndex;
+    if (stageIndex >= widget.tournament.stages.length ||
+        stageIndex >= widget.tournament.runStages.length) {
+      return;
+    }
+    var stage = widget.tournament.stages[stageIndex];
+    final runStage = widget.tournament.runStages[stageIndex];
+    if (stage.type != 'groups' ||
+        !stage.groupDrawOnStart ||
+        stage.groupSlotOrder.isEmpty ||
+        runStage is! GroupTournamentRunStage) {
+      return;
+    }
+    if (!stage.groupDrawCompleted) {
+      stage = stage.copyWith(groupDrawCompleted: true);
+      widget.tournament.stages[stageIndex] = stage;
+    }
+    if (!GroupPositionEditor.canEdit(runStage)) return;
+
+    final expected = _buildRunStageFromPlayers(
+      stage,
+      _incomingPlayersForStage(stageIndex),
+    );
+    if (expected is! GroupTournamentRunStage ||
+        expected.groups.length != runStage.groups.length) {
+      return;
+    }
+    final hasDifferentAssignments = List.generate(expected.groups.length, (
+      groupIndex,
+    ) {
+      final expectedPlayers = expected.groups[groupIndex].players;
+      final savedPlayers = runStage.groups[groupIndex].players;
+      return expectedPlayers.length != savedPlayers.length ||
+          List.generate(
+            expectedPlayers.length,
+            (playerIndex) => playerIndex,
+          ).any(
+            (playerIndex) =>
+                expectedPlayers[playerIndex] != savedPlayers[playerIndex],
+          );
+    }).any((different) => different);
+    if (hasDifferentAssignments) {
+      widget.tournament.runStages[stageIndex] = expected;
+    }
   }
 
   Future<void> _swapKnockoutRunSlots(
@@ -2330,11 +2565,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       0,
       (sum, size) => sum + size,
     );
-    final groupPlayers = _playersInStageOrder(
-      players,
-      stage.groupSlotOrder,
-      groupParticipantCount,
-    );
+    final groupPlayers = players.take(groupParticipantCount).toList();
 
     return GroupTournamentRunStage(
       name: stage.name,
@@ -2348,16 +2579,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       tieBreakers: stage.groupTieBreakers,
     );
   }
-
-  List<TournamentPlayer> _playersInStageOrder(
-    List<TournamentPlayer> players,
-    List<int?> slotOrder,
-    int participantCount,
-  ) => GroupDrawAssignment.orderPlayers(
-    players: players,
-    slotOrder: slotOrder,
-    participantCount: participantCount,
-  );
 
   QualificationPlan? _qualificationPlanForStage(TournamentStage stage) {
     if (stage.groupSizes.isEmpty || stage.qualifiedParticipantCount == null) {
@@ -2502,7 +2723,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   bool _stageNeedsStartDraw(TournamentStage stage) {
     if (stage.type == 'groups') {
-      return stage.groupDrawOnStart && stage.groupSlotOrder.isEmpty;
+      return stage.groupDrawOnStart &&
+          !stage.groupDrawCompleted &&
+          stage.groupSlotOrder.isEmpty;
     }
 
     return _isKnockoutStageType(stage.type) &&
@@ -2550,42 +2773,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   TournamentStage _copyStageWithStartDraw(
     TournamentStage stage,
     List<int?> slotOrder,
-  ) {
-    return TournamentStage(
-      name: stage.name,
-      type: stage.type,
-      groupCount: stage.groupCount,
-      groupSizes: stage.groupSizes,
-      groupPlayType: stage.groupPlayType,
-      groupPlayTypes: stage.groupPlayTypes,
-      groupRoundRobinRepeats: stage.groupRoundRobinRepeats,
-      groupMaxGamesPerPlayer: stage.groupMaxGamesPerPlayer,
-      groupTieBreakers: stage.groupTieBreakers,
-      groupDrawOnStart: stage.groupDrawOnStart,
-      groupSlotOrder: stage.type == 'groups'
-          ? List.unmodifiable(slotOrder)
-          : stage.groupSlotOrder,
-      knockoutParticipantCount: stage.knockoutParticipantCount,
-      knockoutBracketSize: stage.knockoutBracketSize,
-      knockoutByeCount: stage.knockoutByeCount,
-      knockoutSlotOrder: stage.type == 'groups'
-          ? stage.knockoutSlotOrder
-          : List.unmodifiable(slotOrder),
-      knockoutSeedingMode: stage.knockoutSeedingMode,
-      knockoutDrawOnStart: stage.knockoutDrawOnStart,
-      qualifiersByGroup: stage.qualifiersByGroup,
-      fixedQualifiersByGroup: stage.fixedQualifiersByGroup,
-      extraQualifierRank: stage.extraQualifierRank,
-      extraQualifierCount: stage.extraQualifierCount,
-      qualificationAutoAdjust: stage.qualificationAutoAdjust,
-      qualifiedParticipantCount: stage.qualifiedParticipantCount,
-      qualificationSummary: stage.qualificationSummary,
-    );
-  }
+  ) => stage.type == 'groups'
+      ? stage.copyWith(
+          groupSlotOrder: List.unmodifiable(slotOrder),
+          groupDrawCompleted: true,
+        )
+      : stage.copyWith();
 
   Future<void> _completeCurrentStage() async {
     final nextStageIndex = _activeStageIndex + 1;
     final hasNextStage = nextStageIndex < widget.tournament.runStages.length;
+    final completedStageIndex = _activeStageIndex;
+    final previousViewStageIndex = _viewStageIndex;
+    final wasReopenedForCorrections = widget.tournament.reopenedForCorrections;
     final advancingPlayers = hasNextStage
         ? _advancingPlayersFromStage(
             widget.tournament.runStages[_activeStageIndex],
@@ -2602,13 +2802,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
 
       _completedStageIndexes.add(_activeStageIndex);
+      if (!hasNextStage) {
+        widget.tournament.reopenedForCorrections = false;
+      }
       if (hasNextStage) {
         _activeStageIndex++;
       }
       _viewStageIndex = _activeStageIndex;
     });
     _advanceKnockoutWinners();
-    await _saveTournamentProgress();
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (wasReopenedForCorrections && !hasNextStage) {
+        setState(() {
+          widget.tournament.reopenedForCorrections = true;
+          widget.tournament.finishedAt = null;
+          _completedStageIndexes.remove(completedStageIndex);
+          widget.tournament.completedStageIndexes.remove(completedStageIndex);
+          _viewStageIndex = previousViewStageIndex;
+        });
+      }
+      rethrow;
+    }
     if (!mounted) {
       return;
     }
@@ -2767,22 +2983,43 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  TextField(
-                                    controller: _tournamentNameController,
-                                    maxLength: 100,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Turniername',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    onSubmitted: (_) => _saveTournamentName(),
-                                  ),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: FilledButton.icon(
-                                      onPressed: _saveTournamentName,
-                                      icon: const Icon(Icons.save_outlined),
-                                      label: const Text('Namen speichern'),
-                                    ),
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final field = TextField(
+                                        controller: _tournamentNameController,
+                                        maxLength: 100,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Turniername',
+                                          border: OutlineInputBorder(),
+                                          counterText: '',
+                                        ),
+                                        onSubmitted: (_) =>
+                                            _saveTournamentName(),
+                                      );
+                                      final saveButton = FilledButton.icon(
+                                        onPressed: _saveTournamentName,
+                                        icon: const Icon(Icons.save_outlined),
+                                        label: const Text('Namen speichern'),
+                                      );
+                                      if (constraints.maxWidth < 560) {
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            field,
+                                            const SizedBox(height: 8),
+                                            saveButton,
+                                          ],
+                                        );
+                                      }
+                                      return Row(
+                                        children: [
+                                          Expanded(flex: 3, child: field),
+                                          const SizedBox(width: 12),
+                                          saveButton,
+                                        ],
+                                      );
+                                    },
                                   ),
                                   const Divider(height: 28),
                                 ],
@@ -2813,10 +3050,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  Text(
-                                    widget.tournament.isClockPaused
-                                        ? 'Status: Pausiert'
-                                        : 'Status: Läuft aktiv',
+                                  _TournamentClockStatus(
+                                    tournament: widget.tournament,
                                   ),
                                   const SizedBox(height: 12),
                                   if (widget.tournament.finishedAt == null)
@@ -2861,12 +3096,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  const Text(
-                                    'Für den Vereinsheim-TV oder Beamer: Zeigt Tabellen, Spielansetzungen, '
-                                    'Ergebnisse und Turnieruhr automatisch rotierend im Vollbild an. '
-                                    'So können Ergebnisse am Laptop eingetragen werden, ohne die Anzeige zu stören.',
-                                  ),
-                                  const SizedBox(height: 12),
                                   Wrap(
                                     spacing: 8,
                                     runSpacing: 8,
@@ -2879,6 +3108,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               [
                                                 '--second-screen',
                                                 widget.tournament.id,
+                                                '--parent-pid=$pid',
                                               ],
                                             );
                                             if (context.mounted) {
@@ -2914,20 +3144,31 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           'In separatem Fenster öffnen (für 2. Monitor)',
                                         ),
                                       ),
-                                      OutlinedButton.icon(
+                                      IconButton(
+                                        tooltip:
+                                            'Information zum 2. Bildschirm',
                                         onPressed: () => showDialog<void>(
                                           context: context,
-                                          builder: (ctx) => Dialog.fullscreen(
-                                            child: TournamentSecondScreenView(
-                                              tournament: widget.tournament,
-                                              isStandaloneWindow: true,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text(
+                                              '2. Bildschirm (TV-Anzeige)',
                                             ),
+                                            content: const Text(
+                                              'Öffnet die Tabellen, Spielansetzungen, Ergebnisse und Turnieruhr '
+                                              'in einem eigenen Fenster. Ziehe dieses Fenster auf den zweiten '
+                                              'Monitor und maximiere es. Ergebnisse kannst du weiterhin hier '
+                                              'am Hauptbildschirm eintragen.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context).pop(),
+                                                child: const Text('Schließen'),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        icon: const Icon(Icons.fullscreen),
-                                        label: const Text(
-                                          'Hier im Vollbild-Dialog öffnen',
-                                        ),
+                                        icon: const Icon(Icons.help_outline),
                                       ),
                                     ],
                                   ),
@@ -3055,6 +3296,71 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                             ),
                           const SizedBox(height: 12),
+                          if (widget.tournament.leagueMatch == null &&
+                              _activeStageIndex <
+                                  widget.tournament.stages.length &&
+                              widget
+                                      .tournament
+                                      .stages[_activeStageIndex]
+                                      .type ==
+                                  'groups')
+                            Card(
+                              child: ExpansionTile(
+                                initiallyExpanded: false,
+                                leading: const Icon(Icons.swap_vert),
+                                title: const Text('Tie Breaker Einstellungen'),
+                                subtitle: const Text(
+                                  'Reihenfolge für Gleichstände in dieser Etappe',
+                                ),
+                                childrenPadding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  16,
+                                ),
+                                children: [
+                                  Text(
+                                    'Tie-Breaker · ${widget.tournament.stages[_activeStageIndex].name}',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  GroupTieBreakerSetup(
+                                    tieBreakers: _tieBreakersForActiveStage(),
+                                    onMoveTieBreaker: _moveGroupTieBreakerDraft,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: FilledButton.icon(
+                                      onPressed:
+                                          _hasPendingTieBreakerChanges &&
+                                              !_savingTieBreakerSettings &&
+                                              _viewStageIndex ==
+                                                  _activeStageIndex &&
+                                              !_completedStageIndexes.contains(
+                                                _activeStageIndex,
+                                              )
+                                          ? _applyGroupTieBreakerDraft
+                                          : null,
+                                      icon: _savingTieBreakerSettings
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(Icons.check),
+                                      label: const Text('Übernehmen'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (widget.tournament.leagueMatch == null)
+                            const SizedBox(height: 12),
                           // 4. Spieler verwalten
                           Card(
                             child: ExpansionTile(
@@ -3128,6 +3434,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ],
                             ),
                           ),
+                          const GoveeAmbiencePanel(),
                         ],
                       )
                     else if (_stageViewMode == StageViewMode.players)

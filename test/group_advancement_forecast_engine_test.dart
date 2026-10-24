@@ -25,7 +25,7 @@ GroupTournamentRunStage _stage({
     eligibleGroupSize: players.length,
     extraGroups: const [],
   ),
-  tieBreakers: const ['points', 'legDifference', 'legsFor'],
+  tieBreakers: defaultGroupTieBreakers,
 );
 
 void main() {
@@ -124,4 +124,63 @@ void main() {
     expect(result[players[0].name]!.groupWinProbability, greaterThan(16.7));
     expect(result[players[1].name]!.groupWinProbability, lessThan(16.7));
   });
+
+  test(
+    'forecast applies direct comparison before aggregate leg difference',
+    () {
+      final first = TournamentPlayer.generated(1).copyWith(name: 'Spieler A');
+      final second = TournamentPlayer.generated(2).copyWith(name: 'Spieler B');
+      final third = TournamentPlayer.generated(3).copyWith(name: 'Spieler C');
+      final matches = [
+        GroupMatch(
+          homePlayer: second,
+          awayPlayer: first,
+          round: 1,
+          homeLegs: 2,
+          awayLegs: 1,
+        ),
+        GroupMatch(
+          homePlayer: first,
+          awayPlayer: third,
+          round: 1,
+          homeLegs: 2,
+          awayLegs: 0,
+        ),
+        GroupMatch(
+          homePlayer: first,
+          awayPlayer: third,
+          round: 2,
+          homeLegs: 2,
+          awayLegs: 0,
+        ),
+        GroupMatch(
+          homePlayer: second,
+          awayPlayer: third,
+          round: 1,
+          homeLegs: 2,
+          awayLegs: 0,
+        ),
+        GroupMatch(
+          homePlayer: third,
+          awayPlayer: second,
+          round: 2,
+          homeLegs: 2,
+          awayLegs: 0,
+        ),
+      ];
+
+      final result = const GroupAdvancementForecastEngine().calculate(
+        stage: _stage(
+          players: [first, second, third],
+          matches: matches,
+          qualifiers: 1,
+        ),
+        simulations: 20,
+        seed: 41,
+      );
+
+      expect(result[second.name]!.groupWinProbability, 100);
+      expect(result[first.name]!.groupWinProbability, 0);
+    },
+  );
 }

@@ -3,6 +3,7 @@ import '../../../shared/widgets/sport_page_heading.dart';
 import '../../statistics/presentation/local_player_statistics_page.dart';
 import '../../statistics/presentation/player_comparison_page.dart';
 import '../../rankings/presentation/rankings_page.dart';
+
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'package:flutter/material.dart';
 
@@ -66,7 +67,8 @@ class _PlayersPageState extends State<PlayersPage> {
 
     if (player == null) {
       await _database.createPlayerProfile(
-        displayName: result.displayName,
+        firstName: result.firstName,
+        lastName: result.lastName,
         country: '',
         city: '',
         dartsSetupJson: metadataJson,
@@ -74,7 +76,8 @@ class _PlayersPageState extends State<PlayersPage> {
     } else {
       await _database.updatePlayerProfile(
         player.copyWith(
-          displayName: result.displayName,
+          firstName: result.firstName,
+          lastName: result.lastName,
           dartsSetupJson: metadataJson,
         ),
       );
@@ -425,6 +428,7 @@ class _PlayerDialog extends StatefulWidget {
 
 class _PlayerDialogState extends State<_PlayerDialog> {
   late final TextEditingController _nameController;
+  late final TextEditingController _surnameController;
   late final TextEditingController _nicknameController;
   late final TextEditingController _birthdateController;
   late final TextEditingController _scoliaIdController;
@@ -435,7 +439,8 @@ class _PlayerDialogState extends State<_PlayerDialog> {
   void initState() {
     super.initState();
     final player = widget.player;
-    _nameController = TextEditingController(text: player?.displayName ?? '');
+    _nameController = TextEditingController(text: player?.firstName ?? '');
+    _surnameController = TextEditingController(text: player?.lastName ?? '');
     _nicknameController = TextEditingController(text: player?.nickname ?? '');
     _birthdateController = TextEditingController(text: player?.birthdate ?? '');
     _scoliaIdController = TextEditingController(text: player?.scoliaId ?? '');
@@ -450,6 +455,7 @@ class _PlayerDialogState extends State<_PlayerDialog> {
   @override
   void dispose() {
     _nameController.dispose();
+    _surnameController.dispose();
     _nicknameController.dispose();
     _birthdateController.dispose();
     _scoliaIdController.dispose();
@@ -487,14 +493,15 @@ class _PlayerDialogState extends State<_PlayerDialog> {
   }
 
   void _submit() {
-    final displayName = _nameController.text.trim();
-    if (displayName.isEmpty) {
+    final firstName = _nameController.text.trim();
+    if (firstName.isEmpty) {
       return;
     }
 
     Navigator.of(context).pop(
       _PlayerFormResult(
-        displayName: displayName,
+        firstName: firstName,
+        lastName: _surnameController.text.trim(),
         nickname: _nicknameController.text.trim(),
         birthdate: _birthdateController.text.trim(),
         scoliaId: _scoliaIdController.text.trim(),
@@ -518,12 +525,22 @@ class _PlayerDialogState extends State<_PlayerDialog> {
               controller: _nameController,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
-                labelText: 'Name *',
+                labelText: 'Vorname *',
                 prefixIcon: Icon(Icons.person_outline),
               ),
               textInputAction: TextInputAction.next,
               autofocus: true,
               onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _surnameController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Nachname',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+              textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 12),
             TextField(
@@ -596,7 +613,8 @@ class _PlayerDialogState extends State<_PlayerDialog> {
 
 class _PlayerFormResult {
   const _PlayerFormResult({
-    required this.displayName,
+    required this.firstName,
+    required this.lastName,
     required this.nickname,
     required this.birthdate,
     required this.scoliaId,
@@ -604,7 +622,8 @@ class _PlayerFormResult {
     required this.threeKDartsId,
   });
 
-  final String displayName;
+  final String firstName;
+  final String lastName;
   final String nickname;
   final String birthdate;
   final String scoliaId;

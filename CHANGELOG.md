@@ -1,3 +1,112 @@
+# 2.0.1+26
+
+- Adds a versioned read-only website data snapshot for authenticated access to
+  player profiles, ranking standings, statistics, best performances and
+  completed tournaments.
+- Publishes the website snapshot as part of the existing account-scoped
+  Supabase synchronization without changing or replacing the existing backup.
+- Adds a JWT-protected GET Edge Function that uses the caller's Storage RLS
+  permissions and never exposes write operations or a service-role key.
+- Documents deployment and server-side consumption from the separate Astro
+  website project.
+
+# 2.0.0+25
+
+- Removes each drawn name from the wheel and locks the draw setup after the
+  first spin.
+- Shows fixed group slots beside the wheel on wide screens and fills them in
+  draw order, completing each group from top to bottom with no manual
+  reassignment.
+
+# 1.2.3+24
+
+- Replaces group-creation wheel assignment with random group distribution and
+  adds a standalone draw wheel with manual assignment and text/image exports.
+- Stores the Govee API key on-device and adds tournament ambience controls for
+  supported colors and rainbow scenes.
+- Moves second-screen help into a compact help action.
+- Starts the Windows updater through its persisted PowerShell restart script
+  with explicit script encoding and execution policy.
+
+# 1.2.2+23
+
+- Recovers accepted group draw assignments from the persisted draw order even
+  when the completion flag is stale, repairs the flag, and avoids reopening
+  the wheel.
+
+# 1.2.1+22
+
+- Uses the final group's configured tie-breaker order for the completed
+  tournament results and podium.
+- Moves live group tie-breaker editing into its own settings panel with a
+  separate apply action and save feedback.
+- Restores accepted wheel assignments from their saved slot order when opening
+  an untouched group stage, and persists subsequent manual group-position
+  changes in that order.
+
+# 1.2.0+21
+
+- Persists accepted group draws as completed, applies their exact slot order to
+  runtime groups, and reports stale draw data instead of reverting to default
+  group assignments.
+- Adds editable group tie-breakers to the running tournament settings and
+  applies the selected order to the active standings and forecasts.
+- Allows completed tournaments to be reopened with their results and settings
+  intact, the clock paused, and the final completion action available again.
+- Uses the regular surface color for the stage match-count preview.
+
+# 1.1.8+20
+
+- Shows only drawn players in the group assignment preview; undrawn group
+  slots remain placeholders, and accepted assignments follow the wheel order.
+- Adds explicit hour and minute units to actual and estimated tournament
+  durations in results and the PNG export.
+
+# 1.1.7+19
+
+- Applies the draw-wheel order consistently when building group assignments and
+  editing player positions.
+- Gives direct head-to-head results priority over aggregate leg difference by
+  default, migrates saved default ordering, and applies the same rule in
+  advancement forecasts.
+- Remembers the configured group tie-breaker order on the device and explains
+  each criterion in the tournament setup.
+- Labels actual tournament duration and shows the estimated range midpoint with
+  its minimum and maximum in the results view and PNG export.
+
+# 1.1.6+18
+
+- Improves second-screen match layouts, stage progress, and recent-result cards.
+- Shows ranking changes more compactly in tournament results and the PNG
+  export.
+- Adds first and last names to player profiles, with compact match-card names.
+- Fixes random group assignments when using the draw wheel.
+- Restores safe automatic sync resumption and queues sync requests that arrive
+  during an active synchronization.
+- Migrates player profiles to store last names and updates tournament archive
+  schema to support compact player names.
+
+# 1.1.5+17
+
+- Refines player comparison with centered category labels and separators, and
+  removes the Elo history chart from that view.
+- Aligns tournament dashboard and second-screen colors with the dark blue and
+  subtle gold display palette; constrains upcoming match suggestions to two
+  lines and shows only as many as fit.
+- Shows only actual ranking-place changes in tournament results and exports.
+  The tournament PNG uses the dark blue palette, groups point gains and losses,
+  and reports the expected duration range.
+- Keeps random draw assignments consistent with configured group sizes.
+- Improves tournament settings with a compact name/save layout and a visible
+  running or paused clock time.
+- Reuses and focuses an already-open Windows second-screen window, and closes
+  it when the main application exits.
+- Makes Elo tier names and rating boundaries configurable per ranking while
+  retaining default tiers for existing rankings.
+- Hides self-service registration and Google sign-in; operator accounts are
+  managed manually in Supabase.
+- Preserves existing tournament database schema and backup formats.
+
 # 1.1.4+16
 
 - Replaces the player Elo comparison graph with a side-by-side comparison

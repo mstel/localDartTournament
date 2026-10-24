@@ -267,6 +267,26 @@ void main() {
       },
     );
   }
+
+  Future<ProcessResult> runWindowsScriptFile(File script) {
+    final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+    final powershell = p.join(
+      systemRoot,
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    );
+    return Process.run(powershell, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      script.path,
+    ]);
+  }
+
   test(
     'Windows package ZIP accepts PowerShell backslash entry paths',
     () async {
@@ -404,8 +424,15 @@ void main() {
         failureFile: failureFile,
         originalExe: fallbackExe,
       );
+      final restartScript = File(p.join(temp.path, 'restart script.ps1'));
+      await restartScript.writeAsBytes([
+        0xEF,
+        0xBB,
+        0xBF,
+        ...utf8.encode(command),
+      ]);
 
-      final result = await runWindowsScript(command);
+      final result = await runWindowsScriptFile(restartScript);
 
       expect(result.exitCode, 0, reason: '${result.stderr}\n${result.stdout}');
       expect(
@@ -522,26 +549,14 @@ void main() {
       final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
       final where = p.join(systemRoot, 'System32', 'where.exe');
       final fakeUpdate = File(p.join(temp.path, 'fake update.cmd'));
-      final delayedActivation = File(p.join(temp.path, 'activate-later.ps1'));
       final activeFile = p.join(temp.path, 'active.json');
       final logFile = p.join(temp.path, 'restart.log');
       final failureFile = p.join(temp.path, 'update-failure.txt');
-      final powershell = p.join(
-        systemRoot,
-        'System32',
-        'WindowsPowerShell',
-        'v1.0',
-        'powershell.exe',
-      );
-      await delayedActivation.writeAsString(
-        "Start-Sleep -Seconds 2\r\n"
-        "Set-Content -LiteralPath '${activeFile.replaceAll("'", "''")}' "
-        "-Value '{\"schemaVersion\":1,\"id\":\"build-12-123\"}'\r\n",
-      );
       await fakeUpdate.writeAsString(
         '@echo off\r\n'
-        'start "" "$powershell" -NoProfile -NonInteractive '
-        '-WindowStyle Hidden -File "${delayedActivation.path}"\r\n'
+        'timeout /t 2 /nobreak >nul\r\n'
+        'echo {"schemaVersion":1,"id":"build-12-123"} > "$activeFile"\r\n'
+        'timeout /t 3 /nobreak >nul\r\n'
         'exit /b 0\r\n',
       );
       final command = DesktopUpdateLauncher.windowsScript(
@@ -554,9 +569,13 @@ void main() {
         originalExe: where,
       );
 
+      final timer = Stopwatch()..start();
       final result = await runWindowsScript(command);
+      timer.stop();
+      await Future<void>.delayed(const Duration(seconds: 4));
 
       expect(result.exitCode, 0, reason: '${result.stderr}\n${result.stdout}');
+      expect(timer.elapsed, lessThan(const Duration(seconds: 5)));
       expect(
         await File(activeFile).readAsString(),
         contains('"id":"build-12-123"'),

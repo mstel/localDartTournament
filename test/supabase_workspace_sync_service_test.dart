@@ -90,4 +90,30 @@ void main() {
     expect(copied, isFalse);
     expect(await existingProof.readAsString(), 'existing proof');
   });
+
+  test('only resumes after a valid tournament archive contains data', () async {
+    final file = File('${root.path}/tournaments.json');
+    await file.writeAsString(
+      '{"schemaVersion":27,"tournaments":[{"id":"kept"}]}',
+    );
+    final originalBytes = await file.readAsBytes();
+
+    expect(
+      await SupabaseWorkspaceSyncService.hasLocalTournamentData(file),
+      isTrue,
+    );
+    expect(await file.readAsBytes(), originalBytes);
+
+    await file.writeAsString('{"schemaVersion":27,"tournaments":[]}');
+    expect(
+      await SupabaseWorkspaceSyncService.hasLocalTournamentData(file),
+      isFalse,
+    );
+    expect(
+      await SupabaseWorkspaceSyncService.hasLocalTournamentData(
+        File('${root.path}/missing.json'),
+      ),
+      isFalse,
+    );
+  });
 }

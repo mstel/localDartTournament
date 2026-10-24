@@ -9,6 +9,7 @@ import '../../settings/data/planning_settings_storage.dart';
 
 class TournamentTiming {
   static Future<void> prepare(CreatedTournament tournament) async {
+    if (tournament.reopenedForCorrections) return;
     if (tournament.startedAt == null &&
         !matches(tournament).any((m) => m.startedAt != null)) {
       return;
@@ -94,6 +95,10 @@ class TournamentTiming {
             tournament.runStages.length == tournament.stages.length &&
             games.isNotEmpty &&
             games.every((m) => m.isResolved));
+    if (tournament.reopenedForCorrections) {
+      tournament.finishedAt = null;
+      return;
+    }
     if (!complete) {
       tournament.finishedAt = null;
       return;

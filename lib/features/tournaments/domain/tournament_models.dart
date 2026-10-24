@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'player_withdrawal.dart';
 import 'imported_tournament_archive.dart';
 import '../../statistics/domain/best_performance.dart';
@@ -6,9 +7,9 @@ import '../../league/domain/league_match.dart';
 
 const List<String> defaultGroupTieBreakers = [
   'points',
+  'headToHead',
   'legDifference',
   'legsFor',
-  'headToHead',
 ];
 
 String groupLabel(int groupNumber) {
@@ -25,7 +26,7 @@ String groupLabel(int groupNumber) {
 
 String tieBreakerLabel(String tieBreaker) {
   return switch (tieBreaker) {
-    'points' => 'Punkte',
+    'points' => 'Matchpunkte',
     'legDifference' => 'Leg-Differenz',
     'legsFor' => 'Gewonnene Legs',
     'headToHead' => 'Direkter Vergleich',
@@ -54,6 +55,22 @@ List<int> _intListFromJson(Object? value) {
     for (final item in value)
       if (item is int) item,
   ];
+}
+
+List<String> _groupTieBreakersFromJson(Object? value) {
+  final tieBreakers = _stringListFromJson(
+    value,
+    fallback: defaultGroupTieBreakers,
+  );
+  const previousDefault = ['points', 'legDifference', 'legsFor', 'headToHead'];
+  final isPreviousDefault =
+      tieBreakers.length == previousDefault.length &&
+      tieBreakers.asMap().entries.every(
+        (entry) => entry.value == previousDefault[entry.key],
+      );
+  return isPreviousDefault
+      ? List<String>.from(defaultGroupTieBreakers)
+      : tieBreakers;
 }
 
 List<int?> _nullableIntListFromJson(Object? value) {
@@ -145,10 +162,7 @@ TournamentRunStage _runStageFromJson(Map<String, dynamic> json) {
             json['qualificationPlan'] as Map<String, dynamic>,
           )
         : null,
-    tieBreakers: _stringListFromJson(
-      json['tieBreakers'],
-      fallback: defaultGroupTieBreakers,
-    ),
+    tieBreakers: _groupTieBreakersFromJson(json['tieBreakers']),
   );
 }
 
@@ -167,6 +181,7 @@ class TournamentPlayer {
     this.profileId,
     required this.name,
     required this.isGenerated,
+    this.compactName,
     this.members = const [],
   });
 
@@ -175,6 +190,7 @@ class TournamentPlayer {
       profileId: json['profileId'] as String?,
       name: json['name'] as String? ?? '',
       isGenerated: json['isGenerated'] as bool? ?? false,
+      compactName: json['compactName'] as String?,
       members: (json['members'] as List? ?? const [])
           .map(
             (e) =>
@@ -191,6 +207,19 @@ class TournamentPlayer {
   final String? profileId;
   final String name;
   final bool isGenerated;
+  final String? compactName;
+  String get shortDisplayName {
+    if (isTeam) {
+      return members.map((player) => player.shortDisplayName).join(' / ');
+    }
+    final compact = compactName?.trim();
+    if (compact != null && compact.isNotEmpty) return compact;
+    if (isGenerated) return name;
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length < 2) return name;
+    return '${parts.first} ${parts.last[0]}.';
+  }
+
   final List<TournamentPlayer> members;
   bool get isTeam => members.isNotEmpty;
   List<TournamentPlayer> get individuals =>
@@ -216,11 +245,13 @@ class TournamentPlayer {
     String? profileId,
     String? name,
     bool? isGenerated,
+    String? compactName,
   }) {
     return TournamentPlayer(
       profileId: profileId ?? this.profileId,
       name: name ?? this.name,
       isGenerated: isGenerated ?? this.isGenerated,
+      compactName: compactName ?? this.compactName,
       members: members,
     );
   }
@@ -230,6 +261,7 @@ class TournamentPlayer {
       if (profileId != null) 'profileId': profileId,
       'name': name,
       'isGenerated': isGenerated,
+      if (compactName != null) 'compactName': compactName,
       if (isTeam) 'members': members.map((p) => p.toJson()).toList(),
     };
   }
@@ -240,6 +272,7 @@ class TournamentPlayer {
         other.profileId == profileId &&
         other.name == name &&
         other.isGenerated == isGenerated &&
+        other.compactName == compactName &&
         other.members.length == members.length &&
         Iterable<int>.generate(
           members.length,
@@ -247,8 +280,13 @@ class TournamentPlayer {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(profileId, name, isGenerated, Object.hashAll(members));
+  int get hashCode => Object.hash(
+    profileId,
+    name,
+    isGenerated,
+    compactName,
+    Object.hashAll(members),
+  );
 }
 
 class TournamentStage {
@@ -267,6 +305,7 @@ class TournamentStage {
     this.groupTieBreakers = defaultGroupTieBreakers,
     this.groupDrawOnStart = false,
     this.groupSlotOrder = const [],
+    this.groupDrawCompleted = false,
     this.knockoutParticipantCount,
     this.knockoutBracketSize,
     this.knockoutByeCount = 0,
@@ -284,6 +323,7 @@ class TournamentStage {
   });
 
   factory TournamentStage.fromJson(Map<String, dynamic> json) {
+    final groupSlotOrder = _nullableIntListFromJson(json['groupSlotOrder']);
     return TournamentStage(
       name: json['name'] as String? ?? '',
       type: json['type'] as String? ?? 'groups',
@@ -298,12 +338,11 @@ class TournamentStage {
       groupMaxGamesPerPlayer: _nullableIntListFromJson(
         json['groupMaxGamesPerPlayer'],
       ),
-      groupTieBreakers: _stringListFromJson(
-        json['groupTieBreakers'],
-        fallback: defaultGroupTieBreakers,
-      ),
+      groupTieBreakers: _groupTieBreakersFromJson(json['groupTieBreakers']),
       groupDrawOnStart: json['groupDrawOnStart'] as bool? ?? false,
-      groupSlotOrder: _nullableIntListFromJson(json['groupSlotOrder']),
+      groupSlotOrder: groupSlotOrder,
+      groupDrawCompleted:
+          json['groupDrawCompleted'] as bool? ?? groupSlotOrder.isNotEmpty,
       knockoutParticipantCount: json['knockoutParticipantCount'] as int?,
       knockoutBracketSize: json['knockoutBracketSize'] as int?,
       knockoutByeCount: json['knockoutByeCount'] as int? ?? 0,
@@ -352,6 +391,7 @@ class TournamentStage {
   final List<String> groupTieBreakers;
   final bool groupDrawOnStart;
   final List<int?> groupSlotOrder;
+  final bool groupDrawCompleted;
   final int? knockoutParticipantCount;
   final int? knockoutBracketSize;
   final int knockoutByeCount;
@@ -383,6 +423,7 @@ class TournamentStage {
       'groupTieBreakers': groupTieBreakers,
       'groupDrawOnStart': groupDrawOnStart,
       'groupSlotOrder': groupSlotOrder,
+      'groupDrawCompleted': groupDrawCompleted,
       'knockoutParticipantCount': knockoutParticipantCount,
       'knockoutBracketSize': knockoutBracketSize,
       'knockoutByeCount': knockoutByeCount,
@@ -399,6 +440,42 @@ class TournamentStage {
       'gameFormat': gameFormat.toJson(),
     };
   }
+
+  TournamentStage copyWith({
+    List<String>? groupTieBreakers,
+    List<int?>? groupSlotOrder,
+    bool? groupDrawCompleted,
+  }) => TournamentStage(
+    name: name,
+    type: type,
+    finalEndsTournament: finalEndsTournament,
+    knockoutLives: knockoutLives,
+    placementPlaces: placementPlaces,
+    groupCount: groupCount,
+    groupSizes: groupSizes,
+    groupPlayType: groupPlayType,
+    groupPlayTypes: groupPlayTypes,
+    groupRoundRobinRepeats: groupRoundRobinRepeats,
+    groupMaxGamesPerPlayer: groupMaxGamesPerPlayer,
+    groupTieBreakers: groupTieBreakers ?? this.groupTieBreakers,
+    groupDrawOnStart: groupDrawOnStart,
+    groupSlotOrder: groupSlotOrder ?? this.groupSlotOrder,
+    groupDrawCompleted: groupDrawCompleted ?? this.groupDrawCompleted,
+    knockoutParticipantCount: knockoutParticipantCount,
+    knockoutBracketSize: knockoutBracketSize,
+    knockoutByeCount: knockoutByeCount,
+    knockoutSlotOrder: knockoutSlotOrder,
+    knockoutSeedingMode: knockoutSeedingMode,
+    knockoutDrawOnStart: knockoutDrawOnStart,
+    qualifiersByGroup: qualifiersByGroup,
+    fixedQualifiersByGroup: fixedQualifiersByGroup,
+    extraQualifierRank: extraQualifierRank,
+    extraQualifierCount: extraQualifierCount,
+    qualificationAutoAdjust: qualificationAutoAdjust,
+    qualifiedParticipantCount: qualifiedParticipantCount,
+    qualificationSummary: qualificationSummary,
+    gameFormat: gameFormat,
+  );
 }
 
 /// Das tatsächlich gespielte Format einer Etappe. Es ist bewusst unabhängig
@@ -485,6 +562,7 @@ class CreatedTournament {
     this.startedAt,
     this.finishedAt,
     this.pausedAt,
+    this.reopenedForCorrections = false,
     this.totalPausedSeconds = 0,
     this.plannedMinimumMinutes,
     this.plannedMinutes,
@@ -535,6 +613,7 @@ class CreatedTournament {
       startedAt: _dateTimeFromJson(json['startedAt']),
       finishedAt: _dateTimeFromJson(json['finishedAt']),
       pausedAt: _dateTimeFromJson(json['pausedAt']),
+      reopenedForCorrections: json['reopenedForCorrections'] as bool? ?? false,
       totalPausedSeconds: json['totalPausedSeconds'] as int? ?? 0,
       plannedMinimumMinutes: json['plannedMinimumMinutes'] as int?,
       plannedMinutes: json['plannedMinutes'] as int?,
@@ -563,6 +642,7 @@ class CreatedTournament {
   final List<PlayerWithdrawal> withdrawals;
   final Set<int> blockedBoards;
   DateTime? startedAt, finishedAt, pausedAt;
+  bool reopenedForCorrections;
   int totalPausedSeconds;
   bool get isClockPaused => pausedAt != null;
   int? plannedMinimumMinutes;
@@ -593,6 +673,7 @@ class CreatedTournament {
       'startedAt': startedAt?.toUtc().toIso8601String(),
       'finishedAt': finishedAt?.toUtc().toIso8601String(),
       if (pausedAt != null) 'pausedAt': pausedAt?.toUtc().toIso8601String(),
+      if (reopenedForCorrections) 'reopenedForCorrections': true,
       if (totalPausedSeconds > 0) 'totalPausedSeconds': totalPausedSeconds,
       if (plannedMinimumMinutes != null)
         'plannedMinimumMinutes': plannedMinimumMinutes,

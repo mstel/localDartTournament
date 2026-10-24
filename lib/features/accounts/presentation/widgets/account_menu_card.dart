@@ -24,6 +24,8 @@ class AccountMenuCard extends StatefulWidget {
 }
 
 class _AccountMenuCardState extends State<AccountMenuCard> {
+  static const _showSelfServiceRegistration = false;
+
   late final AccountSessionStore _store;
   late Future<AccountUser?> _accountFuture;
 
@@ -191,11 +193,12 @@ class _AccountMenuCardState extends State<AccountMenuCard> {
                 icon: Icons.login_outlined,
                 onTap: _openSignInDialog,
               ),
-              SportMenuAction(
-                label: 'Account erstellen',
-                icon: Icons.person_add_alt_1_outlined,
-                onTap: _openRegisterDialog,
-              ),
+              if (_showSelfServiceRegistration)
+                SportMenuAction(
+                  label: 'Account erstellen',
+                  icon: Icons.person_add_alt_1_outlined,
+                  onTap: _openRegisterDialog,
+                ),
             ],
           );
         }

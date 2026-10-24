@@ -1,8 +1,9 @@
 import '../../../../shared/widgets/sport_menu.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
-    show ProductionTournamentRuntime;
+    show ProductionTournamentRuntime, TournamentRunPage;
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import '../../domain/engines/placement_engine.dart';
+import '../../domain/engines/group_standings_engine.dart';
 import '../../domain/knockout_round_names.dart';
 import 'package:flutter/material.dart';
 
@@ -16,6 +17,8 @@ import '../../../statistics/domain/best_performance.dart';
 import '../widgets/run/best_performance_editor.dart';
 import 'challonge_archive_page.dart';
 import '../../application/tournament_timing.dart';
+import '../../application/tournament_run_controller.dart';
+import '../../application/tournament_duration_range.dart';
 import '../../application/tournament_completion_image_generator.dart';
 import '../widgets/results/tournament_ranking_assignment.dart';
 import '../widgets/results/tournament_ranking_changes_section.dart';
@@ -66,12 +69,13 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: 'Hauptmenü',
-            onPressed: () =>
-                Navigator.of(context).popUntil((route) => route.isFirst),
-            icon: const Icon(Icons.home_outlined),
-          ),
+          if (tournament.stages.isNotEmpty &&
+              tournament.importedArchive == null)
+            IconButton(
+              tooltip: 'Einstellungen',
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: _showSettings,
+            ),
         ],
       ),
       body: SafeArea(
@@ -116,18 +120,10 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                           final timing = TournamentTiming.durationSummary(
                             tournament,
                           );
-                          String formatDur(Duration d) =>
-                              '${d.inHours}:${(d.inMinutes % 60).toString().padLeft(2, '0')}';
                           final averageLegsPerMatch = summary.matchCount == 0
                               ? 0.0
                               : summary.legCount / summary.matchCount;
-                          final expectedRange =
-                              tournament.plannedMinimumMinutes != null &&
-                                  tournament.plannedMinutes != null
-                              ? 'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinimumMinutes!))}–${formatDur(Duration(minutes: tournament.plannedMinutes!))}'
-                              : tournament.plannedMinutes == null
-                              ? null
-                              : 'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinutes!))}';
+                          final expectedRange = _expectedDurationRangeText();
                           return Column(
                             children: [
                               const SizedBox(height: 10),
@@ -173,22 +169,20 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                                   children: [
                                     if (timing != null)
                                       Text(
-                                        'Tatsächlich: ${formatDur(timing.totalDuration)}',
+                                        TournamentDurationRange.actualDurationLabel(
+                                          timing.totalDuration,
+                                        ),
                                       ),
                                     if (expectedRange != null)
                                       Tooltip(
                                         message:
-                                            'Geschätzte Turnierdauer: $expectedRange',
+                                            'Erwartete Spanne der Turnierdauer: $expectedRange',
                                         child: Text(
                                           expectedRange,
                                           key: const ValueKey(
                                             'expected-duration-range',
                                           ),
                                         ),
-                                      ),
-                                    if (timing?.averageMatchDuration != null)
-                                      Text(
-                                        'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
                                       ),
                                     if (timing == null && expectedRange == null)
                                       const Text('Dauer: nicht erfasst'),
@@ -299,8 +293,87 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     );
   }
 
+  Future<void> _reopenTournament() async {
+    final lastStageIndex = tournament.stages.length - 1;
+    if (lastStageIndex < 0 || tournament.reopenedForCorrections) return;
+
+    final previousFinishedAt = tournament.finishedAt;
+    final previousPausedAt = tournament.pausedAt;
+    final previousActiveStageIndex = tournament.activeStageIndex;
+    final previousCompletedStages = Set<int>.from(
+      tournament.completedStageIndexes,
+    );
+    final controller = TournamentRunController(storage: widget.storage);
+    tournament
+      ..finishedAt = null
+      ..pausedAt ??= DateTime.now()
+      ..reopenedForCorrections = true;
+
+    try {
+      await controller.saveProgress(
+        tournament: tournament,
+        activeStageIndex: lastStageIndex,
+        completedStageIndexes: {...previousCompletedStages}
+          ..remove(lastStageIndex),
+      );
+    } catch (error) {
+      tournament
+        ..finishedAt = previousFinishedAt
+        ..pausedAt = previousPausedAt
+        ..reopenedForCorrections = false
+        ..activeStageIndex = previousActiveStageIndex;
+      tournament.completedStageIndexes
+        ..clear()
+        ..addAll(previousCompletedStages);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Turnier konnte nicht geöffnet werden: $error'),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement<void, void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TournamentRunPage(
+          tournament: tournament,
+          runController: controller,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSettings() async {
+    final reopen = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Einstellungen'),
+        content: const Text(
+          'Das Turnier wird mit allen Ergebnissen erneut geöffnet. '
+          'Die Turnieruhr bleibt pausiert.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.replay),
+            label: const Text('Turnier erneut öffnen'),
+          ),
+        ],
+      ),
+    );
+    if (reopen == true) await _reopenTournament();
+  }
+
   Map<String, Object?> _exportSummary(_TournamentResultSummary summary) {
     final timing = TournamentTiming.durationSummary(tournament);
+    final expectedRange = _expectedDurationRange();
     return {
       'participantCount': summary.playerCount,
       'matchCount': summary.matchCount,
@@ -309,8 +382,8 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
           ? 0
           : summary.legCount / summary.matchCount,
       'actualDurationSeconds': timing?.totalDuration.inSeconds,
-      'expectedMinimumMinutes': tournament.plannedMinimumMinutes,
-      'expectedMaximumMinutes': tournament.plannedMinutes,
+      'expectedMinimumMinutes': expectedRange?.minimumMinutes,
+      'expectedMaximumMinutes': expectedRange?.maximumMinutes,
       'podium': [
         for (final stats in summary.ranking.take(3))
           {
@@ -330,19 +403,15 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     List<BestPerformance> performances,
   ) {
     final timing = TournamentTiming.durationSummary(tournament);
-    String formatDur(Duration duration) =>
-        '${duration.inHours}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}';
+    final expectedRange = _expectedDurationRange();
     final durationParts = [
-      if (timing != null) 'Tatsächlich: ${formatDur(timing.totalDuration)}',
-      if (tournament.plannedMinimumMinutes != null &&
-          tournament.plannedMinutes != null)
-        'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinimumMinutes!))}'
-            '–${formatDur(Duration(minutes: tournament.plannedMinutes!))}',
-      if (tournament.plannedMinimumMinutes == null &&
-          tournament.plannedMinutes != null)
-        'Erwartet: ${formatDur(Duration(minutes: tournament.plannedMinutes!))}',
-      if (timing?.averageMatchDuration != null)
-        'Ø ${formatDur(timing!.averageMatchDuration!)} / Match',
+      if (timing != null)
+        TournamentDurationRange.actualDurationLabel(timing.totalDuration),
+      if (expectedRange != null)
+        TournamentDurationRange.estimatedDurationLabel(
+          minimumMinutes: expectedRange.minimumMinutes,
+          maximumMinutes: expectedRange.maximumMinutes,
+        ),
     ];
     return TournamentCompletionImageData(
       tournamentName: tournament.name,
@@ -353,7 +422,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       averageLegsPerMatch: summary.matchCount == 0
           ? 0
           : summary.legCount / summary.matchCount,
-      durationSummary: durationParts.join(' · '),
+      durationSummary: durationParts.join('\n'),
       podium: [
         for (var index = 0; index < podium.length; index++)
           TournamentCompletionPodiumEntry(
@@ -367,6 +436,51 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       ],
       rankingChanges: const [],
       bestPerformances: performances,
+    );
+  }
+
+  ({int minimumMinutes, int maximumMinutes})? _expectedDurationRange() {
+    final estimate = tournament.plannedMinutes;
+    if (estimate == null) return null;
+    final stages = <({int bestOfLegs, int matchCount})>[];
+    for (var index = 0; index < tournament.stages.length; index++) {
+      final stage = tournament.stages[index];
+      final matchCount = index < tournament.runStages.length
+          ? _matchesForRunStage(
+              tournament.runStages[index],
+            ).where((match) => match.hasPlayers).length
+          : 0;
+      stages.add((
+        bestOfLegs: stage.gameFormat.bestOfLegs,
+        matchCount: matchCount > 0 ? matchCount : 1,
+      ));
+    }
+    if (stages.isEmpty) return null;
+    return TournamentDurationRange.forEstimate(
+      estimatedMinutes: estimate,
+      matches: stages,
+    );
+  }
+
+  List<GroupMatch> _matchesForRunStage(TournamentRunStage stage) =>
+      switch (stage) {
+        GroupTournamentRunStage() => [
+          for (final group in stage.groups) ...[
+            ...group.matches,
+            ...group.knockoutRounds.expand((round) => round),
+            ...group.placementMatches,
+          ],
+        ],
+        KnockoutTournamentRunStage() => stage.matches,
+        _ => const [],
+      };
+
+  String? _expectedDurationRangeText() {
+    final range = _expectedDurationRange();
+    if (range == null) return null;
+    return TournamentDurationRange.estimatedDurationLabel(
+      minimumMinutes: range.minimumMinutes,
+      maximumMinutes: range.maximumMinutes,
     );
   }
 
@@ -1043,6 +1157,15 @@ class _TournamentResultSummary {
               .standings(finalStage.groups.single, finalStage.tieBreakers)
               .map((s) => s.player)
               .toList()
+        : finalStage is GroupTournamentRunStage && finalStage.groups.length == 1
+        ? const GroupStandingsEngine()
+              .calculate(
+                finalStage.groups.single,
+                finalStage.tieBreakers,
+                tournament: tournament,
+              )
+              .map((standing) => standing.player)
+              .toList()
         : const <TournamentPlayer>[];
     final ranking = <_PlayerResultStats>[];
     for (final player in finalStageRanking) {
@@ -1061,6 +1184,9 @@ class _TournamentResultSummary {
       playerCount: tournament.players.length,
       rankingHint: finalStage is KnockoutTournamentRunStage
           ? 'Die Platzierung folgt dem finalen K.-o.-Baum; die Balken zeigen gewonnene Legs im gesamten Turnier.'
+          : finalStage is GroupTournamentRunStage &&
+                finalStage.groups.length == 1
+          ? 'Die Platzierung folgt den Tie-Breaker-Einstellungen der finalen Gruppenphase.'
           : 'Die Platzierung folgt den Gesamtwerten aus allen eingetragenen Spielen.',
     );
   }

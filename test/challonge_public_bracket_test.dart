@@ -160,7 +160,16 @@ void main() {
         hasLength(3),
       );
       expect(ko.placementMatches.where((m) => m.hasResult), hasLength(1));
-      expect(native.importedArchive!.nativeValidation!['issues'], isEmpty);
+      expect(
+        native.importedArchive!.nativeValidation!['issues'],
+        [
+          'Gruppe A: Jan_Wa berechnet Platz 2, Challonge Platz 4.',
+          'Gruppe A: Marvin_S berechnet Platz 3, Challonge Platz 2.',
+          'Gruppe A: Max_Re berechnet Platz 4, Challonge Platz 3.',
+          'Gruppe A: Burkhard_H berechnet Platz 6, Challonge Platz 7.',
+          'Gruppe A: Michael_Le berechnet Platz 7, Challonge Platz 6.',
+        ],
+      );
       expect(
         CreatedTournament.fromJson(
           native.toJson(),

@@ -72,6 +72,73 @@ class _TournamentRankingChangesSectionState
         storage: widget.storage,
       ).calculate(widget.tournament);
 
+  Widget _rankingChangeCard(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required Color color,
+    required List<TournamentRankingPlayerChange> changes,
+    required String emptyMessage,
+    required String Function(TournamentRankingPlayerChange) value,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 16),
+            if (changes.isEmpty)
+              Text(emptyMessage, style: const TextStyle(fontSize: 12))
+            else
+              for (var index = 0; index < changes.length; index++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${index + 1}. ${changes[index].playerName}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        value(changes[index]),
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<TournamentRankingPlayerChange>>(
@@ -88,20 +155,26 @@ class _TournamentRankingChangesSectionState
         }
 
         final deltas = snapshot.data!;
+        final rankingNames = deltas
+            .map((change) => change.rankingName)
+            .where((name) => name.trim().isNotEmpty)
+            .toSet()
+            .toList();
         final tierChanges = deltas.where((d) => d.hasTierChange).toList();
         final gains = deltas.where((d) => d.delta > 0).toList()
           ..sort((a, b) => b.delta.compareTo(a.delta));
         final losses = deltas.where((d) => d.delta < 0).toList()
           ..sort((a, b) => a.delta.compareTo(b.delta));
 
-        final topGains = gains;
-        final topLosses = losses;
-        final positionChanges = [...deltas]
-          ..sort((a, b) {
-            final aChange = a.positionChange ?? 0;
-            final bChange = b.positionChange ?? 0;
-            return bChange.compareTo(aChange);
-          });
+        final topGains = gains.take(3).toList();
+        final topLosses = losses.take(3).toList();
+        final positionChanges =
+            deltas.where((change) => change.hasPositionChange).toList()
+              ..sort((a, b) {
+                final aChange = a.positionChange ?? 0;
+                final bChange = b.positionChange ?? 0;
+                return bChange.compareTo(aChange);
+              });
 
         final theme = Theme.of(context);
 
@@ -118,7 +191,8 @@ class _TournamentRankingChangesSectionState
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Änderungen der Rangliste',
+                  'Änderungen der Rangliste'
+                  '${rankingNames.isEmpty ? '' : ' · ${rankingNames.join(', ')}'}',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -177,7 +251,7 @@ class _TournamentRankingChangesSectionState
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${change.rankingName} · ${change.playerName}',
+                                        change.playerName,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -214,243 +288,68 @@ class _TournamentRankingChangesSectionState
               const SizedBox(height: 12),
             ],
 
-            // Top 3 Zuwachs & Top 3 Verlust
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top 3 Punktezuwachs
-                Expanded(
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.arrow_circle_up,
-                                color: Colors.green,
-                                size: 20,
-                              ),
-                              SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Größter Punktezuwachs',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 16),
-                          if (topGains.isEmpty)
-                            const Text(
-                              'Keine Punktegewinne',
-                              style: TextStyle(fontSize: 12),
-                            )
-                          else
-                            for (var i = 0; i < topGains.length; i++)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 3,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        '${i + 1}. ${topGains[i].rankingName} · '
-                                        '${topGains[i].playerName}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Text(
-                                      '+${topGains[i].delta} '
-                                      '(${topGains[i].ratingBefore} → '
-                                      '${topGains[i].ratingAfter})',
-                                      style: const TextStyle(
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Bottom 3 Punkteverlust
-                Expanded(
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.arrow_circle_down,
-                                color: Colors.red,
-                                size: 20,
-                              ),
-                              SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Größter Punkteverlust',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 16),
-                          if (topLosses.isEmpty)
-                            const Text(
-                              'Keine Punkteverluste',
-                              style: TextStyle(fontSize: 12),
-                            )
-                          else
-                            for (var i = 0; i < topLosses.length; i++)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 3,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        '${i + 1}. ${topLosses[i].rankingName} · '
-                                        '${topLosses[i].playerName}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${topLosses[i].delta} '
-                                      '(${topLosses[i].ratingBefore} → '
-                                      '${topLosses[i].ratingAfter})',
-                                      style: const TextStyle(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final cardWidth = constraints.maxWidth >= 960
+                    ? (constraints.maxWidth - 24) / 3
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.format_list_numbered,
-                          color: theme.colorScheme.primary,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Ranglistenplätze',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
+                    SizedBox(
+                      width: cardWidth,
+                      child: _rankingChangeCard(
+                        context,
+                        title: 'Größter Punktezuwachs',
+                        icon: Icons.arrow_circle_up,
+                        color: Colors.green,
+                        changes: topGains,
+                        emptyMessage: 'Keine Punktegewinne',
+                        value: (change) =>
+                            '+${change.delta} '
+                            '(${change.ratingBefore} → ${change.ratingAfter})',
+                      ),
                     ),
-                    const Divider(height: 16),
-                    for (final change in positionChanges)
-                      _PositionChangeRow(change: change),
+                    SizedBox(
+                      width: cardWidth,
+                      child: _rankingChangeCard(
+                        context,
+                        title: 'Größter Punkteverlust',
+                        icon: Icons.arrow_circle_down,
+                        color: Colors.red,
+                        changes: topLosses,
+                        emptyMessage: 'Keine Punkteverluste',
+                        value: (change) =>
+                            '${change.delta} '
+                            '(${change.ratingBefore} → ${change.ratingAfter})',
+                      ),
+                    ),
+                    SizedBox(
+                      width: cardWidth,
+                      child: _rankingChangeCard(
+                        context,
+                        title: 'Ranglistenplätze',
+                        icon: Icons.format_list_numbered,
+                        color: theme.colorScheme.primary,
+                        changes: positionChanges.take(3).toList(),
+                        emptyMessage: 'Keine Platzierungsänderungen',
+                        value: (change) {
+                          final before = change.rankingPositionBefore;
+                          final after = change.rankingPositionAfter;
+                          return before == null || after == null
+                              ? '–'
+                              : '$before → $after';
+                        },
+                      ),
+                    ),
                   ],
-                ),
-              ),
+                );
+              },
             ),
           ],
         );
       },
-    );
-  }
-}
-
-class _PositionChangeRow extends StatelessWidget {
-  const _PositionChangeRow({required this.change});
-
-  final TournamentRankingPlayerChange change;
-
-  @override
-  Widget build(BuildContext context) {
-    final movement = change.positionChange;
-    final (icon, color, status) = switch (movement) {
-      final value? when value > 0 => (
-        Icons.arrow_upward,
-        Colors.green,
-        'Aufgestiegen um $value ${value == 1 ? 'Platz' : 'Plätze'}',
-      ),
-      final value? when value < 0 => (
-        Icons.arrow_downward,
-        Colors.red,
-        'Abgestiegen um ${-value} ${value == -1 ? 'Platz' : 'Plätze'}',
-      ),
-      0 => (Icons.horizontal_rule, Colors.blueGrey, 'Unverändert'),
-      _ => (Icons.remove_circle_outline, Colors.blueGrey, 'Keine Platzierung'),
-    };
-    final before = change.rankingPositionBefore;
-    final after = change.rankingPositionAfter;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '${change.rankingName} · ${change.playerName}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            before == null || after == null
-                ? status
-                : '$status · $before → $after',
-            style: TextStyle(color: color, fontSize: 12),
-          ),
-        ],
-      ),
     );
   }
 }

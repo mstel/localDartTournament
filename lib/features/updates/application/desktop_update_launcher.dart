@@ -221,18 +221,20 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
     final activeFile = p.join(base.path, 'active.json');
     final logFile = p.join(base.path, id, 'restart.log');
     final originalExe = Platform.resolvedExecutable;
-    await script.writeAsString(
-      Platform.isWindows
-          ? windowsScript(
-              exe,
-              id,
-              pid,
-              activeFile: activeFile,
-              logFile: logFile,
-              failureFile: failureFile.path,
-              originalExe: originalExe,
-            )
-          : linuxScript(exe, id, pid, forwardedArgs: forwardedArgs),
+    final scriptContents = Platform.isWindows
+        ? windowsScript(
+            exe,
+            id,
+            pid,
+            activeFile: activeFile,
+            logFile: logFile,
+            failureFile: failureFile.path,
+            originalExe: originalExe,
+          )
+        : linuxScript(exe, id, pid, forwardedArgs: forwardedArgs);
+    final scriptBytes = utf8.encode(scriptContents);
+    await script.writeAsBytes(
+      Platform.isWindows ? [0xEF, 0xBB, 0xBF, ...scriptBytes] : scriptBytes,
       flush: true,
     );
     if (Platform.isWindows) {
@@ -243,26 +245,21 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
         'v1.0',
         'powershell.exe',
       );
-      final command = windowsScript(
-        exe,
-        id,
-        pid,
-        activeFile: activeFile,
-        logFile: logFile,
-        failureFile: failureFile.path,
-        originalExe: originalExe,
+      await Process.start(
+        shell,
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-WindowStyle',
+          'Hidden',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          script.path,
+        ],
+        mode: ProcessStartMode.detached,
+        workingDirectory: p.dirname(script.path),
       );
-      final encoded = base64Encode([
-        for (final unit in command.codeUnits) ...[unit & 255, unit >> 8],
-      ]);
-      await Process.start(shell, [
-        '-NoProfile',
-        '-NonInteractive',
-        '-WindowStyle',
-        'Hidden',
-        '-EncodedCommand',
-        encoded,
-      ], mode: ProcessStartMode.detached);
     } else {
       await Process.start('/bin/sh', [
         script.path,

@@ -191,6 +191,7 @@ class GroupAdvancementForecastEngine {
     for (final rule in tieBreakers) {
       final comparison = switch (rule) {
         'points' => b.points.compareTo(a.points),
+        'headToHead' => _compareHeadToHead(a, b),
         'legDifference' => b.legDifference.compareTo(a.legDifference),
         'legsFor' => b.legsFor.compareTo(a.legsFor),
         _ => 0,
@@ -198,6 +199,23 @@ class GroupAdvancementForecastEngine {
       if (comparison != 0) return comparison;
     }
     return a.player.name.compareTo(b.player.name);
+  }
+
+  int _compareHeadToHead(_SimulatedStanding first, _SimulatedStanding second) {
+    final firstRecord = first.headToHead[second.key];
+    final secondRecord = second.headToHead[first.key];
+    final points = (secondRecord?.points ?? 0).compareTo(
+      firstRecord?.points ?? 0,
+    );
+    if (points != 0) return points;
+
+    final firstDifference =
+        (firstRecord?.legsFor ?? 0) - (firstRecord?.legsAgainst ?? 0);
+    final secondDifference =
+        (secondRecord?.legsFor ?? 0) - (secondRecord?.legsAgainst ?? 0);
+    final difference = secondDifference.compareTo(firstDifference);
+    if (difference != 0) return difference;
+    return (secondRecord?.legsFor ?? 0).compareTo(firstRecord?.legsFor ?? 0);
   }
 
   void _recordResult(
@@ -212,19 +230,35 @@ class GroupAdvancementForecastEngine {
     home.legsAgainst += awayLegs;
     away.legsFor += awayLegs;
     away.legsAgainst += homeLegs;
+    final homeHeadToHead = home.headToHead.putIfAbsent(
+      away.key,
+      _HeadToHeadRecord.new,
+    );
+    final awayHeadToHead = away.headToHead.putIfAbsent(
+      home.key,
+      _HeadToHeadRecord.new,
+    );
+    homeHeadToHead.legsFor += homeLegs;
+    homeHeadToHead.legsAgainst += awayLegs;
+    awayHeadToHead.legsFor += awayLegs;
+    awayHeadToHead.legsAgainst += homeLegs;
     if (homeLegs > awayLegs) {
       home.wins++;
       home.points += 3;
       away.losses++;
+      homeHeadToHead.points += 3;
     } else if (awayLegs > homeLegs) {
       away.wins++;
       away.points += 3;
       home.losses++;
+      awayHeadToHead.points += 3;
     } else {
       home.draws++;
       away.draws++;
       home.points++;
       away.points++;
+      homeHeadToHead.points++;
+      awayHeadToHead.points++;
     }
   }
 
@@ -243,16 +277,34 @@ class _SimulatedStanding {
   int legsFor = 0;
   int legsAgainst = 0;
   int points = 0;
+  final Map<String, _HeadToHeadRecord> headToHead = {};
   int get legDifference => legsFor - legsAgainst;
 
-  _SimulatedStanding copy() => _SimulatedStanding(key: key, player: player)
-    ..played = played
-    ..wins = wins
-    ..draws = draws
-    ..losses = losses
+  _SimulatedStanding copy() {
+    final copied = _SimulatedStanding(key: key, player: player)
+      ..played = played
+      ..wins = wins
+      ..draws = draws
+      ..losses = losses
+      ..legsFor = legsFor
+      ..legsAgainst = legsAgainst
+      ..points = points;
+    copied.headToHead.addAll({
+      for (final entry in headToHead.entries) entry.key: entry.value.copy(),
+    });
+    return copied;
+  }
+}
+
+class _HeadToHeadRecord {
+  int points = 0;
+  int legsFor = 0;
+  int legsAgainst = 0;
+
+  _HeadToHeadRecord copy() => _HeadToHeadRecord()
+    ..points = points
     ..legsFor = legsFor
-    ..legsAgainst = legsAgainst
-    ..points = points;
+    ..legsAgainst = legsAgainst;
 }
 
 class _ChanceTotals {

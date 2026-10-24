@@ -275,7 +275,7 @@ class StageMatchCountPreview extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
+        color: colorScheme.surface,
         border: Border.all(color: colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -325,7 +325,7 @@ class GroupTieBreakerSetup extends StatelessWidget {
   });
 
   final List<String> tieBreakers;
-  final void Function(int index, int direction) onMoveTieBreaker;
+  final Future<void> Function(int index, int direction) onMoveTieBreaker;
 
   @override
   Widget build(BuildContext context) {
@@ -353,6 +353,15 @@ class GroupTieBreakerSetup extends StatelessWidget {
                     CircleAvatar(radius: 12, child: Text('${index + 1}')),
                     const SizedBox(width: 8),
                     Flexible(child: Text(tieBreakerLabel(tieBreakers[index]))),
+                    Tooltip(
+                      message: tieBreakerExplanation(tieBreakers[index]),
+                      child: const SizedBox.square(
+                        dimension: 48,
+                        child: Center(
+                          child: Icon(Icons.info_outline, size: 18),
+                        ),
+                      ),
+                    ),
                     IconButton(
                       constraints: const BoxConstraints.tightFor(
                         width: 48,
@@ -361,7 +370,7 @@ class GroupTieBreakerSetup extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       onPressed: index == 0
                           ? null
-                          : () => onMoveTieBreaker(index, -1),
+                          : () async => onMoveTieBreaker(index, -1),
                       icon: const Icon(Icons.keyboard_arrow_up),
                       tooltip: 'Tie-Breaker nach oben',
                     ),
@@ -373,7 +382,7 @@ class GroupTieBreakerSetup extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       onPressed: index == tieBreakers.length - 1
                           ? null
-                          : () => onMoveTieBreaker(index, 1),
+                          : () async => onMoveTieBreaker(index, 1),
                       icon: const Icon(Icons.keyboard_arrow_down),
                       tooltip: 'Tie-Breaker nach unten',
                     ),
@@ -386,6 +395,23 @@ class GroupTieBreakerSetup extends StatelessWidget {
     );
   }
 }
+
+String tieBreakerExplanation(String tieBreaker) => switch (tieBreaker) {
+  'points' =>
+    'Matchpunkte: Sieg = 3 Punkte, Unentschieden = 1 Punkt, Niederlage = 0. '
+        'Es zählen Match-Ergebnisse, nicht die Anzahl einzelner Legs.',
+  'legDifference' =>
+    'Leg-Differenz: Summe der gewonnenen Legs minus Summe der verlorenen Legs '
+        'aus allen gewerteten Gruppenmatches. Die höhere Differenz gewinnt.',
+  'legsFor' =>
+    'Gewonnene Legs: Gesamtzahl der in gewerteten Gruppenmatches gewonnenen '
+        'Legs. Die höhere Zahl gewinnt.',
+  'headToHead' =>
+    'Direkter Vergleich: Matchpunkte aus den direkten Duellen; bei Gleichstand '
+        'entscheidet dort zuerst die Leg-Differenz und danach die Zahl '
+        'gewonnener Legs.',
+  _ => tieBreaker,
+};
 
 class QualificationRuleSummary extends StatelessWidget {
   const QualificationRuleSummary({super.key, required this.qualificationPlan});

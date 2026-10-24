@@ -29,6 +29,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final List<String> _groupTieBreakers = List<String>.from(
     defaultGroupTieBreakers,
   );
+  final GroupTieBreakerPreferences _groupTieBreakerPreferences =
+      GroupTieBreakerPreferences();
+  Future<void> _groupTieBreakerSaveQueue = Future<void>.value();
+  bool _groupTieBreakersTouched = false;
   final List<int> _groupRoundRobinRepeats = [];
   final List<int?> _groupMaxGamesPerPlayer = [];
 
@@ -78,7 +82,45 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   void initState() {
     super.initState();
     _stageNameController.text = _defaultStageName();
+    unawaited(_loadGroupTieBreakers());
     unawaited(_applyDefaultRanking());
+  }
+
+  Future<void> _loadGroupTieBreakers() async {
+    try {
+      final saved = await _groupTieBreakerPreferences.load();
+      if (!mounted || _groupTieBreakersTouched) return;
+      setState(() {
+        _groupTieBreakers
+          ..clear()
+          ..addAll(saved);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tie-Breaker konnten nicht geladen werden: $error'),
+        ),
+      );
+    }
+  }
+
+  void _saveGroupTieBreakers() {
+    final selection = List<String>.from(_groupTieBreakers);
+    _groupTieBreakerSaveQueue = _groupTieBreakerSaveQueue.then((_) async {
+      try {
+        await _groupTieBreakerPreferences.save(selection);
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Tie-Breaker konnten nicht gespeichert werden: $error',
+            ),
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _applyDefaultRanking() async {
@@ -1033,8 +1075,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         context: context,
         builder: (context) => PlayerProfilePickerDialog(
           profiles: profiles,
-          createPlayer: (name) =>
-              _database.createPlayerProfile(displayName: name),
+          createPlayer: (firstName, lastName) => _database.createPlayerProfile(
+            firstName: firstName,
+            lastName: lastName,
+          ),
           selectedProfileIds: {
             for (final player in _players.expand((p) => p.individuals))
               if (player.profileId != null) player.profileId!,
@@ -1058,6 +1102,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     profileId: profile.id,
                     name: profile.displayName,
                     isGenerated: false,
+                    compactName: profile.compactDisplayName,
                   ),
                 )
                 .where(
@@ -1381,7 +1426,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _bestOfQualifierCountController.text =
             '${stage.extraQualifierCount ?? 0}';
         _autoAdjustQualification = stage.qualificationAutoAdjust;
-        _groupDrawOnStart = stage.groupDrawOnStart;
+        _groupDrawOnStart = false;
         _groupAllocationMode = stage.groupDrawOnStart
             ? GroupPlayerAllocationMode.random
             : GroupPlayerAllocationMode.strengthLevels;
@@ -1691,11 +1736,15 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         stages: sourceStages,
       );
       if (stage.type == 'groups') {
+        final groupParticipantCount = stage.groupSizes.fold<int>(
+          0,
+          (sum, size) => sum + size,
+        );
         final groupPlayers = stage.groupSlotOrder.isNotEmpty
-            ? _playersInStageOrder(
-                incomingPlayers,
-                stage.groupSlotOrder,
-                stage.groupSizes.fold<int>(0, (sum, size) => sum + size),
+            ? GroupDrawAssignment.orderPlayers(
+                players: incomingPlayers,
+                slotOrder: stage.groupSlotOrder,
+                participantCount: groupParticipantCount,
               )
             : const GroupPlayerAllocationEngine().allocate(
                 players: incomingPlayers,
@@ -1771,38 +1820,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
 
     return runStages;
-  }
-
-  List<TournamentPlayer> _playersInStageOrder(
-    List<TournamentPlayer> players,
-    List<int?> slotOrder,
-    int participantCount,
-  ) {
-    if (!_isValidPlayerSlotOrder(slotOrder, participantCount)) {
-      return players;
-    }
-
-    return [
-      for (final seed in slotOrder)
-        if (seed != null && seed <= players.length) players[seed - 1],
-    ];
-  }
-
-  bool _isValidPlayerSlotOrder(List<int?> slotOrder, int participantCount) {
-    if (participantCount < 1 || slotOrder.length != participantCount) {
-      return false;
-    }
-
-    final seen = <int>{};
-    for (final seed in slotOrder) {
-      if (seed == null || seed < 1 || seed > participantCount) {
-        return false;
-      }
-      if (!seen.add(seed)) {
-        return false;
-      }
-    }
-    return true;
   }
 
   int _requiredRankAfterStage(
@@ -2057,16 +2074,19 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     });
   }
 
-  void _moveGroupTieBreaker(int index, int direction) {
+  Future<void> _moveGroupTieBreaker(int index, int direction) async {
     final targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= _groupTieBreakers.length) {
       return;
     }
 
     setState(() {
+      _groupTieBreakersTouched = true;
       final moved = _groupTieBreakers.removeAt(index);
       _groupTieBreakers.insert(targetIndex, moved);
     });
+    _saveGroupTieBreakers();
+    await _groupTieBreakerSaveQueue;
   }
 
   @override
@@ -2481,8 +2501,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   const SizedBox(height: 12),
                   ExpertSetupSection(
                     title: 'Gruppenoptionen',
-                    summary:
-                        'Verteilung, Spieltypen, Auslosung und Wiederholungen',
+                    summary: 'Verteilung, Spieltypen und Wiederholungen',
                     initiallyExpanded: true,
                     children: [
                       DropdownButtonFormField<GroupPlayerAllocationMode>(
@@ -2505,17 +2524,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           ),
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.random,
-                            child: Text(
-                              'Zufällig verteilen · Auslosungsrad beim Start',
-                            ),
+                            child: Text('Zufällig verteilen'),
                           ),
                         ],
                         onChanged: (mode) {
                           if (mode != null) {
                             setState(() {
                               _groupAllocationMode = mode;
-                              _groupDrawOnStart =
-                                  mode == GroupPlayerAllocationMode.random;
+                              _groupDrawOnStart = false;
                             });
                           }
                         },

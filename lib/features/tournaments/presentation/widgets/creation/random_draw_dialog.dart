@@ -57,10 +57,6 @@ class _RandomDrawDialogState extends State<_RandomDrawDialog>
 
   bool get _isComplete => _drawnSeeds.length == widget.participantLabels.length;
 
-  List<String> get _drawnPlayerNames => [
-    for (final seed in _drawnSeeds) widget.participantLabels[seed - 1],
-  ];
-
   List<int> _shuffledRemainingSeeds() {
     return List<int>.from(_remainingSeeds)..shuffle(_random);
   }
@@ -275,7 +271,11 @@ class _RandomDrawDialogState extends State<_RandomDrawDialog>
                           )
                         : _DrawGroupPreview(
                             groupSizes: widget.groupSizes,
-                            drawnPlayerNames: _drawnPlayerNames,
+                            groups: GroupDrawAssignment.previewPartitionDraw(
+                              items: widget.participantLabels,
+                              drawnSeeds: _drawnSeeds,
+                              groupSizes: widget.groupSizes,
+                            ),
                           ),
                   ),
                 ],
@@ -457,18 +457,14 @@ class _AutoRollControls extends StatelessWidget {
 }
 
 class _DrawGroupPreview extends StatelessWidget {
-  const _DrawGroupPreview({
-    required this.groupSizes,
-    required this.drawnPlayerNames,
-  });
+  const _DrawGroupPreview({required this.groupSizes, required this.groups});
 
   final List<int> groupSizes;
-  final List<String> drawnPlayerNames;
+  final List<List<String?>> groups;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    var drawnIndex = 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -508,38 +504,28 @@ class _DrawGroupPreview extends StatelessWidget {
                             slot < groupSizes[groupIndex];
                             slot++
                           )
-                            Builder(
-                              builder: (context) {
-                                final hasPlayer =
-                                    drawnIndex < drawnPlayerNames.length;
-                                final playerName = hasPlayer
-                                    ? drawnPlayerNames[drawnIndex]
-                                    : 'Platz ${slot + 1}';
-                                drawnIndex++;
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 6),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: hasPlayer
-                                        ? colorScheme.primaryContainer
-                                        : colorScheme.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: hasPlayer
-                                          ? colorScheme.primary
-                                          : colorScheme.outlineVariant,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    playerName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              },
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: groups[groupIndex][slot] != null
+                                    ? colorScheme.primaryContainer
+                                    : colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: groups[groupIndex][slot] != null
+                                      ? colorScheme.primary
+                                      : colorScheme.outlineVariant,
+                                ),
+                              ),
+                              child: Text(
+                                groups[groupIndex][slot] ?? 'Platz ${slot + 1}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                         ],
                       ),

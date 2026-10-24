@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:dart_tournament_manager/features/tournaments/data/tournament_sto
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
+import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'order_of_play_test.dart' show fixture;
 
 class DirectorPreview extends StatefulWidget {
@@ -204,7 +206,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 26);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 28);
     },
   );
   testWidgets('director dashboard survives width changes', (tester) async {
@@ -221,6 +223,31 @@ void main() {
     expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('director match tiles use the second-screen navy palette', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1440, 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const MaterialApp(home: DirectorPreview()));
+
+    final tiles = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'director-match-tile-',
+          ),
+    );
+    expect(tiles, findsWidgets);
+    final decoration =
+        tester.widget<Container>(tiles.first).decoration! as BoxDecoration;
+    expect(decoration.color, TournamentDisplayPalette.card);
+    expect(
+      (decoration.border! as Border).top.color,
+      TournamentDisplayPalette.border.withAlpha(150),
+    );
+    expect(tester.takeException(), isNull);
   });
   testWidgets('dashboard has a direct next-stage preview action', (
     tester,

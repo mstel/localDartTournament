@@ -2,9 +2,9 @@ part of '../../../../tournament_workspace.dart';
 
 const List<String> defaultGroupTieBreakers = [
   'points',
+  'headToHead',
   'legDifference',
   'legsFor',
-  'headToHead',
 ];
 
 String groupLabel(int groupNumber) {
@@ -68,9 +68,10 @@ List<TournamentGroup> _buildTournamentGroupsForPlayers(
       requiredRankForGroup,
 }) {
   final groups = <TournamentGroup>[];
-  final playersByGroup = GroupDrawAssignment.partition(
-    players,
-    stage.groupSizes,
+  final playersByGroup = GroupDrawAssignment.partitionDraw(
+    items: players,
+    slotOrder: stage.groupSlotOrder,
+    groupSizes: stage.groupSizes,
   );
 
   for (var groupIndex = 0; groupIndex < stage.groupSizes.length; groupIndex++) {

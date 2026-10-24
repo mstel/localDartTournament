@@ -17,6 +17,7 @@ Von klassischen Turnieren über mehrstufige Wettbewerbe bis hin zu langfristigen
 - **Live-Dashboard:** Turnierfortschritt, Ergebnisse, Prognosen und organisatorische Hinweise verfolgen.
 - **Zwei-Monitor-Modus:** Separate Turnierinformationen auf einem zusätzlichen Bildschirm oder Fernseher anzeigen.
 - **Cloud-Synchronisation:** Daten über Supabase zwischen unterstützten Geräten synchronisieren.
+- **Website-Schnittstelle:** Ranglisten, Spielerprofile, Statistiken, Bestleistungen und abgeschlossene Turniere authentifiziert und schreibgeschützt bereitstellen. Details: [Supabase-API für die Website](docs/website_supabase_api.md).
 - **Updateverwaltung:** Nach neuen Versionen suchen und verfügbare Updates direkt in der Anwendung installieren.
 - **Werkzeuge und Integrationen:** Unter anderem Govee-Lichtsteuerung und Entwicklungswerkzeuge für Turnierformate.
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -45,65 +46,62 @@ class _LimitedGroupSetupPreviewState extends State<LimitedGroupSetupPreview> {
 }
 
 void main() {
-  test(
-    'limited schedules maximize games and balance players, repetitions and rounds',
-    () {
-      for (var n = 2; n <= 25; n++) {
-        final players = [
-          for (var i = 0; i < n; i++) TournamentPlayer.generated(i + 1),
-        ];
-        for (final repeats in [1, 2, 3]) {
-          for (var cap = 1; cap <= (n - 1) * repeats + 2; cap++) {
-            final matches = tournamentEngine.buildRoundRobinMatches(
-              players,
-              repeatCount: repeats,
+  test('limited schedules maximize games and balance players, repetitions and rounds', () {
+    for (var n = 2; n <= 25; n++) {
+      final players = [
+        for (var i = 0; i < n; i++) TournamentPlayer.generated(i + 1),
+      ];
+      for (final repeats in [1, 2, 3]) {
+        for (var cap = 1; cap <= (n - 1) * repeats + 2; cap++) {
+          final matches = tournamentEngine.buildRoundRobinMatches(
+            players,
+            repeatCount: repeats,
+            maxGamesPerPlayer: cap,
+          );
+          final available = (n - 1) * repeats;
+          final effective = cap < available ? cap : available;
+          expect(
+            matches.length,
+            n * effective ~/ 2,
+            reason: '$n/$repeats/$cap',
+          );
+          expect(
+            tournamentEngine.roundRobinMatchCount(
+              n,
+              repeats,
               maxGamesPerPlayer: cap,
-            );
-            final available = (n - 1) * repeats;
-            final effective = cap < available ? cap : available;
-            expect(
-              matches.length,
-              n * effective ~/ 2,
-              reason: '$n/$repeats/$cap',
-            );
-            expect(
-              tournamentEngine.roundRobinMatchCount(
-                n,
-                repeats,
-                maxGamesPerPlayer: cap,
-              ),
-              matches.length,
-            );
-            final counts = [
-              for (final p in players)
-                matches
-                    .where((m) => m.homePlayer == p || m.awayPlayer == p)
-                    .length,
-            ]..sort();
-            expect(counts.last, lessThanOrEqualTo(cap));
-            expect(counts.last - counts.first, lessThanOrEqualTo(1));
-            final pairs = <String, int>{};
-            for (final m in matches) {
-              expect(m.homePlayer, isNot(m.awayPlayer));
-              final key = ([
-                m.homePlayer!.name,
-                m.awayPlayer!.name,
-              ]..sort()).join('/');
-              pairs[key] = (pairs[key] ?? 0) + 1;
-            }
-            expect(pairs.values.every((count) => count <= repeats), isTrue);
-            for (final round in matches.map((m) => m.round).toSet()) {
-              final playing = matches
-                  .where((m) => m.round == round)
-                  .expand((m) => [m.homePlayer, m.awayPlayer])
-                  .toList();
-              expect(playing.toSet().length, playing.length);
-            }
+            ),
+            matches.length,
+          );
+          final counts = [
+            for (final p in players)
+              matches
+                  .where((m) => m.homePlayer == p || m.awayPlayer == p)
+                  .length,
+          ]..sort();
+          expect(counts.last, lessThanOrEqualTo(cap));
+          expect(counts.last - counts.first, lessThanOrEqualTo(1));
+          final pairs = <String, int>{};
+          for (final m in matches) {
+            expect(m.homePlayer, isNot(m.awayPlayer));
+            final key = ([
+              m.homePlayer!.name,
+              m.awayPlayer!.name,
+            ]..sort()).join('/');
+            pairs[key] = (pairs[key] ?? 0) + 1;
+          }
+          expect(pairs.values.every((count) => count <= repeats), isTrue);
+          for (final round in matches.map((m) => m.round).toSet()) {
+            final playing = matches
+                .where((m) => m.round == round)
+                .expand((m) => [m.homePlayer, m.awayPlayer])
+                .toList();
+            expect(playing.toSet().length, playing.length);
           }
         }
       }
-    },
-  );
+    }
+  });
   test(
     'production group builder and legacy storage migration preserve cap',
     () async {
@@ -145,12 +143,10 @@ void main() {
         [5],
       );
       expect(await File('${file.path}.v21.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 26);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 28);
       expect(
-        TournamentStage.fromJson({
-          'name': 'Alt',
-          'type': 'groups',
-        }).maxGamesForGroup(0),
+        TournamentStage.fromJson({'name': 'Alt', 'type': 'groups'})
+            .maxGamesForGroup(0),
         isNull,
       );
     },
@@ -170,9 +166,8 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(2)),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const LimitedGroupSetupPreview(),

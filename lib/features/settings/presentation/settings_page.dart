@@ -9,6 +9,7 @@ import '../../notifications/presentation/push_sender_menu.dart';
 import '../../notifications/presentation/push_device_menu.dart';
 import '../../dev_tools/presentation/dev_tools_page.dart';
 import '../../govee/presentation/govee_hub_page.dart';
+import '../../random_draw/presentation/random_draw_tool_page.dart';
 
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'appearance_panel.dart';
@@ -109,10 +110,25 @@ class _AdministrationPanel extends StatelessWidget {
       Card(
         child: ListTile(
           leading: const Icon(Icons.lightbulb_outline),
-          title: const Text('Govee Licht-Hub'),
+          title: const Text('Govee API-Key'),
+          subtitle: const Text(
+            'API-Key für Ambiente-Licht im Turnier speichern.',
+          ),
           onTap: () => Navigator.of(
             context,
           ).push(MaterialPageRoute<void>(builder: (_) => const GoveeHubPage())),
+        ),
+      ),
+      Card(
+        child: ListTile(
+          leading: const Icon(Icons.casino_outlined),
+          title: const Text('Auslosungsrad'),
+          subtitle: const Text(
+            'Unabhängige Ziehung mit manueller oder automatischer Gruppenzuordnung.',
+          ),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const RandomDrawToolPage()),
+          ),
         ),
       ),
       Card(

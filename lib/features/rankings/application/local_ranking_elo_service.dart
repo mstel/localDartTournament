@@ -14,10 +14,14 @@ class LocalRankingEloService {
   final LocalAppDatabase _database;
   final TournamentStorage? _tournamentStorage;
 
-  Future<LocalEloSnapshot> calculate(LocalRanking ranking) async {
-    final tournaments = await (_tournamentStorage ?? TournamentStorage())
-        .loadTournaments();
-    return _calculate(ranking, tournaments);
+  Future<LocalEloSnapshot> calculate(
+    LocalRanking ranking, {
+    Iterable<CreatedTournament>? tournaments,
+  }) async {
+    final source =
+        tournaments ??
+        await (_tournamentStorage ?? TournamentStorage()).loadTournaments();
+    return _calculate(ranking, source);
   }
 
   Future<LocalEloSnapshot> calculateThroughTournament(

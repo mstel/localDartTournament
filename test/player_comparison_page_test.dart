@@ -82,6 +82,13 @@ void main() {
       expect(find.text('Kategorie'), findsOneWidget);
       expect(find.text('Spiele'), findsOneWidget);
       expect(find.text('Legquote'), findsOneWidget);
+      expect(find.textContaining('Elo-Verlauf'), findsNothing);
+      final comparisonTable = tester.widget<DataTable>(find.byType(DataTable));
+      expect(comparisonTable.border?.verticalInside, isNotNull);
+      expect(
+        tester.widget<Text>(find.text('Spiele')).textAlign,
+        TextAlign.center,
+      );
       final left = tester.widget<DropdownButtonFormField<String>>(
         find.byKey(const ValueKey('player-comparison-Links')),
       );
