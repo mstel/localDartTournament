@@ -2286,9 +2286,13 @@ class PlayerEloHistoryPage extends StatelessWidget {
         final time = a.playedAt.compareTo(b.playedAt);
         if (time != 0) return time;
         final tournament = a.tournamentId.compareTo(b.tournamentId);
-        return tournament != 0
-            ? tournament
-            : a.matchIndex.compareTo(b.matchIndex);
+        if (tournament != 0) return tournament;
+        final matchIndex = a.matchIndex.compareTo(b.matchIndex);
+        if (matchIndex != 0) return matchIndex;
+        final reason = (a.decayReason?.index ?? -1).compareTo(
+          b.decayReason?.index ?? -1,
+        );
+        return reason != 0 ? reason : a.ratingAfter.compareTo(b.ratingAfter);
       });
     final tournamentGroups = <_TournamentEloGroup>[];
     for (final item in orderedHistory) {
@@ -2307,6 +2311,37 @@ class PlayerEloHistoryPage extends StatelessWidget {
     }
     final reversedGroups = tournamentGroups.reversed.toList();
     final trajectory = _eloTrajectory(history);
+    final decayHistory = orderedHistory
+        .where((item) => item.decayReason != null)
+        .toList();
+    final missedTournamentLoss = decayHistory
+        .where(
+          (item) =>
+              item.decayReason == LocalEloDecayReason.missedTournament &&
+              item.delta < 0,
+        )
+        .fold<int>(0, (total, item) => total - item.delta);
+    final inactivityLoss = decayHistory
+        .where(
+          (item) =>
+              item.decayReason == LocalEloDecayReason.extendedInactivity &&
+              item.delta < 0,
+        )
+        .fold<int>(0, (total, item) => total - item.delta);
+    final receivedBySource = <(String, LocalEloDecayReason), int>{};
+    for (final item in decayHistory.where((item) => item.delta > 0)) {
+      final reason = item.decayReason!;
+      final sourceAndReason = (item.opponentName, reason);
+      receivedBySource.update(
+        sourceAndReason,
+        (total) => total + item.delta,
+        ifAbsent: () => item.delta,
+      );
+    }
+    final receivedTotal = receivedBySource.values.fold<int>(
+      0,
+      (total, value) => total + value,
+    );
 
     return Scaffold(
       appBar: AppBar(title: Text('Elo-Verlauf: ${player.name}')),
@@ -2369,6 +2404,69 @@ class PlayerEloHistoryPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            if (decayHistory.isNotEmpty) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Punkte durch Turnierabwesenheit und Inaktivität',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _StatChip(
+                            label: 'Verlust gesamt',
+                            value:
+                                '${missedTournamentLoss + inactivityLoss} Elo',
+                            icon: Icons.trending_down,
+                          ),
+                          _StatChip(
+                            label: 'Turnier verpasst',
+                            value: '$missedTournamentLoss Elo',
+                            icon: Icons.event_busy,
+                          ),
+                          _StatChip(
+                            label: 'Längere Inaktivität',
+                            value: '$inactivityLoss Elo',
+                            icon: Icons.hourglass_bottom,
+                          ),
+                          if (receivedTotal > 0)
+                            _StatChip(
+                              label: 'Aus Abwesenheiten erhalten',
+                              value: '+$receivedTotal Elo',
+                              icon: Icons.trending_up,
+                            ),
+                        ],
+                      ),
+                      if (receivedBySource.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'Erhaltene Punkte nach Verursacher',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        for (final entry in receivedBySource.entries)
+                          Text(
+                            '+${entry.value} Elo, weil ${entry.key.$1} '
+                            '${_decayReasonCause(entry.key.$2)}',
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             if (trajectory.length > 1) ...[
               Text(
                 'Elo-Entwicklung pro Turnier',
@@ -2483,37 +2581,68 @@ class PlayerEloHistoryPage extends StatelessWidget {
                   children: [
                     const Divider(height: 1),
                     for (final match in group.matches)
-                      ListTile(
-                        dense: true,
-                        leading: Icon(
-                          match.delta > 0
-                              ? Icons.check_circle_outline
-                              : match.delta < 0
-                              ? Icons.highlight_off
-                              : Icons.remove_circle_outline,
-                          color: match.delta > 0
-                              ? Colors.green
-                              : match.delta < 0
-                              ? Colors.red
-                              : Colors.grey,
-                          size: 20,
-                        ),
-                        title: Text('vs. ${match.opponentName}'),
-                        subtitle: Text(
-                          'Ergebnis: ${match.score} · Elo danach: ${match.ratingAfter}',
-                        ),
-                        trailing: Text(
-                          '${match.delta >= 0 ? "+" : ""}${match.delta}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: match.delta > 0
-                                ? Colors.green.shade800
-                                : match.delta < 0
-                                ? Colors.red.shade800
-                                : Colors.grey.shade700,
-                          ),
-                        ),
+                      Builder(
+                        builder: (context) {
+                          final reason = match.decayReason;
+                          final isDecay = reason != null;
+                          final title = switch (reason) {
+                            LocalEloDecayReason.missedTournament =>
+                              match.delta > 0
+                                  ? 'Punkte erhalten · Turnier verpasst'
+                                  : 'Punkteverlust · Turnier verpasst',
+                            LocalEloDecayReason.extendedInactivity =>
+                              match.delta > 0
+                                  ? 'Punkte erhalten · längere Inaktivität'
+                                  : 'Punkteverlust · längere Inaktivität',
+                            null => 'vs. ${match.opponentName}',
+                          };
+                          final explanation = switch (reason) {
+                            LocalEloDecayReason.missedTournament =>
+                              match.delta > 0
+                                  ? 'Erhalten, weil ${match.opponentName} ein Turnier verpasst hat'
+                                  : 'Eigener Verlust, weil ein Turnier verpasst wurde',
+                            LocalEloDecayReason.extendedInactivity =>
+                              match.delta > 0
+                                  ? 'Erhalten, weil ${match.opponentName} nach '
+                                        '${match.missedTournamentCount} verpassten Turnieren inaktiv war'
+                                  : 'Eigener Verlust nach ${match.missedTournamentCount} '
+                                        'verpassten Turnieren',
+                            null => 'Ergebnis: ${match.score}',
+                          };
+                          return ListTile(
+                            dense: true,
+                            leading: Icon(
+                              match.delta > 0
+                                  ? Icons.check_circle_outline
+                                  : match.delta < 0
+                                  ? Icons.highlight_off
+                                  : Icons.remove_circle_outline,
+                              color: match.delta > 0
+                                  ? Colors.green
+                                  : match.delta < 0
+                                  ? Colors.red
+                                  : Colors.grey,
+                              size: 20,
+                            ),
+                            title: Text(title),
+                            subtitle: Text(
+                              '$explanation · Elo danach: ${match.ratingAfter}'
+                              '${isDecay ? '' : ' · Ergebnis: ${match.score}'}',
+                            ),
+                            trailing: Text(
+                              '${match.delta >= 0 ? "+" : ""}${match.delta}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: match.delta > 0
+                                    ? Colors.green.shade800
+                                    : match.delta < 0
+                                    ? Colors.red.shade800
+                                    : Colors.grey.shade700,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                   ],
                 ),
@@ -2532,9 +2661,13 @@ List<EloTrajectoryPoint> _eloTrajectory(List<LocalEloHistoryItem> history) {
       final time = a.playedAt.compareTo(b.playedAt);
       if (time != 0) return time;
       final tournament = a.tournamentId.compareTo(b.tournamentId);
-      return tournament != 0
-          ? tournament
-          : a.matchIndex.compareTo(b.matchIndex);
+      if (tournament != 0) return tournament;
+      final matchIndex = a.matchIndex.compareTo(b.matchIndex);
+      if (matchIndex != 0) return matchIndex;
+      final reason = (a.decayReason?.index ?? -1).compareTo(
+        b.decayReason?.index ?? -1,
+      );
+      return reason != 0 ? reason : a.ratingAfter.compareTo(b.ratingAfter);
     });
   final byTournament = <String, List<LocalEloHistoryItem>>{};
   for (final item in ordered) {
@@ -2561,9 +2694,32 @@ List<EloTrajectoryPoint> _eloTrajectory(List<LocalEloHistoryItem> history) {
         tournamentName: tournament.last.tournamentName,
         rating: tournament.last.ratingAfter,
         delta: tournament.fold<int>(0, (sum, item) => sum + item.delta),
+        breakdown: [
+          for (final item in tournament.where(
+            (item) => item.decayReason != null,
+          ))
+            if (item.delta < 0)
+              '${_decayReasonLabel(item.decayReason!)}: ${item.delta} Elo'
+                  '${item.decayReason == LocalEloDecayReason.extendedInactivity ? " nach ${item.missedTournamentCount} verpassten Turnieren" : ""}'
+            else
+              'Erhalten, weil ${item.opponentName} '
+                  '${_decayReasonCause(item.decayReason!)}'
+                  '${item.decayReason == LocalEloDecayReason.extendedInactivity ? " (${item.missedTournamentCount} verpasste Turniere)" : ""}: '
+                  '+${item.delta} Elo',
+        ],
       ),
   ];
 }
+
+String _decayReasonLabel(LocalEloDecayReason reason) => switch (reason) {
+  LocalEloDecayReason.missedTournament => 'Turnier verpasst',
+  LocalEloDecayReason.extendedInactivity => 'Längere Inaktivität',
+};
+
+String _decayReasonCause(LocalEloDecayReason reason) => switch (reason) {
+  LocalEloDecayReason.missedTournament => 'ein Turnier verpasst hat',
+  LocalEloDecayReason.extendedInactivity => 'länger inaktiv war',
+};
 
 class _TournamentEloGroup {
   _TournamentEloGroup({
@@ -2578,9 +2734,11 @@ class _TournamentEloGroup {
   final List<LocalEloHistoryItem> matches = [];
 
   int get totalDelta => matches.fold<int>(0, (sum, m) => sum + m.delta);
-  int get wins => matches.where((m) => m.delta > 0).length;
-  int get losses => matches.where((m) => m.delta < 0).length;
-  int get draws => matches.where((m) => m.delta == 0).length;
+  int get wins => matches.where((m) => m.matchIndex >= 0 && m.delta > 0).length;
+  int get losses =>
+      matches.where((m) => m.matchIndex >= 0 && m.delta < 0).length;
+  int get draws =>
+      matches.where((m) => m.matchIndex >= 0 && m.delta == 0).length;
 }
 
 class _StatChip extends StatelessWidget {

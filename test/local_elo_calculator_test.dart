@@ -200,6 +200,16 @@ void main() {
           );
       final capped = calculate(allowBelowStart: false);
       final belowStartAllowed = calculate(allowBelowStart: true);
+      final cappedWithBothReasons = calculator.calculate(
+        players: const {'a': 'Anna', 'b': 'Ben', 'c': 'Chris'},
+        tournaments: [first, second],
+        rankingId: 'season',
+        absenceDecayEnabled: true,
+        absenceDecayPoints: 50,
+        inactivityDecayEnabled: true,
+        inactivityGraceTournaments: 0,
+        inactivityDecayPoints: 20,
+      );
 
       expect(
         capped.entries.singleWhere((player) => player.id == 'c').rating,
@@ -221,6 +231,12 @@ void main() {
             .reduce((a, b) => a + b),
         3000,
       );
+      final cappedDecay = cappedWithBothReasons.history['c']!
+          .where(
+            (item) => item.tournamentId == 'second' && item.decayReason != null,
+          )
+          .toList();
+      expect(cappedDecay.map((item) => item.delta), [-9, -4]);
     },
   );
 
@@ -267,6 +283,66 @@ void main() {
       );
     },
   );
+
+  test('records decay reasons and attributes each transferred point', () {
+    final prior = tournamentWithMatches('prior', DateTime.utc(2026, 1), [
+      GroupMatch(
+        round: 1,
+        homePlayer: const TournamentPlayer(
+          profileId: 'a',
+          name: 'Anna',
+          isGenerated: false,
+        ),
+        awayPlayer: const TournamentPlayer(
+          profileId: 'c',
+          name: 'Chris',
+          isGenerated: false,
+        ),
+        homeLegs: 0,
+        awayLegs: 2,
+      ),
+    ]);
+    final absence = tournament('absence', DateTime.utc(2026, 2), 'a', 'b');
+    final snapshot = calculator.calculate(
+      players: const {'a': 'Anna', 'b': 'Ben', 'c': 'Chris'},
+      tournaments: [prior, absence],
+      rankingId: 'season',
+      absenceDecayEnabled: true,
+      absenceDecayPoints: 6,
+      inactivityDecayEnabled: true,
+      inactivityGraceTournaments: 0,
+      inactivityDecayPoints: 4,
+    );
+
+    final chrisDecay = snapshot.history['c']!
+        .where((item) => item.tournamentId == 'absence')
+        .toList();
+    expect(chrisDecay.map((item) => item.delta), [-6, -4]);
+    expect(chrisDecay.map((item) => item.decayReason), [
+      LocalEloDecayReason.missedTournament,
+      LocalEloDecayReason.extendedInactivity,
+    ]);
+    expect(chrisDecay.every((item) => item.missedTournamentCount == 1), isTrue);
+
+    final benDecay = snapshot.history['b']!
+        .where(
+          (item) => item.tournamentId == 'absence' && item.decayReason != null,
+        )
+        .toList();
+    expect(benDecay.map((item) => item.delta), [1, 4]);
+    expect(benDecay.map((item) => item.decayReason), [
+      LocalEloDecayReason.missedTournament,
+      LocalEloDecayReason.extendedInactivity,
+    ]);
+    expect(benDecay.every((item) => item.opponentName == 'Chris'), isTrue);
+    final allDecay = snapshot.history.values
+        .expand((items) => items)
+        .where(
+          (item) => item.tournamentId == 'absence' && item.decayReason != null,
+        )
+        .toList();
+    expect(allDecay.fold<int>(0, (sum, item) => sum + item.delta), 0);
+  });
 
   test('uses prior ranking history instead of resetting players to 1000', () {
     final prior = tournament('prior', DateTime.utc(2026, 1), 'a', 'b');

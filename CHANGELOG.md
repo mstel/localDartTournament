@@ -1,3 +1,11 @@
+# 2.0.2+27
+
+- Renames the dashboard and second-screen match queues to "Empfohlene Partien";
+  the second screen now shows up to nine matches in a bounded, scrollable area.
+- Explains Elo points lost for missed tournaments and extended inactivity, and
+  attributes redistributed points to the inactive player in history and graph
+  tooltips.
+
 # 2.0.1+26
 
 - Adds a versioned read-only website data snapshot for authenticated access to

@@ -74,7 +74,8 @@ class _TournamentDirectorDashboardState
     } catch (_) {
       if (mounted) {
         setState(
-          () => _actionError = 'Aktion fehlgeschlagen. Verbindung und Berechtigung prüfen und erneut versuchen.',
+          () => _actionError =
+              'Aktion fehlgeschlagen. Verbindung und Berechtigung prüfen und erneut versuchen.',
         );
       }
     } finally {
@@ -533,7 +534,7 @@ class _TournamentDirectorDashboardState
         status,
         const SizedBox(height: 12),
         _matchQueue(
-          'Nächste 6 Spiele',
+          'Empfohlene Partien',
           nextSix,
           emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
           prioritizedMatches: flowPriority.prioritizedMatches,
