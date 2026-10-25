@@ -74,8 +74,7 @@ class _TournamentDirectorDashboardState
     } catch (_) {
       if (mounted) {
         setState(
-          () => _actionError =
-              'Aktion fehlgeschlagen. Verbindung und Berechtigung prüfen und erneut versuchen.',
+          () => _actionError = 'Aktion fehlgeschlagen. Verbindung und Berechtigung prüfen und erneut versuchen.',
         );
       }
     } finally {
