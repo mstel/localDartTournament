@@ -102,7 +102,7 @@ void main() {
           ),
         );
         expect(find.text('Dashboard'), findsOneWidget);
-        expect(find.text('Nächste 6 Spiele'), findsOneWidget);
+        expect(find.text('Empfohlene Partien'), findsOneWidget);
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);
         expect(find.text('Fortschritt nach Etappen'), findsNothing);
         expect(find.text('Bestleistungen'), findsNothing);
@@ -363,7 +363,7 @@ void main() {
 
     final upcoming = find
         .ancestor(
-          of: find.text('Nächste 6 Spiele'),
+          of: find.text('Empfohlene Partien'),
           matching: find.byType(Card),
         )
         .first;

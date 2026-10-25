@@ -533,7 +533,7 @@ class _TournamentDirectorDashboardState
         status,
         const SizedBox(height: 12),
         _matchQueue(
-          'Nächste 6 Spiele',
+          'Empfohlene Partien',
           nextSix,
           emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
           prioritizedMatches: flowPriority.prioritizedMatches,

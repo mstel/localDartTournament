@@ -78,7 +78,7 @@ void main() {
   }
 
   testWidgets(
-    'long player names stay on one row and reduce suggestions to five',
+    'long player names stay on one row and the second screen shows nine matches',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
@@ -92,10 +92,10 @@ void main() {
           ),
       ];
       final matches = [
-        for (var index = 0; index < 6; index++)
+        for (var index = 0; index < 10; index++)
           GroupMatch(
-            homePlayer: players[index],
-            awayPlayer: players[index + 1],
+            homePlayer: players[index % players.length],
+            awayPlayer: players[(index + 1) % players.length],
             round: index + 1,
           ),
       ];
@@ -138,7 +138,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Nächste Partien (5 Vorschläge)'), findsOneWidget);
+      expect(find.text('Empfohlene Partien (9 Vorschläge)'), findsOneWidget);
       final visibleTiles = find.byWidgetPredicate(
         (widget) =>
             widget.key is ValueKey<String> &&
@@ -146,7 +146,7 @@ void main() {
               'second-screen-match-',
             ),
       );
-      expect(visibleTiles, findsNWidgets(5));
+      expect(visibleTiles, findsNWidgets(9));
       final tileDecoration =
           tester.widget<Container>(visibleTiles.first).decoration!
               as BoxDecoration;
@@ -155,7 +155,7 @@ void main() {
         (tileDecoration.border! as Border).top.color,
         TournamentDisplayPalette.border.withAlpha(150),
       );
-      for (var index = 0; index < 5; index++) {
+      for (var index = 0; index < 9; index++) {
         final playerTexts = tester
             .widgetList<Text>(
               find.descendant(

@@ -1596,7 +1596,7 @@ void main() {
     await selectTournamentDashboard(tester);
 
     expect(find.text('Neues Turnier (Normales Turnier)'), findsOneWidget);
-    expect(find.text('Nächste 6 Spiele'), findsOneWidget);
+    expect(find.text('Empfohlene Partien'), findsOneWidget);
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
     expect(find.text('Runde 1'), findsNothing);
 
@@ -1675,7 +1675,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Endrunde'), findsWidgets);
-    expect(find.text('Nächste 6 Spiele'), findsOneWidget);
+    expect(find.text('Empfohlene Partien'), findsOneWidget);
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
   });
 }

@@ -1400,9 +1400,9 @@ class _TournamentSecondScreenViewState
         .where((match) => !flowPriority.prioritizedMatches.contains(match))
         .toList();
     final suggestions = <GroupMatch>[];
-    final prioritySlots = min(6, prioritizedMatches.length);
-    if (prioritizedMatches.length > 6) {
-      for (var index = 0; index < 6; index++) {
+    final prioritySlots = min(9, prioritizedMatches.length);
+    if (prioritizedMatches.length > 9) {
+      for (var index = 0; index < 9; index++) {
         suggestions.add(
           prioritizedMatches[(_nextMatchIndex + index) %
               prioritizedMatches.length],
@@ -1410,7 +1410,7 @@ class _TournamentSecondScreenViewState
       }
     } else {
       suggestions.addAll(prioritizedMatches);
-      final otherSlots = min(6 - prioritySlots, otherMatches.length);
+      final otherSlots = min(9 - prioritySlots, otherMatches.length);
       if (otherSlots > 0) {
         for (var index = 0; index < otherSlots; index++) {
           suggestions.add(
@@ -1419,9 +1419,7 @@ class _TournamentSecondScreenViewState
         }
       }
     }
-    final visibleSuggestions = _requiresFewerSuggestions(context, suggestions)
-        ? suggestions.take(5).toList()
-        : suggestions;
+    final visibleSuggestions = suggestions;
     final priorityNotice = flowPriority.notices.isEmpty
         ? null
         : flowPriority.notices[_priorityNoticeIndex %
@@ -1524,7 +1522,7 @@ class _TournamentSecondScreenViewState
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                'Nächste Partien (${visibleSuggestions.length} Vorschläge)',
+                'Empfohlene Partien (${visibleSuggestions.length} Vorschläge)',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -1550,42 +1548,24 @@ class _TournamentSecondScreenViewState
               ),
             ),
           )
-        else ...[
-          if (priorityBanner != null) ...[
-            priorityBanner,
-            const SizedBox(height: 10),
-          ],
-          matchesContent,
-        ],
+        else
+          SizedBox(
+            height: 240,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (priorityBanner != null) ...[
+                    priorityBanner,
+                    const SizedBox(height: 10),
+                  ],
+                  matchesContent,
+                ],
+              ),
+            ),
+          ),
       ],
     );
-  }
-
-  bool _requiresFewerSuggestions(
-    BuildContext context,
-    List<GroupMatch> suggestions,
-  ) {
-    if (suggestions.length < 6) return false;
-    final textScaler = MediaQuery.textScalerOf(context);
-    final textDirection = Directionality.of(context);
-    for (final match in suggestions) {
-      for (final name in [
-        match.homePlayer?.name ?? 'Offen',
-        match.awayPlayer?.name ?? 'Offen',
-      ]) {
-        final painter = TextPainter(
-          text: TextSpan(
-            text: name,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-          textDirection: textDirection,
-          textScaler: textScaler,
-          maxLines: 1,
-        )..layout();
-        if (painter.width > 320) return true;
-      }
-    }
-    return false;
   }
 
   Widget _buildMatchTile(

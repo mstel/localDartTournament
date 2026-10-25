@@ -57,6 +57,8 @@ class LocalEloPlayer {
   int matches = 0, wins = 0, losses = 0, draws = 0;
 }
 
+enum LocalEloDecayReason { missedTournament, extendedInactivity }
+
 class LocalEloHistoryItem {
   const LocalEloHistoryItem({
     required this.tournamentId,
@@ -69,6 +71,8 @@ class LocalEloHistoryItem {
     required this.ratingAfter,
     required this.kFactor,
     required this.expectedScore,
+    this.decayReason,
+    this.missedTournamentCount,
   });
   final String tournamentId;
   final int matchIndex;
@@ -76,6 +80,8 @@ class LocalEloHistoryItem {
   final String tournamentName, opponentName, score;
   final int delta, ratingAfter, kFactor;
   final double expectedScore;
+  final LocalEloDecayReason? decayReason;
+  final int? missedTournamentCount;
 }
 
 class LocalEloSnapshot {
@@ -270,59 +276,110 @@ class LocalEloCalculator {
           }
           final missedCount = (missedTournamentStreaks[player.id] ?? 0) + 1;
           missedTournamentStreaks[player.id] = missedCount;
-          var requestedLoss = absenceDecayEnabled
+          final requestedAbsenceLoss = absenceDecayEnabled
               ? max(0, absenceDecayPoints)
               : 0;
-          if (inactivityDecayEnabled &&
-              missedCount > inactivityGraceTournaments) {
-            requestedLoss += max(0, inactivityDecayPoints);
-          }
+          final requestedInactivityLoss =
+              inactivityDecayEnabled && missedCount > inactivityGraceTournaments
+              ? max(0, inactivityDecayPoints)
+              : 0;
           final recipients =
               participants
                   .where((id) => id != player.id && entries.containsKey(id))
                   .toList()
                 ..sort();
+          final requestedLoss = requestedAbsenceLoss + requestedInactivityLoss;
           if (requestedLoss == 0 || recipients.isEmpty) continue;
           final floor = allowDecayBelowStartRating ? 0 : startRating;
           final actualLoss = min(requestedLoss, max(0, player.rating - floor));
           if (actualLoss == 0) continue;
-          player.rating -= actualLoss;
-          (history[player.id] ??= []).add(
-            LocalEloHistoryItem(
-              tournamentId: tournament.id,
-              matchIndex: -1,
-              playedAt: event.date,
-              tournamentName: tournament.name,
-              opponentName: 'Turnierverfall',
-              score: '-$actualLoss',
-              delta: -actualLoss,
-              ratingAfter: player.rating,
-              kFactor: 0,
-              expectedScore: 0,
-            ),
-          );
-          final share = actualLoss ~/ recipients.length;
-          var remainder = actualLoss % recipients.length;
-          for (final id in recipients) {
-            final recipient = entries[id]!;
-            final gain = share + (remainder > 0 ? 1 : 0);
-            if (remainder > 0) remainder--;
-            recipient.rating += gain;
-            if (gain == 0) continue;
-            (history[id] ??= []).add(
+          final appliedLosses = <(LocalEloDecayReason, int)>[];
+          final absenceLoss =
+              actualLoss * requestedAbsenceLoss ~/ requestedLoss;
+          if (absenceLoss > 0) {
+            appliedLosses.add((
+              LocalEloDecayReason.missedTournament,
+              absenceLoss,
+            ));
+          }
+          final inactivityLoss = actualLoss - absenceLoss;
+          if (inactivityLoss > 0) {
+            appliedLosses.add((
+              LocalEloDecayReason.extendedInactivity,
+              inactivityLoss,
+            ));
+          }
+          for (final (reason, loss) in appliedLosses) {
+            player.rating -= loss;
+            (history[player.id] ??= []).add(
               LocalEloHistoryItem(
                 tournamentId: tournament.id,
                 matchIndex: -1,
                 playedAt: event.date,
                 tournamentName: tournament.name,
-                opponentName: player.name,
-                score: '+$gain',
-                delta: gain,
-                ratingAfter: recipient.rating,
+                opponentName: reason == LocalEloDecayReason.missedTournament
+                    ? 'Eigenes Versäumnis'
+                    : 'Eigene Inaktivität',
+                score: '-$loss',
+                delta: -loss,
+                ratingAfter: player.rating,
                 kFactor: 0,
                 expectedScore: 0,
+                decayReason: reason,
+                missedTournamentCount: missedCount,
               ),
             );
+          }
+          final share = actualLoss ~/ recipients.length;
+          var remainder = actualLoss % recipients.length;
+          final remainingGains = <String, int>{};
+          for (final id in recipients) {
+            final gain = share + (remainder > 0 ? 1 : 0);
+            if (remainder > 0) remainder--;
+            remainingGains[id] = gain;
+          }
+          final allocations = <String, List<(LocalEloDecayReason, int)>>{
+            for (final id in recipients) id: [],
+          };
+          for (final (reason, loss) in appliedLosses) {
+            var unallocated = loss;
+            for (final id in recipients) {
+              final gain = remainingGains[id]!;
+              final allocation = min(gain, unallocated);
+              if (allocation == 0) continue;
+              allocations[id]!.add((reason, allocation));
+              remainingGains[id] = gain - allocation;
+              unallocated -= allocation;
+              if (unallocated == 0) break;
+            }
+          }
+          for (final id in recipients) {
+            final recipient = entries[id]!;
+            final totalGain = allocations[id]!.fold<int>(
+              0,
+              (sum, allocation) => sum + allocation.$2,
+            );
+            var ratingAfter = recipient.rating;
+            recipient.rating += totalGain;
+            for (final (reason, gain) in allocations[id]!) {
+              ratingAfter += gain;
+              (history[id] ??= []).add(
+                LocalEloHistoryItem(
+                  tournamentId: tournament.id,
+                  matchIndex: -1,
+                  playedAt: event.date,
+                  tournamentName: tournament.name,
+                  opponentName: player.name,
+                  score: '+$gain',
+                  delta: gain,
+                  ratingAfter: ratingAfter,
+                  kFactor: 0,
+                  expectedScore: 0,
+                  decayReason: reason,
+                  missedTournamentCount: missedCount,
+                ),
+              );
+            }
           }
         }
         continue;

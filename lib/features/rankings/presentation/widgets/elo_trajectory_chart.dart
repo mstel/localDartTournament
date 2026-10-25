@@ -9,12 +9,14 @@ class EloTrajectoryPoint {
     required this.tournamentName,
     required this.rating,
     required this.delta,
+    this.breakdown = const [],
   });
 
   final DateTime playedAt;
   final String tournamentName;
   final int rating;
   final int delta;
+  final List<String> breakdown;
 }
 
 class EloTrajectoryChart extends StatefulWidget {
@@ -60,7 +62,11 @@ class _EloTrajectoryChartState extends State<EloTrajectoryChart> {
         label: 'Interaktive Elo-Entwicklung pro Turnier',
         value: point == null
             ? 'Punkt auswählen, um Turnier und Wertungsänderung anzuzeigen'
-            : '${point.tournamentName}, ${point.rating} Elo, ${point.delta >= 0 ? '+' : ''}${point.delta}',
+            : [
+                '${point.tournamentName}, ${point.rating} Elo, '
+                    '${point.delta >= 0 ? '+' : ''}${point.delta}',
+                ...point.breakdown,
+              ].join(', '),
         child: MouseRegion(
           onHover: (event) =>
               _selectPoint(event.localPosition.dx, constraints.maxWidth),
@@ -104,8 +110,11 @@ class _EloTrajectoryChartState extends State<EloTrajectoryChart> {
                           child: Padding(
                             padding: const EdgeInsets.all(8),
                             child: Text(
-                              '${point.playedAt.day}.${point.playedAt.month}.${point.playedAt.year} · ${point.tournamentName}\n'
-                              '${point.rating} Elo (${point.delta >= 0 ? '+' : ''}${point.delta})',
+                              [
+                                '${point.playedAt.day}.${point.playedAt.month}.${point.playedAt.year} · ${point.tournamentName}',
+                                '${point.rating} Elo (${point.delta >= 0 ? '+' : ''}${point.delta})',
+                                ...point.breakdown,
+                              ].join('\n'),
                               style: TextStyle(
                                 color: Theme.of(
                                   context,

@@ -90,6 +90,111 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('history and graph explain decay losses and attributed gains', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerEloHistoryPage(
+          player: LocalEloPlayer(id: 'anna', name: 'Anna', rating: 1000),
+          rankingName: 'Vereinsrangliste',
+          history: [
+            LocalEloHistoryItem(
+              tournamentId: 'cup-a',
+              matchIndex: -1,
+              playedAt: DateTime(2026, 1, 20),
+              tournamentName: 'Frühjahrscup',
+              opponentName: 'Eigenes Versäumnis',
+              score: '-6',
+              delta: -6,
+              ratingAfter: 994,
+              kFactor: 0,
+              expectedScore: 0,
+              decayReason: LocalEloDecayReason.missedTournament,
+            ),
+            LocalEloHistoryItem(
+              tournamentId: 'cup-a',
+              matchIndex: -1,
+              playedAt: DateTime(2026, 1, 20),
+              tournamentName: 'Frühjahrscup',
+              opponentName: 'Eigene Inaktivität',
+              score: '-4',
+              delta: -4,
+              ratingAfter: 990,
+              kFactor: 0,
+              expectedScore: 0,
+              decayReason: LocalEloDecayReason.extendedInactivity,
+              missedTournamentCount: 3,
+            ),
+            LocalEloHistoryItem(
+              tournamentId: 'cup-a',
+              matchIndex: -1,
+              playedAt: DateTime(2026, 1, 20),
+              tournamentName: 'Frühjahrscup',
+              opponentName: 'Chris',
+              score: '+4',
+              delta: 4,
+              ratingAfter: 994,
+              kFactor: 0,
+              expectedScore: 0,
+              decayReason: LocalEloDecayReason.missedTournament,
+            ),
+            LocalEloHistoryItem(
+              tournamentId: 'cup-a',
+              matchIndex: -1,
+              playedAt: DateTime(2026, 1, 20),
+              tournamentName: 'Frühjahrscup',
+              opponentName: 'Chris',
+              score: '+2',
+              delta: 2,
+              ratingAfter: 996,
+              kFactor: 0,
+              expectedScore: 0,
+              decayReason: LocalEloDecayReason.extendedInactivity,
+              missedTournamentCount: 3,
+            ),
+            LocalEloHistoryItem(
+              tournamentId: 'cup-b',
+              matchIndex: 0,
+              playedAt: DateTime(2026, 2, 20),
+              tournamentName: 'Vereinspokal',
+              opponentName: 'Ben',
+              score: '2:0',
+              delta: 4,
+              ratingAfter: 1000,
+              kFactor: 32,
+              expectedScore: 0.5,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Verlust gesamt'), findsOneWidget);
+    expect(find.text('10 Elo'), findsOneWidget);
+    expect(
+      find.text('+4 Elo, weil Chris ein Turnier verpasst hat'),
+      findsOneWidget,
+    );
+    final chart = find.byType(EloTrajectoryChart);
+    final rect = tester.getRect(chart);
+    await tester.tapAt(Offset(rect.left + rect.width / 2, rect.center.dy));
+    await tester.pump();
+
+    expect(find.textContaining('Turnier verpasst: -6 Elo'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Erhalten, weil Chris ein Turnier verpasst hat: +4 Elo',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tournament history cards start collapsed', (tester) async {
     tester.view.physicalSize = const Size(800, 1000);
     tester.view.devicePixelRatio = 1;
