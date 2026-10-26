@@ -26,8 +26,10 @@ class WebsiteReadModelService {
           left,
           right,
         ) {
-          final byFinishedAt = right.finishedAt!.compareTo(left.finishedAt!);
-          return byFinishedAt != 0 ? byFinishedAt : left.id.compareTo(right.id);
+          final leftDate = left.finishedAt ?? left.startedAt ?? left.createdAt;
+          final rightDate = right.finishedAt ?? right.startedAt ?? right.createdAt;
+          final byDate = rightDate.compareTo(leftDate);
+          return byDate != 0 ? byDate : left.id.compareTo(right.id);
         });
 
     final statistics = LocalStatisticsService(database: _database);
@@ -137,7 +139,17 @@ class WebsiteReadModelService {
       'statistics': playerStatistics,
       'bestPerformances': _uniquePerformances(bestPerformances),
       'completedTournaments': [
-        for (final tournament in completed) tournament.toJson(),
+        for (final tournament in completed)
+          {
+            ...tournament.toJson(),
+            // Ensure finishedAt is always present for the website; fall back
+            // to startedAt or createdAt for legacy Challonge imports where the
+            // public page scrape did not provide a completion timestamp.
+            if (tournament.finishedAt == null)
+              'finishedAt': (tournament.startedAt ?? tournament.createdAt)
+                  .toUtc()
+                  .toIso8601String(),
+          },
       ],
     };
   }
@@ -146,7 +158,8 @@ class WebsiteReadModelService {
     Iterable<CreatedTournament> tournaments,
   ) => [
     for (final tournament in tournaments)
-      if (tournament.finishedAt != null && !tournament.reopenedForCorrections)
+      if (!tournament.reopenedForCorrections &&
+          (tournament.finishedAt != null || tournament.importedArchive != null))
         tournament,
   ];
 

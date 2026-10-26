@@ -208,7 +208,9 @@ class ChallongeTournament {
       players: players.values.toList(),
       createdAt: DateTime.tryParse('${data['created_at'] ?? ''}'),
       startedAt: DateTime.tryParse('${data['started_at'] ?? ''}'),
-      finishedAt: DateTime.tryParse('${data['completed_at'] ?? ''}'),
+      finishedAt: DateTime.tryParse('${data['completed_at'] ?? ''}') ??
+          DateTime.tryParse('${data['started_at'] ?? ''}') ??
+          DateTime.tryParse('${data['created_at'] ?? ''}'),
       countsForRanking: countsForRanking,
       rankingIds: countsForRanking
           ? rankingIds.toSet().toList()
