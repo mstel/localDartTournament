@@ -32,7 +32,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Start'), findsOneWidget);
-    expect(find.text('1000 → 1030 Elo'), findsOneWidget);
+    expect(find.text('1000 → 1030 Elo'), findsNWidgets(2));
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });
@@ -230,4 +230,64 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('vs. Ben'), findsOneWidget);
   });
+
+  testWidgets('tournament cards and matches display rating before and after', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerEloHistoryPage(
+          player: LocalEloPlayer(id: 'player-1', name: 'Spieler', rating: 1045),
+          rankingName: 'Vereinsrangliste',
+          history: [
+            LocalEloHistoryItem(
+              tournamentId: 'tournament-1',
+              matchIndex: 0,
+              playedAt: DateTime(2026, 10, 20),
+              tournamentName: 'Turnier 1',
+              opponentName: 'Gegner 1',
+              score: '2:0',
+              delta: 25,
+              ratingAfter: 1025,
+              kFactor: 32,
+              expectedScore: 0.5,
+            ),
+            LocalEloHistoryItem(
+              tournamentId: 'tournament-1',
+              matchIndex: 1,
+              playedAt: DateTime(2026, 10, 20),
+              tournamentName: 'Turnier 1',
+              opponentName: 'Gegner 2',
+              score: '2:1',
+              delta: 20,
+              ratingAfter: 1045,
+              kFactor: 32,
+              expectedScore: 0.5,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Group total is +45, rating went from 1000 to 1045
+    expect(find.text('+45 Elo'), findsOneWidget);
+    expect(find.text('1000 → 1045 Elo'), findsNWidgets(2)); // in trajectory summary and in card trailing
+
+    // Expand the card
+    final tile = find.widgetWithText(ExpansionTile, 'Turnier 1');
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    // Matches show rating before -> after
+    expect(find.text('1000 → 1025'), findsOneWidget);
+    expect(find.text('1025 → 1045'), findsOneWidget);
+    expect(find.textContaining('Elo: 1000 → 1025'), findsOneWidget);
+    expect(find.textContaining('Elo: 1025 → 1045'), findsOneWidget);
+  });
+
 }

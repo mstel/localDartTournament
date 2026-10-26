@@ -1,3 +1,9 @@
+# 2.0.3+28
+
+- Zeigt in der Spieler-Detailseite unter „Turnier- und Spielverlauf“ die Elo-Wertung vor und nach jedem Turnier sowie bei jedem einzelnen Spiel auf einen Blick an.
+- Fügt in der Turnierübersicht direkt neben dem Turniernamen einen Button zum schnellen Öffnen der zugehörigen Rangliste hinzu.
+- Korrigiert das Datum des 3. Spieltags (Vereinsheim Unzenberg 2026) auf den 21.01.2026 für eine exakte chronologische Elo-Berechnung.
+
 # 2.0.2+27
 
 - Renames the dashboard and second-screen match queues to "Empfohlene Partien";

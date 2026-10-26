@@ -155,6 +155,22 @@ void main() {
     expect(find.text('Sommerpokal'), findsOneWidget);
     expect(find.text('Winterpokal'), findsNothing);
     expect(find.text('2 gespeicherte Turniere'), findsOneWidget);
+    expect(find.byTooltip('Rangliste öffnen'), findsOneWidget);
+  });
+
+  testWidgets('shows open ranking button on tournament card', (tester) async {
+    storage.tournaments.add(
+      CreatedTournament(
+        id: 'turnier-1',
+        name: 'Vereinsturnier',
+        players: const [],
+        stages: const [],
+        runStages: const [],
+      ),
+    );
+    await showPage(tester);
+
+    expect(find.byTooltip('Rangliste öffnen'), findsOneWidget);
   });
 
   for (final size in [

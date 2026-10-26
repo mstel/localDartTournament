@@ -82,6 +82,8 @@ class LocalEloHistoryItem {
   final double expectedScore;
   final LocalEloDecayReason? decayReason;
   final int? missedTournamentCount;
+
+  int get ratingBefore => ratingAfter - delta;
 }
 
 class LocalEloSnapshot {

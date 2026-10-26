@@ -8,9 +8,11 @@ class TournamentSummaryCard extends StatelessWidget {
     required this.tournament,
     required this.onOpen,
     required this.onDelete,
+    this.onOpenRanking,
   });
   final CreatedTournament tournament;
   final VoidCallback onOpen, onDelete;
+  final VoidCallback? onOpenRanking;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -36,11 +38,33 @@ class TournamentSummaryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(
-                      tournament.name,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          tournament.name,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (onOpenRanking != null) ...[
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.leaderboard_outlined,
+                              size: 20,
+                            ),
+                            tooltip: 'Rangliste öffnen',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            onPressed: onOpenRanking,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   PopupMenuButton<String>(

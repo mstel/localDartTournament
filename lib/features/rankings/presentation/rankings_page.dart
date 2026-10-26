@@ -2553,30 +2553,45 @@ class PlayerEloHistoryPage extends StatelessWidget {
                     '${group.playedAt.day}.${group.playedAt.month}.${group.playedAt.year} · ${group.wins} Siege · ${group.losses} Niederlagen${group.draws > 0 ? " · ${group.draws} Unentschieden" : ""}',
                     style: theme.textTheme.bodySmall,
                   ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: group.totalDelta > 0
-                          ? Colors.green.shade100
-                          : group.totalDelta < 0
-                          ? Colors.red.shade100
-                          : colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${group.totalDelta >= 0 ? "+" : ""}${group.totalDelta} Elo',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: group.totalDelta > 0
-                            ? Colors.green.shade900
-                            : group.totalDelta < 0
-                            ? Colors.red.shade900
-                            : colorScheme.onSurface,
+                  trailing: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: group.totalDelta > 0
+                              ? Colors.green.shade100
+                              : group.totalDelta < 0
+                              ? Colors.red.shade100
+                              : colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${group.totalDelta >= 0 ? "+" : ""}${group.totalDelta} Elo',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: group.totalDelta > 0
+                                ? Colors.green.shade900
+                                : group.totalDelta < 0
+                                ? Colors.red.shade900
+                                : colorScheme.onSurface,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${group.ratingBefore} → ${group.ratingAfter} Elo',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                   children: [
                     const Divider(height: 1),
@@ -2626,20 +2641,33 @@ class PlayerEloHistoryPage extends StatelessWidget {
                             ),
                             title: Text(title),
                             subtitle: Text(
-                              '$explanation · Elo danach: ${match.ratingAfter}'
+                              '$explanation · Elo: ${match.ratingBefore} → ${match.ratingAfter}'
                               '${isDecay ? '' : ' · Ergebnis: ${match.score}'}',
                             ),
-                            trailing: Text(
-                              '${match.delta >= 0 ? "+" : ""}${match.delta}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: match.delta > 0
-                                    ? Colors.green.shade800
-                                    : match.delta < 0
-                                    ? Colors.red.shade800
-                                    : Colors.grey.shade700,
-                              ),
+                            trailing: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '${match.delta >= 0 ? "+" : ""}${match.delta}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: match.delta > 0
+                                        ? Colors.green.shade800
+                                        : match.delta < 0
+                                        ? Colors.red.shade800
+                                        : Colors.grey.shade700,
+                                  ),
+                                ),
+                                Text(
+                                  '${match.ratingBefore} → ${match.ratingAfter}',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -2734,6 +2762,10 @@ class _TournamentEloGroup {
   final List<LocalEloHistoryItem> matches = [];
 
   int get totalDelta => matches.fold<int>(0, (sum, m) => sum + m.delta);
+  int get ratingBefore =>
+      matches.isNotEmpty ? matches.first.ratingBefore : 0;
+  int get ratingAfter =>
+      matches.isNotEmpty ? matches.last.ratingAfter : 0;
   int get wins => matches.where((m) => m.matchIndex >= 0 && m.delta > 0).length;
   int get losses =>
       matches.where((m) => m.matchIndex >= 0 && m.delta < 0).length;
