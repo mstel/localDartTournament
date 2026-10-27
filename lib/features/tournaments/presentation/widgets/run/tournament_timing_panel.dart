@@ -122,13 +122,15 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             Icon(
               Icons.timer_outlined,
               color: Theme.of(context).colorScheme.primary,
             ),
-            const SizedBox(width: 8),
             Text(
               'Turnieruhr',
               style: Theme.of(
