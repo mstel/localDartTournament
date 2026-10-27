@@ -225,7 +225,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        final previewButton = find.text('Vorschau Turnierbaum');
+        final previewButton = find.text('Vorschau nächste Etappe');
         await tester.ensureVisible(previewButton);
         await tester.tap(previewButton);
         await tester.pumpAndSettle();

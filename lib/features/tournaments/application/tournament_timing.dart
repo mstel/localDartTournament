@@ -225,6 +225,14 @@ class TournamentTiming {
     }
   }
 
+  static void resetClock(CreatedTournament tournament, DateTime now) {
+    tournament
+      ..startedAt = now
+      ..finishedAt = null
+      ..pausedAt = null
+      ..totalPausedSeconds = 0;
+  }
+
   static TournamentDurationSummary? durationSummary(
     CreatedTournament tournament,
   ) {

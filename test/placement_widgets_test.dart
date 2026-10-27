@@ -116,16 +116,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ergebnisse').last);
     await tester.pumpAndSettle();
-    final previewButton = find.text('Vorschau Turnierbaum');
+    final previewButton = find.text('Vorschau nächste Etappe');
     await tester.ensureVisible(previewButton);
     await tester.tap(previewButton);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.text('Platzierungsspiele', skipOffstage: false),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Platzierungsspiele'), findsOneWidget);
-    expect(find.text('Spiel um Platz 15', skipOffstage: false), findsWidgets);
+    expect(find.textContaining('Turnierbaum-Vorschau'), findsOneWidget);
+    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

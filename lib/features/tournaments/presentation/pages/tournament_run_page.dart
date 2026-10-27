@@ -404,16 +404,46 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     final previousStart = widget.tournament.startedAt;
     final previousEnd = widget.tournament.finishedAt;
+    final previousPausedAt = widget.tournament.pausedAt;
+    final previousTotalPausedSeconds = widget.tournament.totalPausedSeconds;
     widget.tournament
       ..startedAt = startedAt
       ..finishedAt = finishedAt;
+    if (startedAt != previousStart) {
+      widget.tournament
+        ..pausedAt = null
+        ..totalPausedSeconds = 0;
+    }
     try {
       await _saveTournamentProgress(propagateError: true);
       if (mounted) setState(() {});
     } catch (_) {
       widget.tournament
         ..startedAt = previousStart
-        ..finishedAt = previousEnd;
+        ..finishedAt = previousEnd
+        ..pausedAt = previousPausedAt
+        ..totalPausedSeconds = previousTotalPausedSeconds;
+      rethrow;
+    }
+  }
+
+  Future<void> _resetTournamentClock() async {
+    final tournament = widget.tournament;
+    if (tournament.startedAt == null || tournament.finishedAt != null) return;
+    final previousStart = tournament.startedAt;
+    final previousEnd = tournament.finishedAt;
+    final previousPausedAt = tournament.pausedAt;
+    final previousTotalPausedSeconds = tournament.totalPausedSeconds;
+    TournamentTiming.resetClock(tournament, DateTime.now());
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (_) {
+      tournament
+        ..startedAt = previousStart
+        ..finishedAt = previousEnd
+        ..pausedAt = previousPausedAt
+        ..totalPausedSeconds = previousTotalPausedSeconds;
       rethrow;
     }
   }
@@ -3243,6 +3273,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 onStart: _startTournamentClock,
                                 onPauseToggle: _toggleClockPause,
                                 onEditTimes: _editTournamentTimes,
+                                onResetClock: _resetTournamentClock,
                               ),
                             ),
                           ),
@@ -3679,6 +3710,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                       StageResultsSplitView(
                         stage: activeStage,
                         tournament: widget.tournament,
+                        onPreviewBracket: () => showDialog<void>(
+                          context: context,
+                          builder: (context) => Dialog.fullscreen(
+                            child: TournamentSecondScreenView(
+                              tournament: widget.tournament,
+                              isStandaloneWindow: true,
+                              showNextStagePreviewInitially: true,
+                              onClose: () => Navigator.of(context).pop(),
+                            ),
+                          ),
+                        ),
                         standingsFor: _standingsFor,
                         onEditResult: _editResult,
                         canEditResults: canEditResults,

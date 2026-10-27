@@ -18,6 +18,7 @@ class StageResultsSplitView extends StatefulWidget {
     required this.canEditResults,
     this.tournament,
     this.bracketBuilder,
+    this.onPreviewBracket,
     this.qualifyingRank = 1,
     this.isBracketEditMode = false,
     this.canEditBracket = false,
@@ -34,6 +35,7 @@ class StageResultsSplitView extends StatefulWidget {
   final bool canEditResults;
   final CreatedTournament? tournament;
   final KnockoutBracketBuilder? bracketBuilder;
+  final VoidCallback? onPreviewBracket;
   final int qualifyingRank;
   final bool isBracketEditMode;
   final bool canEditBracket;
@@ -532,10 +534,11 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
-                        onPressed: () =>
-                            _openFullBracketPreview(context, stage),
+                        onPressed:
+                            widget.onPreviewBracket ??
+                            () => _openFullBracketPreview(context, stage),
                         icon: const Icon(Icons.open_in_full),
-                        label: const Text('Vorschau Turnierbaum'),
+                        label: const Text('Vorschau nächste Etappe'),
                       ),
                     ],
                   ),

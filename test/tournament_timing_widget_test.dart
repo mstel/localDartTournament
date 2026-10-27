@@ -2,8 +2,71 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_timing_panel.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/tournament_timing.dart';
 
 void main() {
+  testWidgets('running clock can be reset and start time edited', (
+    tester,
+  ) async {
+    final start = DateTime(2026, 10, 3, 12);
+    final tournament =
+        CreatedTournament(name: 'Test', players: [], stages: [], runStages: [])
+          ..startedAt = start
+          ..pausedAt = start.add(const Duration(minutes: 5))
+          ..totalPausedSeconds = 300;
+    DateTime? savedStart;
+    final resetAt = DateTime.now();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentTimingPanel(
+              tournament: tournament,
+              onStart: () async {},
+              onEditTimes: (newStart, _) async {
+                savedStart = newStart;
+                tournament
+                  ..startedAt = newStart
+                  ..pausedAt = null
+                  ..totalPausedSeconds = 0;
+              },
+              onResetClock: () async {
+                TournamentTiming.resetClock(tournament, resetAt);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Startzeitpunkt neu festlegen'), findsOneWidget);
+    await tester.tap(find.text('Startzeitpunkt neu festlegen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Datum auswählen'), findsOneWidget);
+    await tester.tap(find.text('OK').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Uhrzeit auswählen'), findsOneWidget);
+    await tester.tap(find.text('OK').last);
+    await tester.pumpAndSettle();
+    expect(savedStart, isNotNull);
+    expect(tournament.pausedAt, isNull);
+    expect(tournament.totalPausedSeconds, 0);
+
+    await tester.tap(find.text('Turnieruhr zurücksetzen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Turnieruhr zurücksetzen?'), findsOneWidget);
+    await tester.tap(find.text('Uhr zurücksetzen'));
+    await tester.pumpAndSettle();
+
+    expect(tournament.startedAt, resetAt);
+    expect(tournament.pausedAt, isNull);
+    expect(tournament.totalPausedSeconds, 0);
+    expect(find.text('Laufzeit 0 h 0 min'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final size in [
     const Size(360, 800),
     const Size(800, 600),

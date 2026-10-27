@@ -330,6 +330,31 @@ void main() {
     },
   );
 
+  testWidgets('stage preview shows the active KO stage', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final tournament = _twoGroupPreviewTournament()..activeStageIndex = 1;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            showNextStagePreviewInitially: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    expect(find.text('Keine K.-o.-Etappe als Nächstes geplant.'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('next-stage preview labels fixed qualifiers as set', (
     tester,
   ) async {

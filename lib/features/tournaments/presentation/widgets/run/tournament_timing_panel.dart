@@ -10,6 +10,7 @@ class TournamentTimingPanel extends StatefulWidget {
     required this.onStart,
     this.onPauseToggle,
     this.onEditTimes,
+    this.onResetClock,
     this.allowManualStart = true,
     this.allowStartTimeEdit = false,
     this.allowEndTimeEdit = false,
@@ -19,6 +20,7 @@ class TournamentTimingPanel extends StatefulWidget {
   final Future<void> Function()? onPauseToggle;
   final Future<void> Function(DateTime? startedAt, DateTime? finishedAt)?
   onEditTimes;
+  final Future<void> Function()? onResetClock;
   final bool allowManualStart;
   final bool allowStartTimeEdit;
   final bool allowEndTimeEdit;
@@ -109,6 +111,47 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _resetClock() async {
+    if (widget.onResetClock == null || _busy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Turnieruhr zurücksetzen?'),
+        content: const Text(
+          'Die Laufzeit wird auf null gesetzt und die Uhr startet ab jetzt neu. '
+          'Ergebnisse und gemessene Matchzeiten bleiben erhalten.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Uhr zurücksetzen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onResetClock!();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Turnieruhr konnte nicht zurückgesetzt werden. Bitte erneut versuchen.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -230,6 +273,20 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
                       label: Text(
                         t.isClockPaused ? 'Uhr fortsetzen' : 'Uhr pausieren',
                       ),
+                    ),
+                  if (t.finishedAt == null && widget.onEditTimes != null)
+                    TextButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => _editTimestamp(start: true),
+                      icon: const Icon(Icons.edit_calendar_outlined),
+                      label: const Text('Startzeitpunkt neu festlegen'),
+                    ),
+                  if (t.finishedAt == null && widget.onResetClock != null)
+                    TextButton.icon(
+                      onPressed: _busy ? null : _resetClock,
+                      icon: const Icon(Icons.restart_alt),
+                      label: const Text('Turnieruhr zurücksetzen'),
                     ),
                 ],
                 TextButton.icon(

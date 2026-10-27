@@ -528,7 +528,10 @@ class _TournamentSecondScreenViewState
     int activeIndex,
     TournamentRunStage? activeStage,
   ) {
-    final stage = _nextKnockoutStage(t, activeIndex, activeStage);
+    final isViewingKnockout = activeStage is KnockoutTournamentRunStage;
+    final stage =
+        _nextKnockoutStage(t, activeIndex, activeStage) ??
+        (isViewingKnockout ? activeStage : null);
     final stageIndex = _nextKnockoutStageIndex(t, activeIndex, activeStage);
     if (stage == null) {
       return Column(
