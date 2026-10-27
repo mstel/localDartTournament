@@ -468,7 +468,6 @@ class _TournamentDirectorDashboardState
                 ? 'Turnieruhr nicht gestartet'
                 : 'Laufzeit: ${_duration(timing.elapsed)} · Start ${_timeOfDay(t.startedAt!)}',
           ),
-          Text('Uhrzeit: ${_timeOfDay(now)}'),
           if (timing.forecast != null)
             Text('Prognose Ende: ${_clock(timing.forecast!)}'),
         ],

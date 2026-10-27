@@ -8,6 +8,7 @@ import 'package:dart_tournament_manager/features/tournaments/presentation/widget
     show GroupTieBreakerSetup;
 import 'package:dart_tournament_manager/features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show TournamentRunPage;
@@ -179,6 +180,104 @@ void main() {
     expect(nameField.controller?.text, 'Vorheriges Turnier');
     expect(current.name, 'Aktuelles Turnier');
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('name picker shows the newest tournament date first', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final older = CreatedTournament.fromJson({
+      ...fixture().toJson(),
+      'id': 'older',
+      'name': 'Älteres Turnier',
+      'startedAt': DateTime(2025, 1, 1).toIso8601String(),
+    });
+    final newer = CreatedTournament.fromJson({
+      ...fixture().toJson(),
+      'id': 'newer',
+      'name': 'Neueres Turnier',
+      'startedAt': DateTime(2026, 1, 1).toIso8601String(),
+    });
+    final current = fixture()
+      ..name = 'Aktuelles Turnier'
+      ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'));
+    final storage = _ListTournamentStorage([older, current, newer]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: current,
+          tournamentStorage: storage,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Name eines anderen Turniers öffnen'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.text('Neueres Turnier')).dy,
+      lessThan(tester.getTopLeft(find.text('Älteres Turnier')).dy),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('group editing remains enabled when all stages are reset', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = fixture()
+      ..completedStageIndexes.add(0)
+      ..finishedAt = DateTime(2026, 1, 1)
+      ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'));
+
+    await tester.pumpWidget(
+      MaterialApp(home: TournamentRunPage(tournament: tournament)),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.ensureVisible(find.text('Gruppen verwalten'));
+
+    final button = find.widgetWithText(OutlinedButton, 'Bearbeiten');
+    expect(tester.widget<OutlinedButton>(button).onPressed, isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('group editing explains why it is disabled after a result', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = fixture()
+      ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'));
+    final group =
+        (tournament.runStages.first as GroupTournamentRunStage).groups.first;
+    group.matches.first
+      ..homeLegs = 2
+      ..awayLegs = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(home: TournamentRunPage(tournament: tournament)),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pump(const Duration(milliseconds: 500));
+    final button = find.widgetWithText(OutlinedButton, 'Bearbeiten');
+    expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(button));
+    await mouse.moveTo(tester.getCenter(button));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('bevor Ergebnisse vorliegen'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

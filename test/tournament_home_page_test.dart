@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
-    show TournamentHomePage;
+    show TournamentHomePage, TournamentRunPage;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -209,6 +209,67 @@ void main() {
     expect(copy.name, 'Vereinsturnier - Kopie');
     expect(copy.players, original.players);
     expect(copy.stages, original.stages);
+  });
+
+  testWidgets('returning from a renamed tournament shows the saved name', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final players = [
+      TournamentPlayer.generated(1),
+      TournamentPlayer.generated(2),
+    ];
+    final original = CreatedTournament(
+      id: 'rename-me',
+      name: 'Alter Name',
+      players: players,
+      stages: const [TournamentStage(name: 'Gruppen', type: 'groups')],
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppen',
+          groupPlayType: 'round_robin',
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: players,
+              matches: [
+                GroupMatch(
+                  homePlayer: players.first,
+                  awayPlayer: players.last,
+                  round: 1,
+                ),
+              ],
+            ),
+          ],
+          qualificationPlan: null,
+          tieBreakers: defaultGroupTieBreakers,
+        ),
+      ],
+    );
+    storage.tournaments.add(original);
+    await showPage(tester);
+
+    await tester.tap(find.text('Alter Name'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TournamentRunPage), findsOneWidget);
+
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+    final nameField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.labelText == 'Turniername',
+    );
+    await tester.enterText(nameField, 'Neuer Name');
+    await tester.tap(find.text('Namen speichern'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Neuer Name'), findsOneWidget);
+    expect(find.text('Alter Name'), findsNothing);
   });
 
   for (final size in [

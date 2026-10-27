@@ -609,6 +609,8 @@ class _CompactKnockoutPreviewTree extends StatelessWidget {
               else
                 _BracketPreviewPlaceholderMatch(
                   matchNumber: matchIndex + 1,
+                  topLabel: 'Gewinner Spiel ${matchIndex * 2 + 1}',
+                  bottomLabel: 'Gewinner Spiel ${matchIndex * 2 + 2}',
                   qualificationLabel: _bracketQualificationLabelFor(
                     roundIndex: roundIndex,
                     totalRounds: roundSizes.length,

@@ -39,7 +39,9 @@ void main() {
       await tester.tap(find.text('Turnieruhr starten'));
       await tester.pump();
       expect(find.text('Turnieruhr'), findsOneWidget);
+      expect(find.text('Läuft'), findsOneWidget);
       expect(find.text('Laufzeit 0 h 0 min'), findsOneWidget);
+      expect(find.textContaining('Start: '), findsOneWidget);
       await tester.pump(const Duration(seconds: 75));
       expect(tester.takeException(), isNull);
       t.startedAt = DateTime.now().subtract(const Duration(minutes: 10));

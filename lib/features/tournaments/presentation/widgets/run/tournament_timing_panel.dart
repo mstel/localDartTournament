@@ -140,69 +140,66 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
           ],
         ),
         Align(
-          alignment: Alignment.centerRight,
+          alignment: Alignment.centerLeft,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Wrap(
-              alignment: WrapAlignment.end,
+              alignment: WrapAlignment.start,
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 12,
               runSpacing: 4,
               children: [
-                if (t.startedAt == null && widget.allowManualStart)
-                  TextButton.icon(
-                    onPressed: _busy
-                        ? null
-                        : () async {
-                            setState(() => _busy = true);
-                            try {
-                              await widget.onStart();
-                            } catch (_) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Turnierstart konnte nicht gespeichert werden. Bitte erneut versuchen.',
+                if (t.startedAt == null) ...[
+                  const Text(
+                    'Nicht gestartet',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  if (widget.allowManualStart)
+                    TextButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              setState(() => _busy = true);
+                              try {
+                                await widget.onStart();
+                              } catch (_) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Turnierstart konnte nicht gespeichert werden. Bitte erneut versuchen.',
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
+                              } finally {
+                                if (mounted) setState(() => _busy = false);
                               }
-                            } finally {
-                              if (mounted) setState(() => _busy = false);
-                            }
-                          },
-                    icon: const Icon(Icons.play_circle_outline),
-                    label: const Text('Turnieruhr starten'),
-                  )
-                else ...[
+                            },
+                      icon: const Icon(Icons.play_circle_outline),
+                      label: const Text('Turnieruhr starten'),
+                    ),
+                ] else ...[
+                  Text(
+                    t.finishedAt != null
+                        ? 'Abgeschlossen'
+                        : t.isClockPaused
+                        ? 'Pausiert'
+                        : 'Läuft',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Text(
                     '${t.finishedAt == null ? 'Laufzeit' : 'Gesamtdauer'} ${duration(stats.elapsed.inSeconds)}',
                   ),
-                  if (t.isClockPaused && t.finishedAt == null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.errorContainer,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'Pausiert',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                        ),
-                      ),
-                    ),
+                  Text('Start: ${time(t.startedAt!)}'),
+                  if (t.finishedAt != null)
+                    Text('Ende: ${time(t.finishedAt!)}'),
+                  if (stats.forecast != null && t.finishedAt == null)
+                    Text('Voraussichtliches Ende: ${time(stats.forecast!)}'),
                   if (stats.expectedCompleted != null)
                     Text(
                       '${stats.completed} Spiele fertig · ${stats.expectedCompleted} laut Zeitplan',
                     ),
-                  if (stats.forecast != null && t.finishedAt == null)
-                    Text('Voraussichtliches Ende: ${time(stats.forecast!)}'),
                   if (t.finishedAt == null && widget.onPauseToggle != null)
                     TextButton.icon(
                       onPressed: _busy

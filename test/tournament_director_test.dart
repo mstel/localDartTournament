@@ -102,6 +102,7 @@ void main() {
           ),
         );
         expect(find.text('Dashboard'), findsOneWidget);
+        expect(find.textContaining('Uhrzeit:'), findsNothing);
         expect(find.text('Empfohlene Partien'), findsOneWidget);
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);
         expect(find.text('Fortschritt nach Etappen'), findsNothing);

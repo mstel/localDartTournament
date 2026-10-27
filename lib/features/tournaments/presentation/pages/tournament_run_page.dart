@@ -64,7 +64,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         if (home) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         } else {
-          Navigator.of(context).pop();
+          Navigator.of(context).pop(widget.tournament);
         }
       });
     } catch (_) {
@@ -491,9 +491,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _pickTournamentName() async {
     try {
-      final tournaments = (await _tournamentStorage.loadTournaments())
-          .where((tournament) => tournament.id != widget.tournament.id)
-          .toList();
+      final tournaments =
+          (await _tournamentStorage.loadTournaments())
+              .where((tournament) => tournament.id != widget.tournament.id)
+              .toList()
+            ..sort((a, b) {
+              final aDate = a.startedAt ?? a.finishedAt ?? a.createdAt;
+              final bDate = b.startedAt ?? b.finishedAt ?? b.createdAt;
+              return bDate.compareTo(aDate);
+            });
       if (!mounted) return;
       final selected = await showDialog<CreatedTournament>(
         context: context,
@@ -797,11 +803,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         );
   }
 
+  bool _hasRecordedTournamentResults() => widget.tournament.runStages.any(
+    (stage) => _matchesForStage(stage).any((match) => match.hasResult),
+  );
+
+  bool _canEditGroupPositions(GroupTournamentRunStage stage, int stageIndex) {
+    return stageIndex == _activeStageIndex &&
+        !_isApplyingStartDraw &&
+        !_hasRecordedTournamentResults() &&
+        GroupPositionEditor.canEdit(stage);
+  }
+
   Future<void> _editGroupPositions(GroupTournamentRunStage stage) async {
-    if (_isApplyingStartDraw ||
-        widget.tournament.runStages[_activeStageIndex] != stage ||
-        _completedStageIndexes.contains(_activeStageIndex) ||
-        !GroupPositionEditor.canEdit(stage)) {
+    if (!_canEditGroupPositions(stage, _activeStageIndex) ||
+        widget.tournament.runStages[_activeStageIndex] != stage) {
       return;
     }
     final pair = await showDialog<List<TournamentPlayer>>(
@@ -810,14 +825,21 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     );
     if (!mounted ||
         pair == null ||
+        !_canEditGroupPositions(stage, _activeStageIndex) ||
         widget.tournament.runStages[_activeStageIndex] != stage ||
-        _completedStageIndexes.contains(_activeStageIndex)) {
+        _completedStageIndexes.contains(_activeStageIndex) &&
+            _hasRecordedTournamentResults()) {
       return;
     }
     var changed = false;
     setState(() {
       changed = GroupPositionEditor.swap(stage, pair[0], pair[1]);
       if (changed) {
+        _completedStageIndexes.remove(_activeStageIndex);
+        widget.tournament.completedStageIndexes.remove(_activeStageIndex);
+        if (_activeStageIndex == widget.tournament.runStages.length - 1) {
+          widget.tournament.finishedAt = null;
+        }
         _persistGroupArrangementInDrawOrder(stage);
         _advanceKnockoutWinners();
         _ensureGroupDeciders();
@@ -3197,7 +3219,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                       }
                                       return Row(
                                         children: [
-                                          SizedBox(width: 320, child: field),
+                                          Expanded(child: field),
                                           const SizedBox(width: 12),
                                           pickNameButton,
                                           const SizedBox(width: 8),
@@ -3331,28 +3353,44 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                           const SizedBox(height: 12),
                           // 3. Gruppen verwalten
                           if (activeStage is GroupTournamentRunStage)
-                            Card(
-                              child: ListTile(
-                                leading: const Icon(Icons.grid_view),
-                                title: const Text('Gruppen verwalten'),
-                                subtitle: const Text(
-                                  'Positionen der Spieler in den Gruppen tauschen.',
-                                ),
-                                trailing: OutlinedButton(
-                                  onPressed:
-                                      isViewingActiveStage &&
-                                          !_isApplyingStartDraw &&
-                                          !_completedStageIndexes.contains(
-                                            _viewStageIndex,
-                                          ) &&
-                                          GroupPositionEditor.canEdit(
-                                            activeStage,
-                                          )
-                                      ? () => _editGroupPositions(activeStage)
-                                      : null,
-                                  child: const Text('Bearbeiten'),
-                                ),
-                              ),
+                            Builder(
+                              builder: (context) {
+                                final canEdit =
+                                    isViewingActiveStage &&
+                                    _canEditGroupPositions(
+                                      activeStage,
+                                      _viewStageIndex,
+                                    );
+                                final disabledReason = _isApplyingStartDraw
+                                    ? 'Die Gruppenauslosung wird gerade angewendet.'
+                                    : !isViewingActiveStage
+                                    ? 'Gruppen können nur in der aktiven Etappe bearbeitet werden.'
+                                    : _hasRecordedTournamentResults()
+                                    ? 'Die Gruppen lassen sich nur bearbeiten, bevor Ergebnisse vorliegen oder nachdem alle Etappen zurückgesetzt wurden.'
+                                    : 'Mindestens eine Partie wurde bereits gestartet oder zurückgesetzt.';
+                                return Card(
+                                  child: ListTile(
+                                    leading: const Icon(Icons.grid_view),
+                                    title: const Text('Gruppen verwalten'),
+                                    subtitle: const Text(
+                                      'Positionen der Spieler in den Gruppen tauschen.',
+                                    ),
+                                    trailing: Tooltip(
+                                      message: canEdit
+                                          ? 'Spielerpositionen in den Gruppen tauschen'
+                                          : disabledReason,
+                                      child: OutlinedButton(
+                                        onPressed: canEdit
+                                            ? () => _editGroupPositions(
+                                                activeStage,
+                                              )
+                                            : null,
+                                        child: const Text('Bearbeiten'),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           const SizedBox(height: 12),
                           if (widget.tournament.leagueMatch == null)

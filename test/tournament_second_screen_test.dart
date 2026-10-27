@@ -514,7 +514,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keeps preview visible when switching the right-side panel', (
+  testWidgets('keeps full-height preview visible across right-side modes', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -543,7 +543,7 @@ void main() {
     await tester.tap(prognosisTab);
     await tester.pump();
 
-    expect(find.text('KO-Prognose & Weiterkommen'), findsOneWidget);
+    expect(find.byType(SegmentedButton<bool>), findsOneWidget);
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -594,6 +594,59 @@ void main() {
     expect(find.text('Qualifikant offen').hitTestable(), findsNWidgets(16));
     expect(find.text('Halbfinale'), findsOneWidget);
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('three groups show all eight projected KO qualifiers', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _threeGroupEightQualifierPreviewTournament(),
+            isStandaloneWindow: true,
+            showNextStagePreviewInitially: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Qualifikant offen').hitTestable(), findsNWidgets(8));
+    expect(find.text('Gewinner Spiel 1'), findsNWidgets(2));
+    expect(find.text('Gewinner Spiel 2'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows two group tables side by side on a wide monitor', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _threeGroupEightQualifierPreviewTournament(),
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final groupATop = tester.getTopLeft(find.text('Gruppe A')).dy;
+    final groupBTop = tester.getTopLeft(find.text('Gruppe B')).dy;
+    final groupCTop = tester.getTopLeft(find.text('Gruppe C')).dy;
+    expect(groupATop, closeTo(groupBTop, 1));
+    expect(groupCTop, greaterThan(groupATop));
     expect(tester.takeException(), isNull);
   });
 
@@ -774,6 +827,64 @@ CreatedTournament _largePreviewTournament() {
           [for (var index = 0; index < 4; index++) GroupMatch(round: 2)],
           [for (var index = 0; index < 2; index++) GroupMatch(round: 3)],
           [GroupMatch(round: 4)],
+        ],
+      ),
+    ],
+  );
+}
+
+CreatedTournament _threeGroupEightQualifierPreviewTournament() {
+  final players = [
+    for (var index = 1; index <= 18; index++)
+      TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+  ];
+  final groups = [
+    for (var groupIndex = 0; groupIndex < 3; groupIndex++)
+      TournamentGroup(
+        name: 'Gruppe ${String.fromCharCode(65 + groupIndex)}',
+        playType: 'round_robin',
+        players: players.skip(groupIndex * 6).take(6).toList(),
+        matches: const [],
+      ),
+  ];
+  return CreatedTournament(
+    name: 'Drei Gruppen, acht Qualifikanten',
+    players: players,
+    stages: const [
+      TournamentStage(
+        name: 'Gruppenphase',
+        type: 'groups',
+        groupSizes: [6, 6, 6],
+        qualifiedParticipantCount: 8,
+      ),
+      TournamentStage(
+        name: 'KO',
+        type: 'single_knockout',
+        knockoutParticipantCount: 8,
+      ),
+    ],
+    runStages: [
+      GroupTournamentRunStage(
+        name: 'Gruppenphase',
+        groupPlayType: 'round_robin',
+        groups: groups,
+        qualificationPlan: const QualificationPlan(
+          totalQualifiers: 8,
+          fixedPerGroup: 2,
+          extraCount: 2,
+          extraRank: 3,
+          eligibleGroupSize: null,
+          extraGroups: [1, 2, 3],
+          fixedByGroup: [2, 2, 2],
+        ),
+        tieBreakers: defaultGroupTieBreakers,
+      ),
+      KnockoutTournamentRunStage(
+        name: 'KO',
+        rounds: [
+          [for (var index = 0; index < 4; index++) GroupMatch(round: 1)],
+          [for (var index = 0; index < 2; index++) GroupMatch(round: 2)],
+          [GroupMatch(round: 3)],
         ],
       ),
     ],

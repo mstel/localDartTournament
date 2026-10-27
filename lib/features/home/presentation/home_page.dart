@@ -151,6 +151,21 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     });
   }
 
+  void _reloadTournamentsWithUpdatedTournament(
+    CreatedTournament updatedTournament,
+  ) {
+    setState(() {
+      _tournamentsFuture = _storage.loadTournaments().then(
+        (tournaments) => [
+          for (final tournament in tournaments)
+            tournament.id == updatedTournament.id
+                ? updatedTournament
+                : tournament,
+        ],
+      );
+    });
+  }
+
   Future<void> _openCreationPage() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const TournamentCreationPage()),
@@ -159,10 +174,18 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
   }
 
   Future<void> _openTournament(CreatedTournament tournament) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => _tournamentPageFor(tournament)),
-    );
-    _reloadTournaments();
+    final updatedTournament = await Navigator.of(context)
+        .push<CreatedTournament>(
+          MaterialPageRoute<CreatedTournament>(
+            builder: (_) => _tournamentPageFor(tournament),
+          ),
+        );
+    if (!mounted) return;
+    if (updatedTournament == null) {
+      _reloadTournaments();
+    } else {
+      _reloadTournamentsWithUpdatedTournament(updatedTournament);
+    }
   }
 
   Widget _tournamentPageFor(CreatedTournament tournament) {
@@ -171,7 +194,10 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
         tournament.completedStageIndexes.contains(lastStageIndex)) {
       return TournamentResultsPage(tournament: tournament);
     }
-    return TournamentRunPage(tournament: tournament);
+    return TournamentRunPage(
+      tournament: tournament,
+      tournamentStorage: _storage,
+    );
   }
 
   bool _matchesTournamentQuery(CreatedTournament tournament) {
@@ -199,15 +225,11 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(
-        SnackBar(content: Text('Kopie "${copy.name}" erstellt.')),
-      );
+      ).showSnackBar(SnackBar(content: Text('Kopie "${copy.name}" erstellt.')));
       _reloadTournaments();
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Kopieren nicht möglich: $error')),
         );
       }

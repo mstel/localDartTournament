@@ -359,7 +359,7 @@ class _TournamentSecondScreenViewState
                   ),
                   const SizedBox(height: 12),
                   Expanded(
-                    flex: 5,
+                    flex: 4,
                     child: _buildRecentMatchesAndEloPanel(
                       context,
                       t,
@@ -369,7 +369,7 @@ class _TournamentSecondScreenViewState
                   ),
                   const SizedBox(height: 12),
                   Expanded(
-                    flex: 4,
+                    flex: 5,
                     child: _buildProgressAndBestPerformancesPanel(
                       context: context,
                       t: t,
@@ -413,6 +413,7 @@ class _TournamentSecondScreenViewState
     bool expand = true,
   }) {
     final hasNextKnockout = _nextKnockoutStage(t, activeIndex, stage) != null;
+    final showInlinePreview = _showInlineNextStagePreview && hasNextKnockout;
     final standings = _buildStandingsPanel(
       context,
       t,
@@ -473,50 +474,25 @@ class _TournamentSecondScreenViewState
         const SizedBox(height: 8),
         if (expand)
           Expanded(
-            flex: _showInlineNextStagePreview ? 2 : 1,
-            child: SingleChildScrollView(child: panel),
+            child: showInlinePreview
+                ? _buildInlineNextStagePreview(context, t, activeIndex, stage)
+                : SingleChildScrollView(child: panel),
           )
         else
           panel,
-        if (hasNextKnockout) ...[
+        if (hasNextKnockout && !showInlinePreview) ...[
           const SizedBox(height: 8),
           FilledButton.icon(
-            onPressed: () => setState(
-              () => _showInlineNextStagePreview = !_showInlineNextStagePreview,
-            ),
-            icon: Icon(
-              _showInlineNextStagePreview
-                  ? Icons.expand_less
-                  : Icons.account_tree_outlined,
-            ),
-            label: Text(
-              _showInlineNextStagePreview
-                  ? 'Vorschau ausblenden'
-                  : 'Vorschau für die nächste Etappe',
-            ),
+            onPressed: () => setState(() => _showInlineNextStagePreview = true),
+            icon: const Icon(Icons.account_tree_outlined),
+            label: const Text('Vorschau für die nächste Etappe'),
           ),
         ],
-        if (_showInlineNextStagePreview && hasNextKnockout)
-          if (expand)
-            Expanded(
-              flex: 3,
-              child: _buildInlineNextStagePreview(
-                context,
-                t,
-                activeIndex,
-                stage,
-              ),
-            )
-          else
-            SizedBox(
-              height: 620,
-              child: _buildInlineNextStagePreview(
-                context,
-                t,
-                activeIndex,
-                stage,
-              ),
-            ),
+        if (!expand && showInlinePreview)
+          SizedBox(
+            height: 620,
+            child: _buildInlineNextStagePreview(context, t, activeIndex, stage),
+          ),
       ],
     );
   }
@@ -649,9 +625,15 @@ class _TournamentSecondScreenViewState
         groupStage != null &&
         const GroupStagePreviewService().isStageSet(groupStage);
 
-    String playerLabel(TournamentPlayer? player, int roundIndex) {
+    String playerLabel(
+      TournamentPlayer? player,
+      int roundIndex,
+      int matchIndex, {
+      required bool home,
+    }) {
       if (roundIndex > 0) {
-        return player?.name ?? 'Sieger der vorherigen Runde';
+        final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
+        return player?.name ?? 'Gewinner Spiel $sourceMatchNumber';
       }
       if (player == null || player.name.startsWith('Qualifikant ')) {
         return 'Qualifikant offen';
@@ -705,7 +687,7 @@ class _TournamentSecondScreenViewState
                     final scale =
                         MediaQuery.textScalerOf(context).scale(14) / 14;
                     final minimumBoardHeight =
-                        rounds.first.length * 72 * scale + roundHeaderHeight;
+                        rounds.first.length * 96 * scale + roundHeaderHeight;
                     final boardHeight = max(
                       constraints.maxHeight,
                       minimumBoardHeight,
@@ -786,11 +768,15 @@ class _TournamentSecondScreenViewState
                                                       rounds[roundIndex][matchIndex]
                                                           .homePlayer,
                                                       roundIndex,
+                                                      matchIndex,
+                                                      home: true,
                                                     ),
                                                     awayLabel: playerLabel(
                                                       rounds[roundIndex][matchIndex]
                                                           .awayPlayer,
                                                       roundIndex,
+                                                      matchIndex,
+                                                      home: false,
                                                     ),
                                                     matchNumber: matchIndex + 1,
                                                   ),
@@ -883,21 +869,34 @@ class _TournamentSecondScreenViewState
     }
 
     if (stage is GroupTournamentRunStage) {
-      final wrapContent = Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          for (var i = 0; i < stage.groups.length; i++)
-            _buildGroupStandingsCard(
-              context,
-              stage.groups[i],
-              groupNumber: i + 1,
-              qualificationPlan: stage.qualificationPlan,
-              tieBreakers: stage.tieBreakers,
-              full: full,
-            ),
-        ],
-      );
+      final cards = [
+        for (var i = 0; i < stage.groups.length; i++)
+          _buildGroupStandingsCard(
+            context,
+            stage.groups[i],
+            groupNumber: i + 1,
+            qualificationPlan: stage.qualificationPlan,
+            tieBreakers: stage.tieBreakers,
+            full: full,
+          ),
+      ];
+      final wrapContent = full
+          ? LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 572 ? 2 : 1;
+                final cardWidth =
+                    (constraints.maxWidth - 12 * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (final card in cards)
+                      SizedBox(width: cardWidth, child: card),
+                  ],
+                );
+              },
+            )
+          : Wrap(spacing: 12, runSpacing: 12, children: cards);
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1053,7 +1052,7 @@ class _TournamentSecondScreenViewState
                           fontSize: 13,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           standing.player.name,
@@ -1075,7 +1074,7 @@ class _TournamentSecondScreenViewState
                           color: Colors.white60,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
                       Text(
                         '${standing.points} P',
                         textAlign: TextAlign.end,
