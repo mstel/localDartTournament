@@ -5,6 +5,7 @@ import 'shared/widgets/sport_settings_section.dart';
 import 'features/tournaments/presentation/pages/challonge_archive_page.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_run_header.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
+import 'features/tournaments/presentation/widgets/run/tournament_timing_panel.dart';
 import 'features/tournaments/presentation/widgets/creation/expert_setup_section.dart';
 import 'features/tournaments/presentation/widgets/tournament_summary_card.dart';
 import 'shared/widgets/sport_menu.dart';

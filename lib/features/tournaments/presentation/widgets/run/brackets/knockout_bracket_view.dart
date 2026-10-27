@@ -2220,21 +2220,19 @@ class _QualificationMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const backgroundColor = Color(0xFFC8F7DC);
-    const borderColor = Color(0xFF14965F);
-    const textColor = Color(0xFF0B6B45);
+    final scheme = Theme.of(context).colorScheme;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border.all(color: borderColor),
+        color: scheme.primaryContainer,
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.6)),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: textColor,
+          color: scheme.onPrimaryContainer,
           fontWeight: FontWeight.w700,
         ),
       ),

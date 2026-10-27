@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../domain/tournament_models.dart';
 import '../../../../rankings/domain/elo_tier.dart';
+import '../../../../rankings/domain/local_ranking.dart';
 import '../../../../rankings/application/tournament_ranking_changes_service.dart';
+import '../../../../rankings/presentation/rankings_page.dart';
 import '../../../data/app_database.dart';
 import '../../../data/tournament_storage.dart';
 
@@ -72,6 +74,34 @@ class _TournamentRankingChangesSectionState
         storage: widget.storage,
       ).calculate(widget.tournament);
 
+  Future<void> _openRanking(String rankingId, String rankingName) async {
+    final database = widget.database ?? LocalAppDatabase();
+    final rankings = await database.loadLocalRankings();
+    if (!mounted) return;
+    LocalRanking? target;
+    if (rankingId.isNotEmpty) {
+      target = rankings.where((r) => r.id == rankingId).firstOrNull;
+    }
+    target ??= rankings.where((r) => r.name == rankingName).firstOrNull;
+
+    if (target != null) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => target!.type == RankingType.elo
+              ? LocalRankingStandingsPage(database: database, ranking: target)
+              : LocalRankingSeriesStandingsPage(
+                  database: database,
+                  ranking: target,
+                ),
+        ),
+      );
+    } else {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(builder: (_) => const RankingsPage()),
+      );
+    }
+  }
+
   Widget _rankingChangeCard(
     BuildContext context, {
     required String title,
@@ -139,6 +169,132 @@ class _TournamentRankingChangesSectionState
     );
   }
 
+  Widget _buildRankingSection(
+    BuildContext context, {
+    required String rankingName,
+    required String rankingId,
+    required List<TournamentRankingPlayerChange> changes,
+    required ThemeData theme,
+  }) {
+    final gains = changes.where((d) => d.delta > 0).toList()
+      ..sort((a, b) => b.delta.compareTo(a.delta));
+    final losses = changes.where((d) => d.delta < 0).toList()
+      ..sort((a, b) => a.delta.compareTo(b.delta));
+
+    final topGains = gains.take(3).toList();
+    final topLosses = losses.take(3).toList();
+    final positionChanges =
+        changes.where((change) => change.hasPositionChange).toList()
+          ..sort((a, b) {
+            final aChange = a.positionChange ?? 0;
+            final bChange = b.positionChange ?? 0;
+            return bChange.compareTo(aChange);
+          });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(Icons.trending_up, size: 22, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    'Änderungen der Rangliste${rankingName.isNotEmpty ? ' · $rankingName' : ''}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                    ),
+                    onPressed: () => _openRanking(rankingId, rankingName),
+                    icon: const Icon(Icons.leaderboard_outlined, size: 16),
+                    label: const Text(
+                      'Rangliste öffnen',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cardWidth = constraints.maxWidth >= 960
+                ? (constraints.maxWidth - 24) / 3
+                : constraints.maxWidth;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                SizedBox(
+                  width: cardWidth,
+                  child: _rankingChangeCard(
+                    context,
+                    title: 'Größter Punktezuwachs',
+                    icon: Icons.arrow_circle_up,
+                    color: Colors.green,
+                    changes: topGains,
+                    emptyMessage: 'Keine Punktegewinne',
+                    value: (change) =>
+                        '+${change.delta} '
+                        '(${change.ratingBefore} → ${change.ratingAfter})',
+                  ),
+                ),
+                SizedBox(
+                  width: cardWidth,
+                  child: _rankingChangeCard(
+                    context,
+                    title: 'Größter Punkteverlust',
+                    icon: Icons.arrow_circle_down,
+                    color: Colors.red,
+                    changes: topLosses,
+                    emptyMessage: 'Keine Punkteverluste',
+                    value: (change) =>
+                        '${change.delta} '
+                        '(${change.ratingBefore} → ${change.ratingAfter})',
+                  ),
+                ),
+                SizedBox(
+                  width: cardWidth,
+                  child: _rankingChangeCard(
+                    context,
+                    title: 'Ranglistenplätze',
+                    icon: Icons.format_list_numbered,
+                    color: theme.colorScheme.primary,
+                    changes: positionChanges.take(3).toList(),
+                    emptyMessage: 'Keine Platzierungsänderungen',
+                    value: (change) {
+                      final before = change.rankingPositionBefore;
+                      final after = change.rankingPositionAfter;
+                      return before == null || after == null
+                          ? '–'
+                          : '$before → $after';
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<TournamentRankingPlayerChange>>(
@@ -155,53 +311,22 @@ class _TournamentRankingChangesSectionState
         }
 
         final deltas = snapshot.data!;
-        final rankingNames = deltas
-            .map((change) => change.rankingName)
-            .where((name) => name.trim().isNotEmpty)
-            .toSet()
-            .toList();
         final tierChanges = deltas.where((d) => d.hasTierChange).toList();
-        final gains = deltas.where((d) => d.delta > 0).toList()
-          ..sort((a, b) => b.delta.compareTo(a.delta));
-        final losses = deltas.where((d) => d.delta < 0).toList()
-          ..sort((a, b) => a.delta.compareTo(b.delta));
-
-        final topGains = gains.take(3).toList();
-        final topLosses = losses.take(3).toList();
-        final positionChanges =
-            deltas.where((change) => change.hasPositionChange).toList()
-              ..sort((a, b) {
-                final aChange = a.positionChange ?? 0;
-                final bChange = b.positionChange ?? 0;
-                return bChange.compareTo(aChange);
-              });
-
         final theme = Theme.of(context);
+
+        final rankingMap =
+            <({String id, String name}), List<TournamentRankingPlayerChange>>{};
+        for (final change in deltas) {
+          final key = (id: change.rankingId, name: change.rankingName.trim());
+          rankingMap.putIfAbsent(key, () => []).add(change);
+        }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 24),
-            Row(
-              children: [
-                Icon(
-                  Icons.trending_up,
-                  size: 24,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Änderungen der Rangliste'
-                  '${rankingNames.isEmpty ? '' : ' · ${rankingNames.join(', ')}'}',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
 
-            // Tier-Wechsel (Auf- und Abstiege) mit Animation
+            // Tier-Wechsel (Auf- und Abstiege) mit Animation (Gesamtübersicht)
             if (tierChanges.isNotEmpty) ...[
               ScaleTransition(
                 scale: _scaleAnimation,
@@ -251,7 +376,7 @@ class _TournamentRankingChangesSectionState
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        change.playerName,
+                                        '${change.playerName}${change.rankingName.isNotEmpty ? ' (${change.rankingName})' : ''}',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -285,68 +410,20 @@ class _TournamentRankingChangesSectionState
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
             ],
 
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final cardWidth = constraints.maxWidth >= 960
-                    ? (constraints.maxWidth - 24) / 3
-                    : constraints.maxWidth;
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: cardWidth,
-                      child: _rankingChangeCard(
-                        context,
-                        title: 'Größter Punktezuwachs',
-                        icon: Icons.arrow_circle_up,
-                        color: Colors.green,
-                        changes: topGains,
-                        emptyMessage: 'Keine Punktegewinne',
-                        value: (change) =>
-                            '+${change.delta} '
-                            '(${change.ratingBefore} → ${change.ratingAfter})',
-                      ),
-                    ),
-                    SizedBox(
-                      width: cardWidth,
-                      child: _rankingChangeCard(
-                        context,
-                        title: 'Größter Punkteverlust',
-                        icon: Icons.arrow_circle_down,
-                        color: Colors.red,
-                        changes: topLosses,
-                        emptyMessage: 'Keine Punkteverluste',
-                        value: (change) =>
-                            '${change.delta} '
-                            '(${change.ratingBefore} → ${change.ratingAfter})',
-                      ),
-                    ),
-                    SizedBox(
-                      width: cardWidth,
-                      child: _rankingChangeCard(
-                        context,
-                        title: 'Ranglistenplätze',
-                        icon: Icons.format_list_numbered,
-                        color: theme.colorScheme.primary,
-                        changes: positionChanges.take(3).toList(),
-                        emptyMessage: 'Keine Platzierungsänderungen',
-                        value: (change) {
-                          final before = change.rankingPositionBefore;
-                          final after = change.rankingPositionAfter;
-                          return before == null || after == null
-                              ? '–'
-                              : '$before → $after';
-                        },
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+            // Separate Sektion für jede Rangliste
+            for (final entry in rankingMap.entries) ...[
+              _buildRankingSection(
+                context,
+                rankingName: entry.key.name,
+                rankingId: entry.key.id,
+                changes: entry.value,
+                theme: theme,
+              ),
+              const SizedBox(height: 16),
+            ],
           ],
         );
       },

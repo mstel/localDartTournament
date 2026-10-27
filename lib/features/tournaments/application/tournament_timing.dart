@@ -8,21 +8,32 @@ import '../../league/application/league_board_runtime.dart';
 import '../../settings/data/planning_settings_storage.dart';
 
 class TournamentTiming {
-  static Future<void> prepare(CreatedTournament tournament) async {
+  static Future<void> prepare(
+    CreatedTournament tournament, {
+    TournamentPlanningParameters? parameters,
+  }) async {
     if (tournament.reopenedForCorrections) return;
-    if (tournament.startedAt == null &&
-        !matches(tournament).any((m) => m.startedAt != null)) {
+    final games = matches(tournament);
+    final firstResult = games.any(
+      (match) => match.hasResult && match.finishedAt != null,
+    );
+    if (tournament.startedAt == null && !firstResult) {
       return;
     }
-    var parameters = const TournamentPlanningParameters();
-    if (tournament.plannedMinutes == null) {
+    var effectiveParameters = parameters;
+    if (effectiveParameters == null &&
+        (tournament.plannedMinutes == null || tournament.startedAt == null)) {
       try {
-        parameters = await PlanningSettingsStorage().load();
+        effectiveParameters = await PlanningSettingsStorage().load();
       } catch (_) {
-        /* Timing must not prevent saving a match result. */
+        // Timing must not prevent saving a match result.
       }
     }
-    capture(tournament, parameters);
+    effectiveParameters ??= const TournamentPlanningParameters();
+    if (tournament.startedAt == null) {
+      startFromFirstResult(tournament, effectiveParameters);
+    }
+    capture(tournament, effectiveParameters);
   }
 
   static List<GroupMatch> matches(CreatedTournament tournament) =>
@@ -32,6 +43,39 @@ class TournamentTiming {
             .entries(tournament)
             .map((e) => e.match)
             .toList();
+
+  static bool startFromFirstResult(
+    CreatedTournament tournament,
+    TournamentPlanningParameters parameters,
+  ) {
+    if (tournament.startedAt != null) return false;
+    final firstResult =
+        matches(tournament)
+            .where((match) => match.hasResult && match.finishedAt != null)
+            .toList()
+          ..sort((a, b) => a.finishedAt!.compareTo(b.finishedAt!));
+    if (firstResult.isEmpty) return false;
+
+    final match = firstResult.first;
+    final entry = const OrderOfPlayController()
+        .entries(tournament)
+        .where((item) => identical(item.match, match))
+        .firstOrNull;
+    final format =
+        entry != null &&
+            entry.stageIndex >= 0 &&
+            entry.stageIndex < tournament.stages.length
+        ? tournament.stages[entry.stageIndex].gameFormat
+        : const TournamentGameFormat();
+    final matchMinutes = TournamentFormatPlanner(
+      parameters: parameters,
+    ).estimatedMatchMinutes(format);
+    final leadMinutes = parameters.boardIdleMinutes + matchMinutes;
+    tournament.startedAt = match.finishedAt!.subtract(
+      Duration(seconds: (leadMinutes * 60).round()),
+    );
+    return true;
+  }
 
   /// Called by the application before saving. A saved baseline never moves.
   static void capture(

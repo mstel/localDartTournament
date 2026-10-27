@@ -29,51 +29,6 @@ class _LiveTournamentRunPage extends StatefulWidget {
   State<_LiveTournamentRunPage> createState() => _TournamentRunPageState();
 }
 
-class _TournamentClockStatus extends StatefulWidget {
-  const _TournamentClockStatus({required this.tournament});
-
-  final CreatedTournament tournament;
-
-  @override
-  State<_TournamentClockStatus> createState() => _TournamentClockStatusState();
-}
-
-class _TournamentClockStatusState extends State<_TournamentClockStatus> {
-  Timer? _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tournament = widget.tournament;
-    final elapsed = TournamentTiming.snapshot(
-      tournament,
-      DateTime.now(),
-    ).elapsed;
-    final time =
-        '${elapsed.inHours.toString().padLeft(2, '0')}:'
-        '${(elapsed.inMinutes % 60).toString().padLeft(2, '0')}:'
-        '${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}';
-    final paused = tournament.isClockPaused;
-    return Text(
-      'Status: ${paused ? 'Pausiert' : 'Läuft aktiv'} · $time',
-      key: const ValueKey('tournament-clock-status'),
-    );
-  }
-}
-
 class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     with WidgetsBindingObserver {
   bool _leaving = false;
@@ -394,7 +349,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     );
     _viewStageIndex = _activeStageIndex;
     _completedStageIndexes.addAll(widget.tournament.completedStageIndexes);
-    widget.tournament.startedAt ??= DateTime.now();
     _restoreCompletedGroupDrawForActiveStage();
     _advanceKnockoutWinners();
     _ensureGroupDeciders();
@@ -412,6 +366,44 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (mounted) setState(() {});
     } catch (_) {
       TournamentTiming.togglePause(widget.tournament);
+      rethrow;
+    }
+  }
+
+  Future<void> _startTournamentClock() async {
+    if (widget.tournament.startedAt != null) return;
+    final previous = widget.tournament.startedAt;
+    widget.tournament.startedAt = DateTime.now();
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (_) {
+      widget.tournament.startedAt = previous;
+      rethrow;
+    }
+  }
+
+  Future<void> _editTournamentTimes(
+    DateTime? startedAt,
+    DateTime? finishedAt,
+  ) async {
+    if (startedAt != null &&
+        finishedAt != null &&
+        finishedAt.isBefore(startedAt)) {
+      throw ArgumentError('Die Endzeit muss nach der Startzeit liegen.');
+    }
+    final previousStart = widget.tournament.startedAt;
+    final previousEnd = widget.tournament.finishedAt;
+    widget.tournament
+      ..startedAt = startedAt
+      ..finishedAt = finishedAt;
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (_) {
+      widget.tournament
+        ..startedAt = previousStart
+        ..finishedAt = previousEnd;
       rethrow;
     }
   }
@@ -2804,6 +2796,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _completedStageIndexes.add(_activeStageIndex);
       if (!hasNextStage) {
         widget.tournament.reopenedForCorrections = false;
+        widget.tournament.finishedAt ??= DateTime.now();
       }
       if (hasNextStage) {
         _activeStageIndex++;
@@ -2856,6 +2849,108 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _advanceKnockoutWinners();
     });
     _completeCurrentStage();
+  }
+
+  bool get _canReopenPreviousStage {
+    if (_activeStageIndex <= 0) return false;
+    if (_activeStageIndex >= widget.tournament.runStages.length) return false;
+    final currentMatches = _matchesForStage(
+      widget.tournament.runStages[_activeStageIndex],
+    );
+    final hasAnyResult = currentMatches.any((m) => m.hasScore || m.isAnnulled);
+    return !hasAnyResult;
+  }
+
+  Future<void> _reopenPreviousStage() async {
+    if (!_canReopenPreviousStage) return;
+    setState(() {
+      final prevIndex = _activeStageIndex - 1;
+      _activeStageIndex = prevIndex;
+      _viewStageIndex = prevIndex;
+      _completedStageIndexes.removeWhere((i) => i >= prevIndex);
+      widget.tournament.completedStageIndexes.removeWhere(
+        (i) => i >= prevIndex,
+      );
+      widget.tournament.reopenedForCorrections = true;
+      widget.tournament.finishedAt = null;
+
+      for (final match in _matchesForStage(
+        widget.tournament.runStages[prevIndex],
+      )) {
+        if (match.isAnnulled && !match.hasScore) {
+          match.isAnnulled = false;
+        }
+      }
+    });
+    _advanceKnockoutWinners();
+    _ensureGroupDeciders();
+    await _saveTournamentProgress();
+  }
+
+  bool get _canResetCurrentStage {
+    if (_activeStageIndex >= widget.tournament.runStages.length) return false;
+    final currentMatches = _matchesForStage(
+      widget.tournament.runStages[_activeStageIndex],
+    );
+    return currentMatches.any((m) => m.hasScore || m.isAnnulled) ||
+        _completedStageIndexes.contains(_activeStageIndex);
+  }
+
+  Future<void> _resetCurrentStageWithConfirmation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Etappe zurücksetzen?'),
+        content: const Text(
+          'Möchten Sie die aktuelle Etappe wirklich zurücksetzen? '
+          'Alle in dieser Etappe eingetragenen Ergebnisse werden gelöscht.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Zurücksetzen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      final currentStage = widget.tournament.runStages[_activeStageIndex];
+      for (final match in _matchesForStage(currentStage)) {
+        match.homeLegs = null;
+        match.awayLegs = null;
+        match.homeSets = null;
+        match.awaySets = null;
+        match.isAnnulled = false;
+      }
+      if (currentStage is KnockoutTournamentRunStage) {
+        for (final round in currentStage.rounds.skip(1)) {
+          for (final match in round) {
+            match.homePlayer = null;
+            match.awayPlayer = null;
+            match.homeLegs = null;
+            match.awayLegs = null;
+            match.homeSets = null;
+            match.awaySets = null;
+            match.isAnnulled = false;
+          }
+        }
+      }
+      _completedStageIndexes.remove(_activeStageIndex);
+      widget.tournament.completedStageIndexes.remove(_activeStageIndex);
+    });
+    _advanceKnockoutWinners();
+    _ensureGroupDeciders();
+    await _saveTournamentProgress();
   }
 
   @override
@@ -2965,6 +3060,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         },
                         onCompleteStage: _completeCurrentStage,
                         onFinishEarly: _finishCurrentStageEarly,
+                        onReopenPreviousStage: _reopenPreviousStage,
+                        canReopenPreviousStage: _canReopenPreviousStage,
+                        onResetCurrentStage: _resetCurrentStageWithConfirmation,
+                        canResetCurrentStage: _canResetCurrentStage,
                         canCompleteStage: canCompleteStage,
                         isLastStage: isLastStage,
                       )
@@ -3031,44 +3130,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                           Card(
                             child: Padding(
                               padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.timer_outlined),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Turnieruhr',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _TournamentClockStatus(
-                                    tournament: widget.tournament,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  if (widget.tournament.finishedAt == null)
-                                    FilledButton.tonalIcon(
-                                      onPressed: _toggleClockPause,
-                                      icon: Icon(
-                                        widget.tournament.isClockPaused
-                                            ? Icons.play_circle_outline
-                                            : Icons.pause_circle_outline,
-                                      ),
-                                      label: Text(
-                                        widget.tournament.isClockPaused
-                                            ? 'Turnieruhr fortsetzen'
-                                            : 'Turnieruhr pausieren',
-                                      ),
-                                    ),
-                                ],
+                              child: TournamentTimingPanel(
+                                tournament: widget.tournament,
+                                onStart: _startTournamentClock,
+                                onPauseToggle: _toggleClockPause,
+                                onEditTimes: _editTournamentTimes,
                               ),
                             ),
                           ),
@@ -3544,6 +3610,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         widget.tournament.runStages[_activeStageIndex].name,
                     onCompleteStage: _completeCurrentStage,
                     onFinishEarly: _finishCurrentStageEarly,
+                    onReopenPreviousStage: _reopenPreviousStage,
+                    canReopenPreviousStage: _canReopenPreviousStage,
+                    onResetCurrentStage: _resetCurrentStageWithConfirmation,
+                    canResetCurrentStage: _canResetCurrentStage,
                   ),
                 ),
               ],

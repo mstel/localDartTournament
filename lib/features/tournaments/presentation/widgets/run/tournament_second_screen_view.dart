@@ -155,6 +155,12 @@ class _TournamentSecondScreenViewState
     return '$m Min. ${s}s';
   }
 
+  String _formatClockTime(DateTime value) {
+    final local = value.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
+  }
+
   List<GroupMatch> _matchesOf(TournamentRunStage? stage) {
     if (stage is GroupTournamentRunStage) {
       return stage.groups.expand((g) => g.matches).toList();
@@ -435,6 +441,11 @@ class _TournamentSecondScreenViewState
                   color: Colors.white,
                 ),
               ),
+              if (timing.forecast != null)
+                Text(
+                  'Voraussichtliches Ende: ${_formatClockTime(timing.forecast!)}',
+                  style: const TextStyle(color: Colors.white),
+                ),
             ],
           ),
         ),

@@ -27,6 +27,7 @@ class _TournamentFormatPlannerDialogState
   final _targetHours = TextEditingController(text: '3');
   final _targetMinutes = TextEditingController(text: '0');
   bool _useTargetDuration = false;
+  bool _considerBestWorstCase = false;
   String? _targetError;
   String? _durationError;
   String _checkoutType = 'double_out';
@@ -207,6 +208,7 @@ class _TournamentFormatPlannerDialogState
     '${_maxHours.text}h${_maxMinutes.text}m',
     '${_targetHours.text}h${_targetMinutes.text}m',
     _useTargetDuration,
+    _considerBestWorstCase,
     _checkoutType,
     _x01Selection,
     _allowSets,
@@ -334,6 +336,7 @@ class _TournamentFormatPlannerDialogState
               allowSets: _allowSets,
               allowDraws: _allowDraws,
               preferredFinalStage: _preferredFinalStage,
+              considerBestWorstCase: _considerBestWorstCase,
             ),
             allResults: true,
             onCancel: (cancel) => _cancelCalculation = cancel,
@@ -420,6 +423,21 @@ class _TournamentFormatPlannerDialogState
                 ],
               ),
               const SizedBox(height: 12),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Best/Worst Case berücksichtigen?'),
+                subtitle: const Text(
+                  'Prüft das gesamte Zeitfenster (Minimal- bis Maximaldauer) statt nur des Mittelwerts.',
+                ),
+                value: _considerBestWorstCase,
+                onChanged: _calculating
+                    ? null
+                    : (val) => setState(() {
+                        _considerBestWorstCase = val ?? false;
+                        _suggestions = null;
+                      }),
+              ),
+              const SizedBox(height: 8),
               if (_useTargetDuration) ...[
                 Card(
                   child: ListTile(

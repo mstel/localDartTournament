@@ -1,3 +1,4 @@
+import '../application/tournament_duration_range.dart';
 import 'group_size_rules.dart';
 import 'dart:math';
 import 'planning_duration.dart';
@@ -42,6 +43,7 @@ class TournamentPlanningRequest {
     this.preferredFinalStage,
     this.lockLegsFormat = false,
     this.manualQualifiers,
+    this.considerBestWorstCase = false,
   });
 
   final int players;
@@ -49,6 +51,7 @@ class TournamentPlanningRequest {
   final int bestOfLegs;
   final bool lockLegsFormat;
   final int? manualQualifiers;
+  final bool considerBestWorstCase;
   final bool allowSets;
   final bool allowDraws;
   final bool requireGroupPhase;
@@ -106,6 +109,25 @@ class TournamentFormatSuggestion {
   final List<int> stageMatchCounts;
   final bool variableMatches;
   TournamentGameFormat get format => stages.first.format;
+  ({int minimumMinutes, int maximumMinutes}) get durationSpan =>
+      TournamentDurationRange.forEstimate(
+        estimatedMinutes: estimatedMinutes,
+        matches: configurations.isNotEmpty
+            ? [
+                for (var i = 0; i < configurations.length; i++)
+                  (
+                    bestOfLegs: configurations[i].gameFormat.bestOfLegs,
+                    matchCount: i < stageMatchCounts.length
+                        ? stageMatchCounts[i]
+                        : 1,
+                  ),
+              ]
+            : [
+                for (final stage in stages)
+                  (bestOfLegs: stage.format.bestOfLegs, matchCount: 1),
+              ],
+      );
+
   PlanningMatchBreakdown get matchBreakdown {
     final groups = stages.first.groupCount;
     return PlanningMatchBreakdown(

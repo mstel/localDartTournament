@@ -196,6 +196,10 @@ class StageFooter extends StatelessWidget {
     required this.activeStageName,
     required this.onCompleteStage,
     required this.onFinishEarly,
+    this.onReopenPreviousStage,
+    this.canReopenPreviousStage = false,
+    this.onResetCurrentStage,
+    this.canResetCurrentStage = false,
   });
 
   final bool canCompleteStage;
@@ -204,6 +208,10 @@ class StageFooter extends StatelessWidget {
   final String activeStageName;
   final VoidCallback onCompleteStage;
   final VoidCallback onFinishEarly;
+  final VoidCallback? onReopenPreviousStage;
+  final bool canReopenPreviousStage;
+  final VoidCallback? onResetCurrentStage;
+  final bool canResetCurrentStage;
 
   @override
   Widget build(BuildContext context) {

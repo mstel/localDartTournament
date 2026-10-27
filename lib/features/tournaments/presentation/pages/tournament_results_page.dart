@@ -15,6 +15,7 @@ import '../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../rankings/domain/local_elo_calculator.dart';
 import '../../../statistics/domain/best_performance.dart';
 import '../widgets/run/best_performance_editor.dart';
+import '../widgets/run/tournament_timing_panel.dart';
 import 'challonge_archive_page.dart';
 import '../../application/tournament_timing.dart';
 import '../../application/tournament_run_controller.dart';
@@ -42,6 +43,37 @@ class TournamentResultsPage extends StatefulWidget {
 
 class _TournamentResultsPageState extends State<TournamentResultsPage> {
   CreatedTournament get tournament => widget.tournament;
+
+  Future<void> _saveTimingEdits(
+    DateTime? startedAt,
+    DateTime? finishedAt,
+  ) async {
+    if (startedAt != null &&
+        finishedAt != null &&
+        finishedAt.isBefore(startedAt)) {
+      throw ArgumentError('Die Endzeit muss nach der Startzeit liegen.');
+    }
+    final oldStartedAt = tournament.startedAt;
+    final oldFinishedAt = tournament.finishedAt;
+    tournament
+      ..startedAt = startedAt
+      ..finishedAt = finishedAt;
+    try {
+      await TournamentRunController(
+        storage: widget.storage ?? TournamentStorage(),
+      ).saveProgress(
+        tournament: tournament,
+        activeStageIndex: tournament.activeStageIndex,
+        completedStageIndexes: tournament.completedStageIndexes,
+      );
+      if (mounted) setState(() {});
+    } catch (_) {
+      tournament
+        ..startedAt = oldStartedAt
+        ..finishedAt = oldFinishedAt;
+      rethrow;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -210,6 +242,15 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                   ),
                 ),
               ),
+            ),
+            const SizedBox(height: 16),
+            TournamentTimingPanel(
+              tournament: tournament,
+              onStart: () async {},
+              onEditTimes: _saveTimingEdits,
+              allowManualStart: false,
+              allowStartTimeEdit: true,
+              allowEndTimeEdit: true,
             ),
             const SizedBox(height: 16),
             SportMenuGroup(

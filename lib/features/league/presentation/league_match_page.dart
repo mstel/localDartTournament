@@ -277,7 +277,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       _error = null;
     });
     try {
-      await TournamentTiming.prepare(next);
+      await TournamentTiming.prepare(next, parameters: _planningParameters);
       await _storage.saveTournament(next);
       if (mounted) setState(() => _tournament = next);
     } catch (_) {

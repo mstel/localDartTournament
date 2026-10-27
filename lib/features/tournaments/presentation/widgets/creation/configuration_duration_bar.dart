@@ -34,6 +34,7 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
   bool _loading = true;
   String? _error;
   TournamentPlanningParameters? _parameters;
+  DateTime _estimatedStartAt = DateTime.now();
 
   @override
   void initState() {
@@ -97,6 +98,44 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
     });
   }
 
+  Future<void> _selectEstimatedStart() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _estimatedStartAt,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: 'Geplanten Turnierstart auswählen',
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_estimatedStartAt),
+      helpText: 'Startuhrzeit auswählen',
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
+    );
+    if (time == null) return;
+    setState(() {
+      _estimatedStartAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
+  String _formatDateTime(DateTime value) {
+    final date = value.toLocal();
+    return '${date.day.toString().padLeft(2, '0')}.'
+        '${date.month.toString().padLeft(2, '0')}.${date.year} '
+        '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -126,6 +165,24 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
                           : 'ca. ${_minutes! ~/ 60} h ${_minutes! % 60} min'),
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          if (!_loading && _error == null && _minutes != null) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _selectEstimatedStart,
+                  icon: const Icon(Icons.schedule),
+                  label: Text('Start: ${_formatDateTime(_estimatedStartAt)}'),
+                ),
+                Text(
+                  'Voraussichtliches Ende: ${_formatDateTime(_estimatedStartAt.add(Duration(minutes: _minutes!)))}',
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           if (!_loading && _error == null && _estimate != null) ...[
             Text(

@@ -29,54 +29,90 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       widget._database ?? LocalAppDatabase();
   late final TournamentStorage _tournamentStorage =
       widget._tournamentStorage ?? TournamentStorage();
-  late final Future<(List<PlayerProfile>, List<LocalRanking>)> _options =
-      _loadOptions();
+  late final Future<(List<PlayerProfile>, List<LocalRanking>, List<int>)>
+  _options = _loadOptions();
   String? _leftId;
   String? _rightId;
-  String? _rankingId;
+  String? _rankingId = 'all';
+  int? _selectedYear;
   Future<(LocalPlayerStatistics, LocalPlayerStatistics, LocalEloSnapshot?)>?
   _comparison;
 
   Future<(LocalPlayerStatistics, LocalPlayerStatistics, LocalEloSnapshot?)>
-  _loadComparison(String leftId, String rightId, LocalRanking? ranking) async {
+  _loadComparison(
+    String leftId,
+    String rightId,
+    LocalRanking? ranking, {
+    int? year,
+  }) async {
     final statsService = LocalStatisticsService(
       database: _database,
       storage: _tournamentStorage,
     );
-    final leftStats = await statsService.forPlayers({leftId});
-    final rightStats = await statsService.forPlayers({rightId});
+    final tournaments = await _tournamentStorage.loadTournaments();
+    final filteredTournaments = tournaments.where((t) {
+      if (ranking != null) {
+        if (!t.countsForRanking || !t.rankingIds.contains(ranking.id)) {
+          return false;
+        }
+      }
+      if (year != null) {
+        final date = (t.finishedAt ?? t.createdAt).toLocal();
+        if (date.year != year) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    final leftStats = await statsService.forPlayersFromTournaments({
+      leftId,
+    }, filteredTournaments);
+    final rightStats = await statsService.forPlayersFromTournaments({
+      rightId,
+    }, filteredTournaments);
     final snapshot = ranking == null
         ? null
         : await LocalRankingEloService(
             database: _database,
             tournamentStorage: _tournamentStorage,
-          ).calculate(ranking);
+          ).calculate(ranking, tournaments: filteredTournaments);
     return (leftStats, rightStats, snapshot);
   }
 
-  Future<(List<PlayerProfile>, List<LocalRanking>)> _loadOptions() async {
+  Future<(List<PlayerProfile>, List<LocalRanking>, List<int>)>
+  _loadOptions() async {
     final players = await _database.loadPlayerProfiles();
     final rankings = await _database.loadLocalRankings();
-    return (players, rankings);
+    final tournaments = await _tournamentStorage.loadTournaments();
+    final years =
+        tournaments
+            .map((t) => (t.finishedAt ?? t.createdAt).toLocal().year)
+            .toSet()
+            .toList()
+          ..sort((a, b) => b.compareTo(a));
+    return (players, rankings, years);
   }
 
   void _updateSelection({
     required String leftId,
     required String rightId,
     required LocalRanking? ranking,
+    required int? year,
   }) {
     setState(() {
       _leftId = leftId;
       _rightId = rightId;
-      _rankingId = ranking?.id;
-      _comparison = _loadComparison(leftId, rightId, ranking);
+      _rankingId = ranking?.id ?? 'all';
+      _selectedYear = year;
+      _comparison = _loadComparison(leftId, rightId, ranking, year: year);
     });
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Spieler vergleichen')),
-    body: FutureBuilder<(List<PlayerProfile>, List<LocalRanking>)>(
+    body: FutureBuilder<(List<PlayerProfile>, List<LocalRanking>, List<int>)>(
       future: _options,
       builder: (context, optionsSnapshot) {
         if (optionsSnapshot.hasError) {
@@ -88,7 +124,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
         if (options == null) {
           return const Center(child: CircularProgressIndicator());
         }
-        final (players, rankings) = options;
+        final (players, rankings, years) = options;
         if (players.length < 2) {
           return const AdaptiveContentList(
             children: [
@@ -105,12 +141,10 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
         final eloRankings = rankings
             .where((ranking) => ranking.type == RankingType.elo)
             .toList();
-        final ranking = eloRankings.isEmpty
+        final ranking = (_rankingId == null || _rankingId == 'all')
             ? null
-            : eloRankings.firstWhere(
-                (item) => item.id == _rankingId,
-                orElse: () => eloRankings.first,
-              );
+            : eloRankings.where((item) => item.id == _rankingId).firstOrNull;
+
         if (_comparison == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _comparison == null) {
@@ -118,6 +152,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                 leftId: leftId,
                 rightId: rightId,
                 ranking: ranking,
+                year: _selectedYear,
               );
             }
           });
@@ -139,6 +174,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                       leftId: value,
                       rightId: rightId,
                       ranking: ranking,
+                      year: _selectedYear,
                     ),
                   ),
                   _playerSelector(
@@ -150,6 +186,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                       leftId: leftId,
                       rightId: value,
                       ranking: ranking,
+                      year: _selectedYear,
                     ),
                   ),
                 ];
@@ -172,32 +209,86 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                       );
               },
             ),
-            if (eloRankings.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: ranking?.id,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Elo-Rangliste',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final item in eloRankings)
-                    DropdownMenuItem(value: item.id, child: Text(item.name)),
-                ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  final selected = eloRankings.firstWhere(
-                    (item) => item.id == value,
-                  );
-                  _updateSelection(
-                    leftId: leftId,
-                    rightId: rightId,
-                    ranking: selected,
-                  );
-                },
-              ),
-            ],
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 700;
+                final rankingFilter = DropdownButtonFormField<String>(
+                  initialValue: _rankingId ?? 'all',
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Elo-Rangliste',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: 'all',
+                      child: Text('Alle Ranglisten'),
+                    ),
+                    for (final item in eloRankings)
+                      DropdownMenuItem<String>(
+                        value: item.id,
+                        child: Text(item.name),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    final selected = (value == null || value == 'all')
+                        ? null
+                        : eloRankings
+                              .where((item) => item.id == value)
+                              .firstOrNull;
+                    _updateSelection(
+                      leftId: leftId,
+                      rightId: rightId,
+                      ranking: selected,
+                      year: _selectedYear,
+                    );
+                  },
+                );
+
+                final yearFilter = DropdownButtonFormField<int?>(
+                  initialValue: _selectedYear,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Zeitraum',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('Gesamter Zeitraum'),
+                    ),
+                    for (final y in years)
+                      DropdownMenuItem<int?>(value: y, child: Text('$y')),
+                  ],
+                  onChanged: (value) {
+                    _updateSelection(
+                      leftId: leftId,
+                      rightId: rightId,
+                      ranking: ranking,
+                      year: value,
+                    );
+                  },
+                );
+
+                return wide
+                    ? Row(
+                        children: [
+                          Expanded(child: rankingFilter),
+                          const SizedBox(width: 16),
+                          Expanded(child: yearFilter),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          rankingFilter,
+                          const SizedBox(height: 12),
+                          yearFilter,
+                        ],
+                      );
+              },
+            ),
             const SizedBox(height: 20),
             if (_comparison case final future?)
               FutureBuilder<
@@ -231,7 +322,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Spielervergleich${ranking == null ? '' : ' · ${ranking.name}'}',
+                        'Spielervergleich · ${ranking?.name ?? 'Alle Ranglisten'}${_selectedYear == null ? '' : ' ($_selectedYear)'}',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
@@ -295,13 +386,6 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                           ],
                         ),
                       ),
-                      if (elo == null && eloRankings.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Für den Elo-Vergleich muss eine Elo-Rangliste angelegt sein.',
-                          ),
-                        ),
                     ],
                   );
                 },
@@ -407,7 +491,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
         ),
     ];
     if (ranking == null) {
-      rows[0] = (category: 'Elo aktuell', left: '–', right: '–');
+      rows[0] = (category: 'Elo aktuell', left: '-', right: '-');
       return rows;
     }
 

@@ -29,6 +29,16 @@ class FakeTournamentStorage extends TournamentStorage {
     await deleteCompletion?.future;
     tournaments.removeWhere((tournament) => tournament.id == id);
   }
+
+  @override
+  Future<void> saveTournament(CreatedTournament tournament) async {
+    final index = tournaments.indexWhere((item) => item.id == tournament.id);
+    if (index < 0) {
+      tournaments.insert(0, tournament);
+    } else {
+      tournaments[index] = tournament;
+    }
+  }
 }
 
 void main() {
@@ -155,10 +165,11 @@ void main() {
     expect(find.text('Sommerpokal'), findsOneWidget);
     expect(find.text('Winterpokal'), findsNothing);
     expect(find.text('2 gespeicherte Turniere'), findsOneWidget);
-    expect(find.byTooltip('Rangliste öffnen'), findsOneWidget);
   });
 
-  testWidgets('shows open ranking button on tournament card', (tester) async {
+  testWidgets('does not show open ranking button on tournament card', (
+    tester,
+  ) async {
     storage.tournaments.add(
       CreatedTournament(
         id: 'turnier-1',
@@ -170,7 +181,34 @@ void main() {
     );
     await showPage(tester);
 
-    expect(find.byTooltip('Rangliste öffnen'), findsOneWidget);
+    expect(find.byTooltip('Rangliste öffnen'), findsNothing);
+  });
+
+  testWidgets('copying a tournament creates a separate named entry', (
+    tester,
+  ) async {
+    final original = CreatedTournament(
+      id: 'turnier-1',
+      name: 'Vereinsturnier',
+      players: const [],
+      stages: const [],
+      runStages: const [],
+    );
+    storage.tournaments.add(original);
+    await showPage(tester);
+
+    await tester.tap(find.byTooltip('Turnieraktionen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Turnier kopieren'));
+    await tester.pumpAndSettle();
+
+    expect(storage.tournaments, hasLength(2));
+    final copy = storage.tournaments.firstWhere(
+      (tournament) => tournament.id != original.id,
+    );
+    expect(copy.name, 'Vereinsturnier - Kopie');
+    expect(copy.players, original.players);
+    expect(copy.stages, original.stages);
   });
 
   for (final size in [

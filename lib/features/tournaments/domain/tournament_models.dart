@@ -577,6 +577,19 @@ class CreatedTournament {
        rankingIds = List<String>.from(rankingIds),
        withdrawals = withdrawals ?? [];
 
+  CreatedTournament copy({String? name}) {
+    final data = Map<String, dynamic>.from(toJson());
+    data.remove('id');
+    data.remove('createdAt');
+    data.remove('updatedAt');
+    if (name != null) {
+      data['name'] = name;
+    } else {
+      data['name'] = '${this.name} - Kopie';
+    }
+    return CreatedTournament.fromJson(data);
+  }
+
   factory CreatedTournament.fromJson(Map<String, dynamic> json) {
     return CreatedTournament(
       id: json['id'] as String?,

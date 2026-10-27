@@ -16,6 +16,7 @@ class TournamentRankingPlayerChange {
     required this.tierAfter,
     required this.enableTiers,
     required this.rankingName,
+    this.rankingId = '',
     required this.rankingPositionBefore,
     required this.rankingPositionAfter,
   });
@@ -29,6 +30,7 @@ class TournamentRankingPlayerChange {
   final EloTier tierAfter;
   final bool enableTiers;
   final String rankingName;
+  final String rankingId;
   final int? rankingPositionBefore;
   final int? rankingPositionAfter;
 
@@ -42,6 +44,7 @@ class TournamentRankingPlayerChange {
 
   Map<String, Object?> toExportJson() => {
     'rankingName': rankingName,
+    'rankingId': rankingId,
     'playerName': playerName,
     'delta': delta,
     'ratingBefore': ratingBefore,
@@ -132,6 +135,7 @@ class TournamentRankingChangesService {
             ),
             enableTiers: ranking.enableTiers,
             rankingName: ranking.name,
+            rankingId: ranking.id,
             rankingPositionBefore: beforePositions[entry.key],
             rankingPositionAfter: afterPositions[entry.key],
           ),

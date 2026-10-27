@@ -174,83 +174,6 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     return TournamentRunPage(tournament: tournament);
   }
 
-  Future<void> _openRankingFor(CreatedTournament tournament) async {
-    final database = LocalAppDatabase();
-    final rankings = await database.loadLocalRankings();
-    if (!mounted) return;
-
-    if (tournament.countsForRanking && tournament.rankingIds.isNotEmpty) {
-      final matching = rankings
-          .where((r) => tournament.rankingIds.contains(r.id))
-          .toList();
-      if (matching.length == 1) {
-        final ranking = matching.first;
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => ranking.type == RankingType.elo
-                ? LocalRankingStandingsPage(
-                    database: database,
-                    ranking: ranking,
-                  )
-                : LocalRankingSeriesStandingsPage(
-                    database: database,
-                    ranking: ranking,
-                  ),
-          ),
-        );
-        return;
-      } else if (matching.length > 1) {
-        final selected = await showDialog<LocalRanking>(
-          context: context,
-          builder: (dialogContext) => SimpleDialog(
-            title: const Text('Rangliste auswählen'),
-            children: [
-              for (final ranking in matching)
-                SimpleDialogOption(
-                  onPressed: () => Navigator.of(dialogContext).pop(ranking),
-                  child: Row(
-                    children: [
-                      Icon(
-                        ranking.type == RankingType.elo
-                            ? Icons.trending_up
-                            : Icons.format_list_numbered,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(ranking.name)),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        );
-        if (selected != null && mounted) {
-          await Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (_) => selected.type == RankingType.elo
-                  ? LocalRankingStandingsPage(
-                      database: database,
-                      ranking: selected,
-                    )
-                  : LocalRankingSeriesStandingsPage(
-                      database: database,
-                      ranking: selected,
-                    ),
-            ),
-          );
-          return;
-        }
-        return;
-      }
-    }
-
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const RankingsPage(),
-      ),
-    );
-  }
-
   bool _matchesTournamentQuery(CreatedTournament tournament) {
     final query = _tournamentQuery.trim().toLowerCase();
     if (query.isEmpty) return true;
@@ -267,6 +190,28 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
       ...tournament.players.map((player) => player.name),
     ].join(' ').toLowerCase();
     return searchable.contains(query);
+  }
+
+  Future<void> _copyTournament(CreatedTournament tournament) async {
+    try {
+      final copy = tournament.copy();
+      await _storage.saveTournament(copy);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
+        SnackBar(content: Text('Kopie "${copy.name}" erstellt.')),
+      );
+      _reloadTournaments();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(
+          SnackBar(content: Text('Kopieren nicht möglich: $error')),
+        );
+      }
+    }
   }
 
   Future<void> _deleteTournament(CreatedTournament tournament) async {
@@ -509,7 +454,7 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                           tournament: tournament,
                           onOpen: () => _openTournament(tournament),
                           onDelete: () => _deleteTournament(tournament),
-                          onOpenRanking: () => _openRankingFor(tournament),
+                          onCopy: () => _copyTournament(tournament),
                         ),
                     ],
                   ),

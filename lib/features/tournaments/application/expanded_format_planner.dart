@@ -188,11 +188,32 @@ class ExpandedFormatPlanner {
           );
           final minimum = estimates.first!.minimumMatches;
           final duration = (minutes - 1e-9).ceil();
-          final fits =
-              minimum >= request.minimumMatchesPerPlayer &&
-              (request.targetMinutes != null ||
-                  (duration >= request.minimumMinutes &&
-                      duration <= request.maximumMinutes));
+          final tempSuggestion = TournamentFormatSuggestion(
+            title: '',
+            stages: const [],
+            configurations: configs,
+            stageMatchCounts: [for (final e in estimates) e!.totalMatches],
+            minimumMatchesPerPlayer: minimum,
+            totalMatches: count,
+            estimatedMinutes: duration,
+            effectiveBoards: 1,
+            participantCount: request.players,
+          );
+          final bool fits;
+          if (minimum < request.minimumMatchesPerPlayer) {
+            fits = false;
+          } else if (request.targetMinutes != null) {
+            fits = true;
+          } else if (request.considerBestWorstCase) {
+            final span = tempSuggestion.durationSpan;
+            fits =
+                span.minimumMinutes >= request.minimumMinutes &&
+                span.maximumMinutes <= request.maximumMinutes;
+          } else {
+            fits =
+                duration >= request.minimumMinutes &&
+                duration <= request.maximumMinutes;
+          }
           final suggestion = TournamentFormatSuggestion(
             title: stages.map((s) => s.name).join(' → '),
             stages: [

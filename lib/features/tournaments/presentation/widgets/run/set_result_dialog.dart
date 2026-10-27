@@ -22,6 +22,7 @@ class SetResultDialog extends StatefulWidget {
 
 class _SetResultDialogState extends State<SetResultDialog> {
   late final List<TextEditingController> fields;
+  late final List<FocusNode> focusNodes;
   String? error;
   bool recordBestPerformances = false;
   List<BestPerformance> bestPerformances = [];
@@ -39,14 +40,63 @@ class _SetResultDialogState extends State<SetResultDialog> {
       ])
         TextEditingController(text: value?.toString() ?? '0'),
     ];
+    focusNodes = List.generate(4, (index) {
+      final fn = FocusNode();
+      fn.addListener(() {
+        if (fn.hasFocus) {
+          _selectDefaultZero(index);
+        }
+      });
+      return fn;
+    });
   }
 
   @override
   void dispose() {
+    for (final fn in focusNodes) {
+      fn.dispose();
+    }
     for (final field in fields) {
       field.dispose();
     }
     super.dispose();
+  }
+
+  Widget _stepperSuffix(TextEditingController controller, int Function() max) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          canRequestFocus: false,
+          onTap: () {
+            final current = int.tryParse(controller.text) ?? 0;
+            if (current < max()) {
+              controller.text = '${current + 1}';
+              controller.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: controller.text.length,
+              );
+            }
+          },
+          child: const Icon(Icons.arrow_drop_up, size: 22),
+        ),
+        InkWell(
+          canRequestFocus: false,
+          onTap: () {
+            final current = int.tryParse(controller.text) ?? 0;
+            if (current > 0) {
+              controller.text = '${current - 1}';
+              controller.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: controller.text.length,
+              );
+            }
+          },
+          child: const Icon(Icons.arrow_drop_down, size: 22),
+        ),
+      ],
+    );
   }
 
   void save() {
@@ -86,21 +136,42 @@ class _SetResultDialogState extends State<SetResultDialog> {
           for (var i = 0; i < 2; i++) ...[
             if (i > 0) const SizedBox(width: 12),
             Expanded(
-              child: TextField(
-                key: ValueKey('set-result-${start + i}'),
-                controller: fields[start + i],
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  _ScoreLimitInputFormatter(() => _maximumFor(start + i)),
-                ],
-                onTap: () => _selectDefaultZero(start + i),
-                onSubmitted: (_) => save(),
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: i == 0
-                      ? widget.match.homePlayer?.name
-                      : widget.match.awayPlayer?.name,
-                ),
+              child: Builder(
+                builder: (context) {
+                  final index = start + i;
+                  return TextField(
+                    key: ValueKey('set-result-$index'),
+                    controller: fields[index],
+                    focusNode: focusNodes[index],
+                    autofocus: index == 0,
+                    keyboardType: TextInputType.number,
+                    textInputAction: index < 3
+                        ? TextInputAction.next
+                        : TextInputAction.done,
+                    inputFormatters: [
+                      _ScoreLimitInputFormatter(() => _maximumFor(index)),
+                    ],
+                    onTap: () => _selectDefaultZero(index),
+                    onSubmitted: (_) {
+                      if (index < 3) {
+                        focusNodes[index + 1].requestFocus();
+                        _selectDefaultZero(index + 1);
+                      } else {
+                        save();
+                      }
+                    },
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      labelText: i == 0
+                          ? widget.match.homePlayer?.name
+                          : widget.match.awayPlayer?.name,
+                      suffixIcon: _stepperSuffix(
+                        fields[index],
+                        () => _maximumFor(index),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

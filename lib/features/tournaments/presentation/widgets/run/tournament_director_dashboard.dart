@@ -24,6 +24,10 @@ class TournamentDirectorDashboard extends StatefulWidget {
     this.onFinishEarly,
     this.canCompleteStage = false,
     this.isLastStage = false,
+    this.onReopenPreviousStage,
+    this.canReopenPreviousStage = false,
+    this.onResetCurrentStage,
+    this.canResetCurrentStage = false,
   });
   final CreatedTournament tournament;
   final int activeStage;
@@ -36,6 +40,10 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final VoidCallback? onFinishEarly;
   final bool canCompleteStage;
   final bool isLastStage;
+  final VoidCallback? onReopenPreviousStage;
+  final bool canReopenPreviousStage;
+  final VoidCallback? onResetCurrentStage;
+  final bool canResetCurrentStage;
   @override
   State<TournamentDirectorDashboard> createState() =>
       _TournamentDirectorDashboardState();
@@ -74,7 +82,8 @@ class _TournamentDirectorDashboardState
     } catch (_) {
       if (mounted) {
         setState(
-          () => _actionError = 'Aktion fehlgeschlagen. Verbindung und Berechtigung prüfen und erneut versuchen.',
+          () => _actionError =
+              'Aktion fehlgeschlagen. Verbindung und Berechtigung prüfen und erneut versuchen.',
         );
       }
     } finally {
@@ -363,11 +372,33 @@ class _TournamentDirectorDashboardState
               Text('Aktive Etappe: ${t.runStages[widget.activeStage].name}'),
             ],
           ),
-          if (widget.onCompleteStage != null || widget.onFinishEarly != null)
+          if (widget.onCompleteStage != null ||
+              widget.onFinishEarly != null ||
+              (widget.onReopenPreviousStage != null &&
+                  widget.canReopenPreviousStage) ||
+              (widget.onResetCurrentStage != null &&
+                  widget.canResetCurrentStage))
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (widget.onReopenPreviousStage != null &&
+                    widget.canReopenPreviousStage)
+                  OutlinedButton.icon(
+                    onPressed: widget.onReopenPreviousStage,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Vorherige Etappe wieder öffnen'),
+                  ),
+                if (widget.onResetCurrentStage != null &&
+                    widget.canResetCurrentStage)
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    onPressed: widget.onResetCurrentStage,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Etappe zurücksetzen'),
+                  ),
                 if (widget.onFinishEarly != null)
                   OutlinedButton.icon(
                     onPressed: !widget.canCompleteStage

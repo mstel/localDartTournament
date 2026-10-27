@@ -216,6 +216,8 @@ class _ResultDialogState extends State<ResultDialog> {
   List<BestPerformance> _bestPerformances = [];
   late final TextEditingController _homeLegsController;
   late final TextEditingController _awayLegsController;
+  late final FocusNode _homeFocusNode;
+  late final FocusNode _awayFocusNode;
 
   @override
   void initState() {
@@ -228,10 +230,24 @@ class _ResultDialogState extends State<ResultDialog> {
     _awayLegsController = TextEditingController(
       text: widget.match.awayLegs?.toString() ?? '0',
     );
+    _homeFocusNode = FocusNode();
+    _awayFocusNode = FocusNode();
+    _homeFocusNode.addListener(() {
+      if (_homeFocusNode.hasFocus) {
+        _selectInitialZero(_homeLegsController);
+      }
+    });
+    _awayFocusNode.addListener(() {
+      if (_awayFocusNode.hasFocus) {
+        _selectInitialZero(_awayLegsController);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _homeFocusNode.dispose();
+    _awayFocusNode.dispose();
     _homeLegsController.dispose();
     _awayLegsController.dispose();
     super.dispose();
@@ -280,6 +296,43 @@ class _ResultDialogState extends State<ResultDialog> {
     );
   }
 
+  Widget _stepperSuffix(TextEditingController controller, int max) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          canRequestFocus: false,
+          onTap: () {
+            final current = int.tryParse(controller.text) ?? 0;
+            if (current < max) {
+              controller.text = '${current + 1}';
+              controller.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: controller.text.length,
+              );
+            }
+          },
+          child: const Icon(Icons.arrow_drop_up, size: 22),
+        ),
+        InkWell(
+          canRequestFocus: false,
+          onTap: () {
+            final current = int.tryParse(controller.text) ?? 0;
+            if (current > 0) {
+              controller.text = '${current - 1}';
+              controller.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: controller.text.length,
+              );
+            }
+          },
+          child: const Icon(Icons.arrow_drop_down, size: 22),
+        ),
+      ],
+    );
+  }
+
   void _annul() {
     Navigator.of(context).pop(const MatchResult.annulled());
   }
@@ -315,46 +368,59 @@ class _ResultDialogState extends State<ResultDialog> {
               '${widget.match.awayPlayer?.name ?? 'offen'}',
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const ValueKey('home-legs-field'),
-                    controller: _homeLegsController,
-                    onTap: () => _selectInitialZero(_homeLegsController),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      _ScoreLimitInputFormatter(
-                        widget.format.bestOfLegs ~/ 2 + 1,
+            Builder(
+              builder: (context) {
+                final maxLegs = widget.format.bestOfLegs ~/ 2 + 1;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey('home-legs-field'),
+                        controller: _homeLegsController,
+                        focusNode: _homeFocusNode,
+                        autofocus: true,
+                        onTap: () => _selectInitialZero(_homeLegsController),
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        inputFormatters: [_ScoreLimitInputFormatter(maxLegs)],
+                        onSubmitted: (_) {
+                          _awayFocusNode.requestFocus();
+                          _selectInitialZero(_awayLegsController);
+                        },
+                        decoration: InputDecoration(
+                          border: const OutlineInputBorder(),
+                          labelText: widget.match.homePlayer?.name ?? 'offen',
+                          suffixIcon: _stepperSuffix(
+                            _homeLegsController,
+                            maxLegs,
+                          ),
+                        ),
                       ),
-                    ],
-                    onSubmitted: (_) => _save(),
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      labelText: widget.match.homePlayer?.name ?? 'offen',
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    key: const ValueKey('away-legs-field'),
-                    controller: _awayLegsController,
-                    onTap: () => _selectInitialZero(_awayLegsController),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      _ScoreLimitInputFormatter(
-                        widget.format.bestOfLegs ~/ 2 + 1,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey('away-legs-field'),
+                        controller: _awayLegsController,
+                        focusNode: _awayFocusNode,
+                        onTap: () => _selectInitialZero(_awayLegsController),
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.done,
+                        inputFormatters: [_ScoreLimitInputFormatter(maxLegs)],
+                        onSubmitted: (_) => _save(),
+                        decoration: InputDecoration(
+                          border: const OutlineInputBorder(),
+                          labelText: widget.match.awayPlayer?.name ?? 'offen',
+                          suffixIcon: _stepperSuffix(
+                            _awayLegsController,
+                            maxLegs,
+                          ),
+                        ),
                       ),
-                    ],
-                    onSubmitted: (_) => _save(),
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      labelText: widget.match.awayPlayer?.name ?? 'offen',
                     ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,

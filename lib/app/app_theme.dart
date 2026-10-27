@@ -154,6 +154,13 @@ ThemeData _buildTheme({required bool isDark}) {
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: scheme.surface,
+      titleTextStyle: base.textTheme.titleLarge?.copyWith(
+        color: scheme.onSurface,
+        fontWeight: FontWeight.bold,
+      ),
+      contentTextStyle: base.textTheme.bodyMedium?.copyWith(
+        color: scheme.onSurface,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
     bottomSheetTheme: BottomSheetThemeData(
@@ -210,6 +217,10 @@ ThemeData _buildTheme({required bool isDark}) {
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: gold),
     tooltipTheme: TooltipThemeData(
+      textStyle: TextStyle(
+        color: isDark ? const Color(0xFFF5F3ED) : Colors.white,
+        fontSize: 12,
+      ),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF282C36) : const Color(0xFF191B20),
         borderRadius: BorderRadius.circular(8),

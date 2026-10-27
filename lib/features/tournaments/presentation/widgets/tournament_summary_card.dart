@@ -8,11 +8,11 @@ class TournamentSummaryCard extends StatelessWidget {
     required this.tournament,
     required this.onOpen,
     required this.onDelete,
-    this.onOpenRanking,
+    this.onCopy,
   });
   final CreatedTournament tournament;
   final VoidCallback onOpen, onDelete;
-  final VoidCallback? onOpenRanking;
+  final VoidCallback? onCopy;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -38,42 +38,42 @@ class TournamentSummaryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          tournament.name,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (onOpenRanking != null) ...[
-                          const SizedBox(width: 4),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.leaderboard_outlined,
-                              size: 20,
-                            ),
-                            tooltip: 'Rangliste öffnen',
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28,
-                            ),
-                            onPressed: onOpenRanking,
-                          ),
-                        ],
-                      ],
+                    child: Text(
+                      tournament.name,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   PopupMenuButton<String>(
                     tooltip: 'Turnieraktionen',
-                    onSelected: (_) => onDelete(),
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
+                    onSelected: (action) {
+                      switch (action) {
+                        case 'copy':
+                          onCopy?.call();
+                        case 'delete':
+                          onDelete();
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      if (onCopy != null)
+                        const PopupMenuItem(
+                          value: 'copy',
+                          child: ListTile(
+                            leading: Icon(Icons.copy_outlined),
+                            title: Text('Turnier kopieren'),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      const PopupMenuItem(
                         value: 'delete',
-                        child: Text('Turnier löschen'),
+                        child: ListTile(
+                          leading: Icon(Icons.delete_outline),
+                          title: Text('Turnier löschen'),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       ),
                     ],
                   ),
@@ -91,7 +91,9 @@ class TournamentSummaryCard extends StatelessWidget {
               if (tournament.importedArchive == null) ...[
                 Builder(
                   builder: (context) {
-                    final summary = TournamentTiming.durationSummary(tournament);
+                    final summary = TournamentTiming.durationSummary(
+                      tournament,
+                    );
                     if (summary == null || summary.playedMatches == 0) {
                       return const SizedBox.shrink();
                     }
@@ -101,6 +103,13 @@ class TournamentSummaryCard extends StatelessWidget {
                       }
                       return '${d.inMinutes}m';
                     }
+
+                    final matchLabel = summary.playedMatches == 1
+                        ? 'Match'
+                        : 'Matches';
+                    final averageLabel = summary.averageMatchDuration == null
+                        ? ''
+                        : ' · Ø ${formatDuration(summary.averageMatchDuration!)}';
 
                     return Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -114,7 +123,7 @@ class TournamentSummaryCard extends StatelessWidget {
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              '${formatDuration(summary.totalDuration)} · ${summary.playedMatches} ${summary.playedMatches == 1 ? "Match" : "Matches"}${summary.averageMatchDuration != null ? " · Ø ${formatDuration(summary.averageMatchDuration!)}" : ""}',
+                              '${formatDuration(summary.totalDuration)} · ${summary.playedMatches} $matchLabel$averageLabel',
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: scheme.onSurfaceVariant),
                               overflow: TextOverflow.ellipsis,

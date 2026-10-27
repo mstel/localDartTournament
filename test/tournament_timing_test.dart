@@ -81,6 +81,53 @@ void main() {
     expect(TournamentTiming.snapshot(t, start).unmeasured, 1);
     expect(TournamentTiming.snapshot(t, start).averageSeconds, isNull);
   });
+  test(
+    'first result backdates the tournament clock by match and board time',
+    () {
+      final t = fixture();
+      final match = TournamentTiming.matches(t).single
+        ..homeLegs = 2
+        ..awayLegs = 0
+        ..finishedAt = start.add(const Duration(hours: 1));
+      final parameters = TournamentPlanningParameters.fromValues({
+        PlanningParameter.minutes501DoubleOut: 5,
+        PlanningParameter.boardIdleMinutes: 4,
+      });
+
+      expect(TournamentTiming.startFromFirstResult(t, parameters), isTrue);
+      expect(
+        t.startedAt,
+        match.finishedAt!.subtract(const Duration(minutes: 16, seconds: 30)),
+      );
+    },
+  );
+  test('manual start is not overwritten by first result backdating', () {
+    final t = fixture()..startedAt = start;
+    TournamentTiming.matches(t).single
+      ..homeLegs = 2
+      ..awayLegs = 0
+      ..finishedAt = start.add(const Duration(hours: 1));
+
+    expect(
+      TournamentTiming.startFromFirstResult(
+        t,
+        const TournamentPlanningParameters(),
+      ),
+      isFalse,
+    );
+    expect(t.startedAt, start);
+  });
+  test(
+    'starting a match without a result does not start the tournament clock',
+    () async {
+      final t = fixture();
+      TournamentTiming.matches(t).single.startedAt = start;
+
+      await TournamentTiming.prepare(t);
+
+      expect(t.startedAt, isNull);
+    },
+  );
   test('expected progress follows concurrent blocks and survives saving', () {
     final t = fixture()
       ..startedAt = start

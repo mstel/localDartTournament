@@ -9,10 +9,19 @@ class TournamentTimingPanel extends StatefulWidget {
     required this.tournament,
     required this.onStart,
     this.onPauseToggle,
+    this.onEditTimes,
+    this.allowManualStart = true,
+    this.allowStartTimeEdit = false,
+    this.allowEndTimeEdit = false,
   });
   final CreatedTournament tournament;
   final Future<void> Function() onStart;
   final Future<void> Function()? onPauseToggle;
+  final Future<void> Function(DateTime? startedAt, DateTime? finishedAt)?
+  onEditTimes;
+  final bool allowManualStart;
+  final bool allowStartTimeEdit;
+  final bool allowEndTimeEdit;
   @override
   State<TournamentTimingPanel> createState() => _TournamentTimingPanelState();
 }
@@ -23,9 +32,11 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
+    if (widget.tournament.finishedAt == null) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
@@ -43,6 +54,63 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
 
   String matchDuration(num seconds) =>
       '${seconds ~/ 60} min ${seconds.round() % 60} s';
+
+  Future<DateTime?> _pickTimestamp(DateTime initial) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: 'Datum auswählen',
+    );
+    if (date == null || !mounted) return null;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      helpText: 'Uhrzeit auswählen',
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
+    );
+    if (time == null) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  Future<void> _editTimestamp({required bool start}) async {
+    final current = start
+        ? widget.tournament.startedAt
+        : widget.tournament.finishedAt;
+    if (widget.onEditTimes == null ||
+        (current == null &&
+            (start && !widget.allowStartTimeEdit ||
+                !start && !widget.allowEndTimeEdit))) {
+      return;
+    }
+    final selected = await _pickTimestamp(current ?? DateTime.now());
+    if (selected == null || !mounted) return;
+    final nextStart = start ? selected : widget.tournament.startedAt;
+    final nextEnd = start ? widget.tournament.finishedAt : selected;
+    if (nextStart != null && nextEnd != null && nextEnd.isBefore(nextStart)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Die Endzeit muss nach der Startzeit liegen.'),
+        ),
+      );
+      return;
+    }
+    try {
+      await widget.onEditTimes!(nextStart, nextEnd);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Zeitpunkt konnte nicht gespeichert werden.'),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +141,7 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
           spacing: 12,
           runSpacing: 4,
           children: [
-            if (t.startedAt == null)
+            if (t.startedAt == null && widget.allowManualStart)
               TextButton.icon(
                 onPressed: _busy
                     ? null
@@ -104,7 +172,10 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
               ),
               if (t.isClockPaused && t.finishedAt == null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.errorContainer,
                     borderRadius: BorderRadius.circular(6),
@@ -180,8 +251,34 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
                               ? 'Start: noch nicht erfasst'
                               : 'Start: ${time(t.startedAt!)}',
                         ),
-                        if (t.finishedAt != null)
+                        if (t.finishedAt != null || widget.allowEndTimeEdit)
                           Text('Ende: ${time(t.finishedAt!)}'),
+                        if (widget.onEditTimes != null) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              if (t.startedAt != null ||
+                                  widget.allowStartTimeEdit)
+                                TextButton.icon(
+                                  onPressed: () => _editTimestamp(start: true),
+                                  icon: const Icon(
+                                    Icons.edit_calendar_outlined,
+                                  ),
+                                  label: const Text('Startzeit anpassen'),
+                                ),
+                              if (t.finishedAt != null)
+                                TextButton.icon(
+                                  onPressed: () => _editTimestamp(start: false),
+                                  icon: const Icon(
+                                    Icons.edit_calendar_outlined,
+                                  ),
+                                  label: const Text('Endzeit anpassen'),
+                                ),
+                            ],
+                          ),
+                        ],
                         if (deadline != null)
                           Text('Geplantes Ende: ${time(deadline)}'),
                         if (stats.forecast != null && stats.completed > 0)
@@ -245,7 +342,7 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
                           ),
                         const SizedBox(height: 12),
                         const Text(
-                          'Die Uhr startet automatisch beim ersten gestarteten Match oder über „Turnieruhr starten“. Matchdauern reichen vom Start bis zur Ergebniserfassung. Pausen sind enthalten. Die Endzeit-Prognose folgt dem bisherigen Matchfortschritt; unterschiedliche Etappen, Boards und Spielverläufe können sie verändern.',
+                          'Die Uhr startet rückwirkend mit dem ersten gespeicherten Ergebnis oder manuell über „Turnieruhr starten“. Die automatische Startzeit berücksichtigt die geschätzte Matchdauer und den Board-Leerstand. Die Endzeit-Prognose folgt dem bisherigen Matchfortschritt; unterschiedliche Etappen, Boards und Spielverläufe können sie verändern.',
                         ),
                       ],
                     ),
