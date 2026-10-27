@@ -55,26 +55,57 @@ void main() {
     final match = stage.groups.first.matches.first;
     match.startedPlayers = 'Spieler 1\u0000Spieler 2';
     expect(GroupPositionEditor.canEdit(stage), isTrue);
-    expect(GroupPositionEditor.swap(stage, stage.groups.first.players[0],
-      stage.groups.first.players[1]), isTrue);
+    expect(
+      GroupPositionEditor.swap(
+        stage,
+        stage.groups.first.players[0],
+        stage.groups.first.players[1],
+      ),
+      isTrue,
+    );
     expect(match.startedPlayers, isNull);
   });
 
-  test('blocks all groups for any started, scored or annulled match', () {
-    final blockers = <void Function(GroupMatch)>[
+  test('only recorded results block group editing', () {
+    final editableStates = <void Function(GroupMatch)>[
       (m) => m.startedAt = DateTime(2026),
       (m) => m.finishedAt = DateTime(2026),
-      (m) => m.homeLegs = 0,
-      (m) => m.awaySets = 1,
       (m) => m.isAnnulled = true,
     ];
-    for (final block in blockers) {
+    for (final configure in editableStates) {
       final stage = fixture();
-      final before = stage.groups.first.players.toList();
-      block(stage.groups.last.matches.last);
-      expect(GroupPositionEditor.swap(stage, before[0], before[1]), isFalse);
-      expect(stage.groups.first.players, before);
+      final match = stage.groups.last.matches.last;
+      configure(match);
+      expect(GroupPositionEditor.canEdit(stage), isTrue);
     }
+
+    final stage = fixture();
+    final scoredMatch = stage.groups.last.matches.last
+      ..homeLegs = 2
+      ..awayLegs = 0;
+    expect(scoredMatch.hasResult, isTrue);
+    expect(GroupPositionEditor.canEdit(stage), isFalse);
+    final before = stage.groups.first.players.toList();
+    expect(GroupPositionEditor.swap(stage, before[0], before[1]), isFalse);
+    expect(stage.groups.first.players, before);
+  });
+
+  test('swapping after annulling clears old match metadata', () {
+    final stage = fixture();
+    final firstMatch = stage.groups.first.matches.first
+      ..isAnnulled = true
+      ..startedAt = DateTime(2026)
+      ..boardNumber = 3;
+    final first = stage.groups.first.players.first;
+    final second = stage.groups.first.players.last;
+
+    expect(GroupPositionEditor.swap(stage, first, second), isTrue);
+    expect(firstMatch.isAnnulled, isFalse);
+    expect(firstMatch.startedAt, isNull);
+    expect(firstMatch.finishedAt, isNull);
+    expect(firstMatch.boardNumber, isNull);
+    expect(firstMatch.homeLegs, isNull);
+    expect(firstMatch.awayLegs, isNull);
   });
 
   test(

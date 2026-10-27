@@ -106,6 +106,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> openFullTournamentBracket(WidgetTester tester) async {
+    final previewButton = find.text('Vorschau Turnierbaum');
+    await tester.ensureVisible(previewButton);
+    await tester.tap(previewButton);
+    await tester.pumpAndSettle();
+  }
+
   Future<void> enterMatchResult(
     WidgetTester tester, {
     required String homePlayer,
@@ -503,6 +510,7 @@ void main() {
       awayLegs: '0',
     );
 
+    await openFullTournamentBracket(tester);
     expect(find.text('2'), findsWidgets);
     expect(find.text('Spiel 7'), findsWidgets);
     expect(find.text('Spieler 8'), findsWidgets);
@@ -617,6 +625,7 @@ void main() {
     await tester.tap(find.text('Speichern'));
     await tester.pumpAndSettle();
 
+    await openFullTournamentBracket(tester);
     expect(find.text('2'), findsWidgets);
   });
 
@@ -749,6 +758,7 @@ void main() {
       awayLegs: '1',
     );
 
+    await openFullTournamentBracket(tester);
     expect(find.text('2'), findsWidgets);
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(find.text('Spieler 8'), findsWidgets);

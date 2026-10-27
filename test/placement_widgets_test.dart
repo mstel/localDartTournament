@@ -85,6 +85,9 @@ void main() {
   testWidgets('placement tree renders beyond seventh place after restoring', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final players = List.generate(16, (i) => TournamentPlayer.generated(i + 1));
     const config = TournamentStage(
       name: 'KO',
@@ -113,12 +116,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ergebnisse').last);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
+    final previewButton = find.text('Vorschau Turnierbaum');
+    await tester.ensureVisible(previewButton);
+    await tester.tap(previewButton);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
       find.text('Platzierungsspiele', skipOffstage: false),
-      500,
-      scrollable: find.byType(Scrollable).first,
-      maxScrolls: 50,
     );
+    await tester.pumpAndSettle();
     expect(find.text('Platzierungsspiele'), findsOneWidget);
     expect(find.text('Spiel um Platz 15', skipOffstage: false), findsWidgets);
     expect(tester.takeException(), isNull);
