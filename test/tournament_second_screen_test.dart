@@ -647,6 +647,8 @@ void main() {
     final groupCTop = tester.getTopLeft(find.text('Gruppe C')).dy;
     expect(groupATop, closeTo(groupBTop, 1));
     expect(groupCTop, greaterThan(groupATop));
+    expect(find.text('Top 3 weiter'), findsNWidgets(2));
+    expect(find.text('Top 2 weiter'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -874,8 +876,8 @@ CreatedTournament _threeGroupEightQualifierPreviewTournament() {
           extraCount: 2,
           extraRank: 3,
           eligibleGroupSize: null,
-          extraGroups: [1, 2, 3],
-          fixedByGroup: [2, 2, 2],
+          extraGroups: [1, 2],
+          fixedByGroup: [3, 3, 2],
         ),
         tieBreakers: defaultGroupTieBreakers,
       ),

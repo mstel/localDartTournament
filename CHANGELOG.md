@@ -1,3 +1,12 @@
+# 2.0.7+32
+
+- Zeigt im separaten Monitor die je Gruppe festgelegte Anzahl an Qualifikanten
+  korrekt an.
+- Ersetzt den abgeschnittenen KO-Baum in der Ergebnisansicht durch eine
+  Vollbildvorschau mit direkter Rückkehr zu den Ergebnissen.
+- Erlaubt die Gruppenverwaltung wieder, wenn keine Ergebnisse mehr eingetragen
+  sind, auch wenn Partien zuvor annulliert oder gestartet waren.
+
 # 2.0.6+31
 
 - Gibt der Fortschrittsanzeige und den Bestleistungen im zweiten Monitor mehr

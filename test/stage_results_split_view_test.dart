@@ -177,6 +177,69 @@ void main() {
     expect(find.byType(MatchResultTile), findsNWidgets(4));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('knockout results open a responsive full bracket preview', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final playerA = TournamentPlayer.generated(1).copyWith(name: 'Spieler A');
+    final playerB = TournamentPlayer.generated(2).copyWith(name: 'Spieler B');
+    final stage = KnockoutTournamentRunStage(
+      name: 'KO',
+      rounds: [
+        [GroupMatch(homePlayer: playerA, awayPlayer: playerB, round: 1)],
+        [GroupMatch(round: 2)],
+      ],
+    );
+
+    for (final size in [
+      const Size(360, 800),
+      const Size(800, 600),
+      const Size(1440, 900),
+    ]) {
+      for (final textScale in [1.0, 2.0]) {
+        tester.view.physicalSize = size;
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(textScale)),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: StageResultsSplitView(
+                  stage: stage,
+                  standingsFor: (_, _) => [],
+                  onEditResult: (_) {},
+                  canEditResults: true,
+                  bracketBuilder: (_, _, _, _, _, _) =>
+                      const Text('Vollständiger Turnierbaum'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final previewButton = find.text('Vorschau Turnierbaum');
+        await tester.ensureVisible(previewButton);
+        await tester.tap(previewButton);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Vollständiger Turnierbaum'), findsOneWidget);
+        expect(find.byTooltip('Zurück zu Ergebnisse'), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: '$size at $textScale×');
+        await tester.tap(find.byTooltip('Zurück zu Ergebnisse'));
+        await tester.pumpAndSettle();
+        expect(previewButton, findsOneWidget);
+        expect(tester.takeException(), isNull, reason: '$size at $textScale×');
+      }
+    }
+  });
 }
 
 GroupTournamentRunStage _groupStage() {

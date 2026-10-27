@@ -522,25 +522,20 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.account_tree_outlined, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Turnierbaum',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                      const Icon(Icons.account_tree_outlined, size: 28),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Turnierbaum',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 10),
-                      widget.bracketBuilder!(
-                        stage,
-                        widget.qualifyingRank,
-                        widget.onEditResult,
-                        widget.canEditResults,
-                        widget.isBracketEditMode && widget.canEditBracket,
-                        widget.onSwapSlot ?? (a, b) {},
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            _openFullBracketPreview(context, stage),
+                        icon: const Icon(Icons.open_in_full),
+                        label: const Text('Vorschau Turnierbaum'),
                       ),
                     ],
                   ),
@@ -568,6 +563,44 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           ],
         );
       },
+    );
+  }
+
+  void _openFullBracketPreview(
+    BuildContext context,
+    KnockoutTournamentRunStage stage,
+  ) {
+    final bracketBuilder = widget.bracketBuilder;
+    if (bracketBuilder == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text('${stage.name} · Turnierbaum'),
+            leading: IconButton(
+              tooltip: 'Zurück zu Ergebnisse',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_back),
+            ),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: bracketBuilder(
+                  stage,
+                  widget.qualifyingRank,
+                  widget.onEditResult,
+                  widget.canEditResults,
+                  widget.isBracketEditMode && widget.canEditBracket,
+                  widget.onSwapSlot ?? (a, b) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

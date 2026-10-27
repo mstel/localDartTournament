@@ -960,7 +960,11 @@ class _TournamentSecondScreenViewState
     bool full = false,
   }) {
     final standings = _calculateGroupStandings(group, tieBreakers);
-    final fixedPlaces = qualificationPlan?.fixedPerGroup ?? 2;
+    final fixedPlaces = qualificationPlan == null
+        ? 2
+        : groupNumber - 1 < qualificationPlan.fixedByGroup.length
+        ? qualificationPlan.fixedByGroup[groupNumber - 1]
+        : qualificationPlan.fixedPerGroup;
     final playedMatches = group.matches
         .where((match) => match.hasPlayers && match.hasResult)
         .length;

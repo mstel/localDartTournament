@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_run_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_position_editor.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/creation/stage_setup_widgets.dart'
     show GroupTieBreakerSetup;
@@ -248,6 +249,49 @@ void main() {
 
     final button = find.widgetWithText(OutlinedButton, 'Bearbeiten');
     expect(tester.widget<OutlinedButton>(button).onPressed, isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('group editing is enabled when all matches are annulled', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = fixture()
+      ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'));
+    final stage = tournament.runStages.first as GroupTournamentRunStage;
+    for (final match in stage.groups.expand((group) => group.matches)) {
+      match
+        ..isAnnulled = true
+        ..startedAt = DateTime(2026, 1, 1);
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(home: TournamentRunPage(tournament: tournament)),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.ensureVisible(find.text('Gruppen verwalten'));
+
+    final button = find.widgetWithText(OutlinedButton, 'Bearbeiten');
+    expect(tester.widget<OutlinedButton>(button).onPressed, isNotNull);
+    expect(GroupPositionEditor.canEdit(stage), isTrue);
+    final firstPlayer = stage.groups.first.players.first;
+    final secondPlayer = stage.groups.first.players.last;
+    expect(GroupPositionEditor.swap(stage, firstPlayer, secondPlayer), isTrue);
+    expect(
+      stage.groups
+          .expand((group) => group.matches)
+          .every(
+            (match) =>
+                !match.isAnnulled &&
+                match.startedAt == null &&
+                match.finishedAt == null,
+          ),
+      isTrue,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

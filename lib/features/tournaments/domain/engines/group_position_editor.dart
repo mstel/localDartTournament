@@ -10,16 +10,8 @@ class GroupPositionEditor {
     ],
   };
 
-  static bool canEdit(GroupTournamentRunStage stage) => _matches(stage).every(
-    (match) =>
-        match.startedAt == null &&
-        match.finishedAt == null &&
-        !match.isAnnulled &&
-        match.homeLegs == null &&
-        match.awayLegs == null &&
-        match.homeSets == null &&
-        match.awaySets == null,
-  );
+  static bool canEdit(GroupTournamentRunStage stage) =>
+      _matches(stage).every((match) => !match.hasResult);
 
   static bool swap(
     GroupTournamentRunStage stage,
@@ -48,7 +40,14 @@ class GroupPositionEditor {
       match.homePlayer = replace(match.homePlayer);
       match.awayPlayer = replace(match.awayPlayer);
       match.boardNumber = null;
+      match.startedAt = null;
+      match.finishedAt = null;
       match.startedPlayers = null;
+      match.isAnnulled = false;
+      match.homeLegs = null;
+      match.awayLegs = null;
+      match.homeSets = null;
+      match.awaySets = null;
     }
     return true;
   }
