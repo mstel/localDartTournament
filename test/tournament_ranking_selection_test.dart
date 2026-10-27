@@ -100,7 +100,7 @@ void main() {
   );
 
   testWidgets(
-    'tournament settings show elapsed time and a first-result forecast',
+    'tournament settings show elapsed time and the fixed clock panel',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
@@ -129,11 +129,58 @@ void main() {
         lessThan(tester.getRect(saveButton).left),
       );
       expect(find.text('Laufzeit 0 h 3 min'), findsOneWidget);
-      expect(find.text('Prognose nach erstem Ergebnis'), findsOneWidget);
+      expect(find.text('Turnieruhr'), findsOneWidget);
+      expect(find.text('Prognose nach erstem Ergebnis'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('a saved tournament name can be copied into settings', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final previous = fixture()
+      ..name = 'Vorheriges Turnier'
+      ..updatedAt = DateTime.utc(2025);
+    final current = fixture()
+      ..name = 'Aktuelles Turnier'
+      ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'));
+    final storage = _ListTournamentStorage([previous, current]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: current,
+          tournamentStorage: storage,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pump(const Duration(milliseconds: 500));
+    final openNamePicker = find.text('Name eines anderen Turniers öffnen');
+    await tester.ensureVisible(openNamePicker);
+    await tester.tap(openNamePicker);
+    await tester.pumpAndSettle();
+    expect(find.text('Vorheriges Turnier'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, 'Vorheriges Turnier'));
+    await tester.pumpAndSettle();
+
+    final nameField = tester.widget<TextField>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.labelText == 'Turniername',
+      ),
+    );
+    expect(nameField.controller?.text, 'Vorheriges Turnier');
+    expect(current.name, 'Aktuelles Turnier');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets(
     'running group tie-breakers are applied from a separate settings panel',
@@ -337,6 +384,14 @@ class _RecordingTournamentStorage extends TournamentStorage {
         ? []
         : [CreatedTournament.fromJson(Map<String, dynamic>.from(saved))];
   }
+}
+
+class _ListTournamentStorage extends TournamentStorage {
+  _ListTournamentStorage(this.tournaments);
+  final List<CreatedTournament> tournaments;
+
+  @override
+  Future<List<CreatedTournament>> loadTournaments() async => tournaments;
 }
 
 class _ControlledRunController extends TournamentRunController {

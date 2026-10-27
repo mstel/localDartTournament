@@ -163,10 +163,10 @@ void main() {
         copy,
         start.add(const Duration(minutes: 25)),
       ).forecast,
-      isNull,
+      start.add(const Duration(minutes: 75)),
     );
   });
-  test('forecast moves behind plan when no further matches finish', () {
+  test('forecast remains fixed at planned duration from the start time', () {
     final t = fixture()
       ..startedAt = start
       ..plannedMinutes = 60
@@ -188,7 +188,7 @@ void main() {
         t,
         start.add(const Duration(minutes: 20)),
       ).forecast,
-      start.add(const Duration(hours: 2)),
+      start.add(const Duration(hours: 1)),
     );
   });
 }

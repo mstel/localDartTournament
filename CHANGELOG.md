@@ -1,3 +1,15 @@
+# 2.0.5+30
+
+- Stellt die KO-Vorschau auf lesbare Theme-Farben um und kennzeichnet offene
+  Qualifikationsplätze als Qualifikanten statt als Freilose.
+- Zeigt Erläuterungen zum Entfernen von Spielern direkt an den jeweiligen
+  Wertungsoptionen an und ergänzt die Übernahme eines Turniernamens aus einem
+  anderen gespeicherten Turnier.
+- Fixiert die Endzeitprognose auf geplante Dauer ab Startzeit und zeigt die
+  Turnieruhr-Überschrift wieder an.
+- Ergänzt im Spielervergleich die gefilterte Direktbilanz und die einzelnen
+  Begegnungen.
+
 # 2.0.3+28
 
 - Zeigt in der Spieler-Detailseite unter „Turnier- und Spielverlauf“ die Elo-Wertung vor und nach jedem Turnier sowie bei jedem einzelnen Spiel auf einen Blick an.

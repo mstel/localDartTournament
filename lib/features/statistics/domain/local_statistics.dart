@@ -5,7 +5,36 @@ import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/domain/tournament_winner.dart';
+import '../../league/application/league_board_runtime.dart';
 import 'best_performance.dart';
+
+class DirectEncounter {
+  const DirectEncounter({
+    required this.tournamentName,
+    required this.date,
+    required this.leftScore,
+    required this.rightScore,
+  });
+
+  final String tournamentName;
+  final DateTime date;
+  final int leftScore;
+  final int rightScore;
+}
+
+class DirectEncounterSummary {
+  const DirectEncounterSummary({
+    required this.encounters,
+    required this.leftWins,
+    required this.rightWins,
+    required this.draws,
+  });
+
+  final List<DirectEncounter> encounters;
+  final int leftWins;
+  final int rightWins;
+  final int draws;
+}
 
 class LocalPlayerStatistics {
   const LocalPlayerStatistics({
@@ -40,6 +69,77 @@ class LocalStatisticsService {
   const LocalStatisticsService({this.database, this.storage});
   final LocalAppDatabase? database;
   final TournamentStorage? storage;
+
+  Future<DirectEncounterSummary> directEncounters(
+    String leftId,
+    String rightId,
+    Iterable<CreatedTournament> tournaments,
+  ) async {
+    final profiles = await (database ?? LocalAppDatabase())
+        .loadPlayerProfiles();
+    final profileByName = {
+      for (final profile in profiles)
+        profile.displayName.trim().toLowerCase(): profile.id,
+    };
+    final encounters = <DirectEncounter>[];
+    var leftWins = 0;
+    var rightWins = 0;
+    var draws = 0;
+    for (final tournament in tournaments) {
+      for (final match in _matches(tournament)) {
+        if (!match.hasResult || match.withdrawalIgnored) continue;
+        final homeIds = _profileIds(match.homePlayer, profileByName);
+        final awayIds = _profileIds(match.awayPlayer, profileByName);
+        final leftHome = homeIds.contains(leftId);
+        final rightHome = homeIds.contains(rightId);
+        final leftAway = awayIds.contains(leftId);
+        final rightAway = awayIds.contains(rightId);
+        if (!(leftHome && rightAway || leftAway && rightHome)) continue;
+        final leftScore = leftHome ? match.homeScore! : match.awayScore!;
+        final rightScore = leftHome ? match.awayScore! : match.homeScore!;
+        if (leftScore > rightScore) {
+          leftWins++;
+        } else if (rightScore > leftScore) {
+          rightWins++;
+        } else {
+          draws++;
+        }
+        encounters.add(
+          DirectEncounter(
+            tournamentName: tournament.name,
+            date:
+                (match.finishedAt ??
+                        tournament.finishedAt ??
+                        tournament.createdAt)
+                    .toLocal(),
+            leftScore: leftScore,
+            rightScore: rightScore,
+          ),
+        );
+      }
+    }
+    encounters.sort((a, b) => b.date.compareTo(a.date));
+    return DirectEncounterSummary(
+      encounters: encounters,
+      leftWins: leftWins,
+      rightWins: rightWins,
+      draws: draws,
+    );
+  }
+
+  Set<String> _profileIds(
+    TournamentPlayer? player,
+    Map<String, String> profileByName,
+  ) {
+    if (player == null) return const {};
+    return {
+      for (final individual in player.individuals)
+        if (individual.profileId != null)
+          individual.profileId!
+        else if (profileByName[individual.name.trim().toLowerCase()] != null)
+          profileByName[individual.name.trim().toLowerCase()]!,
+    };
+  }
 
   Future<LocalPlayerStatistics> forPlayers(Set<String> ids, {int? year}) async {
     final database = this.database ?? LocalAppDatabase();
@@ -255,6 +355,10 @@ class LocalStatisticsService {
   }
 
   Iterable<GroupMatch> _matches(CreatedTournament tournament) sync* {
+    if (tournament.leagueMatch != null) {
+      yield* LeagueBoardRuntime(tournament).matches;
+      return;
+    }
     for (final stage in tournament.runStages) {
       if (stage is KnockoutTournamentRunStage) {
         yield* stage.matches;

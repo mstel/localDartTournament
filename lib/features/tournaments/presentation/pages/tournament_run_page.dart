@@ -5,10 +5,12 @@ class TournamentRunPage extends StatelessWidget {
     super.key,
     required this.tournament,
     this.runController,
+    this.tournamentStorage,
   });
 
   final CreatedTournament tournament;
   final TournamentRunController? runController;
+  final TournamentStorage? tournamentStorage;
 
   @override
   Widget build(BuildContext context) =>
@@ -18,13 +20,19 @@ class TournamentRunPage extends StatelessWidget {
       : _LiveTournamentRunPage(
           tournament: tournament,
           runController: runController,
+          tournamentStorage: tournamentStorage,
         );
 }
 
 class _LiveTournamentRunPage extends StatefulWidget {
-  const _LiveTournamentRunPage({required this.tournament, this.runController});
+  const _LiveTournamentRunPage({
+    required this.tournament,
+    this.runController,
+    this.tournamentStorage,
+  });
   final CreatedTournament tournament;
   final TournamentRunController? runController;
+  final TournamentStorage? tournamentStorage;
   @override
   State<_LiveTournamentRunPage> createState() => _TournamentRunPageState();
 }
@@ -324,6 +332,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   TournamentRunController get _runController =>
       widget.runController ?? const TournamentRunController();
   final _tournamentNameController = TextEditingController();
+  late final TournamentStorage _tournamentStorage =
+      widget.tournamentStorage ?? TournamentStorage();
   late final Future<List<LocalRanking>> _localRankings = LocalAppDatabase()
       .loadLocalRankings();
 
@@ -459,6 +469,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       );
       return;
     }
+
     final previousName = widget.tournament.name;
     widget.tournament.name = name;
     try {
@@ -475,6 +486,63 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     } catch (_) {
       widget.tournament.name = previousName;
       _tournamentNameController.text = previousName;
+    }
+  }
+
+  Future<void> _pickTournamentName() async {
+    try {
+      final tournaments = (await _tournamentStorage.loadTournaments())
+          .where((tournament) => tournament.id != widget.tournament.id)
+          .toList();
+      if (!mounted) return;
+      final selected = await showDialog<CreatedTournament>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Name eines anderen Turniers öffnen'),
+          content: SizedBox(
+            width: 480,
+            height: 360,
+            child: tournaments.isEmpty
+                ? const Center(
+                    child: Text('Keine anderen Turniere gespeichert.'),
+                  )
+                : ListView.separated(
+                    itemCount: tournaments.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final tournament = tournaments[index];
+                      return ListTile(
+                        title: Text(tournament.name),
+                        subtitle: Text(
+                          tournament.createdAt
+                              .toLocal()
+                              .toString()
+                              .split(' ')
+                              .first,
+                        ),
+                        onTap: () => Navigator.pop(context, tournament),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Schließen'),
+            ),
+          ],
+        ),
+      );
+      if (selected == null || !mounted) return;
+      _tournamentNameController.text = selected.name;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Turniere konnten nicht geladen werden: $error'),
+          ),
+        );
+      }
     }
   }
 
@@ -3095,26 +3163,44 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         onSubmitted: (_) =>
                                             _saveTournamentName(),
                                       );
+                                      final pickNameButton = OutlinedButton.icon(
+                                        onPressed: _pickTournamentName,
+                                        icon: const Icon(
+                                          Icons.folder_open_outlined,
+                                        ),
+                                        label: const Text(
+                                          'Name eines anderen Turniers öffnen',
+                                        ),
+                                      );
                                       final saveButton = FilledButton.icon(
                                         onPressed: _saveTournamentName,
                                         icon: const Icon(Icons.save_outlined),
                                         label: const Text('Namen speichern'),
                                       );
-                                      if (constraints.maxWidth < 560) {
+                                      if (constraints.maxWidth < 900) {
                                         return Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
                                           children: [
                                             field,
                                             const SizedBox(height: 8),
-                                            saveButton,
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: [
+                                                pickNameButton,
+                                                saveButton,
+                                              ],
+                                            ),
                                           ],
                                         );
                                       }
                                       return Row(
                                         children: [
-                                          Expanded(flex: 3, child: field),
+                                          SizedBox(width: 320, child: field),
                                           const SizedBox(width: 12),
+                                          pickNameButton,
+                                          const SizedBox(width: 8),
                                           saveButton,
                                         ],
                                       );

@@ -352,13 +352,18 @@ class _TripleEliminationPreview extends StatelessWidget {
         else
           _BracketPreviewPlaceholderMatch(
             matchNumber: matchNumbers[match] ?? 0,
-            topLabel: sourceLabels[match]?.first ?? 'Freilos',
-            bottomLabel: sourceLabels[match]?.second ?? 'Freilos',
+            topLabel: _previewAdvancementLabel(sourceLabels[match]?.first),
+            bottomLabel: _previewAdvancementLabel(sourceLabels[match]?.second),
             qualificationLabel: qualificationLabel,
           ),
     ];
   }
 }
+
+String _previewAdvancementLabel(String? sourceLabel) =>
+    sourceLabel == null || sourceLabel == 'Freilos'
+    ? 'Qualifikant offen'
+    : sourceLabel;
 
 class _DoubleEliminationPreview extends StatelessWidget {
   const _DoubleEliminationPreview({
@@ -525,8 +530,8 @@ class _DoubleEliminationPreview extends StatelessWidget {
         else
           _BracketPreviewPlaceholderMatch(
             matchNumber: matchNumbers[match] ?? 0,
-            topLabel: sourceLabels[match]?.first ?? 'Freilos',
-            bottomLabel: sourceLabels[match]?.second ?? 'Freilos',
+            topLabel: _previewAdvancementLabel(sourceLabels[match]?.first),
+            bottomLabel: _previewAdvancementLabel(sourceLabels[match]?.second),
             qualificationLabel: qualificationLabel,
           ),
     ];
@@ -787,16 +792,25 @@ class _BracketPreviewSlot extends StatelessWidget {
       decoration: BoxDecoration(
         color: isBye
             ? colorScheme.surfaceContainerHighest
-            : const Color(0xFFC8F7DC),
+            : colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: isBye ? colorScheme.outlineVariant : const Color(0xFF14965F),
+          color: isBye ? colorScheme.outlineVariant : colorScheme.primary,
         ),
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isBye
+                    ? colorScheme.onSurfaceVariant
+                    : colorScheme.onPrimaryContainer,
+              ),
+            ),
           ),
           IconButton(
             constraints: const BoxConstraints.tightFor(width: 24, height: 28),

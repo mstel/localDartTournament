@@ -35,10 +35,24 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
   String? _rightId;
   String? _rankingId = 'all';
   int? _selectedYear;
-  Future<(LocalPlayerStatistics, LocalPlayerStatistics, LocalEloSnapshot?)>?
+  Future<
+    (
+      LocalPlayerStatistics,
+      LocalPlayerStatistics,
+      LocalEloSnapshot?,
+      DirectEncounterSummary,
+    )
+  >?
   _comparison;
 
-  Future<(LocalPlayerStatistics, LocalPlayerStatistics, LocalEloSnapshot?)>
+  Future<
+    (
+      LocalPlayerStatistics,
+      LocalPlayerStatistics,
+      LocalEloSnapshot?,
+      DirectEncounterSummary,
+    )
+  >
   _loadComparison(
     String leftId,
     String rightId,
@@ -71,13 +85,18 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     final rightStats = await statsService.forPlayersFromTournaments({
       rightId,
     }, filteredTournaments);
+    final directEncounters = await statsService.directEncounters(
+      leftId,
+      rightId,
+      filteredTournaments,
+    );
     final snapshot = ranking == null
         ? null
         : await LocalRankingEloService(
             database: _database,
             tournamentStorage: _tournamentStorage,
           ).calculate(ranking, tournaments: filteredTournaments);
-    return (leftStats, rightStats, snapshot);
+    return (leftStats, rightStats, snapshot, directEncounters);
   }
 
   Future<(List<PlayerProfile>, List<LocalRanking>, List<int>)>
@@ -296,6 +315,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                   LocalPlayerStatistics,
                   LocalPlayerStatistics,
                   LocalEloSnapshot?,
+                  DirectEncounterSummary,
                 )
               >(
                 future: future,
@@ -309,7 +329,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                   if (data == null) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  final (leftStats, rightStats, elo) = data;
+                  final (leftStats, rightStats, elo, directEncounters) = data;
                   final rows = _comparisonRows(
                     leftStats: leftStats,
                     rightStats: rightStats,
@@ -318,7 +338,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                     elo: elo,
                     ranking: ranking,
                   );
-                  return Column(
+                  final statistics = Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
@@ -388,6 +408,33 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                       ),
                     ],
                   );
+                  final encounters = _directEncountersPanel(
+                    left: left,
+                    right: right,
+                    summary: directEncounters,
+                  );
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth < 1000) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            statistics,
+                            const SizedBox(height: 20),
+                            encounters,
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 3, child: statistics),
+                          const SizedBox(width: 20),
+                          Expanded(flex: 2, child: encounters),
+                        ],
+                      );
+                    },
+                  );
                 },
               ),
           ],
@@ -418,6 +465,48 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     onChanged: (id) {
       if (id != null) onChanged(id);
     },
+  );
+
+  Widget _directEncountersPanel({
+    required PlayerProfile left,
+    required PlayerProfile right,
+    required DirectEncounterSummary summary,
+  }) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Direkte Begegnungen',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Gesamtbilanz: ${left.displayName} ${summary.leftWins} : '
+            '${summary.rightWins} ${right.displayName}'
+            '${summary.draws == 0 ? '' : ' · ${summary.draws} Unentschieden'}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          if (summary.encounters.isEmpty)
+            const Text('Im ausgewählten Zeitraum keine direkten Begegnungen.')
+          else
+            for (final encounter in summary.encounters)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  '${left.displayName} ${encounter.leftScore} : '
+                  '${encounter.rightScore} ${right.displayName}',
+                ),
+                subtitle: Text(
+                  '${encounter.tournamentName} · '
+                  '${encounter.date.day}.${encounter.date.month}.${encounter.date.year}',
+                ),
+              ),
+        ],
+      ),
+    ),
   );
 
   List<({String category, String left, String right})> _comparisonRows({

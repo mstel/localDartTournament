@@ -181,10 +181,14 @@ class TournamentTiming {
       seconds: max(0, rawElapsed.inSeconds - pausedSeconds),
     );
     final completed = games.where((m) => m.hasResult).length;
-    DateTime? forecast = tournament.finishedAt;
-    int? expectedCompleted;
     final planned = tournament.plannedMinutes;
     final total = tournament.plannedMatches;
+    final forecast =
+        tournament.finishedAt ??
+        (planned != null && tournament.startedAt != null
+            ? tournament.startedAt!.add(Duration(minutes: planned))
+            : null);
+    int? expectedCompleted;
     if (planned != null &&
         total != null &&
         total > 0 &&
@@ -197,35 +201,6 @@ class TournamentTiming {
           : planned > 0
           ? (seconds * total / (planned * 60)).floor().clamp(0, total)
           : total;
-      // Progress-based forecast; it is deliberately labelled as an estimate.
-      // Running games contribute fractional progress using observed match length.
-      final average = durations.isEmpty
-          ? null
-          : durations.reduce((a, b) => a + b) / durations.length;
-      var progress = completed.toDouble();
-      if (average != null && average > 0) {
-        for (final game in games.where(
-          (m) => !m.isResolved && m.startedAt != null,
-        )) {
-          progress += (now.difference(game.startedAt!).inSeconds / average)
-              .clamp(0, 1);
-        }
-      }
-      final remainingFraction = (1 - progress / max(total, completed)).clamp(
-        0.0,
-        1.0,
-      );
-      final secondsPerFraction = progress > 0
-          ? max(0, elapsed.inSeconds) / (progress / max(total, completed))
-          : planned * 60.0;
-      forecast = completed == 0
-          ? null
-          : tournament.finishedAt ??
-                now.add(
-                  Duration(
-                    seconds: (remainingFraction * secondsPerFraction).round(),
-                  ),
-                );
     }
     return TimingSnapshot(
       elapsed.isNegative ? Duration.zero : elapsed,

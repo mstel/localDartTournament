@@ -38,6 +38,7 @@ void main() {
       );
       await tester.tap(find.text('Turnieruhr starten'));
       await tester.pump();
+      expect(find.text('Turnieruhr'), findsOneWidget);
       expect(find.text('Laufzeit 0 h 0 min'), findsOneWidget);
       await tester.pump(const Duration(seconds: 75));
       expect(tester.takeException(), isNull);

@@ -82,6 +82,11 @@ void main() {
       expect(find.text('Kategorie'), findsOneWidget);
       expect(find.text('Spiele'), findsOneWidget);
       expect(find.text('Legquote'), findsOneWidget);
+      expect(find.text('Direkte Begegnungen'), findsOneWidget);
+      expect(
+        find.text('Im ausgewählten Zeitraum keine direkten Begegnungen.'),
+        findsOneWidget,
+      );
       expect(find.textContaining('Elo-Verlauf'), findsNothing);
       final comparisonTable = tester.widget<DataTable>(find.byType(DataTable));
       expect(comparisonTable.border?.verticalInside, isNotNull);
