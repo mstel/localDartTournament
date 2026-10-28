@@ -1,5 +1,5 @@
 -- Fresh Supabase setup for the single-operator, local-first app.
--- Run once in the SQL Editor of the fresh project pwqpcrzbmaxywcdotkbq.
+-- Run once in the SQL Editor of the fresh project rbcsrqisbuutnnxpmcvp.
 -- The private Storage object is a verified full-app backup, not player accounts.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

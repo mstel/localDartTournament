@@ -1,3 +1,13 @@
+# 2.1.0+34
+
+- Deaktiviert den automatischen Supabase-Workspace-Abgleich. Lokale Änderungen
+  bleiben auf dem Gerät, bis der Abgleich oder Upload manuell gestartet wird.
+- Verbindet neue Builds mit dem neuen App-Supabase-Projekt und ermöglicht den
+  Umzug eines lokalen Backups durch Wiederherstellen und anschließendes
+  Hochladen.
+- Vermeidet beim Bestätigen einer Cloud-Wiederherstellung einen zweiten
+  Download desselben Backups.
+
 # 2.0.8+33
 
 - Ergänzt in den Turniereinstellungen Funktionen zum Zurücksetzen der

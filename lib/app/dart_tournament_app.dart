@@ -13,29 +13,14 @@ class DartTournamentApp extends StatefulWidget {
   State<DartTournamentApp> createState() => _DartTournamentAppState();
 }
 
-class _DartTournamentAppState extends State<DartTournamentApp>
-    with WidgetsBindingObserver {
+class _DartTournamentAppState extends State<DartTournamentApp> {
   final _workspaceSync = SupabaseWorkspaceSyncService.instance;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _workspaceSync.start();
     AppThemeController.instance.load();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _workspaceSync.synchronize();
-    }
   }
 
   @override

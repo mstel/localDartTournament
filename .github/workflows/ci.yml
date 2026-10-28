@@ -100,7 +100,7 @@ jobs:
           }
 
       - name: Build Windows x64
-        run: flutter build windows --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
+        run: flutter build windows --release --dart-define="SUPABASE_URL=https://rbcsrqisbuutnnxpmcvp.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
 
       - name: Package Windows update
         shell: pwsh
@@ -221,7 +221,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Linux x64
-        run: flutter build linux --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+        run: flutter build linux --release --dart-define="SUPABASE_URL=https://rbcsrqisbuutnnxpmcvp.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
 
       - name: Verify Linux x64 architecture
         run: file build/linux/x64/release/bundle/dart_tournament_manager | grep -Eq 'x86-64|x86_64'
@@ -273,7 +273,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Linux ARM64
-        run: flutter build linux --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+        run: flutter build linux --release --dart-define="SUPABASE_URL=https://rbcsrqisbuutnnxpmcvp.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
 
       - name: Verify Linux ARM64 architecture
         run: file build/linux/arm64/release/bundle/dart_tournament_manager | grep -Eq 'aarch64|ARM64'
@@ -371,7 +371,7 @@ jobs:
           EOF
 
       - name: Build signed Android APK
-        run: flutter build apk --release --dart-define="SUPABASE_URL=https://pwqpcrzbmaxywcdotkbq.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+        run: flutter build apk --release --dart-define="SUPABASE_URL=https://rbcsrqisbuutnnxpmcvp.supabase.co" --dart-define="SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
 
       - name: Verify APK signature
         run: |

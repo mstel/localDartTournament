@@ -31,11 +31,11 @@ need separate Supabase queries for each page section.
    The repository config enables JWT verification. The function uses Supabase's
    `SUPABASE_URL` and `SUPABASE_ANON_KEY`; no secret key needs to be configured
    in Astro or the Flutter app.
-3. Install this app update. After the operator logs in, the next successful
-   automatic synchronization publishes the read model alongside the private
+3. Install this app update. After the operator logs in, use **Jetzt abgleichen**
+   in **Einstellungen → Daten** to publish the read model alongside the private
    backup. An existing account with an existing backup publishes it on its next
-   app synchronization; local data and the existing backup are not migrated,
-   replaced or deleted by this feature.
+   manual app synchronization; local data and the existing backup are not
+   migrated, replaced or deleted by this feature.
 4. Verify the endpoint with the operator's short-lived access token. A logged
    out request must return `401`; before the first publication an authenticated
    request returns `404`; after sync it returns a document with

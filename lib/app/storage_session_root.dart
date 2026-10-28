@@ -36,7 +36,6 @@ class _StorageSessionRootState extends State<StorageSessionRoot> {
       }
       if (!mounted) return;
       setState(() => _accountId = next);
-      unawaited(SupabaseWorkspaceSyncService.instance.synchronize());
     });
   }
 

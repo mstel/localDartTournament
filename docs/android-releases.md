@@ -24,12 +24,11 @@ Prüfsummendatei, ohne Linux-Pakete neu zu veröffentlichen.
 - Die Android-Buildnummer nach `+` muss mit jeder Veröffentlichung steigen.
   Veröffentlichte Tags verwenden das Format `vX.Y.Z+N`; das APK-Asset heißt
   `dart-turnier-android.apk`.
-- Der Android-Build verwendet die Supabase-Konfiguration aus dem Ziel-Repository
-  (`pwqpcrzbmaxywcdotkbq`) und nicht die des früheren Repositories. Der
-  Publishable-Key wird aus der Actions-Variable `SUPABASE_PUBLISHABLE_KEY`
-  eingelesen. Mit derselben Supabase-URL und demselben Konto bleiben die dort
-  gespeicherten Daten erreichbar; lokale Anmeldung kann nach einer
-  Neuinstallation erneut erforderlich sein.
+- Der Android-Build verwendet das App-Supabase-Projekt
+  (`rbcsrqisbuutnnxpmcvp`). Der Publishable-Key wird aus der Actions-Variable
+  `SUPABASE_PUBLISHABLE_KEY` eingelesen. Cloud-Daten aus dem früheren Projekt
+  werden nicht automatisch übertragen; ein lokales App-Backup kann in der
+  neuen Installation wiederhergestellt und anschließend hochgeladen werden.
 - Vor einer Installation ein externes Backup erstellen. Android muss die
   APK-Signatur, Asset-Größe und SHA-256-Prüfsumme prüfen.
 

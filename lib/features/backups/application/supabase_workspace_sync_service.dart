@@ -13,8 +13,8 @@ import '../data/supabase_backup_repository.dart';
 import '../../website/application/website_read_model_service.dart';
 
 /// Keeps one private complete workspace per authenticated Supabase account.
-/// Local edits are uploaded after a short debounce; a newer remote snapshot is
-/// pulled when the local account workspace has no unpushed edits.
+/// Cloud synchronization is user-triggered; local edits stay on this device
+/// until the user synchronizes or uploads them.
 class SupabaseWorkspaceSyncService {
   static final instance = SupabaseWorkspaceSyncService._();
   static const _localOnlyPreview = bool.fromEnvironment(
@@ -23,34 +23,35 @@ class SupabaseWorkspaceSyncService {
   );
 
   SupabaseWorkspaceSyncService._()
-    : _repository = SupabaseBackupRepository(),
-      _debounce = const Duration(seconds: 3);
+    : _repository = SupabaseBackupRepository();
 
-  SupabaseWorkspaceSyncService({
-    SupabaseBackupRepository? repository,
-    Duration debounce = const Duration(seconds: 3),
-  }) : _repository = repository ?? SupabaseBackupRepository(),
-       _debounce = debounce;
+  SupabaseWorkspaceSyncService({SupabaseBackupRepository? repository})
+    : _repository = repository ?? SupabaseBackupRepository();
 
   static final status = ValueNotifier<String>('Lokale Daten sind bereit');
   final SupabaseBackupRepository _repository;
-  final Duration _debounce;
-  Timer? _timer;
   bool _busy = false;
-  bool _syncRequestedWhileBusy = false;
   bool _pausePending = false;
   bool _started = false;
+  int _localChangeRevision = 0;
+  Future<void> _pendingLocalChangeWrite = Future<void>.value();
   late final VoidCallback _changeListener = _onLocalChange;
 
   void start() {
     if (_started) return;
     _started = true;
     StorageAccess.localDataRevision.addListener(_changeListener);
-    unawaited(_prepareAndSynchronize());
+    unawaited(_prepareLocalWorkspace());
   }
 
   Future<void> activateAccount(String? accountId) async {
-    if (accountId == null || _localOnlyPreview) return;
+    if (accountId == null || _localOnlyPreview) {
+      if (accountId == null) {
+        status.value =
+            'Lokal gespeichert · Cloud-Abgleich nur nach Anmeldung manuell';
+      }
+      return;
+    }
     final accountDirectory = await appDataDirectory();
     final stateFile = File(
       path.join(accountDirectory.path, 'supabase_sync_state.json'),
@@ -94,18 +95,17 @@ class SupabaseWorkspaceSyncService {
           ..remove('syncPaused')
           ..['dirty'] = true;
         await _writeState(state);
-        status.value = 'Automatische Synchronisierung wieder aktiviert';
       }
+      await _setManualSyncStatus();
       return;
     }
-    if (await ownerMarker.exists()) return;
+    if (await ownerMarker.exists()) {
+      await _setManualSyncStatus();
+      return;
+    }
     // Claim the old local-only workspace once. Do not seed another Supabase
-    // account from the same legacy data directory.
-    if (await _repository.hasBackup()) {
-      await ownerMarker.parent.create(recursive: true);
-      await ownerMarker.writeAsString(accountId, flush: true);
-      return;
-    }
+    // account from the same legacy data directory. Any existing cloud
+    // snapshot is checked only after the user starts a manual sync.
     final files = [
       'tournaments.json',
       'app_database.sqlite',
@@ -139,11 +139,11 @@ class SupabaseWorkspaceSyncService {
       final state = await _readState();
       state['dirty'] = true;
       await _writeState(state);
-      status.value = 'Bisherige lokale Daten dem Supabase-Konto zugeordnet';
     }
     // The state file is account-scoped; creating it here also makes a later
     // sync distinguish this account from the legacy local-only store.
     if (!await stateFile.exists()) await _writeState({'dirty': copied});
+    await _setManualSyncStatus();
   }
 
   /// Copies only a genuine matching schema-22 proof; never replaces a proof.
@@ -176,23 +176,37 @@ class SupabaseWorkspaceSyncService {
     return true;
   }
 
-  Future<void> _prepareAndSynchronize() async {
+  Future<void> _prepareLocalWorkspace() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) await activateAccount(user.id);
-      await synchronize();
+      final state = await _readState();
+      status.value = state['dirty'] == true
+          ? 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend'
+          : user == null
+          ? 'Lokal gespeichert · Cloud-Abgleich nur manuell'
+          : 'Bereit · Cloud-Abgleich nur manuell';
     } catch (error) {
-      status.value = 'Synchronisierung wartet auf Verbindung: $error';
+      status.value = 'Lokale Daten bereit · Cloud-Abgleich nur manuell: $error';
     }
   }
 
   void _onLocalChange() {
-    unawaited(_markDirtyAndResumeIfReady());
-    _schedule(_debounce);
+    _localChangeRevision++;
+    _pendingLocalChangeWrite = _pendingLocalChangeWrite.then<void>(
+      (_) => _markDirtyAndResumeIfReady(),
+      onError: (Object _, StackTrace _) => _markDirtyAndResumeIfReady(),
+    );
+    unawaited(
+      _pendingLocalChangeWrite.catchError((Object error) {
+        status.value = 'Lokale Änderung konnte nicht vorgemerkt werden: $error';
+      }),
+    );
   }
 
   Future<void> _markDirtyAndResumeIfReady() async {
     await _setDirty(true);
+    status.value = 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend';
     String? accountId;
     try {
       accountId = Supabase.instance.client.auth.currentUser?.id;
@@ -208,7 +222,7 @@ class SupabaseWorkspaceSyncService {
       ..remove('syncPaused')
       ..['dirty'] = true;
     await _writeState(state);
-    status.value = 'Automatische Synchronisierung wieder aktiviert';
+    status.value = 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend';
   }
 
   Future<bool> _hasLocalTournamentData(Directory directory) async {
@@ -230,11 +244,6 @@ class SupabaseWorkspaceSyncService {
     } on FormatException {
       return false;
     }
-  }
-
-  void _schedule(Duration delay) {
-    _timer?.cancel();
-    _timer = Timer(delay, () => unawaited(synchronize()));
   }
 
   Future<File> get _stateFile async => File(
@@ -260,6 +269,13 @@ class SupabaseWorkspaceSyncService {
     await temp.rename(file.path);
   }
 
+  Future<void> _setManualSyncStatus() async {
+    final state = await _readState();
+    status.value = state['dirty'] == true
+        ? 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend'
+        : 'Bereit · Cloud-Abgleich nur manuell';
+  }
+
   Future<void> _setDirty(bool dirty) async {
     final state = await _readState();
     state['dirty'] = dirty;
@@ -276,10 +292,7 @@ class SupabaseWorkspaceSyncService {
       return;
     }
     if (_pausePending) return;
-    if (_busy) {
-      _syncRequestedWhileBusy = true;
-      return;
-    }
+    if (_busy) return;
     try {
       if (Supabase.instance.client.auth.currentUser == null) {
         status.value = 'Nicht angemeldet · lokal gespeichert';
@@ -290,6 +303,8 @@ class SupabaseWorkspaceSyncService {
     }
     _busy = true;
     try {
+      await _pendingLocalChangeWrite;
+      final localRevision = _localChangeRevision;
       final state = await _readState();
       if (state['syncPaused'] == true) {
         status.value =
@@ -314,6 +329,12 @@ class SupabaseWorkspaceSyncService {
         return;
       }
       if (remoteIsNewer) {
+        await _pendingLocalChangeWrite;
+        if (localRevision != _localChangeRevision) {
+          status.value =
+              'Lokale Änderungen während des Abgleichs · Cloud-Stand nicht geladen';
+          return;
+        }
         status.value = 'Lade neueren Datenstand aus Supabase …';
         await (await BackupService.create()).restore(remote, restartApp: false);
         await _publishWebsiteReadModel();
@@ -332,10 +353,6 @@ class SupabaseWorkspaceSyncService {
       status.value = 'Synchronisierung wartet auf Verbindung: $error';
     } finally {
       _busy = false;
-      if (_syncRequestedWhileBusy && !_pausePending) {
-        _syncRequestedWhileBusy = false;
-        _schedule(_debounce);
-      }
     }
   }
 
@@ -361,13 +378,25 @@ class SupabaseWorkspaceSyncService {
   }
 
   Future<void> _push(Map<String, dynamic> state) async {
+    final localRevision = _localChangeRevision;
     status.value = 'Sichere Änderungen in Supabase …';
     final timestamp = await _repository.upload(await BackupService.create());
     await _publishWebsiteReadModel();
+    await _pendingLocalChangeWrite;
+    if (localRevision != _localChangeRevision) {
+      status.value = 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend';
+      return;
+    }
     await _writeState({
       'dirty': false,
       'lastSyncedAt': timestamp.toUtc().toIso8601String(),
     });
+    if (localRevision != _localChangeRevision) {
+      await _pendingLocalChangeWrite;
+      await _setDirty(true);
+      status.value = 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend';
+      return;
+    }
     status.value = 'Mit Supabase synchronisiert';
   }
 
@@ -393,13 +422,13 @@ class SupabaseWorkspaceSyncService {
   }
 
   /// User-confirmed resolution that replaces the local account workspace.
-  Future<void> downloadRemoteVersion() async {
+  Future<void> downloadRemoteVersion({BackupPreview? preview}) async {
     if (_pausePending) return;
     if (_busy) return;
     _busy = true;
     try {
       final backups = await BackupService.create();
-      final remote = await _repository.download(backups);
+      final remote = preview ?? await _repository.download(backups);
       await backups.restore(remote, restartApp: false);
       await _writeState({
         'dirty': false,
@@ -411,10 +440,9 @@ class SupabaseWorkspaceSyncService {
     }
   }
 
-  /// Pauses every automatic cloud operation before this device is reset.
+  /// Prevents a manual sync from restoring cloud data after this device resets.
   Future<void> pauseSynchronizationForFreshStart() async {
     _pausePending = true;
-    _timer?.cancel();
     try {
       while (_busy) {
         await Future<void>.delayed(const Duration(milliseconds: 25));
@@ -432,7 +460,6 @@ class SupabaseWorkspaceSyncService {
   }
 
   void dispose() {
-    _timer?.cancel();
     StorageAccess.localDataRevision.removeListener(_changeListener);
     _started = false;
   }

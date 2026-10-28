@@ -1,4 +1,4 @@
--- Run this in the Supabase SQL Editor for project hnsyvqtqxdsbbyrayobv.
+-- Run this in the SQL Editor of the app's Supabase project.
 -- Never put a service role or sb_secret key into the Flutter app.
 
 create table if not exists public.player_profiles (

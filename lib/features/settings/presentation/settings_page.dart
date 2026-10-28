@@ -176,7 +176,7 @@ Future<void> _resetLocalData(BuildContext context) async {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Die aktiven lokalen Turniere, Spieler, Ergebnisse, Ranglisten, Statistiken und Planungseinstellungen dieses Geräts werden nach einer bytegetreuen Sicherung entfernt. Deine Anmeldung und übrigen App-Einstellungen bleiben erhalten. Cloud-Daten und andere Geräte bleiben unberührt. Die Synchronisierung wird pausiert, damit keine alten Cloud-Daten zurückgeladen oder neue lokale Daten automatisch hochgeladen werden. Ein neuer Stand bleibt lokal, bis du ihn ausdrücklich als Cloud-Stand freigibst.',
+            'Die aktiven lokalen Turniere, Spieler, Ergebnisse, Ranglisten, Statistiken und Planungseinstellungen dieses Geräts werden nach einer bytegetreuen Sicherung entfernt. Deine Anmeldung und übrigen App-Einstellungen bleiben erhalten. Cloud-Daten und andere Geräte bleiben unberührt. Der Cloud-Abgleich läuft nicht automatisch; ein neuer Stand bleibt lokal, bis du ihn ausdrücklich manuell abgleichst oder hochlädst.',
           ),
           const SizedBox(height: 16),
           TextField(

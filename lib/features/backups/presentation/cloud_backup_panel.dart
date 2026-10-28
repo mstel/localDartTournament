@@ -82,6 +82,11 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
     });
   }
 
+  Future<void> _synchronize() => _run(() async {
+    await SupabaseWorkspaceSyncService.instance.synchronize();
+    _status = SupabaseWorkspaceSyncService.status.value;
+  });
+
   Future<void> _restore() => _run(() async {
     final backups = await BackupService.create();
     final repository = SupabaseBackupRepository();
@@ -108,7 +113,9 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
       ),
     );
     if (confirmed != true) return;
-    await SupabaseWorkspaceSyncService.instance.downloadRemoteVersion();
+    await SupabaseWorkspaceSyncService.instance.downloadRemoteVersion(
+      preview: preview,
+    );
     _status = 'Cloud-Datenstand übernommen. Die Oberfläche lädt neu.';
   });
 
@@ -167,8 +174,8 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
                     children: [
                       Text(
                         user == null
-                            ? 'Mit demselben Supabase-Konto kannst du deinen Datenstand zwischen Laptop und Handy übertragen. Jedes Konto hat einen eigenen Cloud-Speicher.'
-                            : 'Angemeldet als ${user.email ?? 'Betreiber'}. Der Cloud-Datenstand enthält Spieler, Turniere, Bestleistungen und Ranglisten.',
+                            ? 'Mit demselben Supabase-Konto kannst du deinen Datenstand zwischen Laptop und Handy übertragen. Jedes Konto hat einen eigenen Cloud-Speicher. Der Abgleich erfolgt nur manuell.'
+                            : 'Angemeldet als ${user.email ?? 'Betreiber'}. Spieler, Turniere, Bestleistungen und Ranglisten bleiben lokal, bis du den Cloud-Abgleich manuell startest.',
                       ),
                       const SizedBox(height: 8),
                       if (user == null)
@@ -185,6 +192,11 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
+                            FilledButton.icon(
+                              onPressed: _busy ? null : _synchronize,
+                              icon: const Icon(Icons.sync),
+                              label: const Text('Jetzt abgleichen'),
+                            ),
                             FilledButton.icon(
                               onPressed: _busy ? null : _upload,
                               icon: const Icon(Icons.cloud_upload_outlined),
