@@ -27,6 +27,12 @@ class SupabaseBackupRepository {
     return '${user.id}/${WebsiteReadModelService.objectName}';
   }
 
+  String get _websiteTournamentIndexPath {
+    final user = _client.auth.currentUser;
+    if (user == null) throw StateError('Bitte zuerst als Betreiber anmelden.');
+    return '${user.id}/${WebsiteReadModelService.tournamentIndexObjectName}';
+  }
+
   Future<bool> hasBackup() async {
     final user = _client.auth.currentUser;
     if (user == null) throw StateError('Bitte zuerst als Betreiber anmelden.');
@@ -57,6 +63,15 @@ class SupabaseBackupRepository {
     return files.any((file) => file.name == WebsiteReadModelService.objectName);
   }
 
+  Future<bool> hasWebsiteTournamentIndex() async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw StateError('Bitte zuerst als Betreiber anmelden.');
+    final files = await _client.storage.from(bucket).list(path: user.id);
+    return files.any(
+      (file) => file.name == WebsiteReadModelService.tournamentIndexObjectName,
+    );
+  }
+
   Future<void> uploadWebsiteReadModel(Map<String, dynamic> readModel) async {
     final bytes = Uint8List.fromList(utf8.encode(jsonEncode(readModel)));
     await _client.storage
@@ -64,6 +79,22 @@ class SupabaseBackupRepository {
         .uploadBinary(
           _websiteReadModelPath,
           bytes,
+          fileOptions: const FileOptions(
+            upsert: true,
+            contentType: 'application/octet-stream',
+          ),
+        );
+    final tournamentIndex = WebsiteReadModelService.createTournamentIndex(
+      readModel,
+    );
+    final indexBytes = Uint8List.fromList(
+      utf8.encode(jsonEncode(tournamentIndex)),
+    );
+    await _client.storage
+        .from(bucket)
+        .uploadBinary(
+          _websiteTournamentIndexPath,
+          indexBytes,
           fileOptions: const FileOptions(
             upsert: true,
             contentType: 'application/octet-stream',

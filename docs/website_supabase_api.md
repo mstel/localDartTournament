@@ -12,10 +12,20 @@ The website reads the model through the `website-read-model` Supabase Edge
 Function. It accepts `GET` only and requires a valid Supabase user access token.
 The function uses the caller's JWT and the existing owner-folder Storage RLS
 policy to read only
-`dart-app-backups/<authenticated-user-id>/website-read-model.json`. It does not
-use a service-role key or perform database/storage writes. Anonymous requests
-are rejected. The response is a single JSON document, so the website does not
-need separate Supabase queries for each page section.
+objects under `dart-app-backups/<authenticated-user-id>/`. It does not use a
+service-role key or perform database/storage writes. Anonymous requests are
+rejected. The app publishes the full
+`website-read-model.json` plus the compact `website-tournament-index.json`.
+Requests without a view parameter still return the full schema; the tournament
+view reads the compact index to reduce Storage egress.
+
+Use
+`GET /functions/v1/website-read-model?view=tournaments&page=1` to load up to ten
+completed tournament summaries. Increase the 1-based page number to load more.
+An invalid page value returns `400`; an empty result is a successful response
+with an empty `completedTournaments` list and `hasMore: false`. Older accounts
+that have not published the compact index yet receive the same paged contract
+derived from their full model.
 
 ## Deploy
 
@@ -39,7 +49,9 @@ need separate Supabase queries for each page section.
 4. Verify the endpoint with the operator's short-lived access token. A logged
    out request must return `401`; before the first publication an authenticated
    request returns `404`; after sync it returns a document with
-   `schemaVersion: 1`.
+   `schemaVersion: 1`. The tournament view returns at most ten summaries and a
+   `tournamentPage` object containing `page`, `pageSize`, `total`, and
+   `hasMore`.
 
 ## Astro server-side use
 
@@ -93,3 +105,12 @@ authorization header.
 When changing this contract, increment `schemaVersion`, update this document
 and keep the endpoint backward-compatible or update the Astro consumer in the
 separate website project at the same time.
+
+## Tournament page response
+
+The `view=tournaments` response keeps `schemaVersion` and `generatedAt`, and
+contains only compact entries in `completedTournaments`: `id`, `name`,
+`finishedAt`, `startedAt`, `createdAt`, `playerCount`, `matchCount`, `mode`,
+and `hasImportedArchive`. `tournamentPage` contains the requested `page`, the
+fixed `pageSize` of 10, the total number of completed tournaments, and
+`hasMore`.
