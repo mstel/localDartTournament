@@ -8,7 +8,7 @@ class SupabaseAccountConfig {
 
   static const url = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://pwqpcrzbmaxywcdotkbq.supabase.co',
+    defaultValue: 'https://rbcsrqisbuutnnxpmcvp.supabase.co',
   );
   static const publishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',

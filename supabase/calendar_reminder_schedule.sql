@@ -17,7 +17,7 @@ begin
         and x.user_id=r.user_id and x.device_id=d.id and x.starts_at=e.starts_at and x.minutes_before=r.minutes_before)
   ) then
     perform net.http_post(
-      url:='https://hnsyvqtqxdsbbyrayobv.supabase.co/functions/v1/calendar-reminders',
+      url:='https://rbcsrqisbuutnnxpmcvp.supabase.co/functions/v1/calendar-reminders',
       headers:=jsonb_build_object('Content-Type','application/json',
         'Authorization','Bearer __PUBLIC_ANON_JWT__','apikey','__PUBLIC_ANON_JWT__','x-calendar-worker-key',
         (select token from public.community_calendar_worker_config where singleton)),

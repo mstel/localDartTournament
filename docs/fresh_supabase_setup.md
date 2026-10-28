@@ -2,18 +2,23 @@
 
 Jedes Supabase-Konto erhält einen getrennten privaten Komplett-Datenstand.
 Spielerprofile selbst benötigen keine Supabase-Konten. Änderungen werden lokal
-gespeichert und nach kurzer Verzögerung als vollständiger Datenstand
-hochgeladen. Beim Start, nach Anmeldung und beim Fortsetzen der App wird ein
-neuerer Cloud-Stand auf das Gerät geladen, sofern dort keine ungesicherten
-lokalen Änderungen vorliegen. Laptop und Handy verwenden damit denselben Pool,
-wenn beide mit demselben Supabase-Konto angemeldet sind. Andere Konten erhalten
-eigene lokale und Cloud-Daten.
+gespeichert. Cloud-Downloads und vollständige Uploads laufen nur, wenn du in
+**Einstellungen → Daten** auf **Jetzt abgleichen**, **Lokalen Stand hochladen**
+oder **Cloud-Datenstand laden** drückst. Beim App-Start, beim Fortsetzen, nach
+Anmeldung und nach lokalen Änderungen findet kein Cloud-Abgleich statt. So
+bleibt der Supabase-Datenverkehr unter deiner Kontrolle. Laptop und Handy
+verwenden denselben Datenstand, wenn du auf beiden Geräten mit demselben
+Supabase-Konto angemeldet bist und den Abgleich manuell startest. Andere Konten
+erhalten eigene lokale und Cloud-Daten.
 
 Wenn beide Geräte offline oder gleichzeitig Änderungen vorgenommen haben,
 ersetzt die App keinen der beiden Stände automatisch. In **Einstellungen →
 Daten** kann dann bewusst der lokale Stand hochgeladen oder der Cloud-Stand
-geladen werden. Das ist eine Synchronisierung vollständiger Snapshots, keine
-Zusammenführung einzelner Turniere oder Spieler.
+geladen werden. **Jetzt abgleichen** prüft auf Konflikte; bei gleichzeitig
+geänderten Ständen entscheidest du anschließend, welcher vollständige Snapshot
+übernommen werden soll. Das ist keine Zusammenführung einzelner Turniere oder
+Spieler. Ein Upload beim Schließen der App wird nicht versucht, da das
+Betriebssystem Netzwerkzugriffe beim Beenden nicht zuverlässig abwartet.
 
 ## Projekt einrichten
 
