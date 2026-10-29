@@ -147,6 +147,24 @@ void main() {
       ]);
       expect(model['completedTournaments'], hasLength(1));
       expect((model['completedTournaments'] as List).single['id'], 'finished');
+      expect(WebsiteReadModelService.createTournamentIndex(model), {
+        'schemaVersion': 1,
+        'generatedAt': model['generatedAt'],
+        'completedTournaments': [
+          {
+            'id': 'finished',
+            'name': 'Vereinsturnier',
+            'finishedAt': '2026-10-20T00:00:00.000Z',
+            'startedAt': null,
+            'createdAt':
+                (model['completedTournaments'] as List).single['createdAt'],
+            'playerCount': 2,
+            'matchCount': 1,
+            'mode': 'groups:round_robin',
+            'hasImportedArchive': false,
+          },
+        ],
+      });
       expect(model['statistics'], [
         {
           'playerId': player.id,

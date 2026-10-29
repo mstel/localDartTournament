@@ -344,7 +344,8 @@ class SupabaseWorkspaceSyncService {
         });
         status.value = 'Aktueller Datenstand aus Supabase geladen';
       } else {
-        if (!await _repository.hasWebsiteReadModel()) {
+        if (!await _repository.hasWebsiteReadModel() ||
+            !await _repository.hasWebsiteTournamentIndex()) {
           await _publishWebsiteReadModel();
         }
         status.value = 'Mit Supabase synchronisiert';

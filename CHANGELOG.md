@@ -1,4 +1,4 @@
-# 2.1.2+36
+# 2.1.3+37
 
 - Ergänzt Hinweise für Setzung, Freilose, Match-Ergebnisse, Bestleistungen und
   Ausscheiden beziehungsweise verbleibende Leben im Spielplan und K.-o.-Baum.
@@ -12,6 +12,12 @@
   an. Das Protokoll enthält keine Zugangsdaten oder Sitzungstoken.
 - Prüft im Windows-Release-Build, ob der konfigurierte Supabase-Projekt-Key
   akzeptiert wird.
+- Reduziert den Datenverkehr der Turnierliste auf der Website durch einen
+  kompakten Turnierindex und paginierte Ergebnisse; ältere Konten ohne Index
+  bleiben kompatibel.
+- Stabilisiert die Warteschlange für lokale Speicherzugriffe, damit weitere
+  Speicherungen auch nach abgeschlossenen asynchronen Abläufen fortgesetzt
+  werden.
 
 # 2.1.0+34
 
