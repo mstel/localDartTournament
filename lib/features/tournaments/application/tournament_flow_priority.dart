@@ -1,4 +1,5 @@
 import '../domain/tournament_models.dart';
+import '../domain/tournament_flow_priority_settings.dart';
 
 class TournamentFlowPriority {
   const TournamentFlowPriority({
@@ -6,30 +7,49 @@ class TournamentFlowPriority {
     required this.notices,
   });
 
-  static const playerMatchDeficitThreshold = 2;
-  static const groupMatchDeficitThreshold = 3;
+  static const defaultSettings = TournamentFlowPrioritySettings();
 
   final Set<GroupMatch> prioritizedMatches;
   final List<String> notices;
 
-  factory TournamentFlowPriority.forStage(TournamentRunStage? stage) {
+  factory TournamentFlowPriority.forStage(
+    TournamentRunStage? stage, {
+    TournamentFlowPrioritySettings settings = defaultSettings,
+  }) {
     if (stage is! GroupTournamentRunStage || stage.groups.isEmpty) {
       return const TournamentFlowPriority(prioritizedMatches: {}, notices: []);
     }
 
     final priorities = <GroupMatch>{};
     final notices = <String>[];
-    final groupPlayedCounts = [
-      for (final group in stage.groups) _playedMatches(group.matches),
+    final groupProgress = [
+      for (final group in stage.groups)
+        _GroupProgress(
+          played: _playedMatches(group.matches),
+          possible: _possibleMatches(group),
+        ),
     ];
-    final mostPlayedGroup = groupPlayedCounts.reduce((a, b) => a > b ? a : b);
-    final leastPlayedGroup = groupPlayedCounts.reduce((a, b) => a < b ? a : b);
-    final groupDeficit = mostPlayedGroup - leastPlayedGroup;
-    if (groupDeficit >= groupMatchDeficitThreshold) {
+    final referenceMatches = groupProgress
+        .map((progress) => progress.possible)
+        .reduce((a, b) => a > b ? a : b);
+    final leadingProgress = groupProgress
+        .map((progress) => progress.fraction)
+        .reduce((a, b) => a > b ? a : b);
+    // Keep the configured match threshold meaningful using the longest group schedule.
+    final groupDeficits = <int>[
+      for (final progress in groupProgress)
+        settings.usePercentageForGroups && referenceMatches > 0
+            ? ((leadingProgress - progress.fraction) * referenceMatches).round()
+            : groupProgress
+                      .map((item) => item.played)
+                      .reduce((a, b) => a > b ? a : b) -
+                  progress.played,
+    ];
+    final maximumGroupDeficit = groupDeficits.reduce((a, b) => a > b ? a : b);
+    if (maximumGroupDeficit >= settings.groupMatchDeficitThreshold) {
       final trailingGroups = <String>[];
       for (var index = 0; index < stage.groups.length; index++) {
-        if (mostPlayedGroup - groupPlayedCounts[index] <
-            groupMatchDeficitThreshold) {
+        if (groupDeficits[index] < settings.groupMatchDeficitThreshold) {
           continue;
         }
         final group = stage.groups[index];
@@ -38,9 +58,14 @@ class TournamentFlowPriority {
       }
       if (trailingGroups.isNotEmpty) {
         notices.add(
-          'Priorität: ${trailingGroups.join(', ')} liegen bei den gespielten Partien '
-          'mindestens $groupDeficit Partien zurück. Offene Partien dieser '
-          'Gruppen bevorzugt ansetzen.',
+          settings.usePercentageForGroups
+              ? 'Priorität: ${trailingGroups.join(', ')} liegen im Spielplanfortschritt '
+                    'mindestens ${settings.groupMatchDeficitThreshold} von '
+                    '$referenceMatches möglichen Partien zurück. Offene Partien '
+                    'dieser Gruppen bevorzugt ansetzen.'
+              : 'Priorität: ${trailingGroups.join(', ')} liegen bei den gespielten Partien '
+                    'mindestens $maximumGroupDeficit Partien zurück. Offene Partien '
+                    'dieser Gruppen bevorzugt ansetzen.',
         );
       }
     }
@@ -74,7 +99,8 @@ class TournamentFlowPriority {
       final laggingPlayers = playedByPlayer.entries
           .where(
             (entry) =>
-                mostPlayedPlayer - entry.value >= playerMatchDeficitThreshold,
+                mostPlayedPlayer - entry.value >=
+                settings.playerMatchDeficitThreshold,
           )
           .map((entry) => entry.key)
           .toSet();
@@ -84,7 +110,7 @@ class TournamentFlowPriority {
         ..sort();
       playerNotices.add(
         'Priorität: ${names.join(', ')} haben in ${group.name} mindestens '
-        '$playerMatchDeficitThreshold Partien Rückstand. Offene Partien mit '
+        '${settings.playerMatchDeficitThreshold} Partien Rückstand. Offene Partien mit '
         'diesen Spielern bevorzugt ansetzen.',
       );
       for (final match in group.matches.where(_isPrioritizable)) {
@@ -109,6 +135,9 @@ class TournamentFlowPriority {
   static int _playedMatches(Iterable<GroupMatch> matches) =>
       matches.where(_countsAsPlayed).length;
 
+  static int _possibleMatches(TournamentGroup group) =>
+      group.matches.where((match) => match.hasPlayers).length;
+
   static bool _countsAsPlayed(GroupMatch match) =>
       match.hasResult && match.hasPlayers && !match.withdrawalIgnored;
 
@@ -117,4 +146,13 @@ class TournamentFlowPriority {
       !match.isResolved &&
       match.startedAt == null &&
       match.boardNumber == null;
+}
+
+class _GroupProgress {
+  const _GroupProgress({required this.played, required this.possible});
+
+  final int played;
+  final int possible;
+
+  double get fraction => possible == 0 ? 0 : played / possible;
 }

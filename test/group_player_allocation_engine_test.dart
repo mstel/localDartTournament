@@ -89,4 +89,15 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('manual allocation requires an explicit slot order', () {
+    expect(
+      () => engine.allocate(
+        players: players,
+        groupSizes: const [5, 5],
+        mode: GroupPlayerAllocationMode.manual,
+      ),
+      throwsArgumentError,
+    );
+  });
 }

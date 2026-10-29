@@ -6,6 +6,7 @@ GroupTournamentRunStage _stage({
   required List<TournamentPlayer> players,
   required List<GroupMatch> matches,
   int qualifiers = 2,
+  List<String> tieBreakers = defaultGroupTieBreakers,
 }) => GroupTournamentRunStage(
   name: 'Gruppenphase',
   groupPlayType: 'round_robin',
@@ -25,7 +26,7 @@ GroupTournamentRunStage _stage({
     eligibleGroupSize: players.length,
     extraGroups: const [],
   ),
-  tieBreakers: defaultGroupTieBreakers,
+  tieBreakers: tieBreakers,
 );
 
 void main() {
@@ -174,6 +175,12 @@ void main() {
           players: [first, second, third],
           matches: matches,
           qualifiers: 1,
+          tieBreakers: const [
+            'points',
+            'headToHead',
+            'legDifference',
+            'legsFor',
+          ],
         ),
         simulations: 20,
         seed: 41,

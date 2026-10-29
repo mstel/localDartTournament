@@ -6,9 +6,9 @@ void main() {
   test('migrates the persisted previous default tie-breaker order', () {
     const previousDefault = [
       'points',
+      'headToHead',
       'legDifference',
       'legsFor',
-      'headToHead',
     ];
     final stage = TournamentStage(
       name: 'Gruppenphase',
@@ -39,7 +39,7 @@ void main() {
   });
 
   test(
-    'default tie-breakers use head-to-head before aggregate leg difference',
+    'default tie-breakers use aggregate leg difference before head-to-head',
     () {
       final first =
           PlayerStanding(
@@ -65,9 +65,9 @@ void main() {
 
       expect(defaultGroupTieBreakers, [
         'points',
-        'headToHead',
         'legDifference',
         'legsFor',
+        'headToHead',
       ]);
       expect(
         const GroupStandingsEngine().compare(
@@ -76,7 +76,7 @@ void main() {
           defaultGroupTieBreakers,
           matches: [directMatch],
         ),
-        greaterThan(0),
+        lessThan(0),
       );
     },
   );

@@ -65,6 +65,22 @@ class _DirectorPreviewState extends State<DirectorPreview> {
 }
 
 void main() {
+  testWidgets('dashboard opens the full tournament schedule', (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(home: const DirectorPreview()));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Vollständigen Spielplan öffnen'));
+    await tester.tap(find.text('Vollständigen Spielplan öffnen'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Vollständiger Spielplan'), findsOneWidget);
+    expect(find.byType(DataTable), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   const font = String.fromEnvironment('LAYOUT_PREVIEW_FONT');
   setUpAll(() async {
     if (font.isNotEmpty) {
@@ -102,6 +118,8 @@ void main() {
           ),
         );
         expect(find.text('Dashboard'), findsOneWidget);
+        expect(find.textContaining('Aktive Etappe:'), findsNothing);
+        expect(find.textContaining('Gesamt: 0/'), findsOneWidget);
         expect(find.textContaining('Uhrzeit:'), findsNothing);
         expect(find.text('Empfohlene Partien'), findsOneWidget);
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);

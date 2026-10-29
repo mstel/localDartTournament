@@ -23,9 +23,28 @@ void main() {
     SharedPreferences.setMockInitialValues({
       GroupTieBreakerPreferences.key: ['points', 'unknown'],
     });
-
     expect(await GroupTieBreakerPreferences().load(), defaultGroupTieBreakers);
   });
+
+  test(
+    'migrates the previous default order to the new tournament default',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        GroupTieBreakerPreferences.key:
+            GroupTieBreakerPreferences.previousDefault,
+      });
+
+      expect(
+        await GroupTieBreakerPreferences().load(),
+        defaultGroupTieBreakers,
+      );
+      final preferences = await SharedPreferences.getInstance();
+      expect(
+        preferences.getStringList(GroupTieBreakerPreferences.key),
+        defaultGroupTieBreakers,
+      );
+    },
+  );
 
   test('rejects an incomplete order when saving', () async {
     await expectLater(

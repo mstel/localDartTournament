@@ -2,7 +2,7 @@ import 'dart:math';
 
 import '../tournament_models.dart';
 
-enum GroupPlayerAllocationMode { strengthLevels, balanced, random }
+enum GroupPlayerAllocationMode { strengthLevels, balanced, random, manual }
 
 class GroupPlayerAllocationEngine {
   const GroupPlayerAllocationEngine();
@@ -35,6 +35,10 @@ class GroupPlayerAllocationEngine {
         });
       case GroupPlayerAllocationMode.random:
         ordered.shuffle(random ?? Random());
+      case GroupPlayerAllocationMode.manual:
+        throw ArgumentError(
+          'Manual group allocation requires a saved group slot order.',
+        );
     }
 
     final groups = List.generate(

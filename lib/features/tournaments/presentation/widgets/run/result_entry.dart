@@ -46,10 +46,23 @@ class MatchResultTile extends StatelessWidget {
     Widget playerName(bool home, {TextAlign textAlign = TextAlign.start}) {
       final player = home ? match.homePlayer : match.awayPlayer;
       final label = playerLabel(home);
+      final winner = match.winner;
+      final isWinner = match.hasResult && player != null && winner == player;
+      final isLoser =
+          match.hasResult && player != null && winner != null && !isWinner;
       final text = Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         textAlign: textAlign,
-        style: Theme.of(context).textTheme.titleMedium,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: isWinner
+              ? Colors.green.shade700
+              : isLoser
+              ? colorScheme.error
+              : null,
+          fontWeight: isWinner ? FontWeight.bold : null,
+        ),
       );
       if (player == null || onPlayerTap == null) return text;
       return Tooltip(
@@ -77,16 +90,16 @@ class MatchResultTile extends StatelessWidget {
         margin: EdgeInsets.only(bottom: compact ? 4 : 8),
         padding: EdgeInsets.symmetric(
           horizontal: compact ? 8 : 12,
-          vertical: compact ? 5 : 10,
+          vertical: compact ? 0 : 10,
         ),
         decoration: BoxDecoration(
           color: colorScheme.surface,
           border: Border.all(color: colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(compact ? 10 : 16),
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < (compact ? 420 : 620) ||
+            if (constraints.maxWidth < (compact ? 320 : 620) ||
                 MediaQuery.textScalerOf(context).scale(16) > 24) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

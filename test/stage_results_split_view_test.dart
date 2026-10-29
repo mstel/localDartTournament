@@ -39,6 +39,11 @@ void main() {
     for (final tile in tester.widgetList<MatchResultTile>(
       find.byType(MatchResultTile),
     )) {
+      expect(tester.getSize(find.byWidget(tile)).height, lessThan(60));
+    }
+    for (final tile in tester.widgetList<MatchResultTile>(
+      find.byType(MatchResultTile),
+    )) {
       expect(tile.compact, isTrue);
       expect(tile.showRoundLabel, isFalse);
     }

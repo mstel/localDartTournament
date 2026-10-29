@@ -1,3 +1,18 @@
+# 2.1.2+36
+
+- Ergänzt Hinweise für Setzung, Freilose, Match-Ergebnisse, Bestleistungen und
+  Ausscheiden beziehungsweise verbleibende Leben im Spielplan und K.-o.-Baum.
+- Ergänzt die Bearbeitung bestehender Turniere mit Aktualisieren- oder
+  Kopieren-Option und schützt gespeicherte Ergebnisse vor versehentlichem
+  Überschreiben.
+- Ergänzt vier Gruppenverteilungen einschließlich manueller Gruppeneinteilung
+  sowie Einstellungen für Turnierhinweise und Tie-Breaker.
+- Protokolliert Supabase-Anmeldefehler datensparsam mit App-/Windows-Version,
+  Projekt-Host sowie DNS- und HTTPS-Tests und bietet den Export der Diagnose
+  an. Das Protokoll enthält keine Zugangsdaten oder Sitzungstoken.
+- Prüft im Windows-Release-Build, ob der konfigurierte Supabase-Projekt-Key
+  akzeptiert wird.
+
 # 2.1.0+34
 
 - Deaktiviert den automatischen Supabase-Workspace-Abgleich. Lokale Änderungen

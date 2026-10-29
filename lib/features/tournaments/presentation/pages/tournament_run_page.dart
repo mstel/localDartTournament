@@ -519,6 +519,27 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<void> _editTournamentConfiguration() async {
+    final updatedTournament = await Navigator.of(context)
+        .push<CreatedTournament>(
+          MaterialPageRoute<CreatedTournament>(
+            builder: (_) => TournamentCreationPage(
+              tournamentStorage: _tournamentStorage,
+              existingTournament: widget.tournament,
+            ),
+          ),
+        );
+    if (!mounted || updatedTournament == null) return;
+    Navigator.of(context).pushReplacement<void, void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TournamentRunPage(
+          tournament: updatedTournament,
+          tournamentStorage: _tournamentStorage,
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickTournamentName() async {
     try {
       final tournaments =
@@ -1941,131 +1962,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   List<PlayerStanding> _standingsFor(
     TournamentGroup group,
     List<String> tieBreakers,
-  ) {
-    if (group.playType == 'swiss') {
-      final rows = SwissEngine.standings(group);
-      return [
-        ...rows.where(
-          (s) =>
-              PlayerWithdrawalService.policy(widget.tournament, s.player) ==
-              null,
-        ),
-        ...rows.where(
-          (s) =>
-              PlayerWithdrawalService.policy(widget.tournament, s.player) !=
-              null,
-        ),
-      ];
-    }
-    final standings = {
-      for (final player in group.players) player.name: PlayerStanding(player),
-    };
-
-    for (final match in group.matches.where(
-      (match) => match.countsForStatistics && !match.isDecider,
-    )) {
-      final homePlayer = match.homePlayer!;
-      final awayPlayer = match.awayPlayer!;
-      final home = standings[homePlayer.name]!;
-      final away = standings[awayPlayer.name]!;
-      final homeLegs = match.homeLegs!;
-      final awayLegs = match.awayLegs!;
-
-      home.played++;
-      home.legsFor += homeLegs;
-      home.legsAgainst += awayLegs;
-      away.played++;
-      away.legsFor += awayLegs;
-      away.legsAgainst += homeLegs;
-
-      if (match.winner == match.homePlayer) {
-        home.wins++;
-        home.points += 3;
-        away.losses++;
-      } else if (match.winner == match.awayPlayer) {
-        away.wins++;
-        away.points += 3;
-        home.losses++;
-      } else {
-        home.draws++;
-        home.points++;
-        away.draws++;
-        away.points++;
-      }
-    }
-
-    final sorted = standings.values.toList();
-    sorted.sort((a, b) {
-      final withdrawn =
-          (PlayerWithdrawalService.policy(widget.tournament, a.player) == null
-                  ? 0
-                  : 1)
-              .compareTo(
-                PlayerWithdrawalService.policy(widget.tournament, b.player) ==
-                        null
-                    ? 0
-                    : 1,
-              );
-      if (withdrawn != 0) return withdrawn;
-      final comparison = _compareStandings(
-        a,
-        b,
-        tieBreakers,
-        matches: group.matches,
-      );
-      if (comparison != 0) {
-        return comparison;
-      }
-      return a.player.name.compareTo(b.player.name);
-    });
-
-    return sorted;
-  }
-
-  int _compareStandings(
-    PlayerStanding a,
-    PlayerStanding b,
-    List<String> tieBreakers, {
-    List<GroupMatch> matches = const [],
-  }) {
-    for (final tieBreaker in tieBreakers) {
-      final comparison = switch (tieBreaker) {
-        'points' => b.points.compareTo(a.points),
-        'legDifference' => b.legDifference.compareTo(a.legDifference),
-        'legsFor' => b.legsFor.compareTo(a.legsFor),
-        'headToHead' => _compareHeadToHead(a, b, matches),
-        _ => 0,
-      };
-
-      if (comparison != 0) {
-        return comparison;
-      }
-    }
-
-    return _compareDecider(a, b, matches);
-  }
-
-  int _compareDecider(
-    PlayerStanding a,
-    PlayerStanding b,
-    List<GroupMatch> matches,
-  ) {
-    for (final match in matches.where(
-      (match) => match.isDecider && match.hasResult,
-    )) {
-      final home = match.homePlayer!;
-      final away = match.awayPlayer!;
-      final isDirectMatch =
-          (home.name == a.player.name && away.name == b.player.name) ||
-          (home.name == b.player.name && away.name == a.player.name);
-      if (!isDirectMatch || match.winner == null) {
-        continue;
-      }
-      return match.winner!.name == a.player.name ? -1 : 1;
-    }
-
-    return 0;
-  }
+  ) => const GroupStandingsEngine().calculate(
+    group,
+    tieBreakers,
+    tournament: widget.tournament,
+  );
 
   int _compareHeadToHead(
     PlayerStanding a,
@@ -3229,7 +3130,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         icon: const Icon(Icons.save_outlined),
                                         label: const Text('Namen speichern'),
                                       );
-                                      if (constraints.maxWidth < 900) {
+                                      if (constraints.maxWidth < 900 ||
+                                          MediaQuery.textScalerOf(
+                                                context,
+                                              ).scale(16) >
+                                              24) {
                                         return Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
@@ -3259,6 +3164,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     },
                                   ),
                                   const Divider(height: 28),
+                                  if (widget.tournament.leagueMatch == null &&
+                                      widget.tournament.importedArchive == null)
+                                    Align(
+                                      alignment:
+                                          AlignmentDirectional.centerStart,
+                                      child: OutlinedButton.icon(
+                                        onPressed: _editTournamentConfiguration,
+                                        icon: const Icon(Icons.edit_outlined),
+                                        label: const Text(
+                                          'Turnierkonfiguration bearbeiten',
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),

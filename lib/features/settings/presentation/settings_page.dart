@@ -10,6 +10,8 @@ import '../../notifications/presentation/push_device_menu.dart';
 import '../../dev_tools/presentation/dev_tools_page.dart';
 import '../../govee/presentation/govee_hub_page.dart';
 import '../../random_draw/presentation/random_draw_tool_page.dart';
+import 'priority_notice_settings_panel.dart';
+import 'tie_breaker_defaults_panel.dart';
 
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'appearance_panel.dart';
@@ -93,12 +95,52 @@ class _DataPanel extends StatelessWidget {
   );
 }
 
-class _AdministrationPanel extends StatelessWidget {
+class _AdministrationPanel extends StatefulWidget {
   const _AdministrationPanel();
 
   @override
-  Widget build(BuildContext context) => AdaptiveContentList(
-    padding: const EdgeInsets.all(20),
+  State<_AdministrationPanel> createState() => _AdministrationPanelState();
+}
+
+class _AdministrationPanelState extends State<_AdministrationPanel> {
+  int _selected = 0;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var index = 0; index < 3; index++)
+              ChoiceChip(
+                label: Text(
+                  [
+                    'Werkzeuge',
+                    'Tie Breaker Standardwerte',
+                    'Hinweiseinstellungen',
+                  ][index],
+                ),
+                selected: _selected == index,
+                onSelected: (_) => setState(() => _selected = index),
+              ),
+          ],
+        ),
+      ),
+      Expanded(
+        child: switch (_selected) {
+          1 => const TieBreakerDefaultsPanel(),
+          2 => const PriorityNoticeSettingsPanel(),
+          _ => _toolsPanel(context),
+        },
+      ),
+    ],
+  );
+
+  Widget _toolsPanel(BuildContext context) => AdaptiveContentList(
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
     children: [
       Text(
         'Werkzeuge & Verwaltung',

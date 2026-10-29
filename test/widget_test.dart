@@ -74,6 +74,30 @@ void main() {
     }
   }
 
+  Future<void> pumpUntilRunPage(WidgetTester tester) async {
+    final runPage = find.byType(TournamentRunPage);
+    for (
+      var attempt = 0;
+      attempt < 20 && runPage.evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(
+      runPage,
+      findsOneWidget,
+      reason: tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data)
+          .whereType<String>()
+          .join(' | '),
+    );
+  }
+
   Future<void> selectTournamentDashboard(WidgetTester tester) async {
     final selector = find.byWidgetPredicate(
       (widget) =>
@@ -268,7 +292,7 @@ void main() {
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
     await tester.tap(find.widgetWithText(FilledButton, 'Turnier anlegen'));
-    await tester.pumpAndSettle();
+    await pumpUntilRunPage(tester);
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(find.text('Neues Turnier (Normales Turnier)'), findsOneWidget);
@@ -1025,7 +1049,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Turnier anlegen'));
-    await tester.pumpAndSettle();
+    await pumpUntilRunPage(tester);
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -1095,7 +1119,7 @@ void main() {
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
     await tester.tap(find.widgetWithText(FilledButton, 'Turnier anlegen'));
-    await tester.pumpAndSettle();
+    await pumpUntilRunPage(tester);
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -1421,6 +1445,8 @@ void main() {
     expect(find.text('Spieler 1'), findsOneWidget);
     expect(find.text('Spieler 4'), findsOneWidget);
 
+    await tester.ensureVisible(find.byTooltip('Umbenennen').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Umbenennen').first);
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -1602,7 +1628,7 @@ void main() {
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
     await tester.tap(find.text('Turnier anlegen'));
-    await tester.pumpAndSettle();
+    await pumpUntilRunPage(tester);
     await selectTournamentDashboard(tester);
 
     expect(find.text('Neues Turnier (Normales Turnier)'), findsOneWidget);

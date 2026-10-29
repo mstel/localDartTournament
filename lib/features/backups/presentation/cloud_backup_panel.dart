@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../application/supabase_workspace_sync_service.dart';
 import '../../accounts/data/supabase_account_config.dart';
+import '../../accounts/data/supabase_auth_diagnostics.dart';
 import '../data/backup_service.dart';
 import '../data/supabase_backup_repository.dart';
 
@@ -24,6 +28,8 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
   bool _busy = false;
   String? _status;
   bool _error = false;
+  final _diagnostics = SupabaseAuthDiagnostics();
+  String? _diagnosticsWarning;
 
   Future<void> _signIn() async {
     final result = await showDialog<OperatorSignInResult>(
@@ -31,28 +37,91 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
       builder: (_) => const OperatorSignInDialog(),
     );
     if (result == null) return;
+    _diagnosticsWarning = null;
     await _run(() async {
       await SupabaseAccountBootstrap.setPersistSession(result.persistSession);
-      if (result.isRegister) {
-        final res = await Supabase.instance.client.auth.signUp(
-          email: result.email,
-          password: result.password,
-          emailRedirectTo: SupabaseAccountConfig.authRedirectUri,
-        );
-        if (res.session == null) {
-          _status =
-              'Konto erstellt! Bitte bestätige die Bestätigungs-E-Mail und melde dich an.';
+      final timer = Stopwatch()..start();
+      try {
+        await _diagnostics.recordSignInStarted();
+      } on Object catch (error) {
+        _diagnosticsWarning =
+            'Diagnoseprotokoll konnte nicht gestartet werden: $error';
+      }
+      try {
+        if (result.isRegister) {
+          final response = await Supabase.instance.client.auth.signUp(
+            email: result.email,
+            password: result.password,
+            emailRedirectTo: SupabaseAccountConfig.authRedirectUri,
+          );
+          if (response.session == null) {
+            _status =
+                'Konto erstellt! Bitte bestätige die Bestätigungs-E-Mail und melde dich an.';
+          } else {
+            _status = 'Betreiberkonto registriert und angemeldet.';
+          }
         } else {
-          _status = 'Betreiberkonto registriert und angemeldet.';
+          await Supabase.instance.client.auth.signInWithPassword(
+            email: result.email,
+            password: result.password,
+          );
+          _status = 'Betreiberkonto verbunden.';
         }
-      } else {
-        await Supabase.instance.client.auth.signInWithPassword(
-          email: result.email,
-          password: result.password,
-        );
-        _status = 'Betreiberkonto verbunden.';
+        try {
+          await _diagnostics.recordSignInSucceeded(timer.elapsed);
+        } on Object catch (error) {
+          _diagnosticsWarning =
+              'Anmeldung erfolgreich, aber das Diagnoseprotokoll konnte nicht aktualisiert werden: $error';
+        }
+      } on Object catch (error, stackTrace) {
+        try {
+          await _diagnostics.recordSignInFailed(
+            error,
+            duration: timer.elapsed,
+            stackTrace: stackTrace,
+          );
+        } on Object catch (logError) {
+          _diagnosticsWarning =
+              'Fehler konnte nicht protokolliert werden: $logError';
+        }
+        rethrow;
       }
     });
+  }
+
+  Future<void> _exportDiagnostics() async {
+    try {
+      final file = await _diagnostics.logFile;
+      if (!await file.exists()) {
+        setState(() {
+          _status = 'Noch keine Anmeldeversuche protokolliert.';
+          _error = false;
+        });
+        return;
+      }
+      final location = await getSaveLocation(
+        suggestedName: 'supabase-auth-diagnostics.log',
+        acceptedTypeGroups: const [
+          XTypeGroup(label: 'Protokolldatei', extensions: ['log']),
+        ],
+        confirmButtonText: 'Diagnosedatei speichern',
+      );
+      if (location == null) return;
+      await File(
+        location.path,
+      ).writeAsBytes(await file.readAsBytes(), flush: true);
+      if (!mounted) return;
+      setState(() {
+        _status = 'Diagnosedatei exportiert: ${location.path}';
+        _error = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _status = 'Diagnosedatei konnte nicht exportiert werden: $error';
+        _error = true;
+      });
+    }
   }
 
   Future<void> _upload() async {
@@ -130,8 +199,7 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
     } catch (error) {
       _error = true;
       _status = switch (error) {
-        AuthException() =>
-          'Anmeldung fehlgeschlagen. Zugangsdaten und E-Mail-Bestätigung prüfen.',
+        AuthException() => _authFailureMessage(error),
         StorageException() =>
           'Cloud-Backup fehlgeschlagen. Prüfe die Supabase-Storage-Regeln und Internetverbindung.',
         StateError() => '$error',
@@ -140,6 +208,17 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _authFailureMessage(AuthException error) {
+    final projectHost = Uri.tryParse(SupabaseAccountConfig.url)?.host;
+    final diagnostics = [
+      if (error.statusCode != null) 'HTTP ${error.statusCode}',
+      if (error.code != null) 'Code ${error.code}',
+    ];
+    final context = [?projectHost, ...diagnostics].join(' · ');
+    return 'Supabase-Anmeldung fehlgeschlagen'
+        '${context.isEmpty ? '' : ' ($context)'}: ${error.message}';
   }
 
   @override
@@ -245,6 +324,37 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
                   ),
                 ),
               ),
+            if (_diagnosticsWarning != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: SelectableText(
+                  _diagnosticsWarning!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            FutureBuilder<File>(
+              future: _diagnostics.logFile,
+              builder: (context, snapshot) {
+                if (!configured || !snapshot.hasData) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Lokales Supabase-Anmeldeprotokoll:'),
+                      SelectableText(snapshot.data!.path),
+                      OutlinedButton.icon(
+                        onPressed: _exportDiagnostics,
+                        icon: const Icon(Icons.save_alt),
+                        label: const Text('Diagnosedatei exportieren'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),

@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../../shared/theme/tournament_display_palette.dart';
 import '../../../application/tournament_flow_priority.dart';
+import '../../../application/tournament_flow_priority_preferences.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/board_scheduling_engine.dart';
 import 'tournament_second_screen_view.dart';
+import 'tournament_schedule_view.dart';
 
 /// Embedded tournament controls for match scheduling and result entry.
 class TournamentDirectorDashboard extends StatefulWidget {
@@ -55,14 +58,31 @@ class _TournamentDirectorDashboardState
   bool _busy = false;
   String? _actionError;
   int _noticeIndex = 0;
+  TournamentFlowPrioritySettings _prioritySettings =
+      TournamentFlowPriority.defaultSettings;
   @override
   void initState() {
     super.initState();
+    unawaited(_loadPrioritySettings());
     _timer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (mounted) {
         setState(() => _noticeIndex++);
       }
     });
+  }
+
+  Future<void> _loadPrioritySettings() async {
+    try {
+      final settings = await TournamentFlowPriorityPreferences().load();
+      if (mounted) setState(() => _prioritySettings = settings);
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _actionError =
+              'Hinweiseinstellungen konnten nicht geladen werden: $error',
+        );
+      }
+    }
   }
 
   @override
@@ -278,10 +298,18 @@ class _TournamentDirectorDashboardState
     final state = TournamentDirectorSnapshot(t, widget.activeStage);
     final now = DateTime.now();
     final timing = TournamentTiming.snapshot(t, now);
-    final active = state.entries
-        .where((e) => e.stageIndex == widget.activeStage && e.match.hasPlayers)
+    final activeStageEntries = state.entries
+        .where((entry) => entry.stageIndex == widget.activeStage)
         .toList();
-    final completed = active.where((e) => e.match.isResolved).length;
+    final active = activeStageEntries
+        .where((entry) => entry.match.hasPlayers)
+        .toList();
+    final completed = activeStageEntries
+        .where((entry) => entry.match.hasResult)
+        .length;
+    final totalCompleted = state.entries
+        .where((entry) => entry.match.hasResult)
+        .length;
     final waiting = state.schedule.waiting
         .where((e) => e.stageIndex == widget.activeStage && !e.match.isResolved)
         .length;
@@ -294,6 +322,7 @@ class _TournamentDirectorDashboardState
         .toList();
     final flowPriority = TournamentFlowPriority.forStage(
       t.runStages[widget.activeStage],
+      settings: _prioritySettings,
     );
     upcoming.sort((a, b) {
       final aIsPriority = flowPriority.prioritizedMatches.contains(
@@ -350,9 +379,13 @@ class _TournamentDirectorDashboardState
     ];
     final flowNotices = flowPriority.notices;
 
-    final totalGames = active.length;
+    final totalGames = activeStageEntries.length;
     final progressPct = totalGames > 0
         ? ((completed / totalGames) * 100).round()
+        : 0;
+    final totalTournamentGames = state.entries.length;
+    final totalProgressPct = totalTournamentGames > 0
+        ? ((totalCompleted / totalTournamentGames) * 100).round()
         : 0;
 
     final status = _box([
@@ -369,7 +402,6 @@ class _TournamentDirectorDashboardState
                 'Dashboard',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              Text('Aktive Etappe: ${t.runStages[widget.activeStage].name}'),
             ],
           ),
           if (widget.onCompleteStage != null ||
@@ -461,6 +493,10 @@ class _TournamentDirectorDashboardState
           Text(
             '$completed von $totalGames Spielen fertig ($progressPct%)',
             style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            'Gesamt: $totalCompleted/$totalTournamentGames Spiele '
+            '($totalProgressPct%)',
           ),
           Text('${active.length - completed} offen'),
           Text(
@@ -567,6 +603,23 @@ class _TournamentDirectorDashboardState
           nextSix,
           emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
           prioritizedMatches: flowPriority.prioritizedMatches,
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => Dialog.fullscreen(
+                child: TournamentScheduleView(
+                  tournament: t,
+                  onEditResult: (match) => _act(() => widget.onResult(match)),
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.table_view_outlined),
+            label: const Text('Vollständigen Spielplan öffnen'),
+          ),
         ),
         const SizedBox(height: 12),
         _matchQueue(

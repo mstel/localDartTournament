@@ -11,13 +11,17 @@ import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../domain/engines/group_standings_engine.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../domain/engines/qualification_certainty.dart';
 import '../../../application/group_stage_preview_service.dart';
 import '../../../application/tournament_flow_priority.dart';
+import '../../../application/tournament_flow_priority_preferences.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../application/group_advancement_forecast_service.dart';
 import '../../../domain/engines/group_advancement_forecast_engine.dart';
+import 'tournament_schedule_view.dart';
 import '../../../../statistics/domain/best_performance.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
@@ -53,6 +57,9 @@ class _TournamentSecondScreenViewState
   int _clockTicks = 0;
   int _priorityNoticeIndex = 0;
   int _nextMatchIndex = 0;
+  TournamentFlowPrioritySettings _prioritySettings =
+      TournamentFlowPriority.defaultSettings;
+  String? _prioritySettingsError;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
@@ -62,6 +69,7 @@ class _TournamentSecondScreenViewState
   void initState() {
     super.initState();
     _showNextStagePreview = widget.showNextStagePreviewInitially;
+    unawaited(_loadPrioritySettings());
     _refreshEloChanges();
     _refreshAdvancementForecast();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -73,6 +81,23 @@ class _TournamentSecondScreenViewState
         });
       }
     });
+  }
+
+  Future<void> _loadPrioritySettings() async {
+    try {
+      final settings = await TournamentFlowPriorityPreferences().load();
+      if (!mounted) return;
+      setState(() {
+        _prioritySettings = settings;
+        _prioritySettingsError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _prioritySettingsError =
+            'Hinweiseinstellungen konnten nicht geladen werden: $error',
+      );
+    }
   }
 
   @override
@@ -245,7 +270,7 @@ class _TournamentSecondScreenViewState
                     ),
                   ),
                   Text(
-                    '${t.name} · ${activeStage?.name ?? "Turnier"}',
+                    t.name,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -448,6 +473,20 @@ class _TournamentSecondScreenViewState
                   style: const TextStyle(color: Colors.white),
                 ),
             ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => Dialog.fullscreen(
+                child: TournamentScheduleView(tournament: t),
+              ),
+            ),
+            icon: const Icon(Icons.table_view_outlined),
+            label: const Text('Vollständiger Spielplan'),
           ),
         ),
         const SizedBox(height: 6),
@@ -1391,7 +1430,10 @@ class _TournamentSecondScreenViewState
     bool expand = true,
   }) {
     final schedule = const OrderOfPlayController().plan(t, activeIndex);
-    final flowPriority = TournamentFlowPriority.forStage(stage);
+    final flowPriority = TournamentFlowPriority.forStage(
+      stage,
+      settings: _prioritySettings,
+    );
     final matches = _matchesOf(
       stage,
     ).where((m) => m.hasPlayers && !m.isResolved).toList();
@@ -1441,7 +1483,8 @@ class _TournamentSecondScreenViewState
         ? null
         : flowPriority.notices[_priorityNoticeIndex %
               flowPriority.notices.length];
-    final priorityBanner = priorityNotice == null
+    final priorityBanner =
+        priorityNotice == null && _prioritySettingsError == null
         ? null
         : Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1460,7 +1503,7 @@ class _TournamentSecondScreenViewState
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    priorityNotice,
+                    _prioritySettingsError ?? priorityNotice!,
                     style: const TextStyle(
                       color: TournamentDisplayPalette.text,
                       fontWeight: FontWeight.w600,
@@ -1974,6 +2017,8 @@ class _TournamentSecondScreenViewState
     final breakdownContent = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _buildOverallProgress(t),
+        const SizedBox(height: 10),
         const Text(
           'Fortschritt nach Etappen',
           style: TextStyle(
@@ -2059,9 +2104,7 @@ class _TournamentSecondScreenViewState
     return [
       Builder(
         builder: (context) {
-          final matches = _matchesOf(
-            stage,
-          ).where((match) => match.hasPlayers).toList();
+          final matches = _matchesOf(stage);
           final played = matches.where((match) => match.hasResult).length;
           final total = matches.length;
 
@@ -2121,6 +2164,81 @@ class _TournamentSecondScreenViewState
     ];
   }
 
+  Widget _buildOverallProgress(CreatedTournament tournament) {
+    final matches = tournament.runStages.expand(_matchesOf).toList();
+    final played = matches.where((match) => match.hasResult).length;
+    final total = matches.length;
+    final progress = total == 0 ? 0.0 : played / total;
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF142B40),
+        border: Border.all(color: const Color(0xFF244B6B)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final count = Text(
+            '$played/$total (${(progress * 100).round()}%)',
+            style: const TextStyle(
+              color: Color(0xFFC4A96F),
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          );
+          final bar = ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: const Color(0xFF20384D),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFFC4A96F)),
+            ),
+          );
+          if (constraints.maxWidth < 520) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    const Text(
+                      'Gesamt',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    count,
+                  ],
+                ),
+                const SizedBox(height: 8),
+                bar,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              const Text(
+                'Gesamt',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: bar),
+              const SizedBox(width: 8),
+              count,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildHighlightItem(String label, String value, {String? player}) {
     return Column(
       children: [
@@ -2150,61 +2268,11 @@ class _TournamentSecondScreenViewState
   List<PlayerStanding> _calculateGroupStandings(
     TournamentGroup group,
     List<String> tieBreakers,
-  ) {
-    final standings = {
-      for (final player in group.players) player.name: PlayerStanding(player),
-    };
-
-    for (final match in group.matches.where(
-      (m) => m.hasResult && !m.isDecider,
-    )) {
-      final homePlayer = match.homePlayer;
-      final awayPlayer = match.awayPlayer;
-      if (homePlayer == null || awayPlayer == null) continue;
-      final home = standings[homePlayer.name];
-      final away = standings[awayPlayer.name];
-      if (home == null || away == null) continue;
-      final homeLegs = match.homeLegs ?? 0;
-      final awayLegs = match.awayLegs ?? 0;
-
-      home.played++;
-      home.legsFor += homeLegs;
-      home.legsAgainst += awayLegs;
-      away.played++;
-      away.legsFor += awayLegs;
-      away.legsAgainst += homeLegs;
-
-      if (match.winner == homePlayer) {
-        home.wins++;
-        home.points += 3;
-        away.losses++;
-      } else if (match.winner == awayPlayer) {
-        away.wins++;
-        away.points += 3;
-        home.losses++;
-      } else {
-        home.draws++;
-        home.points++;
-        away.draws++;
-        away.points++;
-      }
-    }
-
-    final sorted = standings.values.toList();
-    sorted.sort((a, b) {
-      for (final rule in tieBreakers) {
-        final cmp = switch (rule) {
-          'points' => b.points.compareTo(a.points),
-          'legDifference' => b.legDifference.compareTo(a.legDifference),
-          'legsFor' => b.legsFor.compareTo(a.legsFor),
-          _ => 0,
-        };
-        if (cmp != 0) return cmp;
-      }
-      return a.player.name.compareTo(b.player.name);
-    });
-    return sorted;
-  }
+  ) => const GroupStandingsEngine().calculate(
+    group,
+    tieBreakers,
+    tournament: widget.tournament,
+  );
 }
 
 class _KnockoutPreviewConnectorPainter extends CustomPainter {

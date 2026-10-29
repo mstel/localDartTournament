@@ -171,16 +171,16 @@ void main() {
       await tester.ensureVisible(find.text('Gruppen verwalten'));
       await tester.tap(find.text('Bearbeiten'));
       await tester.pump(const Duration(milliseconds: 300));
-      final groupPlayers = tester
-          .widgetList<ListTile>(
-            find.descendant(
-              of: find.byType(AlertDialog),
-              matching: find.byType(ListTile),
-            ),
-          )
-          .map((tile) => (tile.title as Text).data!)
-          .toList();
-      expect(groupPlayers, drawnNames);
+      final groupDialog = find.byType(Dialog);
+      for (final playerName in drawnNames) {
+        expect(
+          find.descendant(
+            of: groupDialog,
+            matching: find.text(playerName),
+          ),
+          findsOneWidget,
+        );
+      }
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();

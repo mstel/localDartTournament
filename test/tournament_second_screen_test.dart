@@ -170,6 +170,11 @@ void main() {
           expect(text.maxLines, 1);
         }
       }
+      await tester.ensureVisible(find.text('Vollständiger Spielplan'));
+      await tester.tap(find.text('Vollständiger Spielplan'));
+      await tester.pumpAndSettle();
+      expect(find.text('Langnamen · Vollständiger Spielplan'), findsOneWidget);
+      expect(find.byType(DataTable), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -462,7 +467,9 @@ void main() {
     expect(find.text('1. Gruppenphase'), findsOneWidget);
     expect(find.text('1. Gruppenphase · Gruppe A'), findsNothing);
     expect(find.text('3/6 gespielt'), findsOneWidget);
-    expect(find.text('0/1 gespielt'), findsNWidgets(2));
+    expect(find.text('0/1 gespielt'), findsOneWidget);
+    expect(find.text('0/2 gespielt'), findsOneWidget);
+    expect(find.text('Gesamt'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

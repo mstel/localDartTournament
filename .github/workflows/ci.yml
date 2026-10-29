@@ -80,6 +80,19 @@ jobs:
             throw "SUPABASE_PUBLISHABLE_KEY is required for the Windows release build."
           }
 
+      - name: Verify Supabase project accepts the publishable key
+        shell: pwsh
+        run: |
+          $uri = "https://rbcsrqisbuutnnxpmcvp.supabase.co/auth/v1/settings"
+          try {
+            $null = Invoke-RestMethod -Uri $uri -Method Get -Headers @{
+              apikey = $env:SUPABASE_PUBLISHABLE_KEY
+            }
+          } catch {
+            $statusCode = $_.Exception.Response.StatusCode
+            throw "Supabase rejected the Windows release key for the configured project (HTTP $statusCode). Check SUPABASE_PUBLISHABLE_KEY."
+          }
+
       - name: Verify manually selected release
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh
