@@ -757,9 +757,9 @@ class _TournamentSecondScreenViewState
                     final scale =
                         MediaQuery.textScalerOf(context).scale(14) / 14;
                     final minimumBoardHeight =
-                        rounds.first.length * 96 * scale + roundHeaderHeight;
+                        rounds.first.length * 76 * scale + roundHeaderHeight;
                     final boardHeight = max(
-                      constraints.maxHeight + 180,
+                      constraints.maxHeight + 1,
                       minimumBoardHeight,
                     );
 
@@ -770,98 +770,126 @@ class _TournamentSecondScreenViewState
                         key: const ValueKey('knockout-preview-vertical-scroll'),
                         controller: _previewVerticalController,
                         child: SizedBox(
-                          width: boardWidth,
                           height: boardHeight,
-                          child: Stack(
-                            children: [
-                              Positioned.fill(
-                                child: CustomPaint(
-                                  painter: _KnockoutPreviewConnectorPainter(
-                                    roundCounts: [
-                                      for (final round in rounds) round.length,
-                                    ],
-                                    roundWidth: roundWidth,
-                                    roundGap: roundGap,
-                                    topOffset: roundHeaderHeight,
-                                  ),
-                                ),
+                          child: Scrollbar(
+                            controller: _previewHorizontalController,
+                            thumbVisibility: true,
+                            notificationPredicate: (notification) =>
+                                notification.metrics.axis == Axis.horizontal,
+                            child: SingleChildScrollView(
+                              key: const ValueKey(
+                                'knockout-preview-horizontal-scroll',
                               ),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (
-                                    var roundIndex = 0;
-                                    roundIndex < rounds.length;
-                                    roundIndex++
-                                  )
-                                    Container(
-                                      width: roundWidth,
-                                      margin: EdgeInsets.only(
-                                        right: roundIndex < rounds.length - 1
-                                            ? roundGap
-                                            : 0,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          SizedBox(
-                                            height: roundHeaderHeight,
-                                            child: Align(
-                                              alignment: Alignment.topLeft,
-                                              child: Text(
-                                                knockoutRoundName(
-                                                  roundIndex,
-                                                  rounds.length,
-                                                ),
-                                                style: const TextStyle(
-                                                  color: Color(0xFF70E0BA),
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 15,
-                                                ),
-                                              ),
+                              controller: _previewHorizontalController,
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: boardWidth,
+                                height: boardHeight,
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: CustomPaint(
+                                        painter:
+                                            _KnockoutPreviewConnectorPainter(
+                                              roundCounts: [
+                                                for (final round in rounds)
+                                                  round.length,
+                                              ],
+                                              roundWidth: roundWidth,
+                                              roundGap: roundGap,
+                                              topOffset: roundHeaderHeight,
                                             ),
-                                          ),
-                                          Expanded(
+                                      ),
+                                    ),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        for (
+                                          var roundIndex = 0;
+                                          roundIndex < rounds.length;
+                                          roundIndex++
+                                        )
+                                          Container(
+                                            width: roundWidth,
+                                            margin: EdgeInsets.only(
+                                              right:
+                                                  roundIndex < rounds.length - 1
+                                                  ? roundGap
+                                                  : 0,
+                                            ),
                                             child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.spaceEvenly,
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.stretch,
                                               children: [
-                                                for (
-                                                  var matchIndex = 0;
-                                                  matchIndex <
-                                                      rounds[roundIndex].length;
-                                                  matchIndex++
-                                                )
-                                                  _buildBracketMatchPreview(
-                                                    rounds[roundIndex][matchIndex],
-                                                    homeLabel: playerLabel(
-                                                      rounds[roundIndex][matchIndex]
-                                                          .homePlayer,
-                                                      roundIndex,
-                                                      matchIndex,
-                                                      home: true,
+                                                SizedBox(
+                                                  height: roundHeaderHeight,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.topLeft,
+                                                    child: Text(
+                                                      knockoutRoundName(
+                                                        roundIndex,
+                                                        rounds.length,
+                                                      ),
+                                                      style: const TextStyle(
+                                                        color: Color(
+                                                          0xFF70E0BA,
+                                                        ),
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 15,
+                                                      ),
                                                     ),
-                                                    awayLabel: playerLabel(
-                                                      rounds[roundIndex][matchIndex]
-                                                          .awayPlayer,
-                                                      roundIndex,
-                                                      matchIndex,
-                                                      home: false,
-                                                    ),
-                                                    matchNumber: matchIndex + 1,
                                                   ),
+                                                ),
+                                                Expanded(
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceEvenly,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .stretch,
+                                                    children: [
+                                                      for (
+                                                        var matchIndex = 0;
+                                                        matchIndex <
+                                                            rounds[roundIndex]
+                                                                .length;
+                                                        matchIndex++
+                                                      )
+                                                        _buildBracketMatchPreview(
+                                                          rounds[roundIndex][matchIndex],
+                                                          homeLabel: playerLabel(
+                                                            rounds[roundIndex][matchIndex]
+                                                                .homePlayer,
+                                                            roundIndex,
+                                                            matchIndex,
+                                                            home: true,
+                                                          ),
+                                                          awayLabel: playerLabel(
+                                                            rounds[roundIndex][matchIndex]
+                                                                .awayPlayer,
+                                                            roundIndex,
+                                                            matchIndex,
+                                                            home: false,
+                                                          ),
+                                                          matchNumber:
+                                                              matchIndex + 1,
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ],
                                             ),
                                           ),
-                                        ],
-                                      ),
+                                      ],
                                     ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),

@@ -250,7 +250,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                       context: context,
                       group: group,
                       showGroupHeader: true,
-                      compact: false,
+                      compact: columns > 1,
                     ),
                   ),
               ],

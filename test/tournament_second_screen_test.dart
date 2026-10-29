@@ -677,7 +677,9 @@ void main() {
       const ValueKey('knockout-preview-vertical-scroll'),
     );
     final verticalScroll = tester.state<ScrollableState>(
-      find.descendant(of: verticalPreview, matching: find.byType(Scrollable)),
+      find
+          .descendant(of: verticalPreview, matching: find.byType(Scrollable))
+          .first,
     );
     expect(verticalScroll.position.maxScrollExtent, greaterThan(0));
     expect(tester.takeException(), isNull);
