@@ -742,7 +742,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  Future<void> _editResult(GroupMatch match) async {
+  Future<void> _editResult(
+    GroupMatch match, {
+    VoidCallback? onLocalUpdate,
+  }) async {
     if (match.withdrawalSignature != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -829,6 +832,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _ensureGroupDeciders();
       const OrderOfPlayController().resultRecorded(match);
     });
+    onLocalUpdate?.call();
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
@@ -2969,6 +2973,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         match.awaySets = null;
         match.isAnnulled = false;
       }
+      if (currentStage is GroupTournamentRunStage) {
+        for (final group in currentStage.groups) {
+          group.matches.removeWhere((match) => match.isDecider);
+        }
+      }
       if (currentStage is KnockoutTournamentRunStage) {
         for (final round in currentStage.rounds.skip(1)) {
           for (final match in round) {
@@ -3660,6 +3669,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                         standingsFor: _standingsFor,
                         onEditResult: _editResult,
+                        onEditBracketResult: (match, onUpdated) =>
+                            _editResult(match, onLocalUpdate: onUpdated),
                         canEditResults: canEditResults,
                         qualifyingRank: _requiredRankForRunStage(
                           _viewStageIndex,

@@ -14,7 +14,7 @@ class _KnockoutBracketView extends StatelessWidget {
   final KnockoutTournamentRunStage stage;
   final List<GroupMatch> placementMatches;
   final int qualifyingRank;
-  final void Function(GroupMatch match) onEditResult;
+  final FutureOr<void> Function(GroupMatch match) onEditResult;
   final bool canEditResults;
   final bool isEditMode;
   final void Function(int fromSlotIndex, int toSlotIndex)? onSwapSlot;
@@ -47,7 +47,7 @@ class _KnockoutBracketView extends StatelessWidget {
           _BracketTreeLayout(
             totalRounds: rounds.length,
             columnWidth: 260,
-            cardHeight: 224,
+            cardHeight: _compactBracketCardHeight(context),
             firstRoundGap: 12,
             useBalancedColumnLayout: true,
             roundMatches: rounds,
@@ -149,7 +149,7 @@ class _KnockoutBracketView extends StatelessWidget {
     return _BracketTreeLayout(
       totalRounds: displayRounds.length,
       columnWidth: 260,
-      cardHeight: 224,
+      cardHeight: _compactBracketCardHeight(context),
       firstRoundGap: 12,
       useBalancedColumnLayout: stage.eliminationLossLimit > 1,
       roundMatches: displayRounds,
@@ -978,7 +978,7 @@ class _DoubleEliminationBracketView extends StatelessWidget {
   final Map<GroupMatch, ({GroupMatch? first, GroupMatch? second})>
   sourceMatches;
   final int qualifyingRank;
-  final void Function(GroupMatch match) onEditResult;
+  final FutureOr<void> Function(GroupMatch match) onEditResult;
   final bool canEditResults;
   final bool isEditMode;
   final void Function(int fromSlotIndex, int toSlotIndex)? onSwapSlot;
@@ -1000,7 +1000,7 @@ class _DoubleEliminationBracketView extends StatelessWidget {
         _BracketTreeLayout(
           totalRounds: winnersRounds.length,
           columnWidth: 260,
-          cardHeight: 204,
+          cardHeight: _compactBracketCardHeight(context),
           firstRoundGap: 12,
           useBalancedColumnLayout: true,
           roundMatches: winnersRounds,
@@ -1028,7 +1028,7 @@ class _DoubleEliminationBracketView extends StatelessWidget {
         _BracketTreeLayout(
           totalRounds: losersRounds.length,
           columnWidth: 260,
-          cardHeight: 204,
+          cardHeight: _compactBracketCardHeight(context),
           firstRoundGap: 12,
           useBalancedColumnLayout: true,
           roundMatches: losersRounds,
@@ -1056,7 +1056,7 @@ class _DoubleEliminationBracketView extends StatelessWidget {
         _BracketTreeLayout(
           totalRounds: finalMatches.length,
           columnWidth: 260,
-          cardHeight: 204,
+          cardHeight: _compactBracketCardHeight(context),
           firstRoundGap: 12,
           useBalancedColumnLayout: true,
           roundMatches: [
@@ -1129,7 +1129,7 @@ class _TripleEliminationBracketView extends StatelessWidget {
   final Map<GroupMatch, ({GroupMatch? first, GroupMatch? second})>
   sourceMatches;
   final int qualifyingRank;
-  final void Function(GroupMatch match) onEditResult;
+  final FutureOr<void> Function(GroupMatch match) onEditResult;
   final bool canEditResults;
   final bool isEditMode;
   final void Function(int fromSlotIndex, int toSlotIndex)? onSwapSlot;
@@ -1151,7 +1151,7 @@ class _TripleEliminationBracketView extends StatelessWidget {
           _BracketTreeLayout(
             totalRounds: _lossLevelRounds(lossCount).length,
             columnWidth: 260,
-            cardHeight: 204,
+            cardHeight: _compactBracketCardHeight(context),
             firstRoundGap: 12,
             useBalancedColumnLayout: true,
             roundMatches: _lossLevelRounds(lossCount),
@@ -1192,7 +1192,7 @@ class _TripleEliminationBracketView extends StatelessWidget {
         _BracketTreeLayout(
           totalRounds: finalMatches.isEmpty ? 0 : 1,
           columnWidth: 260,
-          cardHeight: 204,
+          cardHeight: _compactBracketCardHeight(context),
           firstRoundGap: 12,
           useBalancedColumnLayout: true,
           roundMatches: [finalMatches],
@@ -1927,7 +1927,7 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
   final int matchIndex;
   final int totalRounds;
   final int qualifyingRank;
-  final void Function(GroupMatch match) onEditResult;
+  final FutureOr<void> Function(GroupMatch match) onEditResult;
   final bool canEditResult;
   final bool isEditMode;
   final String? homeSourceLabel;
@@ -1957,7 +1957,8 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
     return MatchStatisticsTapTarget(
       match: match,
       child: Container(
-        padding: const EdgeInsets.all(10),
+        key: ValueKey('knockout-match-card-$matchNumber'),
+        padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           color: colorScheme.surface,
           border: Border.all(color: colorScheme.outlineVariant),
@@ -1970,31 +1971,33 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.account_tree_outlined,
-                  size: 16,
+                  size: 14,
                   color: colorScheme.primary,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    _matchTitle(),
-                    style: Theme.of(context).textTheme.labelMedium,
+                    [_matchTitle(), ?resolvedQualificationLabel].join(' · '),
+                    style: Theme.of(context).textTheme.labelSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 IconButton.filledTonal(
                   constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
+                    width: 48,
+                    height: 48,
                   ),
                   padding: EdgeInsets.zero,
                   onPressed: canEditResult && match.hasPlayers
-                      ? () => onEditResult(match)
+                      ? () async => onEditResult(match)
                       : null,
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   tooltip: 'Ergebnis',
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 2),
             _BracketPlayerSlot(
               player: match.homePlayer,
               score: match.homePlayer == null ? null : match.homeScore,
@@ -2006,8 +2009,9 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
               slotIndex: matchIndex * 2,
               isEditable: isEditMode && roundIndex == 0,
               onSwapSlot: onSwapSlot,
+              compact: true,
             ),
-            const SizedBox(height: 6),
+            const Divider(height: 2),
             _BracketPlayerSlot(
               player: match.awayPlayer,
               score: match.awayPlayer == null ? null : match.awayScore,
@@ -2019,11 +2023,8 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
               slotIndex: matchIndex * 2 + 1,
               isEditable: isEditMode && roundIndex == 0,
               onSwapSlot: onSwapSlot,
+              compact: true,
             ),
-            if (resolvedQualificationLabel != null) ...[
-              const SizedBox(height: 8),
-              _QualificationMarker(label: resolvedQualificationLabel),
-            ],
           ],
         ),
       ),
@@ -2111,6 +2112,7 @@ class _BracketPlayerSlot extends StatelessWidget {
     this.slotIndex,
     this.isEditable = false,
     this.onSwapSlot,
+    this.compact = false,
   });
 
   final TournamentPlayer? player;
@@ -2120,6 +2122,7 @@ class _BracketPlayerSlot extends StatelessWidget {
   final int? slotIndex;
   final bool isEditable;
   final void Function(int fromSlotIndex, int toSlotIndex)? onSwapSlot;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -2128,7 +2131,10 @@ class _BracketPlayerSlot extends StatelessWidget {
     final displayLabel = label ?? player?.name ?? 'offen';
 
     final baseSlot = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 6 : 10,
+        vertical: compact ? 2 : 9,
+      ),
       decoration: BoxDecoration(
         color: isWinner
             ? colorScheme.primaryContainer
@@ -2238,4 +2244,8 @@ class _QualificationMarker extends StatelessWidget {
       ),
     );
   }
+}
+
+double _compactBracketCardHeight(BuildContext context) {
+  return 120 * MediaQuery.textScalerOf(context).scale(1);
 }

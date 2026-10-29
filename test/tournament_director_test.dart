@@ -29,6 +29,17 @@ class _DirectorPreviewState extends State<DirectorPreview> {
   void initState() {
     super.initState();
     const c = OrderOfPlayController();
+    final completed = c.plan(t, 0).planned.first.entry.match;
+    completed.homeLegs = 3;
+    completed.awayLegs = 1;
+    completed.bestPerformances = [
+      BestPerformance(
+        type: BestPerformanceType.score180,
+        playerName: completed.homePlayer!.name,
+        value: 180,
+      ),
+    ];
+    c.resultRecorded(completed);
     final first = c.plan(t, 0).planned.first;
     c.start(t, 0, first.entry.match, 1);
     t.blockedBoards.add(4);
@@ -122,15 +133,16 @@ void main() {
         expect(find.text('Dashboard'), findsOneWidget);
         expect(find.textContaining('Aktive Etappe:'), findsNothing);
         expect(
-          find.textContaining('0/15 Spiele in dieser Etappe'),
+          find.textContaining('1/15 Spiele in dieser Etappe'),
           findsOneWidget,
         );
-        expect(find.textContaining('0/15 gesamt'), findsOneWidget);
+        expect(find.textContaining('1/15 gesamt'), findsOneWidget);
         expect(find.textContaining('Uhrzeit:'), findsNothing);
         expect(find.text('Spielplan'), findsOneWidget);
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);
         expect(find.text('Fortschritt nach Etappen'), findsNothing);
-        expect(find.text('Bestleistungen'), findsNothing);
+        expect(find.text('180er'), findsOneWidget);
+        expect(find.text('3 : 1'), findsOneWidget);
         expect(tester.takeException(), isNull);
         for (final section in ['Übersicht', 'Boards', 'Spiele']) {
           final tab = find.widgetWithText(ChoiceChip, section);

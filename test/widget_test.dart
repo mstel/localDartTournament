@@ -433,6 +433,156 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('KO bracket refreshes scores and qualifiers after editing', (
+    tester,
+  ) async {
+    final players = [
+      for (var index = 1; index <= 4; index++)
+        TournamentPlayer.generated(index),
+    ];
+    final firstMatch = GroupMatch(
+      homePlayer: players[0],
+      awayPlayer: players[1],
+      round: 1,
+    );
+    final tournament = CreatedTournament(
+      name: 'KO Ergebnis-Aktualisierung',
+      players: players,
+      stages: const [
+        TournamentStage(
+          name: 'KO',
+          type: 'single_knockout',
+          knockoutParticipantCount: 4,
+        ),
+      ],
+      runStages: [
+        KnockoutTournamentRunStage(
+          name: 'KO',
+          rounds: [
+            [
+              firstMatch,
+              GroupMatch(
+                homePlayer: players[2],
+                awayPlayer: players[3],
+                round: 1,
+              ),
+            ],
+            [GroupMatch(round: 2)],
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: TournamentRunPage(tournament: tournament)),
+    );
+    await tester.pumpAndSettle();
+    await selectTournamentResults(tester);
+    await openFullTournamentBracket(tester);
+
+    final firstBracketMatch = find.byKey(
+      const ValueKey('knockout-match-card-1'),
+    );
+    final editResult = find.descendant(
+      of: firstBracketMatch,
+      matching: find.byTooltip('Ergebnis'),
+    );
+    await tester.ensureVisible(editResult);
+    await tester.tap(editResult);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('home-legs-field')), '2');
+    await tester.enterText(find.byKey(const ValueKey('away-legs-field')), '0');
+    await tester.tap(find.text('Speichern'));
+    await tester.pumpAndSettle();
+
+    final stage = tournament.runStages.single as KnockoutTournamentRunStage;
+    expect(firstMatch.homeLegs, 2);
+    expect(stage.rounds.last.single.homePlayer, players[0]);
+    expect(
+      find.descendant(of: firstBracketMatch, matching: find.text('2')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('knockout-match-card-3')),
+        matching: find.text(players[0].name),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('resetting a group stage removes generated deciders', (
+    tester,
+  ) async {
+    final players = [
+      for (var index = 1; index <= 3; index++)
+        TournamentPlayer.generated(index),
+    ];
+    final matches = [
+      for (var home = 0; home < players.length; home++)
+        for (var away = home + 1; away < players.length; away++)
+          GroupMatch(
+            homePlayer: players[home],
+            awayPlayer: players[away],
+            round: 1,
+            homeLegs: 1,
+            awayLegs: 1,
+          ),
+    ];
+    final group = TournamentGroup(
+      name: 'Gruppe A',
+      playType: 'round_robin',
+      players: players,
+      matches: matches,
+    );
+    final tournament = CreatedTournament(
+      name: 'Gruppen-Decider zurücksetzen',
+      players: players,
+      stages: const [
+        TournamentStage(
+          name: 'Gruppen',
+          type: 'groups',
+          groupSizes: [3],
+          qualifiedParticipantCount: 2,
+        ),
+      ],
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppen',
+          groupPlayType: 'round_robin',
+          groups: [group],
+          qualificationPlan: const QualificationPlan(
+            totalQualifiers: 2,
+            fixedPerGroup: 2,
+            extraCount: 0,
+            extraRank: 0,
+            eligibleGroupSize: null,
+            extraGroups: [],
+            fixedByGroup: [2],
+          ),
+          tieBreakers: const ['points', 'legDifference', 'legsFor'],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: TournamentRunPage(tournament: tournament)),
+    );
+    await tester.pumpAndSettle();
+    expect(group.matches.where((match) => match.isDecider), isNotEmpty);
+    await selectTournamentDashboard(tester);
+    await tester.ensureVisible(find.text('Etappe zurücksetzen'));
+    await tester.tap(find.text('Etappe zurücksetzen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Zurücksetzen'));
+    await tester.pumpAndSettle();
+
+    expect(group.matches.where((match) => match.isDecider), isEmpty);
+    expect(matches.every((match) => !match.hasResult), isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('double knockout with many byes accepts first results', (
     tester,
   ) async {

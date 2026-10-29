@@ -14,6 +14,7 @@ import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/board_scheduling_engine.dart';
 import 'tournament_second_screen_view.dart';
 import 'recommended_matches_table.dart';
+import 'recent_match_result_card.dart';
 
 /// Embedded tournament controls for match scheduling and result entry.
 class TournamentDirectorDashboard extends StatefulWidget {
@@ -218,8 +219,39 @@ class _TournamentDirectorDashboardState
     required bool showResult,
     required bool isPriority,
   }) {
-    final theme = Theme.of(context);
     final match = entry.match;
+    if (showResult) {
+      return FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
+        future: _eloChanges,
+        builder: (context, snapshot) {
+          final matchKey = const LocalEloCalculator().matchKey(
+            widget.tournament,
+            match,
+          );
+          final changes = matchKey == null
+              ? const <TournamentMatchEloChange>[]
+              : snapshot.data?[matchKey] ?? const <TournamentMatchEloChange>[];
+          return SizedBox(
+            width: width,
+            child: RecentMatchResultCard(
+              key: ValueKey(
+                'director-match-tile-result-'
+                '${match.round}-${match.homePlayer?.name}-'
+                '${match.awayPlayer?.name}',
+              ),
+              tournament: widget.tournament,
+              match: match,
+              eloChanges: changes,
+              eloError: snapshot.hasError
+                  ? 'Ranglistenänderungen konnten nicht geladen werden.'
+                  : null,
+            ),
+          );
+        },
+      );
+    }
+
+    final theme = Theme.of(context);
     return Container(
       key: ValueKey(
         'director-match-tile-${showResult ? 'result' : 'next'}-'
@@ -287,59 +319,9 @@ class _TournamentDirectorDashboardState
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          if (showResult) ...[
-            const SizedBox(height: 4),
-            Text(
-              '${match.homeLegs ?? 0}:${match.awayLegs ?? 0}',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: TournamentDisplayPalette.text,
-              ),
-            ),
-            FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
-              future: _eloChanges,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Text(
-                    'Ranglistenänderungen konnten nicht geladen werden.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  );
-                }
-                final key = const LocalEloCalculator().matchKey(
-                  widget.tournament,
-                  match,
-                );
-                final changes = key == null
-                    ? const <TournamentMatchEloChange>[]
-                    : snapshot.data?[key] ?? const <TournamentMatchEloChange>[];
-                if (changes.isEmpty) return const SizedBox.shrink();
-                return Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    for (final change in changes)
-                      Text(
-                        '${change.rankingName}: '
-                        '${_formatDelta(change.homeDelta)} / '
-                        '${_formatDelta(change.awayDelta)} Elo',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: TournamentDisplayPalette.mutedText,
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
         ],
       ),
     );
-  }
-
-  String _formatDelta(int? delta) {
-    if (delta == null) return '–';
-    return delta > 0 ? '+$delta' : '$delta';
   }
 
   @override

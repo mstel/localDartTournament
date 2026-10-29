@@ -1,3 +1,15 @@
+# 2.1.7+41
+
+- Platziert kompakte letzte Ergebnisse im separaten Monitor am unteren Rand
+  neben der Etappenvorschau und zeigt dort bis zu vier Partien.
+- Vereinheitlicht die letzten Ergebnisse im Dashboard und Monitor mit
+  Gewinner-/Verliererfarben, Setzungs- und Ausscheidungshinweisen,
+  Elo-Änderungen und Bestleistungs-Badges.
+- Aktualisiert den KO-Baum unmittelbar nach der Ergebniseingabe einschließlich
+  der weitergegebenen Spieler.
+- Entfernt automatisch erzeugte Decider beim Zurücksetzen einer Gruppenetappe,
+  damit keine veralteten offenen Entscheidungsspiele stehen bleiben.
+
 # 2.1.6+40
 
 - Verdichtet die Zweitmonitoransicht: Spielplan für bis zu vier Gruppen,

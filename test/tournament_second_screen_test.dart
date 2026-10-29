@@ -198,7 +198,7 @@ void main() {
   });
 
   testWidgets(
-    '1920x1080 second screen shows only the two latest results in two columns',
+    '1920x1080 second screen shows four latest results in a compact row',
     (tester) async {
       tester.view.physicalSize = const Size(1920, 1080);
       tester.view.devicePixelRatio = 1;
@@ -259,8 +259,9 @@ void main() {
         ),
         isTrue,
       );
+      expect(find.byKey(const ValueKey('recent-result-3-A-D')), findsOneWidget);
+      expect(find.byKey(const ValueKey('recent-result-2-A-C')), findsOneWidget);
       expect(find.byKey(const ValueKey('recent-result-1-A-B')), findsNothing);
-      expect(find.byKey(const ValueKey('recent-result-3-A-D')), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

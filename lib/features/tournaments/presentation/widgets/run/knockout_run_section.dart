@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../../../shared/widgets/sport_settings_section.dart';
 import '../../../domain/knockout_round_names.dart';
 import 'round_match_list.dart';
@@ -10,7 +12,7 @@ typedef KnockoutBracketBuilder =
     Widget Function(
       KnockoutTournamentRunStage stage,
       int qualifyingRank,
-      void Function(GroupMatch match) onEditResult,
+      FutureOr<void> Function(GroupMatch match) onEditResult,
       bool canEditResults,
       bool isEditMode,
       void Function(int fromSlotIndex, int toSlotIndex) onSwapSlot,
@@ -32,7 +34,7 @@ class KnockoutRunSection extends StatelessWidget {
 
   final KnockoutTournamentRunStage stage;
   final int qualifyingRank;
-  final void Function(GroupMatch match) onEditResult;
+  final FutureOr<void> Function(GroupMatch match) onEditResult;
   final bool canEditResults;
   final bool isEditMode;
   final bool canEditBracket;
@@ -119,7 +121,7 @@ class KnockoutRunSection extends StatelessWidget {
                           : 'Runde ${i + 1}',
                     if (stage.placementMatches.isNotEmpty) 'Platzierung',
                   ],
-                  onEditResult: onEditResult,
+                  onEditResult: (match) => onEditResult(match),
                   canEditResults: canEditResults,
                 ),
                 SportSettingsSection(
