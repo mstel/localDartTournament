@@ -13,8 +13,10 @@ class GroupStagePreviewService {
     final matches = _matches(stage).toList();
     final hasResults = matches.any((match) => match.countsForStatistics);
     if (!hasResults) {
+      final targetCount = _placeholderCount(stage, tournament, projectedPlayers);
+      final requiredCount = targetCount > 0 ? targetCount : projectedPlayers.length;
       return List.generate(
-        projectedPlayers.length,
+        requiredCount,
         (index) => TournamentPlayer(
           name: 'Qualifikant ${index + 1} (noch offen)',
           isGenerated: true,
@@ -30,6 +32,30 @@ class GroupStagePreviewService {
               '${stageIsSet || _isCertainQualifier(stage, player, tournament) ? 'gesetzt' : 'vorläufig'}',
         ),
     ];
+  }
+
+  int _placeholderCount(
+    TournamentRunStage stage,
+    CreatedTournament tournament,
+    List<TournamentPlayer> projectedPlayers,
+  ) {
+    if (stage is GroupTournamentRunStage) {
+      final plan = stage.qualificationPlan;
+      if (plan != null && plan.totalQualifiers > 0) {
+        return plan.totalQualifiers;
+      }
+    }
+    final stageIndex = tournament.runStages.indexOf(stage);
+    if (stageIndex >= 0 && stageIndex + 1 < tournament.runStages.length) {
+      final nextStage = tournament.runStages[stageIndex + 1];
+      if (nextStage is KnockoutTournamentRunStage) {
+        final firstRoundSize = nextStage.rounds.firstOrNull?.length ?? 0;
+        if (firstRoundSize > 0) {
+          return firstRoundSize * 2;
+        }
+      }
+    }
+    return projectedPlayers.length;
   }
 
   bool isStageSet(TournamentRunStage stage) {

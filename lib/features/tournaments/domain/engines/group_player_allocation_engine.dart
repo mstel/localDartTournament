@@ -65,6 +65,16 @@ class GroupPlayerAllocationEngine {
     return groups.expand((group) => group).toList(growable: false);
   }
 
-  int _rating(TournamentPlayer player, Map<String, int> ratings) =>
-      player.profileId == null ? 1000 : ratings[player.profileId!] ?? 1000;
+  int _rating(TournamentPlayer player, Map<String, int> ratings) {
+    final individualRatings = player.individuals.map((individual) {
+      final profileId = individual.profileId;
+      return (profileId == null ? null : ratings[profileId]) ??
+          ratings[individual.name.toLowerCase()] ??
+          ratings[individual.name] ??
+          1000;
+    }).toList();
+    return (individualRatings.reduce((sum, value) => sum + value) /
+            individualRatings.length)
+        .round();
+  }
 }

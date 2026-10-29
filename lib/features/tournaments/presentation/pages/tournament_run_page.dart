@@ -870,12 +870,28 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         widget.tournament.runStages[_activeStageIndex] != stage) {
       return;
     }
-    final pair = await showDialog<List<TournamentPlayer>>(
+    Map<String, int> ratings = const {};
+    try {
+      ratings = await GroupPlayerRatingService().calculate(
+        tournament: widget.tournament,
+        stage: stage,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ELO-Wertungen konnten nicht geladen werden: $error'),
+          ),
+        );
+      }
+    }
+    if (!mounted) return;
+    final assignments = await showDialog<List<List<TournamentPlayer>>>(
       context: context,
-      builder: (_) => GroupPositionsDialog(stage: stage),
+      builder: (_) => GroupPositionsDialog(stage: stage, ratings: ratings),
     );
     if (!mounted ||
-        pair == null ||
+        assignments == null ||
         !_canEditGroupPositions(stage, _activeStageIndex) ||
         widget.tournament.runStages[_activeStageIndex] != stage ||
         _completedStageIndexes.contains(_activeStageIndex) &&
@@ -884,7 +900,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     var changed = false;
     setState(() {
-      changed = GroupPositionEditor.swap(stage, pair[0], pair[1]);
+      changed = GroupPositionEditor.reassign(stage, assignments);
       if (changed) {
         _completedStageIndexes.remove(_activeStageIndex);
         widget.tournament.completedStageIndexes.remove(_activeStageIndex);

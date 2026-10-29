@@ -11,6 +11,7 @@ import 'package:dart_tournament_manager/features/tournaments/application/order_o
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
+import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'order_of_play_test.dart' show fixture;
@@ -65,19 +66,18 @@ class _DirectorPreviewState extends State<DirectorPreview> {
 }
 
 void main() {
-  testWidgets('dashboard opens the full tournament schedule', (tester) async {
+  testWidgets('dashboard shows the reduced open-match table', (tester) async {
     tester.view.physicalSize = const Size(800, 600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(MaterialApp(home: const DirectorPreview()));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Vollständigen Spielplan öffnen'));
-    await tester.tap(find.text('Vollständigen Spielplan öffnen'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Vollständiger Spielplan'), findsOneWidget);
-    expect(find.byType(DataTable), findsWidgets);
+    expect(find.byType(RecommendedMatchesTable), findsOneWidget);
+    expect(find.text('Vollständigen Spielplan öffnen'), findsNothing);
+    expect(find.textContaining('Spiele in dieser Etappe'), findsOneWidget);
+    expect(find.textContaining(' gesamt'), findsOneWidget);
+    expect(find.textContaining('offen'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -119,7 +119,11 @@ void main() {
         );
         expect(find.text('Dashboard'), findsOneWidget);
         expect(find.textContaining('Aktive Etappe:'), findsNothing);
-        expect(find.textContaining('Gesamt: 0/'), findsOneWidget);
+        expect(
+          find.textContaining('0/15 Spiele in dieser Etappe'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('0/15 gesamt'), findsOneWidget);
         expect(find.textContaining('Uhrzeit:'), findsNothing);
         expect(find.text('Empfohlene Partien'), findsOneWidget);
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);
@@ -243,7 +247,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('director match tiles use the second-screen navy palette', (
+  testWidgets('recommended match table uses the second-screen navy palette', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -255,7 +259,7 @@ void main() {
       (widget) =>
           widget.key is ValueKey<String> &&
           (widget.key! as ValueKey<String>).value.startsWith(
-            'director-match-tile-',
+            'recommended-group-',
           ),
     );
     expect(tiles, findsWidgets);
@@ -264,7 +268,7 @@ void main() {
     expect(decoration.color, TournamentDisplayPalette.card);
     expect(
       (decoration.border! as Border).top.color,
-      TournamentDisplayPalette.border.withAlpha(150),
+      TournamentDisplayPalette.border,
     );
     expect(tester.takeException(), isNull);
   });
@@ -341,7 +345,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('dashboard shows at most six upcoming and four recent matches', (
+  testWidgets('dashboard lists open matches and four recent results', (
     tester,
   ) async {
     final tournament = fixture();
@@ -393,8 +397,17 @@ void main() {
         )
         .first;
     expect(
-      find.descendant(of: upcoming, matching: find.byType(Container)),
-      findsNWidgets(6),
+      find.descendant(
+        of: upcoming,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'recommended-match-',
+              ),
+        ),
+      ),
+      findsNWidgets(11),
     );
     expect(
       find.descendant(of: recent, matching: find.byType(Container)),

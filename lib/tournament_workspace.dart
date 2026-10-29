@@ -35,6 +35,7 @@ import 'features/rankings/domain/local_ranking.dart';
 import 'features/rankings/application/local_ranking_elo_service.dart';
 import 'features/league/domain/league_match.dart';
 import 'features/tournaments/application/tournament_creation_controller.dart';
+import 'features/tournaments/application/group_player_rating_service.dart';
 import 'features/tournaments/application/group_tie_breaker_preferences.dart';
 import 'features/tournaments/application/tournament_run_controller.dart';
 import 'features/tournaments/application/group_stage_preview_service.dart';

@@ -4,12 +4,14 @@ import '../domain/tournament_flow_priority_settings.dart';
 class TournamentFlowPriority {
   const TournamentFlowPriority({
     required this.prioritizedMatches,
+    required this.delayedGroups,
     required this.notices,
   });
 
   static const defaultSettings = TournamentFlowPrioritySettings();
 
   final Set<GroupMatch> prioritizedMatches;
+  final Set<String> delayedGroups;
   final List<String> notices;
 
   factory TournamentFlowPriority.forStage(
@@ -17,10 +19,15 @@ class TournamentFlowPriority {
     TournamentFlowPrioritySettings settings = defaultSettings,
   }) {
     if (stage is! GroupTournamentRunStage || stage.groups.isEmpty) {
-      return const TournamentFlowPriority(prioritizedMatches: {}, notices: []);
+      return const TournamentFlowPriority(
+        prioritizedMatches: {},
+        delayedGroups: {},
+        notices: [],
+      );
     }
 
     final priorities = <GroupMatch>{};
+    final delayedGroups = <String>{};
     final notices = <String>[];
     final groupProgress = [
       for (final group in stage.groups)
@@ -53,6 +60,7 @@ class TournamentFlowPriority {
           continue;
         }
         final group = stage.groups[index];
+        delayedGroups.add(group.name);
         trailingGroups.add(group.name);
         priorities.addAll(group.matches.where(_isPrioritizable));
       }
@@ -128,6 +136,7 @@ class TournamentFlowPriority {
 
     return TournamentFlowPriority(
       prioritizedMatches: Set.unmodifiable(priorities),
+      delayedGroups: Set.unmodifiable(delayedGroups),
       notices: List.unmodifiable(notices),
     );
   }

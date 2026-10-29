@@ -144,7 +144,7 @@ class MatchResultTile extends StatelessWidget {
                       const Spacer(),
                       IconButton.filledTonal(
                         onPressed: canEdit ? () => onEditResult(match) : null,
-                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        icon: const Icon(Icons.edit_outlined, size: 16),
                         tooltip: 'Ergebnis',
                         style: IconButton.styleFrom(
                           minimumSize: const Size(48, 48),
@@ -190,7 +190,7 @@ class MatchResultTile extends StatelessWidget {
                 const SizedBox(width: 12),
                 IconButton.filledTonal(
                   onPressed: canEdit ? () => onEditResult(match) : null,
-                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  icon: const Icon(Icons.edit_outlined, size: 16),
                   tooltip: 'Ergebnis',
                   style: IconButton.styleFrom(
                     minimumSize: const Size(48, 48),
@@ -536,11 +536,11 @@ class _ScoreBadge extends StatelessWidget {
 
     final badge = Container(
       constraints: BoxConstraints(
-        minWidth: match.isAnnulled || match.hasSetScore ? 100 : 64,
+        minWidth: match.isAnnulled || match.hasSetScore ? 100 : 56,
         minHeight: 48,
       ),
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
       decoration: BoxDecoration(
         color: match.isAnnulled
             ? colorScheme.errorContainer
@@ -555,7 +555,7 @@ class _ScoreBadge extends StatelessWidget {
             : match.hasResult
             ? match.scoreLabel
             : '-:-',
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
       ),
     );
 

@@ -10,7 +10,7 @@ import '../../../application/tournament_timing.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/board_scheduling_engine.dart';
 import 'tournament_second_screen_view.dart';
-import 'tournament_schedule_view.dart';
+import 'recommended_matches_table.dart';
 
 /// Embedded tournament controls for match scheduling and result entry.
 class TournamentDirectorDashboard extends StatefulWidget {
@@ -305,44 +305,55 @@ class _TournamentDirectorDashboardState
         .where((entry) => entry.match.hasPlayers)
         .toList();
     final completed = activeStageEntries
-        .where((entry) => entry.match.hasResult)
+        .where((entry) => entry.match.hasPlayers && entry.match.hasResult)
         .length;
     final totalCompleted = state.entries
-        .where((entry) => entry.match.hasResult)
+        .where((entry) => entry.match.hasPlayers && entry.match.hasResult)
         .length;
     final waiting = state.schedule.waiting
         .where((e) => e.stageIndex == widget.activeStage && !e.match.isResolved)
         .length;
-    final upcoming = state.schedule.planned
-        .where(
-          (assignment) =>
-              assignment.entry.stageIndex == widget.activeStage &&
-              assignment.entry.match.hasPlayers,
-        )
+    final pendingMatches = activeStageEntries
+        .where((entry) => entry.match.hasPlayers && !entry.match.isResolved)
+        .map((entry) => entry.match)
         .toList();
+    final pendingOrder = {
+      for (var index = 0; index < activeStageEntries.length; index++)
+        activeStageEntries[index].match: index,
+    };
+    final pendingMatchSet = pendingMatches.toSet();
     final flowPriority = TournamentFlowPriority.forStage(
       t.runStages[widget.activeStage],
       settings: _prioritySettings,
     );
-    upcoming.sort((a, b) {
-      final aIsPriority = flowPriority.prioritizedMatches.contains(
-        a.entry.match,
-      );
-      final bIsPriority = flowPriority.prioritizedMatches.contains(
-        b.entry.match,
-      );
+    pendingMatches.sort((a, b) {
+      final aIsPriority = flowPriority.prioritizedMatches.contains(a);
+      final bIsPriority = flowPriority.prioritizedMatches.contains(b);
       final priorityComparison = aIsPriority == bIsPriority
           ? 0
           : aIsPriority
           ? -1
           : 1;
       if (priorityComparison != 0) return priorityComparison;
-      return a.block.compareTo(b.block);
+      return pendingOrder[a]!.compareTo(pendingOrder[b]!);
     });
-    final nextSix = upcoming
-        .take(6)
-        .map((assignment) => assignment.entry)
-        .toList();
+    final recommendedGroups = <RecommendedMatchGroup>[];
+    final stage = t.runStages[widget.activeStage];
+    if (stage is GroupTournamentRunStage) {
+      for (final group in stage.groups) {
+        recommendedGroups.add(
+          RecommendedMatchGroup(
+            name: group.name,
+            matches: group.matches.where(pendingMatchSet.contains).toList(),
+            isDelayed: flowPriority.delayedGroups.contains(group.name),
+          ),
+        );
+      }
+    } else {
+      recommendedGroups.add(
+        RecommendedMatchGroup(name: stage.name, matches: pendingMatches),
+      );
+    }
     final resultEntryOrder = {
       for (var index = 0; index < state.entries.length; index++)
         state.entries[index].match: index,
@@ -379,14 +390,10 @@ class _TournamentDirectorDashboardState
     ];
     final flowNotices = flowPriority.notices;
 
-    final totalGames = activeStageEntries.length;
-    final progressPct = totalGames > 0
-        ? ((completed / totalGames) * 100).round()
-        : 0;
-    final totalTournamentGames = state.entries.length;
-    final totalProgressPct = totalTournamentGames > 0
-        ? ((totalCompleted / totalTournamentGames) * 100).round()
-        : 0;
+    final totalGames = active.length;
+    final totalTournamentGames = state.entries
+        .where((entry) => entry.match.hasPlayers)
+        .length;
 
     final status = _box([
       Wrap(
@@ -491,14 +498,10 @@ class _TournamentDirectorDashboardState
         runSpacing: 12,
         children: [
           Text(
-            '$completed von $totalGames Spielen fertig ($progressPct%)',
+            '$completed/$totalGames Spiele in dieser Etappe · '
+            '$totalCompleted/$totalTournamentGames gesamt',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          Text(
-            'Gesamt: $totalCompleted/$totalTournamentGames Spiele '
-            '($totalProgressPct%)',
-          ),
-          Text('${active.length - completed} offen'),
           Text(
             t.startedAt == null
                 ? 'Turnieruhr nicht gestartet'
@@ -598,29 +601,19 @@ class _TournamentDirectorDashboardState
         const SizedBox(height: 12),
         status,
         const SizedBox(height: 12),
-        _matchQueue(
-          'Empfohlene Partien',
-          nextSix,
-          emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
-          prioritizedMatches: flowPriority.prioritizedMatches,
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => Dialog.fullscreen(
-                child: TournamentScheduleView(
-                  tournament: t,
-                  onEditResult: (match) => _act(() => widget.onResult(match)),
-                ),
-              ),
-            ),
-            icon: const Icon(Icons.table_view_outlined),
-            label: const Text('Vollständigen Spielplan öffnen'),
+        _box([
+          Text(
+            'Empfohlene Partien',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-        ),
+          const SizedBox(height: 8),
+          RecommendedMatchesTable(
+            groups: recommendedGroups,
+            prioritizedMatches: flowPriority.prioritizedMatches,
+            onEditResult: (match) => _act(() => widget.onResult(match)),
+            emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+          ),
+        ]),
         const SizedBox(height: 12),
         _matchQueue(
           'Letzte Ergebnisse',

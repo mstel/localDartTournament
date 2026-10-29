@@ -3,6 +3,7 @@ import 'package:dart_tournament_manager/features/tournaments/application/group_a
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_advancement_forecast_engine.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
+import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
 import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,107 +78,99 @@ void main() {
     });
   }
 
-  testWidgets(
-    'long player names stay on one row and the second screen shows nine matches',
-    (tester) async {
-      tester.view.physicalSize = const Size(1440, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('second screen shows all open matches in the grouped table', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      final players = [
-        for (var index = 1; index <= 8; index++)
-          TournamentPlayer.generated(index).copyWith(
-            name: 'Spielername mit außergewöhnlicher Länge Nummer $index',
-          ),
-      ];
-      final matches = [
-        for (var index = 0; index < 10; index++)
-          GroupMatch(
-            homePlayer: players[index % players.length],
-            awayPlayer: players[(index + 1) % players.length],
-            round: index + 1,
-          ),
-      ];
-      final tournament = CreatedTournament(
-        name: 'Langnamen',
-        players: players,
-        stages: const [
-          TournamentStage(
-            name: 'Gruppenphase',
-            type: 'groups',
-            groupSizes: [8],
-          ),
-        ],
-        runStages: [
-          GroupTournamentRunStage(
-            name: 'Gruppenphase',
-            groupPlayType: 'round_robin',
-            groups: [
-              TournamentGroup(
-                name: 'Gruppe A',
-                playType: 'round_robin',
-                players: players,
-                matches: matches,
-              ),
-            ],
-            qualificationPlan: null,
-            tieBreakers: defaultGroupTieBreakers,
-          ),
-        ],
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TournamentSecondScreenView(
-              tournament: tournament,
-              isStandaloneWindow: true,
+    final players = [
+      for (var index = 1; index <= 8; index++)
+        TournamentPlayer.generated(index).copyWith(
+          name: 'Spielername mit außergewöhnlicher Länge Nummer $index',
+        ),
+    ];
+    final matches = [
+      for (var index = 0; index < 10; index++)
+        GroupMatch(
+          homePlayer: players[index % players.length],
+          awayPlayer: players[(index + 1) % players.length],
+          round: index + 1,
+        ),
+    ];
+    final tournament = CreatedTournament(
+      name: 'Langnamen',
+      players: players,
+      stages: const [
+        TournamentStage(name: 'Gruppenphase', type: 'groups', groupSizes: [8]),
+      ],
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppenphase',
+          groupPlayType: 'round_robin',
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: players,
+              matches: matches,
             ),
+          ],
+          qualificationPlan: null,
+          tieBreakers: defaultGroupTieBreakers,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
           ),
         ),
-      );
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
 
-      expect(find.text('Empfohlene Partien (9 Vorschläge)'), findsOneWidget);
-      final visibleTiles = find.byWidgetPredicate(
-        (widget) =>
-            widget.key is ValueKey<String> &&
-            (widget.key! as ValueKey<String>).value.startsWith(
-              'second-screen-match-',
+    expect(find.text('Empfohlene Partien'), findsOneWidget);
+    expect(find.byType(RecommendedMatchesTable), findsOneWidget);
+    final visibleMatches = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'recommended-match-',
+          ),
+    );
+    expect(visibleMatches, findsNWidgets(10));
+    for (var index = 0; index < 10; index++) {
+      final playerTexts = tester
+          .widgetList<Text>(
+            find.descendant(
+              of: visibleMatches.at(index),
+              matching: find.byType(Text),
             ),
-      );
-      expect(visibleTiles, findsNWidgets(9));
-      final tileDecoration =
-          tester.widget<Container>(visibleTiles.first).decoration!
-              as BoxDecoration;
-      expect(tileDecoration.color, TournamentDisplayPalette.card);
-      expect(
-        (tileDecoration.border! as Border).top.color,
-        TournamentDisplayPalette.border.withAlpha(150),
-      );
-      for (var index = 0; index < 9; index++) {
-        final playerTexts = tester
-            .widgetList<Text>(
-              find.descendant(
-                of: visibleTiles.at(index),
-                matching: find.byType(Text),
-              ),
-            )
-            .where((text) => text.data?.startsWith('Spielername') ?? false)
-            .toList();
-        expect(playerTexts, hasLength(1));
-        for (final text in playerTexts) {
-          expect(text.maxLines, 1);
-        }
+          )
+          .where(
+            (text) =>
+                text.data?.startsWith(
+                  'Spielername mit außergewöhnlicher Länge',
+                ) ??
+                false,
+          )
+          .toList();
+      expect(playerTexts, hasLength(2));
+      for (final text in playerTexts) {
+        expect(text.maxLines, 2);
       }
-      await tester.ensureVisible(find.text('Vollständiger Spielplan'));
-      await tester.tap(find.text('Vollständiger Spielplan'));
-      await tester.pumpAndSettle();
-      expect(find.text('Langnamen · Vollständiger Spielplan'), findsOneWidget);
-      expect(find.byType(DataTable), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    }
+    expect(find.text('Vollständiger Spielplan'), findsNothing);
+    await tester.pump(const Duration(seconds: 10));
+    expect(visibleMatches, findsNWidgets(10));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     '1920x1080 second screen shows recent results in two columns and scrolls',
@@ -467,9 +460,53 @@ void main() {
     expect(find.text('1. Gruppenphase'), findsOneWidget);
     expect(find.text('1. Gruppenphase · Gruppe A'), findsNothing);
     expect(find.text('3/6 gespielt'), findsOneWidget);
-    expect(find.text('0/1 gespielt'), findsOneWidget);
-    expect(find.text('0/2 gespielt'), findsOneWidget);
-    expect(find.text('Gesamt'), findsOneWidget);
+    expect(find.text('0/1 gespielt'), findsNWidgets(2));
+    expect(find.text('0/2 gespielt'), findsNothing);
+    expect(find.text('Gesamt'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('recent results highlight winners and current qualification', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament();
+    final stage = tournament.runStages.first as GroupTournamentRunStage;
+    for (var index = 0; index < stage.groups.single.matches.length; index++) {
+      stage.groups.single.matches[index]
+        ..homeLegs = 2
+        ..awayLegs = 0
+        ..finishedAt = DateTime.utc(2026, 1, index + 1);
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Gesetzt'), findsAtLeastNWidgets(1));
+    expect(find.text('Ausgeschieden'), findsAtLeastNWidgets(1));
+    final recentMatch = find.byKey(const ValueKey('recent-result-6-C-D'));
+    expect(recentMatch, findsOneWidget);
+    final winner = tester.widget<Text>(
+      find.descendant(of: recentMatch, matching: find.text('C')),
+    );
+    expect(winner.style?.color, const Color(0xFF86EFAC));
+    expect(
+      find.descendant(of: recentMatch, matching: find.text('Ausgeschieden')),
+      findsNWidgets(2),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -569,6 +606,16 @@ void main() {
     await tester.tap(previewButton);
     await tester.pump();
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    final fullscreenButton = find.byTooltip('KO-Vorschau im Vollbild öffnen');
+    expect(fullscreenButton, findsOneWidget);
+    await tester.ensureVisible(fullscreenButton);
+    await tester.tap(fullscreenButton);
+    await tester.pumpAndSettle();
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsNWidgets(2));
+    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
+    await tester.tap(find.text('Zur Übersichtsansicht zurückkehren'));
+    await tester.pumpAndSettle();
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
 
     final prognosisTab = find.text('Siegprognose & Weiterkommen');
     await tester.ensureVisible(prognosisTab);
@@ -626,6 +673,13 @@ void main() {
     expect(find.text('Qualifikant offen').hitTestable(), findsNWidgets(16));
     expect(find.text('Halbfinale'), findsOneWidget);
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
+    final verticalPreview = find.byKey(
+      const ValueKey('knockout-preview-vertical-scroll'),
+    );
+    final verticalScroll = tester.state<ScrollableState>(
+      find.descendant(of: verticalPreview, matching: find.byType(Scrollable)),
+    );
+    expect(verticalScroll.position.maxScrollExtent, greaterThan(0));
     expect(tester.takeException(), isNull);
   });
 
