@@ -230,7 +230,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        final previewButton = find.text('Vorschau nächste Etappe');
+        final previewButton = find.text('KO Baum öffnen');
         await tester.ensureVisible(previewButton);
         await tester.tap(previewButton);
         await tester.pumpAndSettle();

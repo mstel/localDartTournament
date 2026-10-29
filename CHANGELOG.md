@@ -1,3 +1,17 @@
+# 2.1.6+40
+
+- Verdichtet die Zweitmonitoransicht: Spielplan für bis zu vier Gruppen,
+  zwei letzte Ergebnisse mit Elo-Änderungen und Leistungs-Badges sowie
+  kompakte Tabellen.
+- Zeigt den Gesamtfortschritt neben der Turnieruhr und die Spielzahlen an den
+  Gruppen; in aktiven K.-o.-Etappen nutzt der lesbare Turnierbaum die volle
+  Monitorbreite.
+- Entfernt Ergebniseingaben und Bestleistungs-Badges aus dem Dashboard-
+  Spielplan beziehungsweise den Dashboard-Ergebnissen und ergänzt dort
+  stattdessen Elo-Änderungen.
+- Öffnet den K.-o.-Baum in der Ergebnisse-Ansicht mit direktem Zugriff auf
+  die Ergebniseingabe.
+
 # 2.1.3+37
 
 - Ergänzt Hinweise für Setzung, Freilose, Match-Ergebnisse, Bestleistungen und

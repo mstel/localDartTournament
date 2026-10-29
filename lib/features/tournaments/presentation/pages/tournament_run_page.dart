@@ -3644,17 +3644,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                       StageResultsSplitView(
                         stage: activeStage,
                         tournament: widget.tournament,
-                        onPreviewBracket: () => showDialog<void>(
-                          context: context,
-                          builder: (context) => Dialog.fullscreen(
-                            child: TournamentSecondScreenView(
-                              tournament: widget.tournament,
-                              isStandaloneWindow: true,
-                              showNextStagePreviewInitially: true,
-                              onClose: () => Navigator.of(context).pop(),
-                            ),
-                          ),
-                        ),
+                        onPreviewBracket:
+                            activeStage is KnockoutTournamentRunStage
+                            ? null
+                            : () => showDialog<void>(
+                                context: context,
+                                builder: (context) => Dialog.fullscreen(
+                                  child: TournamentSecondScreenView(
+                                    tournament: widget.tournament,
+                                    isStandaloneWindow: true,
+                                    showNextStagePreviewInitially: true,
+                                    onClose: () => Navigator.of(context).pop(),
+                                  ),
+                                ),
+                              ),
                         standingsFor: _standingsFor,
                         onEditResult: _editResult,
                         canEditResults: canEditResults,

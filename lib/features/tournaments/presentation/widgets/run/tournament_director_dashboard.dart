@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import '../../../../../shared/theme/tournament_display_palette.dart';
+import '../../../../rankings/application/tournament_match_elo_service.dart';
+import '../../../../rankings/domain/local_elo_calculator.dart';
 import '../../../application/tournament_flow_priority.dart';
 import '../../../application/tournament_flow_priority_preferences.dart';
 import '../../../domain/tournament_flow_priority_settings.dart';
@@ -60,15 +63,34 @@ class _TournamentDirectorDashboardState
   int _noticeIndex = 0;
   TournamentFlowPrioritySettings _prioritySettings =
       TournamentFlowPriority.defaultSettings;
+  late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
+  late String _eloInputFingerprint;
+
   @override
   void initState() {
     super.initState();
+    _refreshEloChanges();
     unawaited(_loadPrioritySettings());
     _timer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (mounted) {
         setState(() => _noticeIndex++);
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant TournamentDirectorDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final fingerprint = jsonEncode(widget.tournament.toJson());
+    if (fingerprint != _eloInputFingerprint) {
+      _refreshEloChanges(fingerprint: fingerprint);
+    }
+  }
+
+  void _refreshEloChanges({String? fingerprint}) {
+    _eloInputFingerprint =
+        fingerprint ?? jsonEncode(widget.tournament.toJson());
+    _eloChanges = TournamentMatchEloService().calculate(widget.tournament);
   }
 
   Future<void> _loadPrioritySettings() async {
@@ -197,7 +219,6 @@ class _TournamentDirectorDashboardState
     required bool isPriority,
   }) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final match = entry.match;
     return Container(
       key: ValueKey(
@@ -274,20 +295,51 @@ class _TournamentDirectorDashboardState
                 color: TournamentDisplayPalette.text,
               ),
             ),
-            for (final performance in match.bestPerformances.take(2))
-              Text(
-                '${performance.playerName} · ${performance.label}'
-                '${performance.value == null ? '' : ' ${performance.value}'}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.primary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+            FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
+              future: _eloChanges,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Text(
+                    'Ranglistenänderungen konnten nicht geladen werden.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  );
+                }
+                final key = const LocalEloCalculator().matchKey(
+                  widget.tournament,
+                  match,
+                );
+                final changes = key == null
+                    ? const <TournamentMatchEloChange>[]
+                    : snapshot.data?[key] ?? const <TournamentMatchEloChange>[];
+                if (changes.isEmpty) return const SizedBox.shrink();
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final change in changes)
+                      Text(
+                        '${change.rankingName}: '
+                        '${_formatDelta(change.homeDelta)} / '
+                        '${_formatDelta(change.awayDelta)} Elo',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: TournamentDisplayPalette.mutedText,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           ],
         ],
       ),
     );
+  }
+
+  String _formatDelta(int? delta) {
+    if (delta == null) return '–';
+    return delta > 0 ? '+$delta' : '$delta';
   }
 
   @override
@@ -385,9 +437,6 @@ class _TournamentDirectorDashboardState
             );
           });
     final latestResults = recentResults.take(4).toList();
-    final bestPerformances = [
-      for (final entry in recentResults) ...entry.match.bestPerformances,
-    ];
     final flowNotices = flowPriority.notices;
 
     final totalGames = active.length;
@@ -602,16 +651,13 @@ class _TournamentDirectorDashboardState
         status,
         const SizedBox(height: 12),
         _box([
-          Text(
-            'Empfohlene Partien',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          Text('Spielplan', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
           RecommendedMatchesTable(
             groups: recommendedGroups,
             prioritizedMatches: flowPriority.prioritizedMatches,
-            onEditResult: (match) => _act(() => widget.onResult(match)),
             emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+            dense: true,
           ),
         ]),
         const SizedBox(height: 12),
@@ -622,30 +668,6 @@ class _TournamentDirectorDashboardState
           showResult: true,
           maxColumns: 4,
         ),
-        if (bestPerformances.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _box([
-            Text(
-              'Bestleistungen',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                for (final performance in bestPerformances)
-                  Chip(
-                    avatar: const Icon(Icons.military_tech_outlined, size: 18),
-                    label: Text(
-                      '${performance.playerName} · ${performance.label}'
-                      '${performance.value == null ? '' : ' ${performance.value}'}',
-                    ),
-                  ),
-              ],
-            ),
-          ]),
-        ],
       ],
     );
   }

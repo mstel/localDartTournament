@@ -538,7 +538,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                             widget.onPreviewBracket ??
                             () => _openFullBracketPreview(context, stage),
                         icon: const Icon(Icons.open_in_full),
-                        label: const Text('Vorschau nächste Etappe'),
+                        label: const Text('KO Baum öffnen'),
                       ),
                     ],
                   ),

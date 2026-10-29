@@ -8,11 +8,15 @@ class RecommendedMatchGroup {
     required this.name,
     required this.matches,
     this.isDelayed = false,
+    this.playedMatches,
+    this.totalMatches,
   });
 
   final String name;
   final List<GroupMatch> matches;
   final bool isDelayed;
+  final int? playedMatches;
+  final int? totalMatches;
 }
 
 class RecommendedMatchesTable extends StatelessWidget {
@@ -22,18 +26,23 @@ class RecommendedMatchesTable extends StatelessWidget {
     required this.prioritizedMatches,
     this.onEditResult,
     this.emptyMessage = 'Keine offenen Partien.',
+    this.dense = false,
   });
 
   final List<RecommendedMatchGroup> groups;
   final Set<GroupMatch> prioritizedMatches;
   final ValueChanged<GroupMatch>? onEditResult;
   final String emptyMessage;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
     final visibleGroups = [
       for (final group in groups)
-        if (group.matches.any((match) => match.hasPlayers && !match.isResolved))
+        if (group.matches.any(
+              (match) => match.hasPlayers && !match.isResolved,
+            ) ||
+            group.playedMatches != null && group.totalMatches != null)
           group,
     ];
     if (visibleGroups.isEmpty) {
@@ -45,7 +54,7 @@ class RecommendedMatchesTable extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = (constraints.maxWidth / 280).floor().clamp(1, 4);
+        final columns = (constraints.maxWidth / 190).floor().clamp(1, 4);
         final spacing = 8.0;
         final width =
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
@@ -60,6 +69,7 @@ class RecommendedMatchesTable extends StatelessWidget {
                   group: group,
                   prioritizedMatches: prioritizedMatches,
                   onEditResult: onEditResult,
+                  dense: dense,
                 ),
               ),
           ],
@@ -74,11 +84,13 @@ class _GroupTable extends StatelessWidget {
     required this.group,
     required this.prioritizedMatches,
     required this.onEditResult,
+    required this.dense,
   });
 
   final RecommendedMatchGroup group;
   final Set<GroupMatch> prioritizedMatches;
   final ValueChanged<GroupMatch>? onEditResult;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +129,18 @@ class _GroupTable extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (group.playedMatches != null && group.totalMatches != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      '${group.playedMatches}/${group.totalMatches}',
+                      style: const TextStyle(
+                        color: TournamentDisplayPalette.mutedText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 if (group.isDelayed)
                   const Tooltip(
                     message: 'Diese Gruppe liegt im Spielplan zurück',
@@ -136,6 +160,7 @@ class _GroupTable extends StatelessWidget {
                 match: item.match,
                 isPrioritized: prioritizedMatches.contains(item.match),
                 onEditResult: onEditResult,
+                dense: dense,
               ),
             ],
         ],
@@ -149,11 +174,13 @@ class _MatchRow extends StatelessWidget {
     required this.match,
     required this.isPrioritized,
     required this.onEditResult,
+    required this.dense,
   });
 
   final GroupMatch match;
   final bool isPrioritized;
   final ValueChanged<GroupMatch>? onEditResult;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -172,7 +199,7 @@ class _MatchRow extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 18,
+            width: dense ? 14 : 18,
             child: isPrioritized
                 ? const Tooltip(
                     message: 'Priorisierte Partie',
@@ -187,8 +214,8 @@ class _MatchRow extends StatelessWidget {
           Expanded(
             child: Text(
               match.homePlayer!.shortDisplayName,
-              style: playerStyle,
-              maxLines: 2,
+              style: dense ? playerStyle?.copyWith(fontSize: 12) : playerStyle,
+              maxLines: dense ? 1 : 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -201,11 +228,21 @@ class _MatchRow extends StatelessWidget {
               color: TournamentDisplayPalette.accent,
               onPressed: () => onEditResult!(match),
             ),
+          if (onEditResult == null)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: dense ? 3 : 8),
+              child: Text(
+                '-',
+                style: playerStyle?.copyWith(
+                  color: TournamentDisplayPalette.mutedText,
+                ),
+              ),
+            ),
           Expanded(
             child: Text(
               match.awayPlayer!.shortDisplayName,
-              style: playerStyle,
-              maxLines: 2,
+              style: dense ? playerStyle?.copyWith(fontSize: 12) : playerStyle,
+              maxLines: dense ? 1 : 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
             ),

@@ -75,6 +75,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(RecommendedMatchesTable), findsOneWidget);
     expect(find.text('Vollständigen Spielplan öffnen'), findsNothing);
+    expect(find.text('Spielplan'), findsOneWidget);
+    expect(find.byTooltip('Ergebnis eintragen'), findsNothing);
     expect(find.textContaining('Spiele in dieser Etappe'), findsOneWidget);
     expect(find.textContaining(' gesamt'), findsOneWidget);
     expect(find.textContaining('offen'), findsNothing);
@@ -125,7 +127,7 @@ void main() {
         );
         expect(find.textContaining('0/15 gesamt'), findsOneWidget);
         expect(find.textContaining('Uhrzeit:'), findsNothing);
-        expect(find.text('Empfohlene Partien'), findsOneWidget);
+        expect(find.text('Spielplan'), findsOneWidget);
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);
         expect(find.text('Fortschritt nach Etappen'), findsNothing);
         expect(find.text('Bestleistungen'), findsNothing);
@@ -385,10 +387,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final upcoming = find
-        .ancestor(
-          of: find.text('Empfohlene Partien'),
-          matching: find.byType(Card),
-        )
+        .ancestor(of: find.text('Spielplan'), matching: find.byType(Card))
         .first;
     final recent = find
         .ancestor(
@@ -413,8 +412,9 @@ void main() {
       find.descendant(of: recent, matching: find.byType(Container)),
       findsNWidgets(4),
     );
-    expect(find.text('Bestleistungen'), findsOneWidget);
-    expect(find.text('Spieler 3 · 180+ 180'), findsAtLeastNWidgets(1));
+    expect(find.text('Bestleistungen'), findsNothing);
+    expect(find.text('Spieler 3 · 180+ 180'), findsNothing);
+    expect(find.byTooltip('Ergebnis eintragen'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 

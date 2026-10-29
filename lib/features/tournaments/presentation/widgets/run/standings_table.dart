@@ -13,6 +13,7 @@ class StandingsTable extends StatefulWidget {
     required this.qualificationPlan,
     required this.tieBreakers,
     this.onPlayerTap,
+    this.compact = false,
   });
 
   final List<PlayerStanding> standings;
@@ -21,6 +22,7 @@ class StandingsTable extends StatefulWidget {
   final QualificationPlan? qualificationPlan;
   final List<String> tieBreakers;
   final ValueChanged<TournamentPlayer>? onPlayerTap;
+  final bool compact;
 
   @override
   State<StandingsTable> createState() => _StandingsTableState();
@@ -95,11 +97,17 @@ class _StandingsTableState extends State<StandingsTable> {
         controller: _horizontalController,
         scrollDirection: Axis.horizontal,
         child: DataTable(
-          columnSpacing: 16,
-          horizontalMargin: 12,
-          headingRowHeight: 36,
-          dataRowMinHeight: 40,
-          dataRowMaxHeight: 44,
+          columnSpacing: widget.compact ? 8 : 16,
+          horizontalMargin: widget.compact ? 6 : 12,
+          headingRowHeight: widget.compact ? 32 : 36,
+          dataRowMinHeight: widget.compact ? 34 : 40,
+          dataRowMaxHeight: widget.compact ? 38 : 44,
+          headingTextStyle: widget.compact
+              ? Theme.of(context).textTheme.labelSmall
+              : null,
+          dataTextStyle: widget.compact
+              ? Theme.of(context).textTheme.bodySmall
+              : null,
           columns: [
             const DataColumn(label: Text('#')),
             const DataColumn(label: Text('Spieler')),
@@ -184,7 +192,9 @@ class _StandingsTableState extends State<StandingsTable> {
         ),
         DataCell(
           _StandingText(
-            standing.player.name,
+            widget.compact
+                ? standing.player.shortDisplayName
+                : standing.player.name,
             textColor: cellTextColor,
             fontWeight: fontWeight,
           ),
