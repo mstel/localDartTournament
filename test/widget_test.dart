@@ -131,9 +131,12 @@ void main() {
   }
 
   Future<void> openFullTournamentBracket(WidgetTester tester) async {
-    final previewButton = find.text('Vorschau nächste Etappe');
-    await tester.ensureVisible(previewButton);
-    await tester.tap(previewButton);
+    final knockoutButton = find.text('KO Baum öffnen');
+    final bracketButton = knockoutButton.evaluate().isNotEmpty
+        ? knockoutButton
+        : find.text('Vorschau nächste Etappe');
+    await tester.ensureVisible(bracketButton);
+    await tester.tap(bracketButton);
     await tester.pumpAndSettle();
   }
 
@@ -535,8 +538,8 @@ void main() {
     );
 
     await openFullTournamentBracket(tester);
-    expect(find.textContaining('Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
+    expect(find.textContaining('· Turnierbaum'), findsOneWidget);
+    expect(find.byTooltip('Zurück zu Ergebnisse'), findsOneWidget);
     expect(find.text('Spieler 8'), findsWidgets);
     expect(find.text('Spieler 9'), findsWidgets);
     expect(find.text('Spieler 10'), findsWidgets);
@@ -649,7 +652,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await openFullTournamentBracket(tester);
-    expect(find.textContaining('Turnierbaum-Vorschau'), findsOneWidget);
+    expect(find.textContaining('· Turnierbaum'), findsOneWidget);
   });
 
   testWidgets('triple knockout run shows separate loss brackets', (
@@ -782,8 +785,8 @@ void main() {
     );
 
     await openFullTournamentBracket(tester);
-    expect(find.textContaining('Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
+    expect(find.textContaining('· Turnierbaum'), findsOneWidget);
+    expect(find.byTooltip('Zurück zu Ergebnisse'), findsOneWidget);
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(find.text('Spieler 8'), findsWidgets);
     expect(find.text('Spieler 7'), findsWidgets);
@@ -1632,7 +1635,7 @@ void main() {
     await selectTournamentDashboard(tester);
 
     expect(find.text('Neues Turnier (Normales Turnier)'), findsOneWidget);
-    expect(find.text('Empfohlene Partien'), findsOneWidget);
+    expect(find.text('Spielplan'), findsOneWidget);
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
     expect(find.text('Runde 1'), findsNothing);
 
@@ -1711,7 +1714,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Endrunde'), findsWidgets);
-    expect(find.text('Empfohlene Partien'), findsOneWidget);
+    expect(find.text('Spielplan'), findsOneWidget);
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
   });
 }
