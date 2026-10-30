@@ -4,7 +4,6 @@ import 'package:dart_tournament_manager/features/tournaments/domain/engines/grou
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
-import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -240,19 +239,12 @@ void main() {
       final viewport = tester.getRect(
         find.byKey(const ValueKey('recent-results-scroll')),
       );
-      final firstRecent = tester.widget<Container>(
-        find.byKey(const ValueKey('recent-result-8-C-D')),
-      );
-      final recentDecoration = firstRecent.decoration! as BoxDecoration;
-      expect(recentDecoration.color, TournamentDisplayPalette.card);
-      expect(
-        (recentDecoration.border! as Border).top.color,
-        TournamentDisplayPalette.border.withAlpha(150),
-      );
       final resultRects = [
         for (final key in ['recent-result-8-C-D', 'recent-result-7-B-D'])
           tester.getRect(find.byKey(ValueKey(key))),
       ];
+      expect(resultRects.first.top, lessThan(resultRects.last.top));
+      expect(resultRects.every((rect) => rect.height < 66), isTrue);
       expect(
         resultRects.every(
           (rect) => rect.top >= viewport.top && rect.bottom <= viewport.bottom,
@@ -513,17 +505,37 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Gesetzt'), findsAtLeastNWidgets(1));
-    expect(find.text('Ausgeschieden'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Gesetzt'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Ausgeschieden'), findsAtLeastNWidgets(1));
     final recentMatch = find.byKey(const ValueKey('recent-result-6-C-D'));
     expect(recentMatch, findsOneWidget);
-    final winner = tester.widget<Text>(
-      find.descendant(of: recentMatch, matching: find.text('C')),
-    );
-    expect(winner.style?.color, const Color(0xFF86EFAC));
+    final winnerSpans = <TextSpan>[];
+    void collectSpans(InlineSpan span) {
+      if (span is! TextSpan) return;
+      winnerSpans.add(span);
+      for (final child in span.children ?? const <InlineSpan>[]) {
+        collectSpans(child);
+      }
+    }
+
+    for (final richText in tester.widgetList<RichText>(
+      find.descendant(of: recentMatch, matching: find.byType(RichText)),
+    )) {
+      collectSpans(richText.text);
+    }
     expect(
-      find.descendant(of: recentMatch, matching: find.text('Ausgeschieden')),
-      findsNWidgets(2),
+      winnerSpans.any(
+        (span) =>
+            span.text == 'C' && span.style?.color == const Color(0xFF4ED9A4),
+      ),
+      isTrue,
+    );
+    expect(
+      find.descendant(
+        of: recentMatch,
+        matching: find.textContaining('Ausgeschieden'),
+      ),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });

@@ -188,6 +188,29 @@ class _TournamentDirectorDashboardState
     else
       LayoutBuilder(
         builder: (context, constraints) {
+          if (showResult) {
+            return FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
+              future: _eloChanges,
+              builder: (context, snapshot) => Column(
+                children: [
+                  for (var index = 0; index < entries.length; index++) ...[
+                    if (index > 0)
+                      const Divider(
+                        height: 1,
+                        color: TournamentDisplayPalette.border,
+                      ),
+                    _recentMatchLogEntry(
+                      entries[index].match,
+                      snapshot.data,
+                      eloError: snapshot.hasError
+                          ? 'Ranglistenänderungen konnten nicht geladen werden.'
+                          : null,
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }
           final columns = maxColumns == null
               ? constraints.maxWidth >= 1100
                     ? 6
@@ -213,6 +236,29 @@ class _TournamentDirectorDashboardState
       ),
   ]);
 
+  Widget _recentMatchLogEntry(
+    GroupMatch match,
+    Map<String, List<TournamentMatchEloChange>>? changes, {
+    String? eloError,
+  }) {
+    final matchKey = const LocalEloCalculator().matchKey(
+      widget.tournament,
+      match,
+    );
+    return RecentMatchResultLogEntry(
+      key: ValueKey(
+        'director-match-log-${match.round}-${match.homePlayer?.name}-'
+        '${match.awayPlayer?.name}',
+      ),
+      tournament: widget.tournament,
+      match: match,
+      eloChanges: matchKey == null
+          ? const <TournamentMatchEloChange>[]
+          : changes?[matchKey] ?? const <TournamentMatchEloChange>[],
+      eloError: eloError,
+    );
+  }
+
   Widget _queueTile(
     PlayEntry entry, {
     required double width,
@@ -233,7 +279,7 @@ class _TournamentDirectorDashboardState
               : snapshot.data?[matchKey] ?? const <TournamentMatchEloChange>[];
           return SizedBox(
             width: width,
-            child: RecentMatchResultCard(
+            child: RecentMatchResultLogEntry(
               key: ValueKey(
                 'director-match-tile-result-'
                 '${match.round}-${match.homePlayer?.name}-'
@@ -638,6 +684,7 @@ class _TournamentDirectorDashboardState
           RecommendedMatchesTable(
             groups: recommendedGroups,
             prioritizedMatches: flowPriority.prioritizedMatches,
+            deprioritizedMatches: flowPriority.deprioritizedMatches,
             emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
             dense: true,
           ),

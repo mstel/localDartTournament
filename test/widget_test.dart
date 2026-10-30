@@ -155,7 +155,7 @@ void main() {
     );
     final resultButton = find.descendant(
       of: matchTile,
-      matching: find.byTooltip('Ergebnis'),
+      matching: find.byTooltip('Ergebnis eingeben'),
     );
     await tester.ensureVisible(resultButton);
     await tester.tap(resultButton);
@@ -793,8 +793,8 @@ void main() {
     expect(find.text('Losers Runde 9'), findsNothing);
     expect(find.byType(TournamentRunPage), findsOneWidget);
 
-    await tester.ensureVisible(find.byTooltip('Ergebnis').first);
-    await tester.tap(find.byTooltip('Ergebnis').first);
+    await tester.ensureVisible(find.byTooltip('Ergebnis eingeben').first);
+    await tester.tap(find.byTooltip('Ergebnis eingeben').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('home-legs-field')), '2');
     await tester.enterText(find.byKey(const ValueKey('away-legs-field')), '0');
@@ -1800,7 +1800,7 @@ void main() {
 
     expect(find.textContaining('Offene Spiele'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Ergebnis').first);
+    await tester.tap(find.byTooltip('Ergebnis eingeben').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('home-legs-field')), '2');
     await tester.enterText(find.byKey(const ValueKey('away-legs-field')), '1');
@@ -1810,11 +1810,11 @@ void main() {
     expect(find.text('2:1'), findsWidgets);
 
     await Scrollable.ensureVisible(
-      tester.element(find.byTooltip('Ergebnis').at(1)),
+      tester.element(find.byTooltip('Ergebnis eingeben').at(1)),
       alignment: 0.5,
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Ergebnis').at(1));
+    await tester.tap(find.byTooltip('Ergebnis eingeben').at(1));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('home-legs-field')), '2');
     await tester.enterText(find.byKey(const ValueKey('away-legs-field')), '0');

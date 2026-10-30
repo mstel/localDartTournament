@@ -861,7 +861,7 @@ class _TournamentSecondScreenViewState
                     final scale =
                         MediaQuery.textScalerOf(context).scale(14) / 14;
                     final minimumBoardHeight =
-                        rounds.first.length * 76 * scale + roundHeaderHeight;
+                        rounds.first.length * 88 * scale + roundHeaderHeight;
                     final boardHeight = max(
                       constraints.maxHeight + 1,
                       minimumBoardHeight,
@@ -965,6 +965,10 @@ class _TournamentSecondScreenViewState
                                                       )
                                                         _buildBracketMatchPreview(
                                                           rounds[roundIndex][matchIndex],
+                                                          roundIndex:
+                                                              roundIndex,
+                                                          matchIndex:
+                                                              matchIndex,
                                                           homeLabel: playerLabel(
                                                             rounds[roundIndex][matchIndex]
                                                                 .homePlayer,
@@ -1007,6 +1011,8 @@ class _TournamentSecondScreenViewState
 
   Widget _buildBracketMatchPreview(
     GroupMatch match, {
+    required int roundIndex,
+    required int matchIndex,
     required String homeLabel,
     required String awayLabel,
     required int matchNumber,
@@ -1016,6 +1022,7 @@ class _TournamentSecondScreenViewState
     final awayIsCertain =
         awayLabel.contains('vorläufig') || awayLabel.contains('gesetzt');
     return Container(
+      key: ValueKey('knockout-preview-match-$roundIndex-$matchIndex'),
       padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
         color: const Color(0xFF14202B),
@@ -1180,7 +1187,7 @@ class _TournamentSecondScreenViewState
     return Container(
       constraints: BoxConstraints(
         minWidth: full ? 280 : 220,
-        maxWidth: full ? 420 : 340,
+        maxWidth: full ? double.infinity : 340,
       ),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -1597,6 +1604,7 @@ class _TournamentSecondScreenViewState
           RecommendedMatchesTable(
             groups: recommendedGroups,
             prioritizedMatches: flowPriority.prioritizedMatches,
+            deprioritizedMatches: flowPriority.deprioritizedMatches,
             emptyMessage: 'Keine offenen Partien in dieser Etappe.',
             dense: true,
           ),
@@ -1685,59 +1693,51 @@ class _TournamentSecondScreenViewState
                   future: _eloChanges,
                   builder: (context, snapshot) {
                     final itemExtent =
-                        112 * MediaQuery.textScalerOf(context).scale(1);
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        final columns = constraints.maxWidth >= 760
-                            ? 4
-                            : constraints.maxWidth >= 560
-                            ? 3
-                            : constraints.maxWidth >= 380
-                            ? 2
-                            : 1;
-                        final rows = (displayedRecent.length / columns).ceil();
-                        return SizedBox(
-                          height: displayedRecent.isEmpty
-                              ? itemExtent
-                              : itemExtent * rows + 8,
-                          child: snapshot.hasError
-                              ? const Center(
-                                  child: Text(
-                                    'Ranglistenänderungen konnten nicht geladen werden.',
-                                    style: TextStyle(color: Colors.amber),
+                        66 * MediaQuery.textScalerOf(context).scale(1);
+                    return SizedBox(
+                      key: const ValueKey('recent-results-scroll'),
+                      height: displayedRecent.isEmpty
+                          ? itemExtent
+                          : itemExtent * displayedRecent.length,
+                      child: snapshot.hasError
+                          ? const Center(
+                              child: Text(
+                                'Ranglistenänderungen konnten nicht geladen werden.',
+                                style: TextStyle(color: Colors.amber),
+                              ),
+                            )
+                          : displayedRecent.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Noch keine beendeten Partien vorhanden.',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            )
+                          : Column(
+                              children: [
+                                for (
+                                  var index = 0;
+                                  index < displayedRecent.length;
+                                  index++
+                                ) ...[
+                                  if (index > 0)
+                                    const Divider(
+                                      height: 1,
+                                      color: TournamentDisplayPalette.border,
+                                    ),
+                                  _buildRecentMatchRow(
+                                    context,
+                                    t,
+                                    displayedRecent[index],
+                                    _changesForMatch(
+                                      t,
+                                      displayedRecent[index],
+                                      snapshot.data,
+                                    ),
                                   ),
-                                )
-                              : displayedRecent.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    'Noch keine beendeten Partien vorhanden.',
-                                    style: TextStyle(color: Colors.white70),
-                                  ),
-                                )
-                              : GridView.builder(
-                                  key: const ValueKey('recent-results-scroll'),
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: columns,
-                                        mainAxisExtent: itemExtent,
-                                        crossAxisSpacing: 8,
-                                        mainAxisSpacing: 8,
-                                      ),
-                                  itemCount: displayedRecent.length,
-                                  itemBuilder: (context, index) =>
-                                      _buildRecentMatchRow(
-                                        context,
-                                        t,
-                                        displayedRecent[index],
-                                        _changesForMatch(
-                                          t,
-                                          displayedRecent[index],
-                                          snapshot.data,
-                                        ),
-                                      ),
-                                ),
-                        );
-                      },
+                                ],
+                              ],
+                            ),
                     );
                   },
                 );
@@ -1772,7 +1772,7 @@ class _TournamentSecondScreenViewState
     CreatedTournament tournament,
     GroupMatch m,
     List<TournamentMatchEloChange> eloChanges,
-  ) => RecentMatchResultCard(
+  ) => RecentMatchResultLogEntry(
     tournament: tournament,
     match: m,
     eloChanges: eloChanges,

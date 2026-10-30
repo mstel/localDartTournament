@@ -142,7 +142,7 @@ void main() {
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);
         expect(find.text('Fortschritt nach Etappen'), findsNothing);
         expect(find.text('180er'), findsOneWidget);
-        expect(find.text('3 : 1'), findsOneWidget);
+        expect(find.text('3:1'), findsOneWidget);
         expect(tester.takeException(), isNull);
         for (final section in ['Übersicht', 'Boards', 'Spiele']) {
           final tab = find.widgetWithText(ChoiceChip, section);
@@ -422,7 +422,7 @@ void main() {
     );
     expect(
       find.descendant(of: recent, matching: find.byType(Container)),
-      findsNWidgets(4),
+      findsNWidgets(3),
     );
     expect(find.text('Bestleistungen'), findsNothing);
     expect(find.text('Spieler 3 · 180+ 180'), findsNothing);

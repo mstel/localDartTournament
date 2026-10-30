@@ -8,8 +8,8 @@ import '../../../domain/engines/qualification_certainty.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../../statistics/domain/best_performance.dart';
 
-class RecentMatchResultCard extends StatelessWidget {
-  const RecentMatchResultCard({
+class RecentMatchResultLogEntry extends StatelessWidget {
+  const RecentMatchResultLogEntry({
     super.key,
     required this.tournament,
     required this.match,
@@ -23,197 +23,186 @@ class RecentMatchResultCard extends StatelessWidget {
   final String? eloError;
 
   @override
-  Widget build(BuildContext context) => Container(
-    key:
-        key ??
-        ValueKey(
-          'recent-result-${match.round}-'
-          '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
-          '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
-        ),
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-    decoration: BoxDecoration(
-      color: TournamentDisplayPalette.card,
-      border: Border.all(color: TournamentDisplayPalette.border.withAlpha(150)),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _RecentPlayerLabel(
-                tournament: tournament,
-                match: match,
-                player: match.homePlayer,
-                textAlign: TextAlign.end,
-              ),
-            ),
-            const SizedBox(width: 6),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: TournamentDisplayPalette.cardEmphasis,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: TournamentDisplayPalette.border),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                child: Text(
-                  '${match.homeScore ?? 0} : ${match.awayScore ?? 0}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: TournamentDisplayPalette.accent,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _RecentPlayerLabel(
-                tournament: tournament,
-                match: match,
-                player: match.awayPlayer,
-                textAlign: TextAlign.start,
-              ),
-            ),
-          ],
-        ),
-        if (eloError != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Text(
-              eloError!,
-              style: const TextStyle(color: Color(0xFFFFCC80), fontSize: 11),
-            ),
-          )
-        else if (eloChanges.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 5,
-              runSpacing: 3,
-              children: [
-                for (final change in eloChanges)
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: TournamentDisplayPalette.cardEmphasis,
-                      borderRadius: BorderRadius.circular(5),
-                      border: Border.all(
-                        color: TournamentDisplayPalette.border.withAlpha(150),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(text: '${change.rankingName}: '),
-                            _eloDeltaSpan(change.homeDelta),
-                            const TextSpan(text: ' / '),
-                            _eloDeltaSpan(change.awayDelta),
-                            const TextSpan(text: ' Elo'),
-                          ],
-                        ),
-                        style: const TextStyle(
-                          color: TournamentDisplayPalette.mutedText,
-                          fontSize: 11,
+  Widget build(BuildContext context) {
+    final homePlayer = match.homePlayer;
+    final awayPlayer = match.awayPlayer;
+    final homeIsWinner = homePlayer != null && match.winner == homePlayer;
+    final awayIsWinner = awayPlayer != null && match.winner == awayPlayer;
+    final homeColor = homeIsWinner
+        ? const Color(0xFF4ED9A4)
+        : homePlayer != null && match.loser == homePlayer
+        ? const Color(0xFFFF7777)
+        : TournamentDisplayPalette.text;
+    final awayColor = awayIsWinner
+        ? const Color(0xFF4ED9A4)
+        : awayPlayer != null && match.loser == awayPlayer
+        ? const Color(0xFFFF7777)
+        : TournamentDisplayPalette.text;
+    final homeStatus = homePlayer == null
+        ? null
+        : _recentPlayerStatus(tournament, match, homePlayer);
+    final awayStatus = awayPlayer == null
+        ? null
+        : _recentPlayerStatus(tournament, match, awayPlayer);
+    final time = match.finishedAt?.toLocal();
+    final resultDescription = homeIsWinner
+        ? ' besiegte '
+        : awayIsWinner
+        ? ' unterlag '
+        : ' spielte gegen ';
+
+    return Padding(
+      key:
+          key ??
+          ValueKey(
+            'recent-result-${match.round}-'
+            '${homePlayer?.profileId ?? homePlayer?.name}-'
+            '${awayPlayer?.profileId ?? awayPlayer?.name}',
+          ),
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: homePlayer?.name ?? '?',
+                        style: TextStyle(
+                          color: homeColor,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                      if (homeStatus != null)
+                        TextSpan(
+                          text: ' ($homeStatus)',
+                          style: const TextStyle(
+                            color: TournamentDisplayPalette.mutedText,
+                            fontSize: 10,
+                          ),
+                        ),
+                      TextSpan(text: resultDescription),
+                      TextSpan(
+                        text: awayPlayer?.name ?? '?',
+                        style: TextStyle(
+                          color: awayColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (awayStatus != null)
+                        TextSpan(
+                          text: ' ($awayStatus)',
+                          style: const TextStyle(
+                            color: TournamentDisplayPalette.mutedText,
+                            fontSize: 10,
+                          ),
+                        ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF123D2D),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  child: Text(
+                    match.isAnnulled
+                        ? 'annulliert'
+                        : '${match.homeScore ?? 0}:${match.awayScore ?? 0}',
+                    style: const TextStyle(
+                      color: Color(0xFF4ED9A4),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
+              ),
+              if (time != null) ...[
+                const SizedBox(width: 10),
+                Text(
+                  '${time.hour.toString().padLeft(2, '0')}:'
+                  '${time.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                    color: TournamentDisplayPalette.mutedText,
+                    fontSize: 11,
+                  ),
+                ),
               ],
+            ],
+          ),
+          if (eloError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                eloError!,
+                style: const TextStyle(color: Color(0xFFFFCC80), fontSize: 11),
+              ),
+            )
+          else
+            for (final change in eloChanges)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _eloRatingText(
+                        change.homeDelta,
+                        change.homeRatingBefore,
+                        change.homeRatingAfter,
+                        TextAlign.start,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        '${change.rankingName} · ${tournament.name}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: TournamentDisplayPalette.mutedText,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: _eloRatingText(
+                        change.awayDelta,
+                        change.awayRatingBefore,
+                        change.awayRatingAfter,
+                        TextAlign.end,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          if (match.bestPerformances.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                children: [
+                  for (final performance in match.bestPerformances)
+                    _RecentPerformanceBadge(performance: performance),
+                ],
+              ),
             ),
-          ),
-        if (match.bestPerformances.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 4,
-              runSpacing: 3,
-              children: [
-                for (final performance in match.bestPerformances)
-                  _RecentPerformanceBadge(performance: performance),
-              ],
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
-class _RecentPlayerLabel extends StatelessWidget {
-  const _RecentPlayerLabel({
-    required this.tournament,
-    required this.match,
-    required this.player,
-    required this.textAlign,
-  });
-
-  final CreatedTournament tournament;
-  final GroupMatch match;
-  final TournamentPlayer? player;
-  final TextAlign textAlign;
-
-  @override
-  Widget build(BuildContext context) {
-    if (player == null) {
-      return const Text(
-        '?',
-        style: TextStyle(color: Colors.white70),
-        textAlign: TextAlign.center,
-      );
-    }
-
-    final isWinner = match.winner == player;
-    final isLoser = match.loser == player;
-    final status = _recentPlayerStatus(tournament, match, player!);
-    final statusColor = status == 'Ausgeschieden'
-        ? const Color(0xFFEF9A9A)
-        : const Color(0xFF86EFAC);
-    final alignment = textAlign == TextAlign.end
-        ? CrossAxisAlignment.end
-        : CrossAxisAlignment.start;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: alignment,
-      children: [
-        Text(
-          player!.shortDisplayName,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isWinner
-                ? const Color(0xFF86EFAC)
-                : isLoser
-                ? const Color(0xFFEF9A9A)
-                : Colors.white,
-            fontSize: 13,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: textAlign,
-        ),
-        if (status != null)
-          Text(
-            status,
-            style: TextStyle(
-              color: statusColor,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: textAlign,
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -332,18 +321,23 @@ class _RecentPerformanceBadge extends StatelessWidget {
   }
 }
 
-TextSpan _eloDeltaSpan(int? delta) {
+Widget _eloRatingText(int? delta, int? before, int? after, TextAlign align) {
   final color = delta == null || delta == 0
       ? const Color(0xFFB0BEC5)
       : delta > 0
-      ? const Color(0xFF86EFAC)
-      : const Color(0xFFEF9A9A);
-  return TextSpan(
-    text: delta == null
-        ? '–'
-        : delta > 0
-        ? '+$delta'
-        : '$delta',
-    style: TextStyle(color: color),
+      ? const Color(0xFF4ED9A4)
+      : const Color(0xFFFF7777);
+  final change = delta == null
+      ? ''
+      : delta > 0
+      ? '+$delta'
+      : '$delta';
+  final rating = before != null && after != null ? ' ($before → $after)' : '';
+  return Text(
+    '$change Elo$rating',
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    textAlign: align,
+    style: TextStyle(color: color, fontSize: 11),
   );
 }

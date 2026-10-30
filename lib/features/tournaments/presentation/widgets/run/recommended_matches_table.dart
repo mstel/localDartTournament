@@ -1,3 +1,5 @@
+import 'dart:math' show min;
+
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/tournament_display_palette.dart';
@@ -24,6 +26,7 @@ class RecommendedMatchesTable extends StatelessWidget {
     super.key,
     required this.groups,
     required this.prioritizedMatches,
+    this.deprioritizedMatches = const {},
     this.onEditResult,
     this.emptyMessage = 'Keine offenen Partien.',
     this.dense = false,
@@ -31,6 +34,7 @@ class RecommendedMatchesTable extends StatelessWidget {
 
   final List<RecommendedMatchGroup> groups;
   final Set<GroupMatch> prioritizedMatches;
+  final Set<GroupMatch> deprioritizedMatches;
   final ValueChanged<GroupMatch>? onEditResult;
   final String emptyMessage;
   final bool dense;
@@ -54,7 +58,10 @@ class RecommendedMatchesTable extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = (constraints.maxWidth / 190).floor().clamp(1, 4);
+        final columns = (constraints.maxWidth / 190).floor().clamp(
+          1,
+          min(4, visibleGroups.length),
+        );
         final spacing = 8.0;
         final width =
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
@@ -68,6 +75,7 @@ class RecommendedMatchesTable extends StatelessWidget {
                 child: _GroupTable(
                   group: group,
                   prioritizedMatches: prioritizedMatches,
+                  deprioritizedMatches: deprioritizedMatches,
                   onEditResult: onEditResult,
                   dense: dense,
                 ),
@@ -83,12 +91,14 @@ class _GroupTable extends StatelessWidget {
   const _GroupTable({
     required this.group,
     required this.prioritizedMatches,
+    required this.deprioritizedMatches,
     required this.onEditResult,
     required this.dense,
   });
 
   final RecommendedMatchGroup group;
   final Set<GroupMatch> prioritizedMatches;
+  final Set<GroupMatch> deprioritizedMatches;
   final ValueChanged<GroupMatch>? onEditResult;
   final bool dense;
 
@@ -102,6 +112,11 @@ class _GroupTable extends StatelessWidget {
           final leftPriority = prioritizedMatches.contains(left.match);
           final rightPriority = prioritizedMatches.contains(right.match);
           if (leftPriority != rightPriority) return leftPriority ? -1 : 1;
+          final leftDeprioritized = deprioritizedMatches.contains(left.match);
+          final rightDeprioritized = deprioritizedMatches.contains(right.match);
+          if (leftDeprioritized != rightDeprioritized) {
+            return leftDeprioritized ? 1 : -1;
+          }
           return left.index.compareTo(right.index);
         });
 

@@ -154,13 +154,7 @@ void main() {
       greaterThan(300),
     );
     expect(
-      tester
-          .getRect(
-            find
-                .descendant(of: tiles.first, matching: find.byType(IconButton))
-                .first,
-          )
-          .height,
+      tester.getRect(find.byTooltip('Ergebnis eingeben').first).height,
       greaterThanOrEqualTo(48),
     );
 
@@ -169,7 +163,7 @@ void main() {
     expect(find.text('Spiele von Spieler 1'), findsOneWidget);
     expect(find.byType(MatchResultTile), findsNWidgets(5));
 
-    await tester.tap(find.byTooltip('Ergebnis').first);
+    await tester.tap(find.byTooltip('Ergebnis eingeben').first);
     await tester.pumpAndSettle();
     expect(find.text('Spiele von Spieler 1'), findsNothing);
     expect(find.byType(MatchResultTile), findsNWidgets(14));

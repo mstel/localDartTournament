@@ -1,3 +1,15 @@
+# 2.1.8+42
+
+- Behebt abgeschnittene KO-Baum-Vorschauen und verteilt Gruppen-Spielpläne
+  besser über die verfügbare Breite.
+- Verdichtet die Ergebniseingabe zu kompakten Spielplanzeilen mit zentralem,
+  anklickbarem Ergebnisfeld.
+- Ersetzt die letzten Ergebnisse im Dashboard und Zweitmonitor durch ein
+  chronologisches Match-Protokoll mit optionalen Elo-Änderungen.
+- Sortiert Partien gegen bereits deutlich weitergespielte Teilnehmer innerhalb
+  der priorisierten Vorschläge nach hinten.
+- Richtet Statistikspalten rechtsbündig aus und nutzt Tabellenbreite besser.
+
 # 2.1.7+41
 
 - Platziert kompakte letzte Ergebnisse im separaten Monitor am unteren Rand

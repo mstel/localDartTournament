@@ -4,6 +4,7 @@ import '../domain/tournament_flow_priority_settings.dart';
 class TournamentFlowPriority {
   const TournamentFlowPriority({
     required this.prioritizedMatches,
+    required this.deprioritizedMatches,
     required this.delayedGroups,
     required this.notices,
   });
@@ -11,6 +12,7 @@ class TournamentFlowPriority {
   static const defaultSettings = TournamentFlowPrioritySettings();
 
   final Set<GroupMatch> prioritizedMatches;
+  final Set<GroupMatch> deprioritizedMatches;
   final Set<String> delayedGroups;
   final List<String> notices;
 
@@ -21,12 +23,14 @@ class TournamentFlowPriority {
     if (stage is! GroupTournamentRunStage || stage.groups.isEmpty) {
       return const TournamentFlowPriority(
         prioritizedMatches: {},
+        deprioritizedMatches: {},
         delayedGroups: {},
         notices: [],
       );
     }
 
     final priorities = <GroupMatch>{};
+    final deprioritized = <GroupMatch>{};
     final delayedGroups = <String>{};
     final notices = <String>[];
     final groupProgress = [
@@ -113,6 +117,10 @@ class TournamentFlowPriority {
           .map((entry) => entry.key)
           .toSet();
       if (laggingPlayers.isEmpty) continue;
+      final leadingPlayers = playedByPlayer.entries
+          .where((entry) => entry.value == mostPlayedPlayer)
+          .map((entry) => entry.key)
+          .toSet();
 
       final names = laggingPlayers.map((id) => namesByPlayer[id] ?? id).toList()
         ..sort();
@@ -129,6 +137,49 @@ class TournamentFlowPriority {
         };
         if (matchPlayers.any(laggingPlayers.contains)) {
           priorities.add(match);
+          if (matchPlayers.any(leadingPlayers.contains)) {
+            deprioritized.add(match);
+          }
+        }
+      }
+    }
+    // Group-level delays can prioritize every open match; keep matches involving
+    // a caught-up player behind opportunities for lagging players to catch up.
+    for (final group in stage.groups) {
+      final playedByPlayer = <String, int>{};
+      for (final player in group.players) {
+        for (final individual in player.individuals) {
+          playedByPlayer.putIfAbsent(
+            individual.profileId ?? individual.name,
+            () => 0,
+          );
+        }
+      }
+      for (final match in group.matches.where(_countsAsPlayed)) {
+        for (final player in [match.homePlayer, match.awayPlayer]) {
+          if (player == null) continue;
+          for (final individual in player.individuals) {
+            final id = individual.profileId ?? individual.name;
+            playedByPlayer.update(id, (count) => count + 1, ifAbsent: () => 1);
+          }
+        }
+      }
+      if (playedByPlayer.isEmpty) continue;
+      final highestPlayed = playedByPlayer.values.reduce(
+        (a, b) => a > b ? a : b,
+      );
+      final leadingPlayers = playedByPlayer.entries
+          .where((entry) => entry.value == highestPlayed)
+          .map((entry) => entry.key)
+          .toSet();
+      for (final match in group.matches.where(priorities.contains)) {
+        final matchPlayers = {
+          for (final player in [match.homePlayer, match.awayPlayer])
+            if (player != null)
+              ...player.individuals.map((p) => p.profileId ?? p.name),
+        };
+        if (matchPlayers.any(leadingPlayers.contains)) {
+          deprioritized.add(match);
         }
       }
     }
@@ -136,6 +187,7 @@ class TournamentFlowPriority {
 
     return TournamentFlowPriority(
       prioritizedMatches: Set.unmodifiable(priorities),
+      deprioritizedMatches: Set.unmodifiable(deprioritized),
       delayedGroups: Set.unmodifiable(delayedGroups),
       notices: List.unmodifiable(notices),
     );

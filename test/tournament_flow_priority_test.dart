@@ -40,6 +40,60 @@ void main() {
     },
   );
 
+  test(
+    'matches against the caught-up player are last among prioritized matches',
+    () {
+      final stage = _stage();
+      final group = stage.groups.first;
+      final matches = group.matches;
+      final caughtUpPlayer = group.players.first;
+      final caughtUpMatches = matches
+          .where(
+            (match) =>
+                match.homePlayer == caughtUpPlayer ||
+                match.awayPlayer == caughtUpPlayer,
+          )
+          .take(2);
+      for (final match in caughtUpMatches) {
+        _finish(match);
+      }
+      final priority = TournamentFlowPriority.forStage(
+        stage,
+        settings: const TournamentFlowPrioritySettings(
+          playerMatchDeficitThreshold: 1,
+        ),
+      );
+      final openMatchesAgainstLeader = matches.where(
+        (match) =>
+            !match.isResolved &&
+            (match.homePlayer == caughtUpPlayer ||
+                match.awayPlayer == caughtUpPlayer),
+      );
+      final catchUpMatches = matches.where(
+        (match) =>
+            !match.isResolved &&
+            match.homePlayer != caughtUpPlayer &&
+            match.awayPlayer != caughtUpPlayer,
+      );
+      String matchKey(GroupMatch match) =>
+          '${match.homePlayer?.name}-${match.awayPlayer?.name}';
+      final prioritizedKeys = priority.prioritizedMatches.map(matchKey).toSet();
+      final deprioritizedKeys = priority.deprioritizedMatches
+          .map(matchKey)
+          .toSet();
+
+      expect(
+        prioritizedKeys,
+        containsAll(openMatchesAgainstLeader.map(matchKey)),
+      );
+      expect(prioritizedKeys, containsAll(catchUpMatches.map(matchKey)));
+      expect(
+        deprioritizedKeys,
+        unorderedEquals(openMatchesAgainstLeader.map(matchKey)),
+      );
+    },
+  );
+
   test('group imbalance needs three played matches before prioritizing', () {
     final stage = _stage();
     final leading = stage.groups.first;
