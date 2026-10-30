@@ -1,4 +1,4 @@
-import 'dart:math' show min;
+import 'dart:math' show max, min;
 
 import 'package:flutter/material.dart';
 
@@ -58,24 +58,73 @@ class RecommendedMatchesTable extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final openGroupIndexes = [
+          for (var index = 0; index < visibleGroups.length; index++)
+            if (visibleGroups[index].matches.any(
+              (match) => match.hasPlayers && !match.isResolved,
+            ))
+              index,
+        ];
+        final maxColumns = min(
+          4,
+          max(visibleGroups.length, openGroupIndexes.length * 2),
+        );
         final columns = (constraints.maxWidth / 190).floor().clamp(
           1,
-          min(4, visibleGroups.length),
+          maxColumns,
         );
         final spacing = 8.0;
         final width =
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        final columnCounts = List<int>.filled(visibleGroups.length, 1);
+        for (var index = visibleGroups.length; index < columns; index++) {
+          columnCounts[
+            openGroupIndexes[(index - visibleGroups.length) %
+                openGroupIndexes.length]
+          ]++;
+        }
+        final displayColumns =
+            <
+              ({
+                RecommendedMatchGroup group,
+                List<GroupMatch> matches,
+                int copyIndex,
+              })
+            >[];
+        for (
+          var groupIndex = 0;
+          groupIndex < visibleGroups.length;
+          groupIndex++
+        ) {
+          final group = visibleGroups[groupIndex];
+          final matches = _orderedMatches(
+            group,
+            prioritizedMatches,
+            deprioritizedMatches,
+          );
+          final copies = columnCounts[groupIndex];
+          for (var copyIndex = 0; copyIndex < copies; copyIndex++) {
+            final start = matches.length * copyIndex ~/ copies;
+            final end = matches.length * (copyIndex + 1) ~/ copies;
+            displayColumns.add((
+              group: group,
+              matches: matches.sublist(start, end),
+              copyIndex: copyIndex,
+            ));
+          }
+        }
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
           children: [
-            for (final group in visibleGroups)
+            for (final column in displayColumns)
               SizedBox(
                 width: width,
                 child: _GroupTable(
-                  group: group,
+                  group: column.group,
+                  matches: column.matches,
+                  copyIndex: column.copyIndex,
                   prioritizedMatches: prioritizedMatches,
-                  deprioritizedMatches: deprioritizedMatches,
                   onEditResult: onEditResult,
                   dense: dense,
                 ),
@@ -87,41 +136,56 @@ class RecommendedMatchesTable extends StatelessWidget {
   }
 }
 
+List<GroupMatch> _orderedMatches(
+  RecommendedMatchGroup group,
+  Set<GroupMatch> prioritizedMatches,
+  Set<GroupMatch> deprioritizedMatches,
+) {
+  final matches =
+      [
+        for (var index = 0; index < group.matches.length; index++)
+          (match: group.matches[index], index: index),
+      ]..sort((left, right) {
+        final leftPriority = prioritizedMatches.contains(left.match);
+        final rightPriority = prioritizedMatches.contains(right.match);
+        if (leftPriority != rightPriority) return leftPriority ? -1 : 1;
+        final leftDeprioritized = deprioritizedMatches.contains(left.match);
+        final rightDeprioritized = deprioritizedMatches.contains(right.match);
+        if (leftDeprioritized != rightDeprioritized) {
+          return leftDeprioritized ? 1 : -1;
+        }
+        return left.index.compareTo(right.index);
+      });
+  return [
+    for (final item in matches)
+      if (item.match.hasPlayers && !item.match.isResolved) item.match,
+  ];
+}
+
 class _GroupTable extends StatelessWidget {
   const _GroupTable({
     required this.group,
+    required this.matches,
+    required this.copyIndex,
     required this.prioritizedMatches,
-    required this.deprioritizedMatches,
     required this.onEditResult,
     required this.dense,
   });
 
   final RecommendedMatchGroup group;
+  final List<GroupMatch> matches;
+  final int copyIndex;
   final Set<GroupMatch> prioritizedMatches;
-  final Set<GroupMatch> deprioritizedMatches;
   final ValueChanged<GroupMatch>? onEditResult;
   final bool dense;
 
   @override
   Widget build(BuildContext context) {
-    final matches =
-        [
-          for (var index = 0; index < group.matches.length; index++)
-            (match: group.matches[index], index: index),
-        ]..sort((left, right) {
-          final leftPriority = prioritizedMatches.contains(left.match);
-          final rightPriority = prioritizedMatches.contains(right.match);
-          if (leftPriority != rightPriority) return leftPriority ? -1 : 1;
-          final leftDeprioritized = deprioritizedMatches.contains(left.match);
-          final rightDeprioritized = deprioritizedMatches.contains(right.match);
-          if (leftDeprioritized != rightDeprioritized) {
-            return leftDeprioritized ? 1 : -1;
-          }
-          return left.index.compareTo(right.index);
-        });
-
     return Container(
-      key: ValueKey('recommended-group-${group.name}'),
+      key: ValueKey(
+        'recommended-group-${group.name}'
+        '${copyIndex == 0 ? '' : '-$copyIndex'}',
+      ),
       decoration: BoxDecoration(
         color: TournamentDisplayPalette.card,
         border: Border.all(color: TournamentDisplayPalette.border),
@@ -168,16 +232,15 @@ class _GroupTable extends StatelessWidget {
               ],
             ),
           ),
-          for (final item in matches)
-            if (item.match.hasPlayers && !item.match.isResolved) ...[
-              const Divider(height: 1, color: TournamentDisplayPalette.border),
-              _MatchRow(
-                match: item.match,
-                isPrioritized: prioritizedMatches.contains(item.match),
-                onEditResult: onEditResult,
-                dense: dense,
-              ),
-            ],
+          for (final match in matches) ...[
+            const Divider(height: 1, color: TournamentDisplayPalette.border),
+            _MatchRow(
+              match: match,
+              isPrioritized: prioritizedMatches.contains(match),
+              onEditResult: onEditResult,
+              dense: dense,
+            ),
+          ],
         ],
       ),
     );

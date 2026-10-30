@@ -50,6 +50,70 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('eight groups use four result columns on wide desktop', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final stage = _groupStage();
+    final template = stage.groups.first;
+    final multiGroupStage = GroupTournamentRunStage(
+      name: stage.name,
+      groupPlayType: stage.groupPlayType,
+      qualificationPlan: stage.qualificationPlan,
+      tieBreakers: stage.tieBreakers,
+      groups: [
+        for (var index = 0; index < 8; index++)
+          TournamentGroup(
+            name: 'Gruppe ${String.fromCharCode(65 + index)}',
+            playType: template.playType,
+            players: template.players,
+            matches: [
+              for (var matchIndex = 0; matchIndex < 8; matchIndex++)
+                GroupMatch(
+                  homePlayer: template.players[0],
+                  awayPlayer: template.players[1],
+                  round: matchIndex + 1,
+                ),
+            ],
+          ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: multiGroupStage,
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final firstRow = [
+      for (final name in ['Gruppe A', 'Gruppe B', 'Gruppe C', 'Gruppe D'])
+        tester.getRect(find.text(name).first),
+    ];
+    expect(
+      firstRow.every(
+        (rect) => (rect.center.dy - firstRow.first.center.dy).abs() < 4,
+      ),
+      isTrue,
+      reason: '$firstRow',
+    );
+    expect(firstRow.first.center.dx, lessThan(firstRow.last.center.dx));
+    expect(find.byType(MatchResultTile), findsNWidgets(64));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('group results remain readable at mobile width', (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;

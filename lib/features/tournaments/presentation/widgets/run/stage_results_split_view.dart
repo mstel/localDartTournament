@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -238,11 +239,14 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
         LayoutBuilder(
           builder: (context, constraints) {
-            final columns =
-                constraints.maxWidth >= 900 && stage.groups.length > 1 ? 2 : 1;
+            final columns = constraints.maxWidth >= 1200
+                ? math.min(4, stage.groups.length)
+                : constraints.maxWidth >= 900 && stage.groups.length > 1
+                ? 2
+                : 1;
             final groupWidth = columns == 1
                 ? constraints.maxWidth
-                : (constraints.maxWidth - 12) / columns;
+                : (constraints.maxWidth - 12 * (columns - 1)) / columns;
 
             return Wrap(
               spacing: 12,
@@ -354,7 +358,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
         else
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 900 ? 2 : 1;
+              final columns = constraints.maxWidth >= 560 ? 2 : 1;
               final width =
                   (constraints.maxWidth - (columns - 1) * 8) / columns;
               return Wrap(

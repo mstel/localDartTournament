@@ -56,6 +56,7 @@ class _TournamentSecondScreenViewState
   Timer? _clockTimer;
   final _previewVerticalController = ScrollController();
   final _previewHorizontalController = ScrollController();
+  final _recentResultsController = ScrollController();
   TournamentFlowPrioritySettings _prioritySettings =
       TournamentFlowPriority.defaultSettings;
   String? _prioritySettingsError;
@@ -145,6 +146,7 @@ class _TournamentSecondScreenViewState
     _clockTimer?.cancel();
     _previewVerticalController.dispose();
     _previewHorizontalController.dispose();
+    _recentResultsController.dispose();
     super.dispose();
   }
 
@@ -439,7 +441,6 @@ class _TournamentSecondScreenViewState
                       t,
                       playedMatches,
                       expand: false,
-                      maxResults: 4,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -1648,7 +1649,6 @@ class _TournamentSecondScreenViewState
     CreatedTournament t,
     List<GroupMatch> playedMatches, {
     bool expand = true,
-    int maxResults = 2,
   }) {
     final enteredOrder = {
       for (var index = 0; index < playedMatches.length; index++)
@@ -1687,18 +1687,19 @@ class _TournamentSecondScreenViewState
         const SizedBox(height: 10),
         Builder(
           builder: (context) {
-            final displayedRecent = recent.take(maxResults).toList();
             final recentList =
                 FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
                   future: _eloChanges,
                   builder: (context, snapshot) {
+                    const visibleItemCount = 2;
                     final itemExtent =
                         66 * MediaQuery.textScalerOf(context).scale(1);
                     return SizedBox(
                       key: const ValueKey('recent-results-scroll'),
-                      height: displayedRecent.isEmpty
+                      height: recent.isEmpty
                           ? itemExtent
-                          : itemExtent * displayedRecent.length,
+                          : itemExtent *
+                                recent.length.clamp(1, visibleItemCount),
                       child: snapshot.hasError
                           ? const Center(
                               child: Text(
@@ -1706,37 +1707,41 @@ class _TournamentSecondScreenViewState
                                 style: TextStyle(color: Colors.amber),
                               ),
                             )
-                          : displayedRecent.isEmpty
+                          : recent.isEmpty
                           ? const Center(
                               child: Text(
                                 'Noch keine beendeten Partien vorhanden.',
                                 style: TextStyle(color: Colors.white70),
                               ),
                             )
-                          : Column(
-                              children: [
-                                for (
-                                  var index = 0;
-                                  index < displayedRecent.length;
-                                  index++
-                                ) ...[
-                                  if (index > 0)
+                          : Scrollbar(
+                              controller: _recentResultsController,
+                              thumbVisibility: recent.length > visibleItemCount,
+                              child: ListView.separated(
+                                controller: _recentResultsController,
+                                padding: EdgeInsets.zero,
+                                itemCount: recent.length,
+                                separatorBuilder: (context, index) =>
                                     const Divider(
                                       height: 1,
                                       color: TournamentDisplayPalette.border,
                                     ),
-                                  _buildRecentMatchRow(
+                                itemBuilder: (context, index) => ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: itemExtent,
+                                  ),
+                                  child: _buildRecentMatchRow(
                                     context,
                                     t,
-                                    displayedRecent[index],
+                                    recent[index],
                                     _changesForMatch(
                                       t,
-                                      displayedRecent[index],
+                                      recent[index],
                                       snapshot.data,
                                     ),
                                   ),
-                                ],
-                              ],
+                                ),
+                              ),
                             ),
                     );
                   },

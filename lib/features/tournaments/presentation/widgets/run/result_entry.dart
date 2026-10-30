@@ -107,7 +107,7 @@ class MatchResultTile extends StatelessWidget {
                 ),
               ),
             Padding(
-              padding: EdgeInsets.only(bottom: compact ? 2 : 4),
+              padding: EdgeInsets.only(bottom: compact ? 0 : 4),
               child: Row(
                 children: [
                   Expanded(child: playerName(true)),

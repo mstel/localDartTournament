@@ -1,3 +1,12 @@
+# 2.1.9+43
+
+- Begrenzt den sichtbaren Bereich der letzten Ergebnisse auf zwei Matches und
+  macht den vollständigen chronologischen Verlauf scrollbar.
+- Teilt Spielpläne bei wenigen Gruppen auf bis zu vier Spalten auf und
+  verteilt offene Begegnungen auf wiederholte Gruppenspalten.
+- Zeigt Gruppen-Ergebnisse auf breiten Bildschirmen in bis zu vier Spalten und
+  mit kompakteren Match-Zeilen an.
+
 # 2.1.8+42
 
 - Behebt abgeschnittene KO-Baum-Vorschauen und verteilt Gruppen-Spielpläne

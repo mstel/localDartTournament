@@ -59,6 +59,7 @@ class TournamentDirectorDashboard extends StatefulWidget {
 class _TournamentDirectorDashboardState
     extends State<TournamentDirectorDashboard> {
   Timer? _timer;
+  final _recentResultsController = ScrollController();
   bool _busy = false;
   String? _actionError;
   int _noticeIndex = 0;
@@ -111,6 +112,7 @@ class _TournamentDirectorDashboardState
   @override
   void dispose() {
     _timer?.cancel();
+    _recentResultsController.dispose();
     super.dispose();
   }
 
@@ -191,23 +193,32 @@ class _TournamentDirectorDashboardState
           if (showResult) {
             return FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
               future: _eloChanges,
-              builder: (context, snapshot) => Column(
-                children: [
-                  for (var index = 0; index < entries.length; index++) ...[
-                    if (index > 0)
-                      const Divider(
-                        height: 1,
-                        color: TournamentDisplayPalette.border,
-                      ),
-                    _recentMatchLogEntry(
-                      entries[index].match,
-                      snapshot.data,
-                      eloError: snapshot.hasError
-                          ? 'Ranglistenänderungen konnten nicht geladen werden.'
-                          : null,
+              builder: (context, snapshot) => SizedBox(
+                key: const ValueKey('director-recent-results-scroll'),
+                height: 132,
+                child: Scrollbar(
+                  controller: _recentResultsController,
+                  thumbVisibility: entries.length > 2,
+                  child: ListView.separated(
+                    controller: _recentResultsController,
+                    padding: EdgeInsets.zero,
+                    itemCount: entries.length,
+                    separatorBuilder: (context, index) => const Divider(
+                      height: 1,
+                      color: TournamentDisplayPalette.border,
                     ),
-                  ],
-                ],
+                    itemBuilder: (context, index) => ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 66),
+                      child: _recentMatchLogEntry(
+                        entries[index].match,
+                        snapshot.data,
+                        eloError: snapshot.hasError
+                            ? 'Ranglistenänderungen konnten nicht geladen werden.'
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             );
           }
@@ -464,7 +475,7 @@ class _TournamentDirectorDashboardState
               resultEntryOrder[a.match] ?? 0,
             );
           });
-    final latestResults = recentResults.take(4).toList();
+    final latestResults = recentResults;
     final flowNotices = flowPriority.notices;
 
     final totalGames = active.length;

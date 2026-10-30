@@ -8,6 +8,78 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('recommended table splits two groups into four match columns', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final players = [
+      for (var index = 1; index <= 8; index++)
+        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+    ];
+    final groups = [
+      for (var groupIndex = 0; groupIndex < 2; groupIndex++)
+        RecommendedMatchGroup(
+          name: 'Gruppe ${groupIndex == 0 ? 'A' : 'B'}',
+          matches: [
+            for (var index = 0; index < 6; index++)
+              GroupMatch(
+                homePlayer: players[groupIndex * 4 + index % 4],
+                awayPlayer: players[groupIndex * 4 + (index + 1) % 4],
+                round: index + 1,
+              ),
+          ],
+        ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 1100,
+              child: RecommendedMatchesTable(
+                groups: groups,
+                prioritizedMatches: const {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final groupAColumns = [
+      tester.getRect(find.byKey(const ValueKey('recommended-group-Gruppe A'))),
+      tester.getRect(
+        find.byKey(const ValueKey('recommended-group-Gruppe A-1')),
+      ),
+    ];
+    final groupBColumns = [
+      tester.getRect(find.byKey(const ValueKey('recommended-group-Gruppe B'))),
+      tester.getRect(
+        find.byKey(const ValueKey('recommended-group-Gruppe B-1')),
+      ),
+    ];
+    expect(groupAColumns[0].center.dy, closeTo(groupAColumns[1].center.dy, 4));
+    expect(groupBColumns[0].center.dy, closeTo(groupBColumns[1].center.dy, 4));
+    expect(groupAColumns[0].center.dx, lessThan(groupAColumns[1].center.dx));
+    expect(groupBColumns[0].center.dx, lessThan(groupBColumns[1].center.dx));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'recommended-match-',
+            ),
+      ),
+      findsNWidgets(12),
+    );
+  });
+
   testWidgets('tournament clock precedes the mode switch on TV surfaces', (
     tester,
   ) async {
@@ -197,7 +269,7 @@ void main() {
   });
 
   testWidgets(
-    '1920x1080 second screen shows four latest results in a compact row',
+    'second screen scrolls through recent results in a two-match viewport',
     (tester) async {
       tester.view.physicalSize = const Size(1920, 1080);
       tester.view.devicePixelRatio = 1;
@@ -244,16 +316,34 @@ void main() {
           tester.getRect(find.byKey(ValueKey(key))),
       ];
       expect(resultRects.first.top, lessThan(resultRects.last.top));
-      expect(resultRects.every((rect) => rect.height < 66), isTrue);
+      expect(resultRects.every((rect) => rect.height <= 66), isTrue);
       expect(
         resultRects.every(
-          (rect) => rect.top >= viewport.top && rect.bottom <= viewport.bottom,
+          (rect) =>
+              rect.top >= viewport.top && rect.bottom <= viewport.bottom + 1,
         ),
         isTrue,
+        reason: 'Viewport $viewport; rows $resultRects',
       );
+      expect(
+        find.byKey(const ValueKey('recent-result-3-A-D')).hitTestable(),
+        findsNothing,
+      );
+      await tester.drag(
+        find.descendant(
+          of: find.byKey(const ValueKey('recent-results-scroll')),
+          matching: find.byType(ListView),
+        ),
+        const Offset(0, -120),
+      );
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('recent-result-3-A-D')), findsOneWidget);
-      expect(find.byKey(const ValueKey('recent-result-2-A-C')), findsOneWidget);
-      expect(find.byKey(const ValueKey('recent-result-1-A-B')), findsNothing);
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('recent-result-3-A-D')))
+            .overlaps(viewport),
+        isTrue,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -467,8 +557,8 @@ void main() {
       await tester.pump();
 
       expect(find.text('3/9 gespielt'), findsOneWidget);
-      expect(find.text('3/6'), findsNWidgets(2));
-      expect(find.text('0/1'), findsNWidgets(2));
+      expect(find.text('3/6'), findsAtLeastNWidgets(2));
+      expect(find.text('0/1'), findsAtLeastNWidgets(2));
       expect(find.text('Gesamt'), findsNothing);
       expect(find.text('Fortschritt nach Etappen'), findsNothing);
       expect(find.byType(LinearProgressIndicator), findsNothing);

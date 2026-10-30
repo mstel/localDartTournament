@@ -359,7 +359,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('dashboard lists open matches and four recent results', (
+  testWidgets('dashboard lists open matches and scrollable recent results', (
     tester,
   ) async {
     final tournament = fixture();
@@ -421,8 +421,15 @@ void main() {
       findsNWidgets(11),
     );
     expect(
-      find.descendant(of: recent, matching: find.byType(Container)),
-      findsNWidgets(3),
+      find.descendant(
+        of: recent,
+        matching: find.byKey(const ValueKey('director-recent-results-scroll')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: recent, matching: find.byType(ListView)),
+      findsOneWidget,
     );
     expect(find.text('Bestleistungen'), findsNothing);
     expect(find.text('Spieler 3 · 180+ 180'), findsNothing);
