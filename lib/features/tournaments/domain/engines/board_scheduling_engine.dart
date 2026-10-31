@@ -228,6 +228,14 @@ class BoardSchedulingEngine {
       }
 
       if (selected.isEmpty) {
+        if (block == 0) {
+          if (useGroupAssignments &&
+              groupBoards.values.every((boards) => boards.isEmpty)) {
+            break;
+          }
+          block++;
+          continue;
+        }
         if (useGroupAssignments) break;
         if (block > 0) {
           throw StateError(
