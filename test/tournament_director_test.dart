@@ -331,7 +331,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 29);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 30);
     },
   );
   test('director mode and strategy persist in tournament JSON', () {
@@ -420,6 +420,70 @@ void main() {
       expect(assignment.board, group % 4 + 1);
     }
     expect(schedule.map((assignment) => assignment.block).toSet().length, 2);
+  });
+  test('group board assignments survive tournament JSON round trips', () {
+    final tournament = fixture(boards: 4)
+      ..directorGroupBoardAssignments['0:A'] = [1, 2];
+
+    final restored = CreatedTournament.fromJson(
+      jsonDecode(jsonEncode(tournament.toJson())) as Map<String, dynamic>,
+    );
+
+    expect(restored.directorGroupBoardAssignments['0:A'], [1, 2]);
+  });
+  test('explicit group board assignments allow multiple boards per group', () {
+    final entries = [
+      for (var index = 0; index < 4; index++)
+        PlayEntry(
+          GroupMatch(
+            homePlayer: TournamentPlayer.generated(index * 2 + 1),
+            awayPlayer: TournamentPlayer.generated(index * 2 + 2),
+            round: 1,
+          ),
+          0,
+          'Gruppe A',
+          'A',
+        ),
+      for (var index = 0; index < 4; index++)
+        PlayEntry(
+          GroupMatch(
+            homePlayer: TournamentPlayer.generated(index * 2 + 11),
+            awayPlayer: TournamentPlayer.generated(index * 2 + 12),
+            round: 1,
+          ),
+          0,
+          'Gruppe B',
+          'B',
+        ),
+    ];
+
+    final schedule = const BoardSchedulingEngine().schedule(
+      all: entries,
+      ready: entries,
+      boardCount: 4,
+      strategy: 'group',
+      assignGroupsToBoards: true,
+      groupBoardAssignments: const {
+        '0:A': {1, 2},
+        '0:B': {3, 4},
+      },
+    );
+
+    expect(schedule, hasLength(entries.length));
+    expect(
+      schedule
+          .where((assignment) => assignment.entry.groupKey == 'A')
+          .map((assignment) => assignment.board)
+          .toSet(),
+      {1, 2},
+    );
+    expect(
+      schedule
+          .where((assignment) => assignment.entry.groupKey == 'B')
+          .map((assignment) => assignment.board)
+          .toSet(),
+      {3, 4},
+    );
   });
   test(
     'group strategy schedules knockout entries without group assignment',
@@ -606,15 +670,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-
     final upcoming = find
         .ancestor(of: find.text('Spielplan'), matching: find.byType(Card))
-        .first;
-    final recent = find
-        .ancestor(
-          of: find.text('Letzte Ergebnisse'),
-          matching: find.byType(Card),
-        )
         .first;
     expect(
       find.descendant(
@@ -630,27 +687,18 @@ void main() {
       findsNWidgets(11),
     );
     expect(
-      find.descendant(
-        of: recent,
-        matching: find.byKey(const ValueKey('director-recent-results-scroll')),
-      ),
+      find.byKey(const ValueKey('director-recent-results-scroll')),
       findsOneWidget,
     );
+    expect(find.byType(ListView), findsOneWidget);
     expect(
-      find.descendant(of: recent, matching: find.byType(ListView)),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: recent,
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is RichText &&
-              widget.text.toPlainText().contains('besiegte') &&
-              widget.text.toPlainText().contains('an Board 4'),
-        ),
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('besiegte') &&
+            widget.text.toPlainText().contains('an Board 4'),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('Bestleistungen'), findsNothing);
     expect(find.text('Spieler 3 · 180+ 180'), findsNothing);
@@ -738,7 +786,7 @@ void main() {
     expect(startedMatch, same(expectedMatch));
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('running board card can move a match to another free board', (
+  testWidgets('running board card offers result and reset but not move', (
     tester,
   ) async {
     final tournament = fixture(boards: 3);
@@ -749,8 +797,7 @@ void main() {
         .entry
         .match;
     const OrderOfPlayController().start(tournament, 0, match, 1);
-    GroupMatch? movedMatch;
-    var targetBoard = -1;
+    GroupMatch? resetMatch;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -763,9 +810,8 @@ void main() {
               onChange: () async {},
               onResult: (_) async {},
               onBlock: (_) async {},
-              onMoveMatch: (selectedMatch, board) async {
-                movedMatch = selectedMatch;
-                targetBoard = board;
+              onResetMatch: (selectedMatch) async {
+                resetMatch = selectedMatch;
               },
             ),
           ),
@@ -774,16 +820,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final changeBoard = find.text('Board wechseln');
-    await tester.ensureVisible(changeBoard);
-    await tester.tap(changeBoard);
-    await tester.pumpAndSettle();
-    expect(find.text('Laufende Partie verschieben'), findsOneWidget);
-    await tester.tap(find.text('Auf Board 2 verschieben'));
+    expect(find.text('Board wechseln'), findsNothing);
+    final resultButton = find.text('Ergebnis erfassen');
+    final resetButton = find.text('Partie zurücksetzen');
+    expect(resultButton, findsOneWidget);
+    expect(resetButton, findsOneWidget);
+    expect(
+      tester.getTopLeft(resultButton).dy,
+      lessThan(tester.getTopLeft(resetButton).dy),
+    );
+    await tester.ensureVisible(resetButton);
+    await tester.tap(resetButton);
     await tester.pumpAndSettle();
 
-    expect(movedMatch, same(match));
-    expect(targetBoard, 2);
+    expect(resetMatch, same(match));
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets(
@@ -861,7 +911,6 @@ void main() {
               onResult: (_) async {},
               onBlock: (_) async {},
               onStartOnBoard: (_, {match}) async {},
-              onMoveMatch: (_, _) async {},
             ),
           ),
         ),

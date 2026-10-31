@@ -53,6 +53,7 @@ import 'features/tournaments/presentation/widgets/creation/team_participant_list
 import 'features/tournaments/domain/engines/group_position_editor.dart';
 import 'features/tournaments/presentation/widgets/run/group_positions_dialog.dart';
 import 'features/tournaments/application/order_of_play/order_of_play_controller.dart';
+import 'features/tournaments/domain/engines/group_board_assignment.dart';
 import 'features/tournaments/data/app_database.dart';
 import 'features/tournaments/data/tournament_storage.dart';
 import 'features/tournaments/domain/engines/tournament_engine.dart';

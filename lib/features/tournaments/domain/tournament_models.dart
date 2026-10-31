@@ -563,6 +563,7 @@ class CreatedTournament {
     this.boardCount = 1,
     this.directorModeEnabled = false,
     this.directorSchedulingStrategy = 'group',
+    Map<String, List<int>> directorGroupBoardAssignments = const {},
     this.syncRevision = 0,
     List<PlayerWithdrawal>? withdrawals,
     Set<int>? blockedBoards,
@@ -581,6 +582,10 @@ class CreatedTournament {
        updatedAt = updatedAt ?? DateTime.now(),
        completedStageIndexes = completedStageIndexes ?? <int>{},
        blockedBoards = blockedBoards ?? <int>{},
+       directorGroupBoardAssignments = {
+         for (final entry in directorGroupBoardAssignments.entries)
+           entry.key: List<int>.from(entry.value),
+       },
        rankingIds = List<String>.from(rankingIds),
        withdrawals = withdrawals ?? [];
 
@@ -626,6 +631,18 @@ class CreatedTournament {
       directorSchedulingStrategy: _directorSchedulingStrategyFromJson(
         json['directorSchedulingStrategy'],
       ),
+      directorGroupBoardAssignments: {
+        for (final entry
+            in (json['directorGroupBoardAssignments'] as Map? ?? {}).entries)
+          if (entry.key is String && entry.value is List)
+            entry.key as String:
+                (entry.value as List)
+                    .whereType<int>()
+                    .where((board) => board >= 1 && board <= 64)
+                    .toSet()
+                    .toList()
+                  ..sort(),
+      },
       syncRevision: json['syncRevision'] as int? ?? 0,
       withdrawals: _mapListFromJson(
         json['withdrawals'],
@@ -664,6 +681,7 @@ class CreatedTournament {
   int boardCount;
   bool directorModeEnabled;
   String directorSchedulingStrategy;
+  final Map<String, List<int>> directorGroupBoardAssignments;
   int syncRevision;
   final List<PlayerWithdrawal> withdrawals;
   final Set<int> blockedBoards;
@@ -696,6 +714,11 @@ class CreatedTournament {
       if (directorModeEnabled) 'directorModeEnabled': true,
       if (directorSchedulingStrategy != 'group')
         'directorSchedulingStrategy': directorSchedulingStrategy,
+      if (directorGroupBoardAssignments.isNotEmpty)
+        'directorGroupBoardAssignments': {
+          for (final entry in directorGroupBoardAssignments.entries)
+            entry.key: entry.value.toSet().toList()..sort(),
+        },
       if (syncRevision != 0) 'syncRevision': syncRevision,
       if (blockedBoards.isNotEmpty)
         'blockedBoards': blockedBoards.toList()..sort(),

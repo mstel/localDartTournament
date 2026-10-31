@@ -86,7 +86,9 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final tournament = _tournament()..directorModeEnabled = true;
+    final tournament = _tournament()
+      ..directorModeEnabled = true
+      ..boardCount = 4;
     final forecastService = _FixedForecastService();
 
     await tester.pumpWidget(
@@ -107,6 +109,18 @@ void main() {
       find.byKey(const ValueKey('second-screen-director-board-1')),
       findsOneWidget,
     );
+    final boardOne = tester.getTopLeft(
+      find.byKey(const ValueKey('second-screen-director-board-1')),
+    );
+    final boardTwo = tester.getTopLeft(
+      find.byKey(const ValueKey('second-screen-director-board-2')),
+    );
+    final boardThree = tester.getTopLeft(
+      find.byKey(const ValueKey('second-screen-director-board-3')),
+    );
+    expect(boardTwo.dy, closeTo(boardOne.dy, 1));
+    expect(boardTwo.dx, greaterThan(boardOne.dx));
+    expect(boardThree.dy, greaterThan(boardOne.dy));
     expect(find.text('Spielplan'), findsNothing);
     expect(tester.takeException(), isNull);
   });

@@ -1662,9 +1662,12 @@ class _TournamentSecondScreenViewState
     final snapshot = TournamentDirectorSnapshot(tournament, activeIndex);
     return LayoutBuilder(
       builder: (context, constraints) {
+        final maxColumns = tournament.boardCount < 2
+            ? tournament.boardCount
+            : 2;
         final columns = (constraints.maxWidth / 280).floor().clamp(
           1,
-          tournament.boardCount,
+          maxColumns,
         );
         final spacing = 8.0;
         final width =
@@ -1964,6 +1967,7 @@ class _TournamentSecondScreenViewState
     tournament: tournament,
     match: m,
     eloChanges: eloChanges,
+    showBoardNumber: tournament.directorModeEnabled,
   );
 
   List<PlayerStanding> _calculateGroupStandings(

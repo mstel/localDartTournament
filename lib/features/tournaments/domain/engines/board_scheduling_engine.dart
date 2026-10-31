@@ -1,4 +1,5 @@
 import '../tournament_models.dart';
+import 'group_board_assignment.dart';
 
 class PlayEntry {
   const PlayEntry(this.match, this.stageIndex, this.origin, [this.groupKey]);
@@ -44,6 +45,7 @@ class BoardSchedulingEngine {
     Set<int> blockedBoards = const {},
     String strategy = 'group',
     bool assignGroupsToBoards = false,
+    Map<String, Set<int>> groupBoardAssignments = const {},
   }) {
     if (boardCount < 1) throw ArgumentError.value(boardCount, 'boardCount');
     if (List.generate(boardCount, (i) => i + 1).every(blockedBoards.contains)) {
@@ -61,26 +63,46 @@ class BoardSchedulingEngine {
     }
 
     final planned = <BoardAssignment>[];
-    final groupBoards = <String, int>{};
+    final groupBoards = <String, Set<int>>{};
     final useGroupAssignments =
         assignGroupsToBoards &&
         normalizedStrategy == 'group' &&
         ready.isNotEmpty &&
         ready.every((entry) => entry.groupKey != null);
     if (useGroupAssignments) {
-      final availableBoards = [
-        for (var board = 1; board <= boardCount; board++)
-          if (!blockedBoards.contains(board)) board,
-      ];
       final groupKeys = all
           .where((entry) => entry.stageIndex == ready.first.stageIndex)
           .map((entry) => entry.groupKey)
           .whereType<String>()
           .toSet()
           .toList();
-      for (var index = 0; index < groupKeys.length; index++) {
-        groupBoards[groupKeys[index]] =
-            availableBoards[index % availableBoards.length];
+      final defaults = GroupBoardAssignment.defaults(
+        groupNames: groupKeys
+            .map(
+              (groupName) => GroupBoardAssignment.keyFor(
+                ready.first.stageIndex,
+                groupName,
+              ),
+            )
+            .toList(),
+        boardCount: boardCount,
+      );
+      for (final groupKey in groupKeys) {
+        final assignmentKey = GroupBoardAssignment.keyFor(
+          ready.first.stageIndex,
+          groupKey,
+        );
+        groupBoards[groupKey] =
+            (groupBoardAssignments[assignmentKey] ??
+                    defaults[assignmentKey] ??
+                    const <int>{})
+                .where(
+                  (board) =>
+                      board >= 1 &&
+                      board <= boardCount &&
+                      !blockedBoards.contains(board),
+                )
+                .toSet();
       }
     }
     var block = 0;
@@ -172,7 +194,9 @@ class BoardSchedulingEngine {
         final used = <String>{...busy};
         for (final board in boards) {
           for (final entry in available) {
-            if (groupBoards[entry.groupKey] != board ||
+            if (!(groupBoards[entry.groupKey] ?? const <int>{}).contains(
+                  board,
+                ) ||
                 entry.players.any(used.contains)) {
               continue;
             }
@@ -203,10 +227,14 @@ class BoardSchedulingEngine {
         ]);
       }
 
-      if (selected.isEmpty && block > 0) {
-        throw StateError(
-          'Unable to assign a ready match to an available board.',
-        );
+      if (selected.isEmpty) {
+        if (useGroupAssignments) break;
+        if (block > 0) {
+          throw StateError(
+            'Unable to assign a ready match to an available board.',
+          );
+        }
+        break;
       }
 
       for (final assignment in selected) {

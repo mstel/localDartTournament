@@ -27,8 +27,9 @@ class TournamentDirectorDashboard extends StatefulWidget {
     required this.onResult,
     required this.onBlock,
     this.directorModeEnabled = false,
+    this.showBoardNumber,
     this.onStartOnBoard,
-    this.onMoveMatch,
+    this.onResetMatch,
     this.onStartClock,
     this.onPauseClock,
     this.onEditTimes,
@@ -50,8 +51,9 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final Future<void> Function(GroupMatch) onResult;
   final Future<void> Function(int) onBlock;
   final bool directorModeEnabled;
+  final bool? showBoardNumber;
   final Future<void> Function(int board, {GroupMatch? match})? onStartOnBoard;
-  final Future<void> Function(GroupMatch match, int board)? onMoveMatch;
+  final Future<void> Function(GroupMatch match)? onResetMatch;
   final Future<void> Function()? onStartClock;
   final Future<void> Function()? onPauseClock;
   final Future<void> Function(DateTime? startedAt, DateTime? finishedAt)?
@@ -193,6 +195,9 @@ class _TournamentDirectorDashboardState
   String _timeOfDay(DateTime t) =>
       '${t.toLocal().hour.toString().padLeft(2, '0')}:${t.toLocal().minute.toString().padLeft(2, '0')} Uhr';
 
+  bool get _showBoardNumber =>
+      widget.showBoardNumber ?? widget.directorModeEnabled;
+
   int? _quickStartBoard(PlayEntry entry) {
     if (!widget.canOperate ||
         widget.tournament.completedStageIndexes.contains(widget.activeStage)) {
@@ -212,7 +217,12 @@ class _TournamentDirectorDashboardState
     )) {
       return null;
     }
-    return snapshot.freeBoards.firstOrNull;
+    final assignment = snapshot.schedule.planned
+        .where((assignment) => identical(assignment.entry.match, entry.match))
+        .firstOrNull;
+    return assignment != null && snapshot.freeBoards.contains(assignment.board)
+        ? assignment.board
+        : null;
   }
 
   Future<void> _chooseMatchForBoard(
@@ -282,47 +292,6 @@ class _TournamentDirectorDashboardState
     await startOnBoard(board, match: match);
   }
 
-  Future<void> _chooseBoardForRunningMatch(
-    PlayEntry entry,
-    TournamentDirectorSnapshot state,
-  ) async {
-    final moveMatch = widget.onMoveMatch;
-    if (moveMatch == null || !widget.canOperate) return;
-    final availableBoards = state.freeBoards;
-    if (availableBoards.isEmpty) return;
-    final board = await showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Laufende Partie verschieben'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '${entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
-              '${entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
-            ),
-            const SizedBox(height: 8),
-            for (final board in availableBoards)
-              ListTile(
-                leading: const Icon(Icons.dashboard_outlined),
-                title: Text('Auf Board $board verschieben'),
-                onTap: () => Navigator.of(context).pop(board),
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Abbrechen'),
-          ),
-        ],
-      ),
-    );
-    if (board == null || !mounted) return;
-    await _act(() => moveMatch(entry.match, board));
-  }
-
   Widget _matchQueue(
     String title,
     List<PlayEntry> entries, {
@@ -330,6 +299,7 @@ class _TournamentDirectorDashboardState
     bool showResult = false,
     int? maxColumns,
     Set<GroupMatch> prioritizedMatches = const {},
+    Map<GroupMatch, int> plannedBoards = const {},
   }) => _box([
     Text(title, style: Theme.of(context).textTheme.titleLarge),
     const SizedBox(height: 8),
@@ -388,6 +358,7 @@ class _TournamentDirectorDashboardState
                   width: width,
                   showResult: showResult,
                   isPriority: prioritizedMatches.contains(entry.match),
+                  plannedBoard: plannedBoards[entry.match],
                 ),
             ],
           );
@@ -503,6 +474,7 @@ class _TournamentDirectorDashboardState
           ? const <TournamentMatchEloChange>[]
           : changes?[matchKey] ?? const <TournamentMatchEloChange>[],
       eloError: eloError,
+      showBoardNumber: _showBoardNumber,
     );
   }
 
@@ -511,6 +483,7 @@ class _TournamentDirectorDashboardState
     required double width,
     required bool showResult,
     required bool isPriority,
+    int? plannedBoard,
   }) {
     final match = entry.match;
     final startOnBoard = widget.onStartOnBoard;
@@ -543,6 +516,7 @@ class _TournamentDirectorDashboardState
               eloError: snapshot.hasError
                   ? 'Ranglistenänderungen konnten nicht geladen werden.'
                   : null,
+              showBoardNumber: _showBoardNumber,
             ),
           );
         },
@@ -583,8 +557,11 @@ class _TournamentDirectorDashboardState
                 child: Text(
                   showResult
                       ? entry.origin
-                      : 'Etappe ${entry.stageIndex + 1}'
-                            '${match.boardNumber == null ? '' : ' · Board ${match.boardNumber}'}',
+                      : plannedBoard != null
+                      ? 'Board $plannedBoard'
+                      : match.boardNumber != null
+                      ? 'Board ${match.boardNumber}'
+                      : 'Wartet',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: TournamentDisplayPalette.mutedText,
                   ),
@@ -661,10 +638,10 @@ class _TournamentDirectorDashboardState
               assignment.entry.match.hasPlayers,
         )
         .toList();
-    final pendingMatches = activeStageEntries
+    final directorPlan = activeStageEntries
         .where((entry) => entry.match.hasPlayers && !entry.match.isResolved)
-        .map((entry) => entry.match)
         .toList();
+    final pendingMatches = directorPlan.map((entry) => entry.match).toList();
     final pendingOrder = {
       for (var index = 0; index < activeStageEntries.length; index++)
         activeStageEntries[index].match: index,
@@ -732,7 +709,6 @@ class _TournamentDirectorDashboardState
                   };
                   return Container(
                     key: ValueKey('director-board-$board'),
-                    width: 180,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: TournamentDisplayPalette.card,
@@ -801,23 +777,6 @@ class _TournamentDirectorDashboardState
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
-                                if (widget.onMoveMatch != null &&
-                                    widget.canOperate &&
-                                    state.freeBoards.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: OutlinedButton.icon(
-                                      onPressed: () =>
-                                          _chooseBoardForRunningMatch(
-                                            running,
-                                            state,
-                                          ),
-                                      icon: const Icon(
-                                        Icons.swap_horiz_rounded,
-                                      ),
-                                      label: const Text('Board wechseln'),
-                                    ),
-                                  ),
                                 if (widget.canOperate)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 8),
@@ -827,6 +786,19 @@ class _TournamentDirectorDashboardState
                                       ),
                                       icon: const Icon(Icons.edit_note_rounded),
                                       label: const Text('Ergebnis erfassen'),
+                                    ),
+                                  ),
+                                if (widget.canOperate &&
+                                    widget.onResetMatch != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _act(
+                                        () =>
+                                            widget.onResetMatch!(running.match),
+                                      ),
+                                      icon: const Icon(Icons.refresh_rounded),
+                                      label: const Text('Partie zurücksetzen'),
                                     ),
                                   ),
                               ],
@@ -1095,7 +1067,20 @@ class _TournamentDirectorDashboardState
     final boardOverview = _box([
       Text('Boards', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 8),
-      Wrap(spacing: 8, runSpacing: 8, children: boardCards),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = ((constraints.maxWidth + 8) / 220).floor().clamp(
+            1,
+            t.boardCount,
+          );
+          final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+          final cards = [
+            for (var index = 0; index < boardCards.length; index++)
+              SizedBox(width: width, child: boardCards[index]),
+          ];
+          return Wrap(spacing: 8, runSpacing: 8, children: cards);
+        },
+      ),
     ]);
     final clock = _box([
       TournamentTimingPanel(
@@ -1199,12 +1184,27 @@ class _TournamentDirectorDashboardState
           boardOverview,
           const SizedBox(height: 12),
           _matchSearch(state),
+          const SizedBox(height: 12),
+          _matchQueue(
+            'Spielplan',
+            directorPlan,
+            emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+            prioritizedMatches: flowPriority.prioritizedMatches,
+            plannedBoards: {
+              for (final assignment in upcoming)
+                assignment.entry.match: assignment.board,
+            },
+          ),
         ] else ...[
           _matchQueue(
             'Empfohlene Partien',
             nextSix,
             emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
             prioritizedMatches: flowPriority.prioritizedMatches,
+            plannedBoards: {
+              for (final assignment in upcoming)
+                assignment.entry.match: assignment.board,
+            },
           ),
           const SizedBox(height: 12),
           _box([

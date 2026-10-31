@@ -362,22 +362,154 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  Future<void> _moveRunningMatchToBoard(GroupMatch match, int board) async {
+  Future<void> _resetRunningMatch(GroupMatch match) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Partie zurücksetzen?'),
+        content: const Text(
+          'Das Board wird freigegeben und der noch nicht eingetragene '
+          'Spielstand verworfen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Zurücksetzen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     final previousBoard = match.boardNumber;
-    final moved = const OrderOfPlayController().moveRunningMatch(
+    final previousStartedAt = match.startedAt;
+    final previousStartedPlayers = match.startedPlayers;
+    final previousFinishedAt = match.finishedAt;
+    final previousHomeLegs = match.homeLegs;
+    final previousAwayLegs = match.awayLegs;
+    final previousHomeSets = match.homeSets;
+    final previousAwaySets = match.awaySets;
+    final previousBestPerformances = [...match.bestPerformances];
+    if (!const OrderOfPlayController().resetRunningMatch(
       widget.tournament,
       _activeStageIndex,
       match,
-      board,
-    );
-    if (!moved) return;
+    )) {
+      throw StateError(
+        'Nur eine laufende Partie ohne Ergebnis kann zurückgesetzt werden.',
+      );
+    }
     setState(() {});
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
-      match.boardNumber = previousBoard;
+      match
+        ..boardNumber = previousBoard
+        ..startedAt = previousStartedAt
+        ..startedPlayers = previousStartedPlayers
+        ..finishedAt = previousFinishedAt
+        ..homeLegs = previousHomeLegs
+        ..awayLegs = previousAwayLegs
+        ..homeSets = previousHomeSets
+        ..awaySets = previousAwaySets
+        ..bestPerformances = previousBestPerformances;
       if (mounted) setState(() {});
       rethrow;
+    }
+  }
+
+  Future<void> _changeDirectorBoardCount(int boardCount) async {
+    final tournament = widget.tournament;
+    if (boardCount < 1 || boardCount > 64) return;
+    if (const OrderOfPlayController()
+        .plan(tournament, _activeStageIndex)
+        .running
+        .any((entry) => (entry.match.boardNumber ?? 0) > boardCount)) {
+      throw StateError('Ein laufendes Board kann nicht entfernt werden.');
+    }
+    final previousCount = tournament.boardCount;
+    final previousBlocked = Set<int>.from(tournament.blockedBoards);
+    final previousAssignments = {
+      for (final entry in tournament.directorGroupBoardAssignments.entries)
+        entry.key: List<int>.from(entry.value),
+    };
+    setState(() {
+      tournament.boardCount = boardCount;
+      tournament.blockedBoards.removeWhere((board) => board > boardCount);
+      tournament.directorGroupBoardAssignments.updateAll(
+        (_, boards) => boards.where((board) => board <= boardCount).toList(),
+      );
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      tournament.boardCount = previousCount;
+      tournament.blockedBoards
+        ..clear()
+        ..addAll(previousBlocked);
+      tournament.directorGroupBoardAssignments
+        ..clear()
+        ..addAll(previousAssignments);
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Future<void> _setDirectorGroupBoard(
+    int stageIndex,
+    String groupName,
+    int board,
+    bool selected,
+  ) async {
+    final assignments = widget.tournament.directorGroupBoardAssignments;
+    final key = GroupBoardAssignment.keyFor(stageIndex, groupName);
+    final previous = assignments.containsKey(key)
+        ? List<int>.from(assignments[key]!)
+        : null;
+    final stage = widget.tournament.runStages[stageIndex];
+    if (stage is! GroupTournamentRunStage) return;
+    final defaults = GroupBoardAssignment.defaults(
+      groupNames: stage.groups
+          .map((group) => GroupBoardAssignment.keyFor(stageIndex, group.name))
+          .toList(),
+      boardCount: widget.tournament.boardCount,
+    );
+    final current = (assignments[key] ?? defaults[key] ?? const <int>{})
+        .toSet();
+    if (selected) {
+      current.add(board);
+    } else {
+      current.remove(board);
+    }
+    setState(() {
+      assignments[key] = current.toList()..sort();
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (previous == null) {
+        assignments.remove(key);
+      } else {
+        assignments[key] = previous;
+      }
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Future<void> _handleDirectorSettings(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error) {
+      if (!mounted || error is! StateError) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Einstellung konnte nicht gespeichert werden: $error'),
+        ),
+      );
     }
   }
 
@@ -3192,8 +3324,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         directorModeEnabled:
                             widget.tournament.directorModeEnabled &&
                             _stageViewMode == StageViewMode.director,
+                        showBoardNumber: widget.tournament.directorModeEnabled,
                         onStartOnBoard: _startRecommendedMatchOnBoard,
-                        onMoveMatch: _moveRunningMatchToBoard,
+                        onResetMatch: _resetRunningMatch,
                         onStartClock: _startTournamentClock,
                         onPauseClock: _toggleClockPause,
                         onEditTimes: _editTournamentTimes,
@@ -3341,6 +3474,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         decoration: const InputDecoration(
                                           labelText: 'Board-Strategie',
                                           border: OutlineInputBorder(),
+                                          suffixIcon: Tooltip(
+                                            message:
+                                                'Gruppenbasiert: Jede Gruppe '
+                                                'spielt nur auf den ihr '
+                                                'zugewiesenen Boards. Global '
+                                                'optimiert: Alle offenen '
+                                                'Partien werden gemeinsam '
+                                                'auf die Boards verteilt.',
+                                            child: Icon(Icons.help_outline),
+                                          ),
                                         ),
                                         items: const [
                                           DropdownMenuItem(
@@ -3377,6 +3520,181 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                             });
                                           }
                                         },
+                                      ),
+                                    ),
+                                  if (widget.tournament.directorModeEnabled)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Text(
+                                            'Boards: ${widget.tournament.boardCount}',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              OutlinedButton.icon(
+                                                onPressed:
+                                                    widget
+                                                            .tournament
+                                                            .boardCount <=
+                                                        1
+                                                    ? null
+                                                    : () => _handleDirectorSettings(
+                                                        () => _changeDirectorBoardCount(
+                                                          widget
+                                                                  .tournament
+                                                                  .boardCount -
+                                                              1,
+                                                        ),
+                                                      ),
+                                                icon: const Icon(Icons.remove),
+                                                label: const Text(
+                                                  'Board entfernen',
+                                                ),
+                                              ),
+                                              OutlinedButton.icon(
+                                                onPressed:
+                                                    widget
+                                                            .tournament
+                                                            .boardCount >=
+                                                        64
+                                                    ? null
+                                                    : () => _handleDirectorSettings(
+                                                        () => _changeDirectorBoardCount(
+                                                          widget
+                                                                  .tournament
+                                                                  .boardCount +
+                                                              1,
+                                                        ),
+                                                      ),
+                                                icon: const Icon(Icons.add),
+                                                label: const Text(
+                                                  'Board hinzufügen',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (widget
+                                                  .tournament
+                                                  .directorSchedulingStrategy ==
+                                              'group')
+                                            for (
+                                              var stageIndex = 0;
+                                              stageIndex <
+                                                  widget
+                                                      .tournament
+                                                      .runStages
+                                                      .length;
+                                              stageIndex++
+                                            )
+                                              if (widget
+                                                      .tournament
+                                                      .runStages[stageIndex]
+                                                  case final GroupTournamentRunStage
+                                                      stage) ...[
+                                                const Divider(height: 24),
+                                                Text(
+                                                  stage.name,
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleSmall,
+                                                ),
+                                                for (final group
+                                                    in stage.groups)
+                                                  Builder(
+                                                    builder: (context) {
+                                                      final key =
+                                                          GroupBoardAssignment.keyFor(
+                                                            stageIndex,
+                                                            group.name,
+                                                          );
+                                                      final defaults =
+                                                          GroupBoardAssignment.defaults(
+                                                            groupNames: stage
+                                                                .groups
+                                                                .map(
+                                                                  (
+                                                                    item,
+                                                                  ) => GroupBoardAssignment.keyFor(
+                                                                    stageIndex,
+                                                                    item.name,
+                                                                  ),
+                                                                )
+                                                                .toList(),
+                                                            boardCount: widget
+                                                                .tournament
+                                                                .boardCount,
+                                                          );
+                                                      final selected =
+                                                          (widget
+                                                                      .tournament
+                                                                      .directorGroupBoardAssignments[key] ??
+                                                                  defaults[key] ??
+                                                                  const <int>{})
+                                                              .toSet();
+                                                      return Padding(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              vertical: 6,
+                                                            ),
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              '${group.name} wird gespielt auf Board:',
+                                                            ),
+                                                            Wrap(
+                                                              spacing: 4,
+                                                              runSpacing: 2,
+                                                              children: [
+                                                                for (
+                                                                  var board = 1;
+                                                                  board <=
+                                                                      widget
+                                                                          .tournament
+                                                                          .boardCount;
+                                                                  board++
+                                                                )
+                                                                  FilterChip(
+                                                                    materialTapTargetSize:
+                                                                        MaterialTapTargetSize
+                                                                            .padded,
+                                                                    label: Text(
+                                                                      'Board $board',
+                                                                    ),
+                                                                    selected: selected
+                                                                        .contains(
+                                                                          board,
+                                                                        ),
+                                                                    onSelected: (value) => _handleDirectorSettings(
+                                                                      () => _setDirectorGroupBoard(
+                                                                        stageIndex,
+                                                                        group
+                                                                            .name,
+                                                                        board,
+                                                                        value,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                              ],
+                                        ],
                                       ),
                                     ),
                                 ],

@@ -15,12 +15,14 @@ class RecentMatchResultLogEntry extends StatelessWidget {
     required this.match,
     required this.eloChanges,
     this.eloError,
+    this.showBoardNumber = true,
   });
 
   final CreatedTournament tournament;
   final GroupMatch match;
   final List<TournamentMatchEloChange> eloChanges;
   final String? eloError;
+  final bool showBoardNumber;
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +106,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                             : ' spielte gegen ',
                       ),
                       if (awayIsWinner) homeTextSpan else awayTextSpan,
-                      if (match.boardNumber != null)
+                      if (showBoardNumber && match.boardNumber != null)
                         TextSpan(text: ' an Board ${match.boardNumber}'),
                     ],
                   ),

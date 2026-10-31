@@ -107,6 +107,10 @@ class OrderOfPlayController {
       assignGroupsToBoards:
           tournament.directorModeEnabled &&
           tournament.directorSchedulingStrategy == 'group',
+      groupBoardAssignments: {
+        for (final entry in tournament.directorGroupBoardAssignments.entries)
+          entry.key: entry.value.toSet(),
+      },
     );
     return BoardSchedule(planned, running, finished, waiting);
   }
@@ -126,18 +130,15 @@ class OrderOfPlayController {
     final occupied = {
       for (final entry in schedule.running) entry.match.boardNumber,
     };
-    final board = [
-      for (var b = 1; b <= tournament.boardCount; b++)
-        if (!occupied.contains(b) && !tournament.blockedBoards.contains(b)) b,
-    ].firstOrNull;
-    if (board == null) return null;
     for (final assignment in schedule.planned) {
       final entry = assignment.entry;
       if (!entry.players.any(identities.contains) ||
-          entry.players.any(busy.contains)) {
+          entry.players.any(busy.contains) ||
+          occupied.contains(assignment.board) ||
+          tournament.blockedBoards.contains(assignment.board)) {
         continue;
       }
-      return BoardAssignment(entry, 0, board);
+      return assignment;
     }
     return null;
   }
@@ -157,7 +158,9 @@ class OrderOfPlayController {
     final busy = {for (final entry in schedule.running) ...entry.players};
     for (final assignment in schedule.planned) {
       final entry = assignment.entry;
-      if (entry.players.any(busy.contains)) continue;
+      if (assignment.board != board || entry.players.any(busy.contains)) {
+        continue;
+      }
       if (schedule.running.any(
         (runningEntry) =>
             runningEntry.match.boardNumber == board ||
@@ -198,6 +201,28 @@ class OrderOfPlayController {
     match.startedAt = DateTime.now();
     match.startedPlayers = entry.playerSignature;
     match.finishedAt = null;
+    return true;
+  }
+
+  bool resetRunningMatch(
+    CreatedTournament tournament,
+    int stage,
+    GroupMatch match,
+  ) {
+    if (match.hasResult ||
+        !plan(tournament, stage).running.any((entry) => entry.match == match)) {
+      return false;
+    }
+    match
+      ..boardNumber = null
+      ..startedAt = null
+      ..startedPlayers = null
+      ..finishedAt = null
+      ..homeLegs = null
+      ..awayLegs = null
+      ..homeSets = null
+      ..awaySets = null
+      ..bestPerformances = [];
     return true;
   }
 
