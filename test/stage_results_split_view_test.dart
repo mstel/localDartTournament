@@ -47,6 +47,14 @@ void main() {
       expect(tile.compact, isTrue);
       expect(tile.showRoundLabel, isFalse);
     }
+    final card = tester.widget<Container>(
+      find.byKey(const ValueKey('match-result-tile-1-Spieler A-Spieler B')),
+    );
+    final cardDecoration = card.decoration! as BoxDecoration;
+    expect(cardDecoration.color, isNotNull);
+    expect(cardDecoration.borderRadius, BorderRadius.circular(8));
+    expect(find.byTooltip('Ergebnis eingeben'), findsNWidgets(2));
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

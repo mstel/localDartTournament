@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../../shared/theme/tournament_display_palette.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/set_result_validation.dart';
 import '../../models/match_result.dart';
@@ -84,53 +85,61 @@ class MatchResultTile extends StatelessWidget {
     return MatchStatisticsTapTarget(
       match: match,
       tournament: tournament,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: colorScheme.outlineVariant.withAlpha(120),
-            ),
-          ),
+      child: Container(
+        key: ValueKey(
+          'match-result-tile-${match.round}-${match.homePlayer?.name}-'
+          '${match.awayPlayer?.name}',
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (leadingLabel != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 2, top: 2),
-                child: Text(
-                  leadingLabel!,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colorScheme.secondary,
+        decoration: BoxDecoration(
+          color: TournamentDisplayPalette.card,
+          border: Border.all(color: colorScheme.outlineVariant.withAlpha(150)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 8,
+            vertical: compact ? 0 : 2,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (leadingLabel != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 2, top: 2),
+                  child: Text(
+                    leadingLabel!,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.secondary,
+                    ),
                   ),
                 ),
+              Padding(
+                padding: EdgeInsets.only(bottom: compact ? 0 : 4),
+                child: Row(
+                  children: [
+                    Expanded(child: playerName(true)),
+                    _ScoreBadge(
+                      match: match,
+                      compact: compact,
+                      onTap: canEdit
+                          ? () => onEditResult(match)
+                          : match.hasResult
+                          ? () => MatchStatisticsTapTarget.open(
+                              context,
+                              match,
+                              tournament: tournament,
+                            )
+                          : null,
+                    ),
+                    Expanded(
+                      child: playerName(false, textAlign: TextAlign.right),
+                    ),
+                  ],
+                ),
               ),
-            Padding(
-              padding: EdgeInsets.only(bottom: compact ? 0 : 4),
-              child: Row(
-                children: [
-                  Expanded(child: playerName(true)),
-                  _ScoreBadge(
-                    match: match,
-                    compact: compact,
-                    onTap: canEdit
-                        ? () => onEditResult(match)
-                        : match.hasResult
-                        ? () => MatchStatisticsTapTarget.open(
-                            context,
-                            match,
-                            tournament: tournament,
-                          )
-                        : null,
-                  ),
-                  Expanded(
-                    child: playerName(false, textAlign: TextAlign.right),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

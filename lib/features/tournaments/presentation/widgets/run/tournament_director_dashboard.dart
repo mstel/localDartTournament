@@ -26,6 +26,7 @@ class TournamentDirectorDashboard extends StatefulWidget {
     required this.onChange,
     required this.onResult,
     required this.onBlock,
+    this.directorModeEnabled = false,
     this.onStartOnBoard,
     this.onMoveMatch,
     this.onStartClock,
@@ -48,6 +49,7 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final Future<void> Function() onChange;
   final Future<void> Function(GroupMatch) onResult;
   final Future<void> Function(int) onBlock;
+  final bool directorModeEnabled;
   final Future<void> Function(int board, {GroupMatch? match})? onStartOnBoard;
   final Future<void> Function(GroupMatch match, int board)? onMoveMatch;
   final Future<void> Function()? onStartClock;
@@ -399,7 +401,6 @@ class _TournamentDirectorDashboardState
     final busyPlayers = {
       for (final running in state.schedule.running) ...running.players,
     };
-    final freeBoard = state.freeBoards.firstOrNull;
     final startOnBoard = widget.onStartOnBoard;
 
     return _box([
@@ -433,14 +434,16 @@ class _TournamentDirectorDashboardState
                       (candidate) => identical(candidate.match, entry.match),
                     )
                     .firstOrNull;
-                final isPlanned = state.schedule.planned.any(
-                  (assignment) =>
-                      identical(assignment.entry.match, entry.match),
-                );
+                final assignment = state.schedule.planned
+                    .where(
+                      (candidate) =>
+                          identical(candidate.entry.match, entry.match),
+                    )
+                    .firstOrNull;
                 final canStart =
                     running == null &&
-                    isPlanned &&
-                    freeBoard != null &&
+                    assignment != null &&
+                    state.freeBoards.contains(assignment.board) &&
                     startOnBoard != null &&
                     widget.canOperate &&
                     !widget.tournament.completedStageIndexes.contains(
@@ -450,8 +453,8 @@ class _TournamentDirectorDashboardState
                 final status = running != null
                     ? 'Läuft auf Board ${running.match.boardNumber ?? '—'}'
                     : canStart
-                    ? 'Startbar · ${entry.origin}'
-                    : isPlanned
+                    ? 'Startbar · Board ${assignment.board}'
+                    : assignment != null
                     ? 'Wartet auf ein freies Board oder die Etappenfreigabe'
                     : 'Wartet auf vorherige Ergebnisse';
 
@@ -465,9 +468,12 @@ class _TournamentDirectorDashboardState
                   trailing: canStart
                       ? FilledButton.tonal(
                           onPressed: () => _act(
-                            () => startOnBoard(freeBoard, match: entry.match),
+                            () => startOnBoard(
+                              assignment.board,
+                              match: entry.match,
+                            ),
                           ),
-                          child: const Text('Starten'),
+                          child: Text('Board ${assignment.board} starten'),
                         )
                       : null,
                 );
@@ -508,7 +514,8 @@ class _TournamentDirectorDashboardState
   }) {
     final match = entry.match;
     final startOnBoard = widget.onStartOnBoard;
-    final quickStartBoard = !showResult && startOnBoard != null
+    final quickStartBoard =
+        widget.directorModeEnabled && !showResult && startOnBoard != null
         ? _quickStartBoard(entry)
         : null;
     if (showResult) {
@@ -682,163 +689,229 @@ class _TournamentDirectorDashboardState
         .take(6)
         .map((assignment) => assignment.entry)
         .toList();
-    final boardCards = [
+    final boardAssignments = <int, List<BoardAssignment>>{
       for (var board = 1; board <= t.boardCount; board++)
-        Builder(
-          builder: (context) {
-            final running = state.runningOn(board);
-            final blocked = t.blockedBoards.contains(board);
-            final suggestion =
-                widget.onStartOnBoard != null && widget.canOperate
-                ? OrderOfPlayController().suggestForBoard(
-                    t,
-                    widget.activeStage,
-                    board,
-                  )
-                : null;
-            final label = running != null
-                ? 'Läuft'
-                : blocked
-                ? 'Gesperrt'
-                : suggestion != null
-                ? 'Frei'
-                : 'Reserve';
-            final accent = running != null
-                ? TournamentDisplayPalette.accent
-                : blocked
-                ? Theme.of(context).colorScheme.error
-                : suggestion != null
-                ? Colors.green.shade700
-                : TournamentDisplayPalette.mutedText;
-            return Container(
-              width: 180,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: TournamentDisplayPalette.card,
-                border: Border.all(
-                  color: blocked
-                      ? Theme.of(context).colorScheme.error.withAlpha(180)
-                      : TournamentDisplayPalette.border,
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        running != null
-                            ? Icons.sports_score
-                            : blocked
-                            ? Icons.block
-                            : Icons.dashboard_outlined,
-                        size: 18,
-                        color: accent,
+        board: state.schedule.planned
+            .where(
+              (assignment) =>
+                  assignment.entry.stageIndex == widget.activeStage &&
+                  assignment.board == board &&
+                  assignment.entry.match.hasPlayers,
+            )
+            .take(3)
+            .toList(),
+    };
+    final boardCards = !widget.directorModeEnabled
+        ? <Widget>[]
+        : [
+            for (var board = 1; board <= t.boardCount; board++)
+              Builder(
+                builder: (context) {
+                  final running = state.runningOn(board);
+                  final blocked = t.blockedBoards.contains(board);
+                  final upcomingForBoard = boardAssignments[board]!;
+                  final suggestion = upcomingForBoard.firstOrNull;
+                  final label = running != null
+                      ? 'Läuft'
+                      : blocked
+                      ? 'Gesperrt'
+                      : suggestion != null
+                      ? 'Frei'
+                      : 'Reserve';
+                  final accent = running != null
+                      ? TournamentDisplayPalette.accent
+                      : blocked
+                      ? Theme.of(context).colorScheme.error
+                      : suggestion != null
+                      ? Colors.green.shade700
+                      : TournamentDisplayPalette.mutedText;
+                  final assignedGroups = <String>{
+                    ?running?.groupKey,
+                    for (final assignment in upcomingForBoard)
+                      ?assignment.entry.groupKey,
+                  };
+                  return Container(
+                    key: ValueKey('director-board-$board'),
+                    width: 180,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: TournamentDisplayPalette.card,
+                      border: Border.all(
+                        color: blocked
+                            ? Theme.of(context).colorScheme.error.withAlpha(180)
+                            : TournamentDisplayPalette.border,
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Board $board',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: accent,
-                      fontWeight: FontWeight.w600,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                  ),
-                  if (running != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${running.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
-                            '${running.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              running != null
+                                  ? Icons.sports_score
+                                  : blocked
+                                  ? Icons.block
+                                  : Icons.dashboard_outlined,
+                              size: 18,
+                              color: accent,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Board $board',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          label,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: accent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        if (widget.tournament.directorSchedulingStrategy ==
+                                'group' &&
+                            assignedGroups.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              assignedGroups.join(' · '),
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: TournamentDisplayPalette.mutedText,
+                                  ),
+                            ),
                           ),
-                          if (widget.onMoveMatch != null &&
-                              widget.canOperate &&
-                              state.freeBoards.isNotEmpty)
+                        if (running != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${running.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
+                                  '${running.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                if (widget.onMoveMatch != null &&
+                                    widget.canOperate &&
+                                    state.freeBoards.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: OutlinedButton.icon(
+                                      onPressed: () =>
+                                          _chooseBoardForRunningMatch(
+                                            running,
+                                            state,
+                                          ),
+                                      icon: const Icon(
+                                        Icons.swap_horiz_rounded,
+                                      ),
+                                      label: const Text('Board wechseln'),
+                                    ),
+                                  ),
+                                if (widget.canOperate)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _act(
+                                        () => widget.onResult(running.match),
+                                      ),
+                                      icon: const Icon(Icons.edit_note_rounded),
+                                      label: const Text('Ergebnis erfassen'),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          )
+                        else if (blocked)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: Text('Für manuellen Betrieb gesperrt.'),
+                          )
+                        else if (suggestion != null)
+                          const SizedBox.shrink(),
+                        if (!blocked && upcomingForBoard.isNotEmpty)
+                          for (final assignment in upcomingForBoard)
                             Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: OutlinedButton.icon(
-                                onPressed: () =>
-                                    _chooseBoardForRunningMatch(running, state),
-                                icon: const Icon(Icons.swap_horiz_rounded),
-                                label: const Text('Board wechseln'),
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    '${assignment.entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
+                                    '${assignment.entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                  if (widget.onStartOnBoard != null)
+                                    FilledButton.tonalIcon(
+                                      onPressed:
+                                          widget.canOperate &&
+                                              state.canStart(assignment.entry)
+                                          ? () => _act(
+                                              () => widget.onStartOnBoard!(
+                                                board,
+                                                match: assignment.entry.match,
+                                              ),
+                                            )
+                                          : null,
+                                      icon: const Icon(
+                                        Icons.play_arrow_rounded,
+                                        size: 18,
+                                      ),
+                                      label: Text(
+                                        'Schnellstart · Board $board',
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                          if (widget.canOperate)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: OutlinedButton.icon(
-                                onPressed: () =>
-                                    _act(() => widget.onResult(running.match)),
-                                icon: const Icon(Icons.edit_note_rounded),
-                                label: const Text('Ergebnis erfassen'),
-                              ),
+                        if (running == null &&
+                            !blocked &&
+                            suggestion != null &&
+                            widget.onStartOnBoard != null &&
+                            widget.canOperate)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _chooseMatchForBoard(board, state),
+                              icon: const Icon(Icons.swap_horiz_rounded),
+                              label: const Text('Partie wählen'),
                             ),
-                        ],
-                      ),
-                    )
-                  else if (blocked)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 6),
-                      child: Text('Für manuellen Betrieb gesperrt.'),
-                    )
-                  else if (suggestion != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: FilledButton.icon(
-                        onPressed: widget.onStartOnBoard == null
-                            ? null
-                            : () => _act(() => widget.onStartOnBoard!(board)),
-                        icon: const Icon(Icons.play_arrow_rounded),
-                        label: const Text('Starten'),
-                      ),
+                          ),
+                        if (running == null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _act(() => widget.onBlock(board)),
+                              icon: Icon(
+                                blocked
+                                    ? Icons.lock_open_rounded
+                                    : Icons.lock_rounded,
+                              ),
+                              label: Text(blocked ? 'Freigeben' : 'Sperren'),
+                            ),
+                          ),
+                      ],
                     ),
-                  if (running == null &&
-                      !blocked &&
-                      suggestion != null &&
-                      widget.onStartOnBoard != null &&
-                      widget.canOperate)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: OutlinedButton.icon(
-                        onPressed: () => _chooseMatchForBoard(board, state),
-                        icon: const Icon(Icons.swap_horiz_rounded),
-                        label: const Text('Partie wählen'),
-                      ),
-                    ),
-                  if (running == null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: OutlinedButton.icon(
-                        onPressed: () => _act(() => widget.onBlock(board)),
-                        icon: Icon(
-                          blocked
-                              ? Icons.lock_open_rounded
-                              : Icons.lock_rounded,
-                        ),
-                        label: Text(blocked ? 'Freigeben' : 'Sperren'),
-                      ),
-                    ),
-                ],
+                  );
+                },
               ),
-            );
-          },
-        ),
-    ];
+          ];
     final recommendedGroups = <RecommendedMatchGroup>[];
     final stage = t.runStages[widget.activeStage];
     if (stage is GroupTournamentRunStage) {
@@ -1094,7 +1167,10 @@ class _TournamentDirectorDashboardState
         const Text(
           'Alle Boards sind gesperrt. Ein Board freigeben, um fortzufahren.',
         ),
-      if (active.isNotEmpty && completed == active.length && waiting == 0)
+      if (!widget.directorModeEnabled &&
+          active.isNotEmpty &&
+          completed == active.length &&
+          waiting == 0)
         const Text(
           'Etappe fertig: Buttons oben zum Abschließen oder vorzeitigen Beenden nutzen.',
         ),
@@ -1113,32 +1189,36 @@ class _TournamentDirectorDashboardState
       children: [
         notices,
         const SizedBox(height: 12),
-        status,
-        const SizedBox(height: 12),
-        clock,
-        const SizedBox(height: 12),
-        boardOverview,
-        const SizedBox(height: 12),
-        _matchSearch(state),
-        const SizedBox(height: 12),
-        _box([
-          Text('Spielplan', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          RecommendedMatchesTable(
-            groups: recommendedGroups,
-            prioritizedMatches: flowPriority.prioritizedMatches,
-            deprioritizedMatches: flowPriority.deprioritizedMatches,
+        if (!widget.directorModeEnabled) ...[
+          status,
+          const SizedBox(height: 12),
+          clock,
+          const SizedBox(height: 12),
+        ],
+        if (widget.directorModeEnabled) ...[
+          boardOverview,
+          const SizedBox(height: 12),
+          _matchSearch(state),
+        ] else ...[
+          _matchQueue(
+            'Empfohlene Partien',
+            nextSix,
             emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
-            dense: true,
+            prioritizedMatches: flowPriority.prioritizedMatches,
           ),
-        ]),
-        const SizedBox(height: 12),
-        _matchQueue(
-          'Schnellstart · nächste Partien',
-          nextSix,
-          emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
-          prioritizedMatches: flowPriority.prioritizedMatches,
-        ),
+          const SizedBox(height: 12),
+          _box([
+            Text('Spielplan', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            RecommendedMatchesTable(
+              groups: recommendedGroups,
+              prioritizedMatches: flowPriority.prioritizedMatches,
+              deprioritizedMatches: flowPriority.deprioritizedMatches,
+              emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+              dense: true,
+            ),
+          ]),
+        ],
         const SizedBox(height: 12),
         _matchQueue(
           'Letzte Ergebnisse',

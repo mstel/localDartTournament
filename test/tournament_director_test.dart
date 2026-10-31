@@ -26,7 +26,6 @@ class DirectorPreview extends StatefulWidget {
 class _DirectorPreviewState extends State<DirectorPreview> {
   late final t = fixture(boards: 4);
   @override
-  @override
   void initState() {
     super.initState();
     const c = OrderOfPlayController();
@@ -46,7 +45,6 @@ class _DirectorPreviewState extends State<DirectorPreview> {
     t.blockedBoards.add(4);
   }
 
-  @override
   @override
   void dispose() {
     super.dispose();
@@ -92,6 +90,35 @@ void main() {
     expect(find.textContaining('Spiele in dieser Etappe'), findsOneWidget);
     expect(find.textContaining(' gesamt'), findsOneWidget);
     expect(find.textContaining('offen'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('director-only controls stay hidden when the mode is disabled', (
+    tester,
+  ) async {
+    final tournament = fixture();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onStartOnBoard: (_, {match}) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('director-board-1')), findsNothing);
+    expect(find.byKey(const ValueKey('director-player-search')), findsNothing);
+    expect(find.textContaining('Schnellstart · Board'), findsNothing);
+    expect(find.text('Turnieruhr'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -186,6 +213,7 @@ void main() {
   const c = OrderOfPlayController();
   test('blocked boards excluded in plan, starts and player suggestions', () {
     final t = fixture();
+    t.directorModeEnabled = true;
     t.blockedBoards.add(1);
     final schedule = c.plan(t, 0);
     expect(schedule.planned.every((a) => a.board == 2), isTrue);
@@ -198,6 +226,22 @@ void main() {
     t.blockedBoards.remove(1);
     expect(c.plan(t, 0).planned.length, 15);
   });
+  test(
+    'disabled director mode ignores director strategy and blocked boards',
+    () {
+      final t = fixture(boards: 2);
+      t.directorSchedulingStrategy = 'group';
+      t.blockedBoards.addAll([1, 2]);
+
+      final schedule = c.plan(t, 0);
+
+      expect(schedule.planned, isNotEmpty);
+      expect(
+        schedule.planned.take(2).map((assignment) => assignment.board).toSet(),
+        {1, 2},
+      );
+    },
+  );
   test('board suggestion starts a ready match on a free board', () {
     final t = fixture();
     final suggestion = c.suggestForBoard(t, 0, 2);
@@ -332,7 +376,7 @@ void main() {
 
       final ready = [b1, a1, b2, a2];
       final groupSchedule = const BoardSchedulingEngine().schedule(
-        all: ready,
+        all: [a1, a2, b1, b2],
         ready: ready,
         boardCount: 2,
         strategy: 'group',
@@ -346,6 +390,68 @@ void main() {
 
       expect(groupSchedule.first.entry.groupKey, 'A');
       expect(globalSchedule.first.entry.groupKey, 'B');
+    },
+  );
+  test('group strategy keeps each group assigned to its board', () {
+    final entries = [
+      for (var group = 0; group < 8; group++)
+        PlayEntry(
+          GroupMatch(
+            homePlayer: TournamentPlayer.generated(group * 4 + 1),
+            awayPlayer: TournamentPlayer.generated(group * 4 + 2),
+            round: 1,
+          ),
+          0,
+          'Gruppe $group',
+          'Gruppe $group',
+        ),
+    ];
+
+    final schedule = const BoardSchedulingEngine().schedule(
+      all: entries,
+      ready: entries.skip(1).toList(),
+      boardCount: 4,
+      strategy: 'group',
+      assignGroupsToBoards: true,
+    );
+
+    for (final assignment in schedule) {
+      final group = int.parse(assignment.entry.groupKey!.split(' ').last);
+      expect(assignment.board, group % 4 + 1);
+    }
+    expect(schedule.map((assignment) => assignment.block).toSet().length, 2);
+  });
+  test(
+    'group strategy schedules knockout entries without group assignment',
+    () {
+      final previousGroupMatch = PlayEntry(
+        GroupMatch(
+          homePlayer: TournamentPlayer.generated(1),
+          awayPlayer: TournamentPlayer.generated(2),
+          round: 1,
+        ),
+        0,
+        'Gruppe A',
+        'Gruppe A',
+      );
+      final knockoutMatch = PlayEntry(
+        GroupMatch(
+          homePlayer: TournamentPlayer.generated(3),
+          awayPlayer: TournamentPlayer.generated(4),
+          round: 1,
+        ),
+        1,
+        'KO · Runde 1',
+      );
+
+      final schedule = const BoardSchedulingEngine().schedule(
+        all: [previousGroupMatch, knockoutMatch],
+        ready: [knockoutMatch],
+        boardCount: 1,
+        strategy: 'group',
+      );
+
+      expect(schedule.single.entry, same(knockoutMatch));
     },
   );
   testWidgets('director dashboard survives width changes', (tester) async {
@@ -475,6 +581,7 @@ void main() {
         ..awayLegs = 1
         ..finishedAt = DateTime.utc(2026, 1, index + 1);
     }
+    matches[3].boardNumber = 4;
     matches[2].bestPerformances = const [
       BestPerformance(
         type: BestPerformanceType.score180,
@@ -531,6 +638,18 @@ void main() {
     );
     expect(
       find.descendant(of: recent, matching: find.byType(ListView)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: recent,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is RichText &&
+              widget.text.toPlainText().contains('besiegte') &&
+              widget.text.toPlainText().contains('an Board 4'),
+        ),
+      ),
       findsOneWidget,
     );
     expect(find.text('Bestleistungen'), findsNothing);
@@ -592,6 +711,7 @@ void main() {
             child: TournamentDirectorDashboard(
               tournament: tournament,
               activeStage: 0,
+              directorModeEnabled: true,
               onChange: () async {},
               onResult: (_) async {},
               onBlock: (_) async {},
@@ -639,6 +759,7 @@ void main() {
             child: TournamentDirectorDashboard(
               tournament: tournament,
               activeStage: 0,
+              directorModeEnabled: true,
               onChange: () async {},
               onResult: (_) async {},
               onBlock: (_) async {},
@@ -665,65 +786,57 @@ void main() {
     expect(targetBoard, 2);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('director can control the tournament clock and enter a result', (
-    tester,
-  ) async {
-    final tournament = fixture();
-    final match = const OrderOfPlayController()
-        .plan(tournament, 0)
-        .planned
-        .first
-        .entry
-        .match;
-    const OrderOfPlayController().start(tournament, 0, match, 1);
-    var resultRequested = false;
+  testWidgets(
+    'director mode leaves clock and stage controls in the dashboard',
+    (tester) async {
+      final tournament = fixture();
+      final match = const OrderOfPlayController()
+          .plan(tournament, 0)
+          .planned
+          .first
+          .entry
+          .match;
+      const OrderOfPlayController().start(tournament, 0, match, 1);
+      var resultRequested = false;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TournamentDirectorDashboard(
-              tournament: tournament,
-              activeStage: 0,
-              onChange: () async {},
-              onResult: (_) async {
-                resultRequested = true;
-              },
-              onBlock: (_) async {},
-              onStartClock: () async {
-                tournament.startedAt = DateTime.now();
-              },
-              onPauseClock: () async {
-                TournamentTiming.togglePause(tournament);
-              },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: TournamentDirectorDashboard(
+                tournament: tournament,
+                activeStage: 0,
+                directorModeEnabled: true,
+                onChange: () async {},
+                onResult: (_) async {
+                  resultRequested = true;
+                },
+                onBlock: (_) async {},
+                onStartClock: () async {
+                  tournament.startedAt = DateTime.now();
+                },
+                onPauseClock: () async {
+                  TournamentTiming.togglePause(tournament);
+                },
+              ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    final startClock = find.text('Turnieruhr starten');
-    await tester.ensureVisible(startClock);
-    await tester.tap(startClock);
-    await tester.pumpAndSettle();
-    expect(tournament.startedAt, isNotNull);
+      expect(find.text('Turnieruhr starten'), findsNothing);
+      expect(find.text('Vorzeitig beenden'), findsNothing);
 
-    final pauseClock = find.text('Uhr pausieren');
-    await tester.ensureVisible(pauseClock);
-    await tester.tap(pauseClock);
-    await tester.pumpAndSettle();
-    expect(tournament.isClockPaused, isTrue);
-    expect(find.text('Uhr fortsetzen'), findsOneWidget);
+      final recordResult = find.text('Ergebnis erfassen');
+      await tester.ensureVisible(recordResult);
+      await tester.tap(recordResult);
+      await tester.pumpAndSettle();
+      expect(resultRequested, isTrue);
 
-    final recordResult = find.text('Ergebnis erfassen');
-    await tester.ensureVisible(recordResult);
-    await tester.tap(recordResult);
-    await tester.pumpAndSettle();
-    expect(resultRequested, isTrue);
-
-    await tester.pumpWidget(const SizedBox());
-  });
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets('director disables match operations when the stage is locked', (
     tester,
   ) async {
@@ -742,6 +855,7 @@ void main() {
             child: TournamentDirectorDashboard(
               tournament: tournament,
               activeStage: 0,
+              directorModeEnabled: true,
               canOperate: false,
               onChange: () async {},
               onResult: (_) async {},
@@ -776,6 +890,7 @@ void main() {
             child: TournamentDirectorDashboard(
               tournament: tournament,
               activeStage: 0,
+              directorModeEnabled: true,
               onChange: () async {},
               onResult: (_) async {},
               onBlock: (_) async {},
@@ -796,7 +911,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Startbar · Gruppen · A'), findsWidgets);
+    expect(find.textContaining('Startbar · Board'), findsWidgets);
     final firstResult = find.byType(ListTile).first;
     final startButton = find.descendant(
       of: firstResult,
@@ -819,7 +934,7 @@ void main() {
     );
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('recommended queue supports quick start on a free board', (
+  testWidgets('director board queue starts a match on its assigned board', (
     tester,
   ) async {
     GroupMatch? startedMatch;
@@ -832,6 +947,7 @@ void main() {
             child: TournamentDirectorDashboard(
               tournament: tournament,
               activeStage: 0,
+              directorModeEnabled: true,
               onChange: () async {},
               onResult: (_) async {},
               onBlock: (_) async {},
@@ -846,7 +962,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final quickStart = find.text('Schnellstart').first;
+    final quickStart = find.textContaining('Schnellstart · Board').first;
     expect(quickStart, findsOneWidget);
     await tester.ensureVisible(quickStart);
     await tester.tap(quickStart);

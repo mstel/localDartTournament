@@ -43,9 +43,12 @@ class BoardSchedulingEngine {
     required int boardCount,
     Set<int> blockedBoards = const {},
     String strategy = 'group',
+    bool assignGroupsToBoards = false,
   }) {
     if (boardCount < 1) throw ArgumentError.value(boardCount, 'boardCount');
-    if (List.generate(boardCount, (i) => i + 1).every(blockedBoards.contains)) return [];
+    if (List.generate(boardCount, (i) => i + 1).every(blockedBoards.contains)) {
+      return [];
+    }
 
     final normalizedStrategy = strategy.trim().toLowerCase();
     final pending = List<PlayEntry>.from(ready);
@@ -58,6 +61,28 @@ class BoardSchedulingEngine {
     }
 
     final planned = <BoardAssignment>[];
+    final groupBoards = <String, int>{};
+    final useGroupAssignments =
+        assignGroupsToBoards &&
+        normalizedStrategy == 'group' &&
+        ready.isNotEmpty &&
+        ready.every((entry) => entry.groupKey != null);
+    if (useGroupAssignments) {
+      final availableBoards = [
+        for (var board = 1; board <= boardCount; board++)
+          if (!blockedBoards.contains(board)) board,
+      ];
+      final groupKeys = all
+          .where((entry) => entry.stageIndex == ready.first.stageIndex)
+          .map((entry) => entry.groupKey)
+          .whereType<String>()
+          .toSet()
+          .toList();
+      for (var index = 0; index < groupKeys.length; index++) {
+        groupBoards[groupKeys[index]] =
+            availableBoards[index % availableBoards.length];
+      }
+    }
     var block = 0;
     while (pending.isNotEmpty) {
       final busy = block == 0
@@ -116,49 +141,77 @@ class BoardSchedulingEngine {
         return max - min;
       }
 
-      var selected = <PlayEntry>[];
       final available =
-          pending.where((e) => !e.players.any(busy.contains)).toList()
-            ..sort((a, b) {
-              if (normalizedStrategy == 'group') {
-                final groupCompare = (a.groupKey ?? '').compareTo(
-                  b.groupKey ?? '',
-                );
-                if (groupCompare != 0) return groupCompare;
-              }
-
-              final fairness = fairnessSpread(a).compareTo(fairnessSpread(b));
-              if (fairness != 0) return fairness;
-
-              final preferredGap = minimumRestGap(b).compareTo(
-                minimumRestGap(a),
+          pending.where((e) => !e.players.any(busy.contains)).toList()..sort((
+            a,
+            b,
+          ) {
+            if (normalizedStrategy == 'group') {
+              final groupCompare = (a.groupKey ?? '').compareTo(
+                b.groupKey ?? '',
               );
-              if ((minimumRestGap(a) < preferredPlayerRestBlocks) !=
-                  (minimumRestGap(b) < preferredPlayerRestBlocks)) {
-                return preferredGap;
-              }
+              if (groupCompare != 0) return groupCompare;
+            }
 
-              final r = rest(a).compareTo(rest(b));
-              if (r != 0) return r;
-              final rem = maxRemaining(b).compareTo(maxRemaining(a));
-              return rem != 0 ? rem : all.indexOf(a).compareTo(all.indexOf(b));
-            });
-      for (final first in available.take(64)) {
-        final batch = <PlayEntry>[];
+            final fairness = fairnessSpread(a).compareTo(fairnessSpread(b));
+            if (fairness != 0) return fairness;
+
+            final preferredGap = minimumRestGap(b).compareTo(minimumRestGap(a));
+            if ((minimumRestGap(a) < preferredPlayerRestBlocks) !=
+                (minimumRestGap(b) < preferredPlayerRestBlocks)) {
+              return preferredGap;
+            }
+
+            final r = rest(a).compareTo(rest(b));
+            if (r != 0) return r;
+            final rem = maxRemaining(b).compareTo(maxRemaining(a));
+            return rem != 0 ? rem : all.indexOf(a).compareTo(all.indexOf(b));
+          });
+      final selected = <({PlayEntry entry, int board})>[];
+      if (useGroupAssignments && groupBoards.isNotEmpty) {
         final used = <String>{...busy};
-        for (final entry in [first, ...available.where((e) => e != first)]) {
-          if (batch.length >= boards.length) break;
-          if (entry.players.any(used.contains)) continue;
-          batch.add(entry);
-          used.addAll(entry.players);
+        for (final board in boards) {
+          for (final entry in available) {
+            if (groupBoards[entry.groupKey] != board ||
+                entry.players.any(used.contains)) {
+              continue;
+            }
+            selected.add((entry: entry, board: board));
+            used.addAll(entry.players);
+            break;
+          }
         }
-        if (batch.length > selected.length) selected = batch;
-        if (selected.length == boards.length) break;
+      } else {
+        var selectedEntries = <PlayEntry>[];
+        for (final first in available.take(64)) {
+          final batch = <PlayEntry>[];
+          final used = <String>{...busy};
+          for (final entry in [first, ...available.where((e) => e != first)]) {
+            if (batch.length >= boards.length) break;
+            if (entry.players.any(used.contains)) continue;
+            batch.add(entry);
+            used.addAll(entry.players);
+          }
+          if (batch.length > selectedEntries.length) {
+            selectedEntries = batch;
+          }
+          if (selectedEntries.length == boards.length) break;
+        }
+        selected.addAll([
+          for (var index = 0; index < selectedEntries.length; index++)
+            (entry: selectedEntries[index], board: boards[index]),
+        ]);
       }
 
-      for (var i = 0; i < selected.length; i++) {
-        final entry = selected[i];
-        planned.add(BoardAssignment(entry, block, boards[i]));
+      if (selected.isEmpty && block > 0) {
+        throw StateError(
+          'Unable to assign a ready match to an available board.',
+        );
+      }
+
+      for (final assignment in selected) {
+        final entry = assignment.entry;
+        planned.add(BoardAssignment(entry, block, assignment.board));
         pending.remove(entry);
         for (final player in entry.players) {
           lastPlayed[player] = block;

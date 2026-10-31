@@ -666,6 +666,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }) async {
     final previousEnabled = widget.tournament.directorModeEnabled;
     final previousStrategy = widget.tournament.directorSchedulingStrategy;
+    final previousViewMode = _stageViewMode;
     setState(() {
       widget.tournament.directorModeEnabled = enabled;
       widget.tournament.directorSchedulingStrategy = enabled
@@ -685,6 +686,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       setState(() {
         widget.tournament.directorModeEnabled = previousEnabled;
         widget.tournament.directorSchedulingStrategy = previousStrategy;
+        _stageViewMode = previousViewMode;
       });
     }
   }
@@ -3148,6 +3150,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                   completedStages: _completedStageIndexes,
                   mode: _stageViewMode,
                   canLead: true,
+                  directorModeEnabled: widget.tournament.directorModeEnabled,
                   onStageChanged: (index) => setState(() {
                     _viewStageIndex = index;
                     _isBracketEditMode = false;
@@ -3186,6 +3189,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             ),
                         onResult: _editResult,
                         onBlock: _toggleBoardBlock,
+                        directorModeEnabled:
+                            widget.tournament.directorModeEnabled &&
+                            _stageViewMode == StageViewMode.director,
                         onStartOnBoard: _startRecommendedMatchOnBoard,
                         onMoveMatch: _moveRunningMatchToBoard,
                         onStartClock: _startTournamentClock,
@@ -3884,8 +3890,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                   ],
                 ),
               ),
-              if (_stageViewMode == StageViewMode.dashboard ||
-                  _stageViewMode == StageViewMode.director) ...[
+              if (_stageViewMode == StageViewMode.dashboard) ...[
                 SliverToBoxAdapter(
                   child: StageFooter(
                     canCompleteStage: canCompleteStage,

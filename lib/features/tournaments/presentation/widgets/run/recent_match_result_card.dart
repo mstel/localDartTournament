@@ -45,11 +45,38 @@ class RecentMatchResultLogEntry extends StatelessWidget {
         ? null
         : _recentPlayerStatus(tournament, match, awayPlayer);
     final time = match.finishedAt?.toLocal();
-    final resultDescription = homeIsWinner
-        ? ' besiegte '
-        : awayIsWinner
-        ? ' unterlag '
-        : ' spielte gegen ';
+    final homeTextSpan = TextSpan(
+      children: [
+        TextSpan(
+          text: homePlayer?.name ?? '?',
+          style: TextStyle(color: homeColor, fontWeight: FontWeight.w600),
+        ),
+        if (homeStatus != null)
+          TextSpan(
+            text: ' ($homeStatus)',
+            style: const TextStyle(
+              color: TournamentDisplayPalette.mutedText,
+              fontSize: 10,
+            ),
+          ),
+      ],
+    );
+    final awayTextSpan = TextSpan(
+      children: [
+        TextSpan(
+          text: awayPlayer?.name ?? '?',
+          style: TextStyle(color: awayColor, fontWeight: FontWeight.w600),
+        ),
+        if (awayStatus != null)
+          TextSpan(
+            text: ' ($awayStatus)',
+            style: const TextStyle(
+              color: TournamentDisplayPalette.mutedText,
+              fontSize: 10,
+            ),
+          ),
+      ],
+    );
 
     return Padding(
       key:
@@ -70,37 +97,15 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                 child: Text.rich(
                   TextSpan(
                     children: [
+                      if (awayIsWinner) awayTextSpan else homeTextSpan,
                       TextSpan(
-                        text: homePlayer?.name ?? '?',
-                        style: TextStyle(
-                          color: homeColor,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        text: homeIsWinner || awayIsWinner
+                            ? ' besiegte '
+                            : ' spielte gegen ',
                       ),
-                      if (homeStatus != null)
-                        TextSpan(
-                          text: ' ($homeStatus)',
-                          style: const TextStyle(
-                            color: TournamentDisplayPalette.mutedText,
-                            fontSize: 10,
-                          ),
-                        ),
-                      TextSpan(text: resultDescription),
-                      TextSpan(
-                        text: awayPlayer?.name ?? '?',
-                        style: TextStyle(
-                          color: awayColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (awayStatus != null)
-                        TextSpan(
-                          text: ' ($awayStatus)',
-                          style: const TextStyle(
-                            color: TournamentDisplayPalette.mutedText,
-                            fontSize: 10,
-                          ),
-                        ),
+                      if (awayIsWinner) homeTextSpan else awayTextSpan,
+                      if (match.boardNumber != null)
+                        TextSpan(text: ' an Board ${match.boardNumber}'),
                     ],
                   ),
                   maxLines: 1,

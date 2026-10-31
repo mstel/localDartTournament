@@ -80,6 +80,37 @@ void main() {
     );
   });
 
+  testWidgets('director mode shows board status and upcoming matches on TV', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = _tournament()..directorModeEnabled = true;
+    final forecastService = _FixedForecastService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            forecastService: forecastService,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(forecastService.calls, lessThanOrEqualTo(1));
+    expect(find.text('Boards & nächste Begegnungen'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('second-screen-director-board-1')),
+      findsOneWidget,
+    );
+    expect(find.text('Spielplan'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tournament clock precedes the mode switch on TV surfaces', (
     tester,
   ) async {

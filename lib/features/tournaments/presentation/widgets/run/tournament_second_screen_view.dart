@@ -11,6 +11,7 @@ import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../application/tournament_director_snapshot.dart';
 import '../../../domain/engines/group_standings_engine.dart';
 import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../domain/engines/qualification_certainty.dart';
@@ -1154,7 +1155,7 @@ class _TournamentSecondScreenViewState
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Aktuelle Spiele und Paarungen siehe Spielansetzungen.',
               style: TextStyle(color: Colors.white70),
             ),
@@ -1564,60 +1565,72 @@ class _TournamentSecondScreenViewState
       (group) =>
           group.matches.any((match) => match.hasPlayers && !match.isResolved),
     );
-    final recommendedContent = SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final notice in flowPriority.notices)
-            Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: TournamentDisplayPalette.cardEmphasis,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: TournamentDisplayPalette.border),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.priority_high,
-                    size: 18,
-                    color: TournamentDisplayPalette.accent,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      notice,
-                      style: const TextStyle(
-                        color: TournamentDisplayPalette.text,
-                        fontWeight: FontWeight.w600,
+    final recommendedContent = widget.tournament.directorModeEnabled
+        ? _buildDirectorBoardQueue(context, t, activeIndex)
+        : SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final notice in flowPriority.notices)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: TournamentDisplayPalette.cardEmphasis,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: TournamentDisplayPalette.border,
                       ),
                     ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.priority_high,
+                          size: 18,
+                          color: TournamentDisplayPalette.accent,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            notice,
+                            style: const TextStyle(
+                              color: TournamentDisplayPalette.text,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                if (_prioritySettingsError case final error?)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      error,
+                      style: const TextStyle(color: Colors.amber),
+                    ),
+                  ),
+                RecommendedMatchesTable(
+                  groups: recommendedGroups,
+                  prioritizedMatches: flowPriority.prioritizedMatches,
+                  deprioritizedMatches: flowPriority.deprioritizedMatches,
+                  emptyMessage: 'Keine offenen Partien in dieser Etappe.',
+                  dense: true,
+                ),
+              ],
             ),
-          if (_prioritySettingsError case final error?)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(error, style: const TextStyle(color: Colors.amber)),
-            ),
-          RecommendedMatchesTable(
-            groups: recommendedGroups,
-            prioritizedMatches: flowPriority.prioritizedMatches,
-            deprioritizedMatches: flowPriority.deprioritizedMatches,
-            emptyMessage: 'Keine offenen Partien in dieser Etappe.',
-            dense: true,
-          ),
-        ],
-      ),
-    );
+          );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Spielplan',
+        Text(
+          widget.tournament.directorModeEnabled
+              ? 'Boards & nächste Begegnungen'
+              : 'Spielplan',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,
@@ -1638,6 +1651,176 @@ class _TournamentSecondScreenViewState
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildDirectorBoardQueue(
+    BuildContext context,
+    CreatedTournament tournament,
+    int activeIndex,
+  ) {
+    final snapshot = TournamentDirectorSnapshot(tournament, activeIndex);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = (constraints.maxWidth / 280).floor().clamp(
+          1,
+          tournament.boardCount,
+        );
+        final spacing = 8.0;
+        final width =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return SingleChildScrollView(
+          child: Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              for (var board = 1; board <= tournament.boardCount; board++)
+                Builder(
+                  builder: (context) {
+                    final running = snapshot.runningOn(board);
+                    final blocked = tournament.blockedBoards.contains(board);
+                    final upcoming = snapshot.schedule.planned
+                        .where(
+                          (assignment) =>
+                              assignment.entry.stageIndex == activeIndex &&
+                              assignment.board == board &&
+                              assignment.entry.match.hasPlayers,
+                        )
+                        .take(3)
+                        .toList();
+                    final groupNames = <String>{
+                      ?running?.groupKey,
+                      for (final assignment in upcoming)
+                        ?assignment.entry.groupKey,
+                    };
+                    final status = running != null
+                        ? 'Läuft'
+                        : blocked
+                        ? 'Gesperrt'
+                        : upcoming.isNotEmpty
+                        ? 'Frei'
+                        : 'Reserve';
+                    final statusColor = running != null
+                        ? TournamentDisplayPalette.accent
+                        : blocked
+                        ? Colors.redAccent
+                        : upcoming.isNotEmpty
+                        ? const Color(0xFF4ED9A4)
+                        : TournamentDisplayPalette.mutedText;
+                    return Container(
+                      key: ValueKey('second-screen-director-board-$board'),
+                      width: width,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: TournamentDisplayPalette.card,
+                        border: Border.all(
+                          color: TournamentDisplayPalette.border.withAlpha(150),
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.dashboard_outlined,
+                                size: 18,
+                                color: TournamentDisplayPalette.accent,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Board $board',
+                                  style: const TextStyle(
+                                    color: TournamentDisplayPalette.text,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                status,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (tournament.directorSchedulingStrategy ==
+                                  'group' &&
+                              groupNames.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                groupNames.join(' · '),
+                                style: const TextStyle(
+                                  color: TournamentDisplayPalette.mutedText,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          if (running != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Aktuell: ${running.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
+                                '${running.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: TournamentDisplayPalette.text,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          if (upcoming.isEmpty && running == null)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Keine nächste Begegnung zugewiesen.',
+                                style: TextStyle(
+                                  color: TournamentDisplayPalette.mutedText,
+                                ),
+                              ),
+                            ),
+                          for (var index = 0; index < upcoming.length; index++)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 22,
+                                    child: Text(
+                                      '${index + 1}.',
+                                      style: const TextStyle(
+                                        color: TournamentDisplayPalette.accent,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      '${upcoming[index].entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
+                                      '${upcoming[index].entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: TournamentDisplayPalette.text,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 

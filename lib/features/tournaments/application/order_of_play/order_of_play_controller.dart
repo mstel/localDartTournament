@@ -98,8 +98,15 @@ class OrderOfPlayController {
       running: running,
       finished: finished,
       boardCount: tournament.boardCount,
-      blockedBoards: tournament.blockedBoards,
-      strategy: tournament.directorSchedulingStrategy,
+      blockedBoards: tournament.directorModeEnabled
+          ? tournament.blockedBoards
+          : const {},
+      strategy: tournament.directorModeEnabled
+          ? tournament.directorSchedulingStrategy
+          : 'group',
+      assignGroupsToBoards:
+          tournament.directorModeEnabled &&
+          tournament.directorSchedulingStrategy == 'group',
     );
     return BoardSchedule(planned, running, finished, waiting);
   }
