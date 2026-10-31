@@ -1,3 +1,12 @@
+# 2.2.0+44
+
+- Ergänzt den optionalen Turnierleiter-Modus mit Board-Sperren, Vorschlägen,
+  manueller Partiezuweisung, Spielersuche und gezieltem Start auf einem Board.
+- Ermöglicht den Wechsel eines laufenden Matches auf ein freies Board sowie
+  Ergebnisaufnahme und Turnieruhr-Steuerung direkt im Dashboard.
+- Verbessert die Spielplanpriorisierung nach Gruppenfortschritt und
+  Spielerbelastung; Turnierleiter-Einstellungen bleiben gespeichert.
+
 # 2.1.9+43
 
 - Begrenzt den sichtbaren Bereich der letzten Ergebnisse auf zwei Matches und

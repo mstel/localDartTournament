@@ -143,7 +143,7 @@ void main() {
         [5],
       );
       expect(await File('${file.path}.v21.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 28);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 29);
       expect(
         TournamentStage.fromJson({'name': 'Alt', 'type': 'groups'})
             .maxGamesForGroup(0),
