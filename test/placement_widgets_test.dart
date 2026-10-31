@@ -116,12 +116,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ergebnisse').last);
     await tester.pumpAndSettle();
-    final previewButton = find.text('Vorschau nächste Etappe');
-    await tester.ensureVisible(previewButton);
-    await tester.tap(previewButton);
+    final bracketButton = find.text('KO Baum öffnen');
+    await tester.ensureVisible(bracketButton);
+    await tester.tap(bracketButton);
     await tester.pumpAndSettle();
-    expect(find.textContaining('Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
+    expect(find.textContaining('· Turnierbaum'), findsOneWidget);
+    expect(find.byTooltip('Zurück zu Ergebnisse'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

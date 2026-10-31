@@ -82,7 +82,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Abgeschlossene Spiele (1)'));
       await tester.pumpAndSettle();
-      expect(find.text('Runde 2'), findsOneWidget);
+      expect(find.text('3:1'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

@@ -37,7 +37,6 @@ class MatchResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final canEdit = canEditResult && match.hasPlayers;
-    final roundLabel = leadingLabel ?? 'Runde ${match.round}';
     String playerLabel(bool home) {
       return (home ? match.homePlayer : match.awayPlayer)?.name ??
           (match.allowsBye ? 'Freilos' : 'offen');
@@ -46,26 +45,38 @@ class MatchResultTile extends StatelessWidget {
     Widget playerName(bool home, {TextAlign textAlign = TextAlign.start}) {
       final player = home ? match.homePlayer : match.awayPlayer;
       final label = playerLabel(home);
-      final text = Text(
-        label,
-        textAlign: textAlign,
-        style: Theme.of(context).textTheme.titleMedium,
+      final winner = match.winner;
+      final isWinner = match.hasResult && player != null && winner == player;
+      final isLoser =
+          match.hasResult && player != null && winner != null && !isWinner;
+      final text = Align(
+        alignment: textAlign == TextAlign.right
+            ? Alignment.centerRight
+            : Alignment.centerLeft,
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: textAlign,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: isWinner
+                ? const Color(0xFF4ED9A4)
+                : isLoser
+                ? const Color(0xFFFF7777)
+                : null,
+            fontWeight: isWinner ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
       );
-      if (player == null || onPlayerTap == null) return text;
+      if (player == null || onPlayerTap == null) {
+        return SizedBox(height: 48, child: text);
+      }
       return Tooltip(
         message: 'Spiele von ${player.name} anzeigen',
         child: InkWell(
           onTap: () => onPlayerTap!(player),
           borderRadius: BorderRadius.circular(4),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Align(
-              alignment: textAlign == TextAlign.right
-                  ? Alignment.centerRight
-                  : Alignment.centerLeft,
-              child: text,
-            ),
-          ),
+          child: SizedBox(height: 48, child: text),
         ),
       );
     }
@@ -73,120 +84,53 @@ class MatchResultTile extends StatelessWidget {
     return MatchStatisticsTapTarget(
       match: match,
       tournament: tournament,
-      child: Container(
-        margin: EdgeInsets.only(bottom: compact ? 4 : 8),
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 8 : 12,
-          vertical: compact ? 5 : 10,
-        ),
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          color: colorScheme.surface,
-          border: Border.all(color: colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(16),
+          border: Border(
+            bottom: BorderSide(
+              color: colorScheme.outlineVariant.withAlpha(120),
+            ),
+          ),
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth < (compact ? 420 : 620) ||
-                MediaQuery.textScalerOf(context).scale(16) > 24) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (leadingLabel != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 2, top: 2),
+                child: Text(
+                  leadingLabel!,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.secondary,
+                  ),
+                ),
+              ),
+            Padding(
+              padding: EdgeInsets.only(bottom: compact ? 0 : 4),
+              child: Row(
                 children: [
-                  if (showRoundLabel || originLabel != null) ...[
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (showRoundLabel)
-                          Text(
-                            roundLabel,
-                            style: Theme.of(context).textTheme.labelMedium,
-                          ),
-                        if (originLabel != null)
-                          _MatchOriginChip(label: originLabel!),
-                      ],
-                    ),
-                    SizedBox(height: compact ? 4 : 8),
-                  ],
-                  playerName(true),
-                  const SizedBox(height: 4),
-                  playerName(false),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: _ScoreBadge(
-                          match: match,
-                          onTap: match.hasResult
-                              ? () => MatchStatisticsTapTarget.open(
-                                  context,
-                                  match,
-                                  tournament: tournament,
-                                )
-                              : canEdit
-                              ? () => onEditResult(match)
-                              : null,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton.filledTonal(
-                        onPressed: canEdit ? () => onEditResult(match) : null,
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Ergebnis',
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(48, 48),
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
+                  Expanded(child: playerName(true)),
+                  _ScoreBadge(
+                    match: match,
+                    compact: compact,
+                    onTap: canEdit
+                        ? () => onEditResult(match)
+                        : match.hasResult
+                        ? () => MatchStatisticsTapTarget.open(
+                            context,
+                            match,
+                            tournament: tournament,
+                          )
+                        : null,
+                  ),
+                  Expanded(
+                    child: playerName(false, textAlign: TextAlign.right),
                   ),
                 ],
-              );
-            }
-
-            return Row(
-              children: [
-                if (showRoundLabel) ...[
-                  SizedBox(
-                    width: leadingLabel == null ? 74 : 148,
-                    child: Text(
-                      roundLabel,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                if (originLabel != null) ...[
-                  _MatchOriginChip(label: originLabel!),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(child: playerName(true)),
-                _ScoreBadge(
-                  match: match,
-                  onTap: match.hasResult
-                      ? () => MatchStatisticsTapTarget.open(
-                          context,
-                          match,
-                          tournament: tournament,
-                        )
-                      : canEdit
-                      ? () => onEditResult(match)
-                      : null,
-                ),
-                Expanded(child: playerName(false, textAlign: TextAlign.right)),
-                const SizedBox(width: 12),
-                IconButton.filledTonal(
-                  onPressed: canEdit ? () => onEditResult(match) : null,
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  tooltip: 'Ergebnis',
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -483,38 +427,11 @@ class _ScoreLimitInputFormatter extends TextInputFormatter {
   }
 }
 
-class _MatchOriginChip extends StatelessWidget {
-  const _MatchOriginChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      constraints: const BoxConstraints(minWidth: 76),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: colorScheme.onSecondaryContainer,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
 class _ScoreBadge extends StatelessWidget {
-  const _ScoreBadge({required this.match, this.onTap});
+  const _ScoreBadge({required this.match, required this.compact, this.onTap});
 
   final GroupMatch match;
+  final bool compact;
   final VoidCallback? onTap;
 
   @override
@@ -522,12 +439,14 @@ class _ScoreBadge extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     final badge = Container(
-      constraints: BoxConstraints(
-        minWidth: match.isAnnulled || match.hasSetScore ? 100 : 64,
-        minHeight: 48,
-      ),
+      width: match.isAnnulled
+          ? 72
+          : compact
+          ? 40
+          : 48,
+      height: compact ? 32 : 36,
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
         color: match.isAnnulled
             ? colorScheme.errorContainer
@@ -542,20 +461,25 @@ class _ScoreBadge extends StatelessWidget {
             : match.hasResult
             ? match.scoreLabel
             : '-:-',
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: compact ? 11 : 12,
+        ),
       ),
     );
 
     if (onTap == null) {
-      return badge;
+      return SizedBox(width: 48, height: 48, child: Center(child: badge));
     }
 
     return Tooltip(
-      message: match.hasResult ? 'Spielstatistik öffnen' : 'Ergebnis eingeben',
+      message: match.hasResult ? 'Ergebnis bearbeiten' : 'Ergebnis eingeben',
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: onTap,
-        child: badge,
+        child: SizedBox(width: 48, height: 48, child: Center(child: badge)),
       ),
     );
   }

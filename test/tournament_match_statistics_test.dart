@@ -124,31 +124,30 @@ void main() {
       );
     }
   }
-  testWidgets(
-    'score opens match details and result edit stays independent',
-    (tester) async {
-      final match = recordedMatch();
-      var edits = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MatchResultTile(
-              match: match,
-              onEditResult: (_) => edits++,
-              canEditResult: true,
-            ),
+  testWidgets('score edits results while tapping the row opens match details', (
+    tester,
+  ) async {
+    final match = recordedMatch();
+    var edits = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MatchResultTile(
+            match: match,
+            onEditResult: (_) => edits++,
+            canEditResult: true,
           ),
         ),
-      );
-      await tester.tap(find.byTooltip('Ergebnis'));
-      expect(edits, 1);
-      expect(find.byType(TournamentMatchStatisticsPage), findsNothing);
-      await tester.tap(find.text('1:0'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Ergebnis:'), findsOneWidget);
-      expect(find.textContaining('Scorer'), findsNothing);
-    },
-  );
+      ),
+    );
+    await tester.tap(find.byTooltip('Ergebnis bearbeiten'));
+    expect(edits, 1);
+    expect(find.byType(TournamentMatchStatisticsPage), findsNothing);
+    await tester.tap(find.text('Anna Musterfrau'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Ergebnis:'), findsOneWidget);
+    expect(find.textContaining('Scorer'), findsNothing);
+  });
   testWidgets('unfinished match still edits its score', (tester) async {
     final match = recordedMatch()
       ..homeLegs = null

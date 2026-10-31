@@ -12,6 +12,7 @@ import 'package:dart_tournament_manager/features/tournaments/application/tournam
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
+import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'order_of_play_test.dart' show fixture;
@@ -29,6 +30,17 @@ class _DirectorPreviewState extends State<DirectorPreview> {
   void initState() {
     super.initState();
     const c = OrderOfPlayController();
+    final completed = c.plan(t, 0).planned.first.entry.match;
+    completed.homeLegs = 3;
+    completed.awayLegs = 1;
+    completed.bestPerformances = [
+      BestPerformance(
+        type: BestPerformanceType.score180,
+        playerName: completed.homePlayer!.name,
+        value: 180,
+      ),
+    ];
+    c.resultRecorded(completed);
     final first = c.plan(t, 0).planned.first;
     c.start(t, 0, first.entry.match, 1);
     t.blockedBoards.add(4);
@@ -66,6 +78,23 @@ class _DirectorPreviewState extends State<DirectorPreview> {
 }
 
 void main() {
+  testWidgets('dashboard shows the reduced open-match table', (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(home: const DirectorPreview()));
+    await tester.pumpAndSettle();
+    expect(find.byType(RecommendedMatchesTable), findsOneWidget);
+    expect(find.text('Vollständigen Spielplan öffnen'), findsNothing);
+    expect(find.text('Spielplan'), findsOneWidget);
+    expect(find.byTooltip('Ergebnis eintragen'), findsNothing);
+    expect(find.textContaining('Spiele in dieser Etappe'), findsOneWidget);
+    expect(find.textContaining(' gesamt'), findsOneWidget);
+    expect(find.textContaining('offen'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   const font = String.fromEnvironment('LAYOUT_PREVIEW_FONT');
   setUpAll(() async {
     if (font.isNotEmpty) {
@@ -105,11 +134,18 @@ void main() {
           ),
         );
         expect(find.text('Dashboard'), findsOneWidget);
+        expect(find.textContaining('Aktive Etappe:'), findsNothing);
+        expect(
+          find.textContaining('1/15 Spiele in dieser Etappe'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('1/15 gesamt'), findsOneWidget);
         expect(find.textContaining('Uhrzeit:'), findsNothing);
-        expect(find.text('Empfohlene Partien'), findsOneWidget);
+        expect(find.text('Spielplan'), findsOneWidget);
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);
         expect(find.text('Fortschritt nach Etappen'), findsNothing);
-        expect(find.text('Bestleistungen'), findsNothing);
+        expect(find.text('180er'), findsOneWidget);
+        expect(find.text('3:1'), findsOneWidget);
         expect(tester.takeException(), isNull);
         for (final section in ['Übersicht', 'Boards', 'Spiele']) {
           final tab = find.widgetWithText(ChoiceChip, section);
@@ -327,7 +363,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('director match tiles use the second-screen navy palette', (
+  testWidgets('recommended match table uses the second-screen navy palette', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -339,7 +375,7 @@ void main() {
       (widget) =>
           widget.key is ValueKey<String> &&
           (widget.key! as ValueKey<String>).value.startsWith(
-            'director-match-tile-',
+            'recommended-group-',
           ),
     );
     expect(tiles, findsWidgets);
@@ -348,7 +384,7 @@ void main() {
     expect(decoration.color, TournamentDisplayPalette.card);
     expect(
       (decoration.border! as Border).top.color,
-      TournamentDisplayPalette.border.withAlpha(150),
+      TournamentDisplayPalette.border,
     );
     expect(tester.takeException(), isNull);
   });
@@ -425,7 +461,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('dashboard shows at most six upcoming and four recent matches', (
+  testWidgets('dashboard lists open matches and scrollable recent results', (
     tester,
   ) async {
     final tournament = fixture();
@@ -465,10 +501,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final upcoming = find
-        .ancestor(
-          of: find.text('Empfohlene Partien'),
-          matching: find.byType(Card),
-        )
+        .ancestor(of: find.text('Spielplan'), matching: find.byType(Card))
         .first;
     final recent = find
         .ancestor(
@@ -477,15 +510,32 @@ void main() {
         )
         .first;
     expect(
-      find.descendant(of: upcoming, matching: find.byType(Container)),
-      findsNWidgets(6),
+      find.descendant(
+        of: upcoming,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'recommended-match-',
+              ),
+        ),
+      ),
+      findsNWidgets(11),
     );
     expect(
-      find.descendant(of: recent, matching: find.byType(Container)),
-      findsNWidgets(4),
+      find.descendant(
+        of: recent,
+        matching: find.byKey(const ValueKey('director-recent-results-scroll')),
+      ),
+      findsOneWidget,
     );
-    expect(find.text('Bestleistungen'), findsOneWidget);
-    expect(find.text('Spieler 3 · 180+ 180'), findsAtLeastNWidgets(1));
+    expect(
+      find.descendant(of: recent, matching: find.byType(ListView)),
+      findsOneWidget,
+    );
+    expect(find.text('Bestleistungen'), findsNothing);
+    expect(find.text('Spieler 3 · 180+ 180'), findsNothing);
+    expect(find.byTooltip('Ergebnis eintragen'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 

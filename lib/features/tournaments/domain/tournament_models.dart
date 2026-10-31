@@ -7,9 +7,9 @@ import '../../league/domain/league_match.dart';
 
 const List<String> defaultGroupTieBreakers = [
   'points',
-  'headToHead',
   'legDifference',
   'legsFor',
+  'headToHead',
 ];
 
 String groupLabel(int groupNumber) {
@@ -67,7 +67,7 @@ List<String> _groupTieBreakersFromJson(Object? value) {
     value,
     fallback: defaultGroupTieBreakers,
   );
-  const previousDefault = ['points', 'legDifference', 'legsFor', 'headToHead'];
+  const previousDefault = ['points', 'headToHead', 'legDifference', 'legsFor'];
   final isPreviousDefault =
       tieBreakers.length == previousDefault.length &&
       tieBreakers.asMap().entries.every(

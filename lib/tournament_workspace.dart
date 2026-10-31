@@ -19,6 +19,7 @@ import 'features/tournaments/domain/knockout_round_names.dart';
 import 'features/tournaments/domain/group_size_rules.dart';
 import 'features/tournaments/modes/triple_ko/triple_ko_engine.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -34,6 +35,7 @@ import 'features/rankings/domain/local_ranking.dart';
 import 'features/rankings/application/local_ranking_elo_service.dart';
 import 'features/league/domain/league_match.dart';
 import 'features/tournaments/application/tournament_creation_controller.dart';
+import 'features/tournaments/application/group_player_rating_service.dart';
 import 'features/tournaments/application/group_tie_breaker_preferences.dart';
 import 'features/tournaments/application/tournament_run_controller.dart';
 import 'features/tournaments/application/group_stage_preview_service.dart';
@@ -54,6 +56,7 @@ import 'features/tournaments/application/order_of_play/order_of_play_controller.
 import 'features/tournaments/data/app_database.dart';
 import 'features/tournaments/data/tournament_storage.dart';
 import 'features/tournaments/domain/engines/tournament_engine.dart';
+import 'features/tournaments/domain/engines/group_standings_engine.dart';
 import 'features/tournaments/domain/engines/group_bye_seeding.dart';
 import 'features/tournaments/domain/engines/group_draw_assignment.dart';
 import 'features/tournaments/domain/engines/group_player_allocation_engine.dart';
@@ -66,6 +69,7 @@ import 'features/tournaments/presentation/pages/challonge_local_import_page.dart
 import 'features/backups/application/supabase_workspace_sync_service.dart';
 import 'features/tournaments/presentation/widgets/creation/stage_setup_widgets.dart';
 import 'features/tournaments/presentation/widgets/creation/group_game_limit_setup.dart';
+import 'features/tournaments/presentation/widgets/creation/group_player_allocation_dialog.dart';
 import 'features/tournaments/presentation/widgets/run/result_entry.dart';
 import 'features/tournaments/presentation/widgets/run/stage_controls.dart';
 import 'features/tournaments/presentation/widgets/run/stage_results_split_view.dart';

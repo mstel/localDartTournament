@@ -1,65 +1,83 @@
 import '../domain/tournament_models.dart';
+import '../domain/tournament_flow_priority_settings.dart';
 
 class TournamentFlowPriority {
   const TournamentFlowPriority({
     required this.prioritizedMatches,
+    required this.deprioritizedMatches,
+    required this.delayedGroups,
     required this.notices,
   });
 
-  static const playerMatchDeficitThreshold = 2;
-  static const groupMatchDeficitThreshold = 3;
+  static const defaultSettings = TournamentFlowPrioritySettings();
 
   final Set<GroupMatch> prioritizedMatches;
+  final Set<GroupMatch> deprioritizedMatches;
+  final Set<String> delayedGroups;
   final List<String> notices;
 
-  factory TournamentFlowPriority.forStage(TournamentRunStage? stage) {
+  factory TournamentFlowPriority.forStage(
+    TournamentRunStage? stage, {
+    TournamentFlowPrioritySettings settings = defaultSettings,
+  }) {
     if (stage is! GroupTournamentRunStage || stage.groups.isEmpty) {
-      return const TournamentFlowPriority(prioritizedMatches: {}, notices: []);
+      return const TournamentFlowPriority(
+        prioritizedMatches: {},
+        deprioritizedMatches: {},
+        delayedGroups: {},
+        notices: [],
+      );
     }
 
     final priorities = <GroupMatch>{};
+    final deprioritized = <GroupMatch>{};
+    final delayedGroups = <String>{};
     final notices = <String>[];
-    final groupPlayedCounts = [
-      for (final group in stage.groups) _playedMatches(group.matches),
+    final groupProgress = [
+      for (final group in stage.groups)
+        _GroupProgress(
+          played: _playedMatches(group.matches),
+          possible: _possibleMatches(group),
+        ),
     ];
-    final groupMatchTotals = [
-      for (final group in stage.groups) group.matches.length,
+    final referenceMatches = groupProgress
+        .map((progress) => progress.possible)
+        .reduce((a, b) => a > b ? a : b);
+    final leadingProgress = groupProgress
+        .map((progress) => progress.fraction)
+        .reduce((a, b) => a > b ? a : b);
+    // Keep the configured match threshold meaningful using the longest group schedule.
+    final groupDeficits = <int>[
+      for (final progress in groupProgress)
+        settings.usePercentageForGroups && referenceMatches > 0
+            ? ((leadingProgress - progress.fraction) * referenceMatches).round()
+            : groupProgress
+                      .map((item) => item.played)
+                      .reduce((a, b) => a > b ? a : b) -
+                  progress.played,
     ];
-    final mostPlayedGroup = groupPlayedCounts.reduce((a, b) => a > b ? a : b);
-    final leastPlayedGroup = groupPlayedCounts.reduce((a, b) => a < b ? a : b);
-    final groupDeficit = mostPlayedGroup - leastPlayedGroup;
-    final groupProgress = <double>[];
-    for (var index = 0; index < stage.groups.length; index++) {
-      final total = groupMatchTotals[index];
-      groupProgress.add(total == 0 ? 0.0 : groupPlayedCounts[index] / total);
-    }
-    final mostPlayedRatio = groupProgress.isEmpty ? 0.0 : groupProgress.reduce((a, b) => a > b ? a : b);
-    final lowestPlayedRatio = groupProgress.isEmpty ? 0.0 : groupProgress.reduce((a, b) => a < b ? a : b);
-    final shouldPrioritizeGroupLag =
-        groupDeficit >= groupMatchDeficitThreshold ||
-        (groupProgress.length > 1 && (mostPlayedRatio - lowestPlayedRatio) >= 0.5);
-    if (shouldPrioritizeGroupLag) {
+    final maximumGroupDeficit = groupDeficits.reduce((a, b) => a > b ? a : b);
+    if (maximumGroupDeficit >= settings.groupMatchDeficitThreshold) {
       final trailingGroups = <String>[];
       for (var index = 0; index < stage.groups.length; index++) {
-        final groupMatches = groupPlayedCounts[index];
-        final totalMatches = groupMatchTotals[index];
-        final ratio = totalMatches == 0 ? 0.0 : groupMatches / totalMatches;
-        final lagBehindLeader =
-            mostPlayedGroup - groupMatches >= groupMatchDeficitThreshold ||
-            (groupDeficit >= groupMatchDeficitThreshold &&
-                (mostPlayedRatio - ratio) >= 0.25);
-        if (!lagBehindLeader) {
+        if (groupDeficits[index] < settings.groupMatchDeficitThreshold) {
           continue;
         }
         final group = stage.groups[index];
+        delayedGroups.add(group.name);
         trailingGroups.add(group.name);
         priorities.addAll(group.matches.where(_isPrioritizable));
       }
       if (trailingGroups.isNotEmpty) {
         notices.add(
-          'Priorität: ${trailingGroups.join(', ')} liegen bei den gespielten Partien '
-          'mindestens $groupDeficit Partien zurück. Offene Partien dieser '
-          'Gruppen bevorzugt ansetzen.',
+          settings.usePercentageForGroups
+              ? 'Priorität: ${trailingGroups.join(', ')} liegen im Spielplanfortschritt '
+                    'mindestens ${settings.groupMatchDeficitThreshold} von '
+                    '$referenceMatches möglichen Partien zurück. Offene Partien '
+                    'dieser Gruppen bevorzugt ansetzen.'
+              : 'Priorität: ${trailingGroups.join(', ')} liegen bei den gespielten Partien '
+                    'mindestens $maximumGroupDeficit Partien zurück. Offene Partien '
+                    'dieser Gruppen bevorzugt ansetzen.',
         );
       }
     }
@@ -93,17 +111,22 @@ class TournamentFlowPriority {
       final laggingPlayers = playedByPlayer.entries
           .where(
             (entry) =>
-                mostPlayedPlayer - entry.value >= playerMatchDeficitThreshold,
+                mostPlayedPlayer - entry.value >=
+                settings.playerMatchDeficitThreshold,
           )
           .map((entry) => entry.key)
           .toSet();
       if (laggingPlayers.isEmpty) continue;
+      final leadingPlayers = playedByPlayer.entries
+          .where((entry) => entry.value == mostPlayedPlayer)
+          .map((entry) => entry.key)
+          .toSet();
 
       final names = laggingPlayers.map((id) => namesByPlayer[id] ?? id).toList()
         ..sort();
       playerNotices.add(
         'Priorität: ${names.join(', ')} haben in ${group.name} mindestens '
-        '$playerMatchDeficitThreshold Partien Rückstand. Offene Partien mit '
+        '${settings.playerMatchDeficitThreshold} Partien Rückstand. Offene Partien mit '
         'diesen Spielern bevorzugt ansetzen.',
       );
       for (final match in group.matches.where(_isPrioritizable)) {
@@ -114,6 +137,49 @@ class TournamentFlowPriority {
         };
         if (matchPlayers.any(laggingPlayers.contains)) {
           priorities.add(match);
+          if (matchPlayers.any(leadingPlayers.contains)) {
+            deprioritized.add(match);
+          }
+        }
+      }
+    }
+    // Group-level delays can prioritize every open match; keep matches involving
+    // a caught-up player behind opportunities for lagging players to catch up.
+    for (final group in stage.groups) {
+      final playedByPlayer = <String, int>{};
+      for (final player in group.players) {
+        for (final individual in player.individuals) {
+          playedByPlayer.putIfAbsent(
+            individual.profileId ?? individual.name,
+            () => 0,
+          );
+        }
+      }
+      for (final match in group.matches.where(_countsAsPlayed)) {
+        for (final player in [match.homePlayer, match.awayPlayer]) {
+          if (player == null) continue;
+          for (final individual in player.individuals) {
+            final id = individual.profileId ?? individual.name;
+            playedByPlayer.update(id, (count) => count + 1, ifAbsent: () => 1);
+          }
+        }
+      }
+      if (playedByPlayer.isEmpty) continue;
+      final highestPlayed = playedByPlayer.values.reduce(
+        (a, b) => a > b ? a : b,
+      );
+      final leadingPlayers = playedByPlayer.entries
+          .where((entry) => entry.value == highestPlayed)
+          .map((entry) => entry.key)
+          .toSet();
+      for (final match in group.matches.where(priorities.contains)) {
+        final matchPlayers = {
+          for (final player in [match.homePlayer, match.awayPlayer])
+            if (player != null)
+              ...player.individuals.map((p) => p.profileId ?? p.name),
+        };
+        if (matchPlayers.any(leadingPlayers.contains)) {
+          deprioritized.add(match);
         }
       }
     }
@@ -121,12 +187,17 @@ class TournamentFlowPriority {
 
     return TournamentFlowPriority(
       prioritizedMatches: Set.unmodifiable(priorities),
+      deprioritizedMatches: Set.unmodifiable(deprioritized),
+      delayedGroups: Set.unmodifiable(delayedGroups),
       notices: List.unmodifiable(notices),
     );
   }
 
   static int _playedMatches(Iterable<GroupMatch> matches) =>
       matches.where(_countsAsPlayed).length;
+
+  static int _possibleMatches(TournamentGroup group) =>
+      group.matches.where((match) => match.hasPlayers).length;
 
   static bool _countsAsPlayed(GroupMatch match) =>
       match.hasResult && match.hasPlayers && !match.withdrawalIgnored;
@@ -136,4 +207,13 @@ class TournamentFlowPriority {
       !match.isResolved &&
       match.startedAt == null &&
       match.boardNumber == null;
+}
+
+class _GroupProgress {
+  const _GroupProgress({required this.played, required this.possible});
+
+  final int played;
+  final int possible;
+
+  double get fraction => possible == 0 ? 0 : played / possible;
 }

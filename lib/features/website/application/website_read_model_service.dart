@@ -15,6 +15,7 @@ class WebsiteReadModelService {
 
   static const schemaVersion = 1;
   static const objectName = 'website-read-model.json';
+  static const tournamentIndexObjectName = 'website-tournament-index.json';
   final LocalAppDatabase _database;
   final TournamentStorage _tournamentStorage;
 
@@ -152,6 +153,88 @@ class WebsiteReadModelService {
           },
       ],
     };
+  }
+
+  static Map<String, dynamic> createTournamentIndex(
+    Map<String, dynamic> readModel,
+  ) {
+    final tournaments =
+        (readModel['completedTournaments'] as List<dynamic>? ?? const []);
+    return {
+      'schemaVersion': schemaVersion,
+      'generatedAt': readModel['generatedAt'],
+      'completedTournaments': [
+        for (final tournament in tournaments.cast<Map<String, dynamic>>())
+          {
+            'id': tournament['id'],
+            'name': tournament['name'],
+            'finishedAt': tournament['finishedAt'],
+            'startedAt': tournament['startedAt'],
+            'createdAt': tournament['createdAt'],
+            'playerCount':
+                (tournament['players'] as List<dynamic>? ?? const []).length,
+            'matchCount': _matchCount(tournament),
+            'mode': _mode(tournament),
+            'hasImportedArchive': tournament['importedArchive'] != null,
+          },
+      ],
+    };
+  }
+
+  static int _matchCount(Map<String, dynamic> tournament) {
+    var count = 0;
+    for (final stage in tournament['runStages'] as List<dynamic>? ?? const []) {
+      if (stage is! Map<String, dynamic>) continue;
+      if (stage['kind'] == 'groups') {
+        for (final group in stage['groups'] as List<dynamic>? ?? const []) {
+          if (group is Map<String, dynamic>) {
+            count += (group['matches'] as List<dynamic>? ?? const []).length;
+          }
+        }
+      } else if (stage['kind'] == 'single_knockout') {
+        for (final round in stage['rounds'] as List<dynamic>? ?? const []) {
+          if (round is List) count += round.length;
+        }
+        count +=
+            (stage['placementMatches'] as List<dynamic>? ?? const []).length;
+      }
+    }
+    if (tournament['leagueMatch'] != null) count++;
+    return count;
+  }
+
+  static String _mode(Map<String, dynamic> tournament) {
+    final archive = tournament['importedArchive'];
+    if (archive is Map<String, dynamic> && archive['mode'] is String) {
+      return archive['mode'] as String;
+    }
+    final stages = tournament['stages'] as List<dynamic>? ?? const [];
+    if (stages.isNotEmpty && stages.first is Map<String, dynamic>) {
+      final firstStage = stages.first as Map<String, dynamic>;
+      final type = firstStage['type'];
+      if (type is String) {
+        if (type == 'groups') {
+          final runStages =
+              tournament['runStages'] as List<dynamic>? ?? const [];
+          if (runStages.isNotEmpty && runStages.first is Map<String, dynamic>) {
+            final playType =
+                (runStages.first as Map<String, dynamic>)['groupPlayType'];
+            if (playType is String) return 'groups:$playType';
+          }
+        }
+        return type;
+      }
+    }
+    final runStages = tournament['runStages'] as List<dynamic>? ?? const [];
+    if (runStages.isNotEmpty && runStages.first is Map<String, dynamic>) {
+      final firstRunStage = runStages.first as Map<String, dynamic>;
+      final kind = firstRunStage['kind'];
+      if (kind == 'groups' && firstRunStage['groupPlayType'] is String) {
+        return 'groups:${firstRunStage['groupPlayType']}';
+      }
+      if (kind is String) return kind;
+    }
+    return 'unknown';
   }
 
   static List<CreatedTournament> completedTournaments(

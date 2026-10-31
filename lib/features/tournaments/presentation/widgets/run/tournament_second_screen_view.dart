@@ -11,16 +11,20 @@ import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../domain/engines/group_standings_engine.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../domain/engines/qualification_certainty.dart';
 import '../../../application/group_stage_preview_service.dart';
 import '../../../application/tournament_flow_priority.dart';
+import '../../../application/tournament_flow_priority_preferences.dart';
 import '../../../application/tournament_timing.dart';
-import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../application/group_advancement_forecast_service.dart';
 import '../../../domain/engines/group_advancement_forecast_engine.dart';
-import '../../../../statistics/domain/best_performance.dart';
+import 'standings_table.dart';
+import 'recommended_matches_table.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
+import 'recent_match_result_card.dart';
 
 /// Feste, responsive Info-Tafel für den Vereinsheim-TV (2. Bildschirm).
 class TournamentSecondScreenView extends StatefulWidget {
@@ -50,9 +54,12 @@ class _TournamentSecondScreenViewState
   bool _showInlineNextStagePreview = false;
   bool _showPrognosis = false;
   Timer? _clockTimer;
-  int _clockTicks = 0;
-  int _priorityNoticeIndex = 0;
-  int _nextMatchIndex = 0;
+  final _previewVerticalController = ScrollController();
+  final _previewHorizontalController = ScrollController();
+  final _recentResultsController = ScrollController();
+  TournamentFlowPrioritySettings _prioritySettings =
+      TournamentFlowPriority.defaultSettings;
+  String? _prioritySettingsError;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
@@ -62,17 +69,31 @@ class _TournamentSecondScreenViewState
   void initState() {
     super.initState();
     _showNextStagePreview = widget.showNextStagePreviewInitially;
+    unawaited(_loadPrioritySettings());
     _refreshEloChanges();
     _refreshAdvancementForecast();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() {
-          _clockTicks++;
-          if (_clockTicks % 8 == 0) _priorityNoticeIndex++;
-          if (_clockTicks % 5 == 0) _nextMatchIndex++;
-        });
+        setState(() {});
       }
     });
+  }
+
+  Future<void> _loadPrioritySettings() async {
+    try {
+      final settings = await TournamentFlowPriorityPreferences().load();
+      if (!mounted) return;
+      setState(() {
+        _prioritySettings = settings;
+        _prioritySettingsError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _prioritySettingsError =
+            'Hinweiseinstellungen konnten nicht geladen werden: $error',
+      );
+    }
   }
 
   @override
@@ -123,6 +144,9 @@ class _TournamentSecondScreenViewState
   @override
   void dispose() {
     _clockTimer?.cancel();
+    _previewVerticalController.dispose();
+    _previewHorizontalController.dispose();
+    _recentResultsController.dispose();
     super.dispose();
   }
 
@@ -163,11 +187,26 @@ class _TournamentSecondScreenViewState
 
   List<GroupMatch> _matchesOf(TournamentRunStage? stage) {
     if (stage is GroupTournamentRunStage) {
-      return stage.groups.expand((g) => g.matches).toList();
+      return stage.groups.expand(_matchesOfGroup).toList();
     } else if (stage is KnockoutTournamentRunStage) {
       return [...stage.rounds.expand((r) => r), ...stage.placementMatches];
     }
     return [];
+  }
+
+  List<GroupMatch> _matchesOfGroup(TournamentGroup group) {
+    if (group.knockoutRounds.isEmpty) return group.matches;
+    return [
+      ...group.knockoutRounds.expand((round) => round),
+      ...group.placementMatches,
+      ...group.matches.where((match) => match.isDecider),
+    ];
+  }
+
+  int _countMatchesForProgress(TournamentRunStage stage) {
+    final matches = _matchesOf(stage);
+    if (stage is KnockoutTournamentRunStage) return matches.length;
+    return matches.where((match) => match.hasPlayers).length;
   }
 
   @override
@@ -245,7 +284,7 @@ class _TournamentSecondScreenViewState
                     ),
                   ),
                   Text(
-                    '${t.name} · ${activeStage?.name ?? "Turnier"}',
+                    t.name,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -301,8 +340,36 @@ class _TournamentSecondScreenViewState
       builder: (context, constraints) {
         final wide =
             constraints.maxWidth >= 1000 && constraints.maxHeight >= 620;
-        if (!wide) {
-          return SingleChildScrollView(
+        final allTournamentMatches = TournamentTiming.matches(t);
+        final playedCount = allTournamentMatches
+            .where((match) => match.hasPlayers && match.hasResult)
+            .length;
+        final totalMatchCount = t.runStages.isEmpty
+            ? allTournamentMatches.where((match) => match.hasPlayers).length
+            : t.runStages.fold(
+                0,
+                (total, stage) => total + _countMatchesForProgress(stage),
+              );
+        final stageMatchCounts = activeStage == null
+            ? null
+            : _matchesOf(activeStage);
+        final stagePlayedCount = stageMatchCounts
+            ?.where((match) => match.hasResult)
+            .length;
+        final stageTotalCount = activeStage == null
+            ? null
+            : _countMatchesForProgress(activeStage);
+
+        Widget content;
+        if (activeStage is KnockoutTournamentRunStage) {
+          content = _buildBracketPreview(
+            t,
+            activeStage,
+            activeIndex,
+            isActiveStage: true,
+          );
+        } else if (!wide) {
+          content = SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -321,83 +388,119 @@ class _TournamentSecondScreenViewState
                   expand: false,
                 ),
                 const SizedBox(height: 16),
-                _buildProgressAndBestPerformancesPanel(
-                  context: context,
-                  t: t,
-                  expand: false,
-                ),
-                const SizedBox(height: 16),
                 _buildStandingsAndPreviewControl(
                   context,
                   t,
                   activeIndex,
                   activeStage,
-                  timing: timing,
                   expand: false,
                 ),
               ],
             ),
           );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 6,
-              child: Column(
+        } else {
+          content = Column(
+            children: [
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 6,
+                      child: _buildBoardsAndPriorityPanel(
+                        context,
+                        t,
+                        activeIndex,
+                        activeStage,
+                        expand: true,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 5,
+                      child: _buildStandingsAndPreviewControl(
+                        context,
+                        t,
+                        activeIndex,
+                        activeStage,
+                        expand: true,
+                        showPreviewButton: false,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    flex: 5,
-                    child: _buildBoardsAndPriorityPanel(
-                      context,
-                      t,
-                      activeIndex,
-                      activeStage,
-                      expand: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    flex: 4,
+                    flex: 6,
                     child: _buildRecentMatchesAndEloPanel(
                       context,
                       t,
                       playedMatches,
-                      expand: true,
+                      expand: false,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(width: 16),
                   Expanded(
                     flex: 5,
-                    child: _buildProgressAndBestPerformancesPanel(
-                      context: context,
-                      t: t,
-                      expand: true,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              flex: 5,
-              child: Column(
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: _buildStandingsAndPreviewControl(
+                    child: _buildOverviewPreviewAction(
                       context,
                       t,
                       activeIndex,
                       activeStage,
-                      timing: timing,
-                      expand: true,
                     ),
                   ),
                 ],
               ),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
+                  Text(
+                    'Turnieruhr: ${_formatDuration(timing.elapsed)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    '$playedCount/$totalMatchCount gespielt',
+                    style: const TextStyle(
+                      color: Color(0xFF70E0BA),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (stageMatchCounts != null &&
+                      activeStage is KnockoutTournamentRunStage)
+                    Text(
+                      '${activeStage.name}: '
+                      '$stagePlayedCount/$stageTotalCount',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  if (timing.forecast != null)
+                    Text(
+                      'Ende ca. ${_formatClockTime(timing.forecast!)}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                ],
+              ),
             ),
+            const SizedBox(height: 8),
+            Expanded(child: content),
           ],
         );
       },
@@ -409,8 +512,8 @@ class _TournamentSecondScreenViewState
     CreatedTournament t,
     int activeIndex,
     TournamentRunStage? stage, {
-    required TimingSnapshot timing,
     bool expand = true,
+    bool showPreviewButton = true,
   }) {
     final hasNextKnockout = _nextKnockoutStage(t, activeIndex, stage) != null;
     final showInlinePreview = _showInlineNextStagePreview && hasNextKnockout;
@@ -428,29 +531,6 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            children: [
-              const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
-              Text(
-                'Turnieruhr: ${_formatDuration(timing.elapsed)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              if (timing.forecast != null)
-                Text(
-                  'Voraussichtliches Ende: ${_formatClockTime(timing.forecast!)}',
-                  style: const TextStyle(color: Colors.white),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 6),
         SegmentedButton<bool>(
           segments: const [
             ButtonSegment<bool>(
@@ -480,7 +560,7 @@ class _TournamentSecondScreenViewState
           )
         else
           panel,
-        if (hasNextKnockout && !showInlinePreview) ...[
+        if (hasNextKnockout && !showInlinePreview && showPreviewButton) ...[
           const SizedBox(height: 8),
           FilledButton.icon(
             onPressed: () => setState(() => _showInlineNextStagePreview = true),
@@ -494,6 +574,35 @@ class _TournamentSecondScreenViewState
             child: _buildInlineNextStagePreview(context, t, activeIndex, stage),
           ),
       ],
+    );
+  }
+
+  Widget _buildOverviewPreviewAction(
+    BuildContext context,
+    CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? stage,
+  ) {
+    final hasNextKnockout =
+        _nextKnockoutStage(tournament, activeIndex, stage) != null;
+    if (!hasNextKnockout || _showInlineNextStagePreview) {
+      return const SizedBox.shrink();
+    }
+    return Align(
+      alignment: Alignment.centerRight,
+      child: FilledButton.icon(
+        onPressed: () => setState(
+          () => _showInlineNextStagePreview = !_showInlineNextStagePreview,
+        ),
+        icon: Icon(
+          _showInlineNextStagePreview ? Icons.expand_less : Icons.account_tree,
+        ),
+        label: Text(
+          _showInlineNextStagePreview
+              ? 'Vorschau schließen'
+              : 'Vorschau für die nächste Etappe',
+        ),
+      ),
     );
   }
 
@@ -557,7 +666,14 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(child: _buildBracketPreview(t, stage, stageIndex)),
+        Expanded(
+          child: _buildBracketPreview(
+            t,
+            stage,
+            stageIndex,
+            isActiveStage: isViewingKnockout,
+          ),
+        ),
         const SizedBox(height: 8),
         FilledButton.icon(
           onPressed: _returnFromPreview,
@@ -595,10 +711,12 @@ class _TournamentSecondScreenViewState
   Widget _buildBracketPreview(
     CreatedTournament t,
     KnockoutTournamentRunStage stage,
-    int? stageIndex,
-  ) {
+    int? stageIndex, {
+    bool isActiveStage = false,
+  }) {
     final groupStage =
-        stageIndex != null &&
+        !isActiveStage &&
+            stageIndex != null &&
             stageIndex > 0 &&
             t.runStages[stageIndex - 1] is GroupTournamentRunStage
         ? t.runStages[stageIndex - 1] as GroupTournamentRunStage
@@ -628,12 +746,42 @@ class _TournamentSecondScreenViewState
         groupStage != null &&
         const GroupStagePreviewService().isStageSet(groupStage);
 
+    final hasGroupStageResults =
+        groupStage != null &&
+        groupStage.groups.any(
+          (group) => group.matches.any((match) => match.countsForStatistics),
+        );
+
     String playerLabel(
       TournamentPlayer? player,
       int roundIndex,
       int matchIndex, {
       required bool home,
     }) {
+      if (isActiveStage) {
+        if (player != null && !player.name.startsWith('Qualifikant ')) {
+          return player.shortDisplayName;
+        }
+        if (roundIndex == 0) return 'Offen';
+        final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
+        return 'Gewinner Spiel $sourceMatchNumber';
+      }
+      if (!hasGroupStageResults) {
+        if (roundIndex == 0) {
+          return 'Qualifikant offen';
+        }
+        if (roundIndex > 0) {
+          final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
+          if (player == null || player.name.startsWith('Qualifikant ')) {
+            return 'Gewinner Spiel $sourceMatchNumber';
+          }
+          return player.name;
+        }
+        if (player == null || player.name.startsWith('Qualifikant ')) {
+          return 'Qualifikant offen';
+        }
+        return player.name;
+      }
       if (roundIndex > 0) {
         final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
         return player?.name ?? 'Gewinner Spiel $sourceMatchNumber';
@@ -647,13 +795,37 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          '${previewStage.name} · Turnierbaum-Vorschau',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                isActiveStage
+                    ? '${previewStage.name} · Turnierbaum'
+                    : '${previewStage.name} · Turnierbaum-Vorschau',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            if (!widget.showNextStagePreviewInitially)
+              IconButton(
+                tooltip: 'KO-Vorschau im Vollbild öffnen',
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (context) => Dialog.fullscreen(
+                    child: TournamentSecondScreenView(
+                      tournament: t,
+                      isStandaloneWindow: true,
+                      showNextStagePreviewInitially: true,
+                      onClose: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.fullscreen, color: Color(0xFF70E0BA)),
+              ),
+          ],
         ),
         if (groupStage != null &&
             groupStage.groups.any(
@@ -690,108 +862,143 @@ class _TournamentSecondScreenViewState
                     final scale =
                         MediaQuery.textScalerOf(context).scale(14) / 14;
                     final minimumBoardHeight =
-                        rounds.first.length * 96 * scale + roundHeaderHeight;
+                        rounds.first.length * 88 * scale + roundHeaderHeight;
                     final boardHeight = max(
-                      constraints.maxHeight,
+                      constraints.maxHeight + 1,
                       minimumBoardHeight,
                     );
 
-                    return SingleChildScrollView(
+                    return Scrollbar(
+                      controller: _previewVerticalController,
+                      thumbVisibility: true,
                       child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
+                        key: const ValueKey('knockout-preview-vertical-scroll'),
+                        controller: _previewVerticalController,
                         child: SizedBox(
-                          width: boardWidth,
                           height: boardHeight,
-                          child: Stack(
-                            children: [
-                              Positioned.fill(
-                                child: CustomPaint(
-                                  painter: _KnockoutPreviewConnectorPainter(
-                                    roundCounts: [
-                                      for (final round in rounds) round.length,
-                                    ],
-                                    roundWidth: roundWidth,
-                                    roundGap: roundGap,
-                                    topOffset: roundHeaderHeight,
-                                  ),
-                                ),
+                          child: Scrollbar(
+                            controller: _previewHorizontalController,
+                            thumbVisibility: true,
+                            notificationPredicate: (notification) =>
+                                notification.metrics.axis == Axis.horizontal,
+                            child: SingleChildScrollView(
+                              key: const ValueKey(
+                                'knockout-preview-horizontal-scroll',
                               ),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (
-                                    var roundIndex = 0;
-                                    roundIndex < rounds.length;
-                                    roundIndex++
-                                  )
-                                    Container(
-                                      width: roundWidth,
-                                      margin: EdgeInsets.only(
-                                        right: roundIndex < rounds.length - 1
-                                            ? roundGap
-                                            : 0,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          SizedBox(
-                                            height: roundHeaderHeight,
-                                            child: Align(
-                                              alignment: Alignment.topLeft,
-                                              child: Text(
-                                                knockoutRoundName(
-                                                  roundIndex,
-                                                  rounds.length,
-                                                ),
-                                                style: const TextStyle(
-                                                  color: Color(0xFF70E0BA),
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 15,
-                                                ),
-                                              ),
+                              controller: _previewHorizontalController,
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: boardWidth,
+                                height: boardHeight,
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: CustomPaint(
+                                        painter:
+                                            _KnockoutPreviewConnectorPainter(
+                                              roundCounts: [
+                                                for (final round in rounds)
+                                                  round.length,
+                                              ],
+                                              roundWidth: roundWidth,
+                                              roundGap: roundGap,
+                                              topOffset: roundHeaderHeight,
                                             ),
-                                          ),
-                                          Expanded(
+                                      ),
+                                    ),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        for (
+                                          var roundIndex = 0;
+                                          roundIndex < rounds.length;
+                                          roundIndex++
+                                        )
+                                          Container(
+                                            width: roundWidth,
+                                            margin: EdgeInsets.only(
+                                              right:
+                                                  roundIndex < rounds.length - 1
+                                                  ? roundGap
+                                                  : 0,
+                                            ),
                                             child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.spaceEvenly,
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.stretch,
                                               children: [
-                                                for (
-                                                  var matchIndex = 0;
-                                                  matchIndex <
-                                                      rounds[roundIndex].length;
-                                                  matchIndex++
-                                                )
-                                                  _buildBracketMatchPreview(
-                                                    rounds[roundIndex][matchIndex],
-                                                    homeLabel: playerLabel(
-                                                      rounds[roundIndex][matchIndex]
-                                                          .homePlayer,
-                                                      roundIndex,
-                                                      matchIndex,
-                                                      home: true,
+                                                SizedBox(
+                                                  height: roundHeaderHeight,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.topLeft,
+                                                    child: Text(
+                                                      knockoutRoundName(
+                                                        roundIndex,
+                                                        rounds.length,
+                                                      ),
+                                                      style: const TextStyle(
+                                                        color: Color(
+                                                          0xFF70E0BA,
+                                                        ),
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 15,
+                                                      ),
                                                     ),
-                                                    awayLabel: playerLabel(
-                                                      rounds[roundIndex][matchIndex]
-                                                          .awayPlayer,
-                                                      roundIndex,
-                                                      matchIndex,
-                                                      home: false,
-                                                    ),
-                                                    matchNumber: matchIndex + 1,
                                                   ),
+                                                ),
+                                                Expanded(
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceEvenly,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .stretch,
+                                                    children: [
+                                                      for (
+                                                        var matchIndex = 0;
+                                                        matchIndex <
+                                                            rounds[roundIndex]
+                                                                .length;
+                                                        matchIndex++
+                                                      )
+                                                        _buildBracketMatchPreview(
+                                                          rounds[roundIndex][matchIndex],
+                                                          roundIndex:
+                                                              roundIndex,
+                                                          matchIndex:
+                                                              matchIndex,
+                                                          homeLabel: playerLabel(
+                                                            rounds[roundIndex][matchIndex]
+                                                                .homePlayer,
+                                                            roundIndex,
+                                                            matchIndex,
+                                                            home: true,
+                                                          ),
+                                                          awayLabel: playerLabel(
+                                                            rounds[roundIndex][matchIndex]
+                                                                .awayPlayer,
+                                                            roundIndex,
+                                                            matchIndex,
+                                                            home: false,
+                                                          ),
+                                                          matchNumber:
+                                                              matchIndex + 1,
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ],
                                             ),
                                           ),
-                                        ],
-                                      ),
+                                      ],
                                     ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -805,6 +1012,8 @@ class _TournamentSecondScreenViewState
 
   Widget _buildBracketMatchPreview(
     GroupMatch match, {
+    required int roundIndex,
+    required int matchIndex,
     required String homeLabel,
     required String awayLabel,
     required int matchNumber,
@@ -814,6 +1023,7 @@ class _TournamentSecondScreenViewState
     final awayIsCertain =
         awayLabel.contains('vorläufig') || awayLabel.contains('gesetzt');
     return Container(
+      key: ValueKey('knockout-preview-match-$roundIndex-$matchIndex'),
       padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
         color: const Color(0xFF14202B),
@@ -978,7 +1188,7 @@ class _TournamentSecondScreenViewState
     return Container(
       constraints: BoxConstraints(
         minWidth: full ? 280 : 220,
-        maxWidth: full ? 420 : 340,
+        maxWidth: full ? double.infinity : 340,
       ),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -1004,7 +1214,7 @@ class _TournamentSecondScreenViewState
                 ),
               ),
               Text(
-                '$playedMatches/$totalMatches gespielt',
+                '$playedMatches/$totalMatches',
                 style: const TextStyle(
                   fontSize: 11,
                   color: Color(0xFF70E0BA),
@@ -1018,84 +1228,14 @@ class _TournamentSecondScreenViewState
             ],
           ),
           const Divider(color: Color(0xFF263D52), height: 12),
-          for (var r = 0; r < standings.length; r++)
-            Builder(
-              builder: (context) {
-                final standing = standings[r];
-                final place = r + 1;
-                final isQualified = place <= fixedPlaces;
-                final isCertain = const QualificationCertainty().isCertain(
-                  standing: standing,
-                  place: place,
-                  fixedPlaces: fixedPlaces,
-                  standings: standings,
-                  matches: group.matches,
-                  tieBreakers: tieBreakers,
-                );
-
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 4,
-                    horizontal: 6,
-                  ),
-                  margin: const EdgeInsets.symmetric(vertical: 1),
-                  decoration: BoxDecoration(
-                    color: isCertain
-                        ? const Color(0xFF144D34)
-                        : isQualified
-                        ? const Color(0xFF163828)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        '$place.',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isQualified
-                              ? const Color(0xFF86EFAC)
-                              : Colors.white70,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          standing.player.name,
-                          style: TextStyle(
-                            fontWeight: isQualified
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: Colors.white,
-                            fontSize: 13,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${standing.legsFor}:${standing.legsAgainst}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white60,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${standing.points} P',
-                        textAlign: TextAlign.end,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF70E0BA),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+          StandingsTable(
+            standings: standings,
+            group: group,
+            groupNumber: groupNumber,
+            qualificationPlan: qualificationPlan,
+            tieBreakers: tieBreakers,
+            compact: full,
+          ),
         ],
       ),
     );
@@ -1390,304 +1530,114 @@ class _TournamentSecondScreenViewState
     TournamentRunStage? stage, {
     bool expand = true,
   }) {
-    final schedule = const OrderOfPlayController().plan(t, activeIndex);
-    final flowPriority = TournamentFlowPriority.forStage(stage);
-    final matches = _matchesOf(
+    final flowPriority = TournamentFlowPriority.forStage(
       stage,
-    ).where((m) => m.hasPlayers && !m.isResolved).toList();
-    final plannedOrder = {
-      for (var index = 0; index < schedule.planned.length; index++)
-        schedule.planned[index].entry.match: index,
-    };
-    matches.sort((a, b) {
-      final aIsPriority = flowPriority.prioritizedMatches.contains(a);
-      final bIsPriority = flowPriority.prioritizedMatches.contains(b);
-      final priority = aIsPriority == bIsPriority
-          ? 0
-          : aIsPriority
-          ? -1
-          : 1;
-      if (priority != 0) return priority;
-      return (plannedOrder[a] ?? 1 << 30).compareTo(plannedOrder[b] ?? 1 << 30);
-    });
-    final prioritizedMatches = matches
-        .where(flowPriority.prioritizedMatches.contains)
-        .toList();
-    final otherMatches = matches
-        .where((match) => !flowPriority.prioritizedMatches.contains(match))
-        .toList();
-    final suggestions = <GroupMatch>[];
-    final prioritySlots = min(9, prioritizedMatches.length);
-    if (prioritizedMatches.length > 9) {
-      for (var index = 0; index < 9; index++) {
-        suggestions.add(
-          prioritizedMatches[(_nextMatchIndex + index) %
-              prioritizedMatches.length],
-        );
-      }
-    } else {
-      suggestions.addAll(prioritizedMatches);
-      final otherSlots = min(9 - prioritySlots, otherMatches.length);
-      if (otherSlots > 0) {
-        for (var index = 0; index < otherSlots; index++) {
-          suggestions.add(
-            otherMatches[(_nextMatchIndex + index) % otherMatches.length],
-          );
-        }
-      }
-    }
-    final visibleSuggestions = suggestions;
-    final priorityNotice = flowPriority.notices.isEmpty
-        ? null
-        : flowPriority.notices[_priorityNoticeIndex %
-              flowPriority.notices.length];
-    final priorityBanner = priorityNotice == null
-        ? null
-        : Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: TournamentDisplayPalette.card,
-              border: Border.all(color: TournamentDisplayPalette.border),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.priority_high,
-                  size: 18,
-                  color: TournamentDisplayPalette.accent,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    priorityNotice,
-                    style: const TextStyle(
-                      color: TournamentDisplayPalette.text,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
+      settings: _prioritySettings,
+    );
+    final recommendedGroups = stage is GroupTournamentRunStage
+        ? [
+            for (final group in stage.groups)
+              RecommendedMatchGroup(
+                name: group.name,
+                matches: _matchesOfGroup(group),
+                isDelayed: flowPriority.delayedGroups.contains(group.name),
+                playedMatches: _matchesOfGroup(
+                  group,
+                ).where((match) => match.hasPlayers && match.hasResult).length,
+                totalMatches: _matchesOfGroup(
+                  group,
+                ).where((match) => match.hasPlayers).length,
+              ),
+          ]
+        : [
+            if (stage != null)
+              RecommendedMatchGroup(
+                name: stage.name,
+                matches: _matchesOf(stage),
+                playedMatches: _matchesOf(
+                  stage,
+                ).where((match) => match.hasResult).length,
+                totalMatches: _countMatchesForProgress(stage),
+              ),
+          ];
+    final hasOpenMatches = recommendedGroups.any(
+      (group) =>
+          group.matches.any((match) => match.hasPlayers && !match.isResolved),
+    );
+    final recommendedContent = SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final notice in flowPriority.notices)
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: TournamentDisplayPalette.cardEmphasis,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: TournamentDisplayPalette.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.priority_high,
+                    size: 18,
+                    color: TournamentDisplayPalette.accent,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      notice,
+                      style: const TextStyle(
+                        color: TournamentDisplayPalette.text,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          );
-
-    final matchTiles = LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 10.0;
-        final columns = constraints.maxWidth >= 740
-            ? 3
-            : constraints.maxWidth >= 460
-            ? 2
-            : 1;
-        final tileWidth =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (var i = 0; i < visibleSuggestions.length; i++)
-              _buildMatchTile(
-                context,
-                visibleSuggestions[i],
-                width: tileWidth,
-                isPreferred: flowPriority.prioritizedMatches.contains(
-                  visibleSuggestions[i],
-                ),
+                ],
               ),
-          ],
-        );
-      },
+            ),
+          if (_prioritySettingsError case final error?)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(error, style: const TextStyle(color: Colors.amber)),
+            ),
+          RecommendedMatchesTable(
+            groups: recommendedGroups,
+            prioritizedMatches: flowPriority.prioritizedMatches,
+            deprioritizedMatches: flowPriority.deprioritizedMatches,
+            emptyMessage: 'Keine offenen Partien in dieser Etappe.',
+            dense: true,
+          ),
+        ],
+      ),
     );
-    final matchesContent = matches.isEmpty
-        ? const Center(
-            child: Text(
-              'Keine offenen Partien in dieser Etappe.',
-              style: TextStyle(color: Colors.white70),
-            ),
-          )
-        : AnimatedSwitcher(
-            duration: const Duration(milliseconds: 350),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, animation) =>
-                FadeTransition(opacity: animation, child: child),
-            child: KeyedSubtree(
-              key: ValueKey(
-                visibleSuggestions
-                    .map(
-                      (match) =>
-                          '${match.label}:${match.homePlayer?.profileId ?? match.homePlayer?.name}:'
-                          '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
-                    )
-                    .join('|'),
-              ),
-              child: matchTiles,
-            ),
-          );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.sports_esports,
-              size: 20,
-              color: TournamentDisplayPalette.accent,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                'Empfohlene Partien (${visibleSuggestions.length} Vorschläge)',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
+        const Text(
+          'Spielplan',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: Colors.white,
+          ),
         ),
         const SizedBox(height: 8),
         if (expand)
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (priorityBanner != null) ...[
-                    priorityBanner,
-                    const SizedBox(height: 10),
-                  ],
-                  matchesContent,
-                ],
-              ),
-            ),
-          )
+          Expanded(child: recommendedContent)
         else
-          SizedBox(
-            height: 240,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (priorityBanner != null) ...[
-                    priorityBanner,
-                    const SizedBox(height: 10),
-                  ],
-                  matchesContent,
-                ],
-              ),
+          SizedBox(height: 240, child: recommendedContent),
+        if (!hasOpenMatches && expand)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'Keine offenen Partien in dieser Etappe.',
+              style: TextStyle(color: Colors.white70),
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildMatchTile(
-    BuildContext context,
-    GroupMatch match, {
-    required double width,
-    required bool isPreferred,
-  }) {
-    final isRunning = match.boardNumber != null;
-
-    return Container(
-      width: width,
-      key: ValueKey(
-        'second-screen-match-${match.round}-'
-        '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
-        '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
-      ),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isPreferred
-            ? TournamentDisplayPalette.cardEmphasis
-            : TournamentDisplayPalette.card,
-        border: Border.all(
-          color: isPreferred
-              ? TournamentDisplayPalette.accent.withAlpha(180)
-              : isRunning
-              ? TournamentDisplayPalette.accent
-              : TournamentDisplayPalette.border.withAlpha(150),
-          width: isPreferred || isRunning ? 1.5 : 1,
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isRunning
-                      ? TournamentDisplayPalette.cardEmphasis
-                      : TournamentDisplayPalette.background,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  isRunning
-                      ? 'Board ${match.boardNumber} (Läuft)'
-                      : 'Nächste Partie',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: isRunning
-                        ? TournamentDisplayPalette.accent
-                        : TournamentDisplayPalette.mutedText,
-                  ),
-                ),
-              ),
-              if (match.label != null && match.label!.isNotEmpty)
-                Text(
-                  match.label!,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: TournamentDisplayPalette.mutedText,
-                  ),
-                ),
-              if (isPreferred)
-                const Wrap(
-                  spacing: 2,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.priority_high,
-                      color: TournamentDisplayPalette.accent,
-                      size: 18,
-                    ),
-                    Text(
-                      '!',
-                      style: TextStyle(
-                        color: TournamentDisplayPalette.accent,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${match.homePlayer?.shortDisplayName ?? "Offen"} - '
-            '${match.awayPlayer?.shortDisplayName ?? "Offen"}',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: TournamentDisplayPalette.text,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
     );
   }
 
@@ -1741,50 +1691,58 @@ class _TournamentSecondScreenViewState
                 FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
                   future: _eloChanges,
                   builder: (context, snapshot) {
+                    const visibleItemCount = 2;
                     final itemExtent =
-                        72 * MediaQuery.textScalerOf(context).scale(1);
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        final columns = constraints.maxWidth >= 560 ? 2 : 1;
-                        return SizedBox(
-                          height: itemExtent * 2 + 8,
-                          child: snapshot.hasError
-                              ? const Center(
-                                  child: Text(
-                                    'Ranglistenänderungen konnten nicht geladen werden.',
-                                    style: TextStyle(color: Colors.amber),
+                        66 * MediaQuery.textScalerOf(context).scale(1);
+                    return SizedBox(
+                      key: const ValueKey('recent-results-scroll'),
+                      height: recent.isEmpty
+                          ? itemExtent
+                          : itemExtent *
+                                recent.length.clamp(1, visibleItemCount),
+                      child: snapshot.hasError
+                          ? const Center(
+                              child: Text(
+                                'Ranglistenänderungen konnten nicht geladen werden.',
+                                style: TextStyle(color: Colors.amber),
+                              ),
+                            )
+                          : recent.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Noch keine beendeten Partien vorhanden.',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            )
+                          : Scrollbar(
+                              controller: _recentResultsController,
+                              thumbVisibility: recent.length > visibleItemCount,
+                              child: ListView.separated(
+                                controller: _recentResultsController,
+                                padding: EdgeInsets.zero,
+                                itemCount: recent.length,
+                                separatorBuilder: (context, index) =>
+                                    const Divider(
+                                      height: 1,
+                                      color: TournamentDisplayPalette.border,
+                                    ),
+                                itemBuilder: (context, index) => ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: itemExtent,
                                   ),
-                                )
-                              : recent.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    'Noch keine beendeten Partien vorhanden.',
-                                    style: TextStyle(color: Colors.white70),
+                                  child: _buildRecentMatchRow(
+                                    context,
+                                    t,
+                                    recent[index],
+                                    _changesForMatch(
+                                      t,
+                                      recent[index],
+                                      snapshot.data,
+                                    ),
                                   ),
-                                )
-                              : GridView.builder(
-                                  key: const ValueKey('recent-results-scroll'),
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: columns,
-                                        mainAxisExtent: itemExtent,
-                                        crossAxisSpacing: 8,
-                                        mainAxisSpacing: 8,
-                                      ),
-                                  itemCount: recent.length,
-                                  itemBuilder: (context, index) =>
-                                      _buildRecentMatchRow(
-                                        context,
-                                        recent[index],
-                                        _changesForMatch(
-                                          t,
-                                          recent[index],
-                                          snapshot.data,
-                                        ),
-                                      ),
                                 ),
-                        );
-                      },
+                              ),
+                            ),
                     );
                   },
                 );
@@ -1816,395 +1774,23 @@ class _TournamentSecondScreenViewState
 
   Widget _buildRecentMatchRow(
     BuildContext context,
+    CreatedTournament tournament,
     GroupMatch m,
     List<TournamentMatchEloChange> eloChanges,
-  ) {
-    return Container(
-      key: ValueKey(
-        'recent-result-${m.round}-'
-        '${m.homePlayer?.profileId ?? m.homePlayer?.name}-'
-        '${m.awayPlayer?.profileId ?? m.awayPlayer?.name}',
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: TournamentDisplayPalette.card,
-        border: Border.all(
-          color: TournamentDisplayPalette.border.withAlpha(150),
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${m.homePlayer?.shortDisplayName ?? "?"} - '
-            '${m.awayPlayer?.shortDisplayName ?? "?"}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontSize: 14,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: TournamentDisplayPalette.cardEmphasis,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: TournamentDisplayPalette.border),
-                  ),
-                  child: Text(
-                    '${m.homeScore ?? 0} : ${m.awayScore ?? 0}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: TournamentDisplayPalette.accent,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                for (final change in eloChanges)
-                  Container(
-                    margin: const EdgeInsets.only(left: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: TournamentDisplayPalette.cardEmphasis,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: TournamentDisplayPalette.border.withAlpha(150),
-                      ),
-                    ),
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(text: '${change.rankingName}: '),
-                          _eloDeltaSpan(change.homeDelta),
-                          const TextSpan(text: ' / '),
-                          _eloDeltaSpan(change.awayDelta),
-                          const TextSpan(text: ' Elo'),
-                        ],
-                      ),
-                      style: TextStyle(
-                        color: TournamentDisplayPalette.mutedText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _signedDelta(int delta) => delta > 0 ? '+$delta' : '$delta';
-
-  TextSpan _eloDeltaSpan(int? delta) {
-    final color = delta == null || delta == 0
-        ? const Color(0xFFB0BEC5)
-        : delta > 0
-        ? const Color(0xFF86EFAC)
-        : const Color(0xFFEF9A9A);
-    return TextSpan(
-      text: delta == null ? '–' : _signedDelta(delta),
-      style: TextStyle(color: color),
-    );
-  }
-
-  // ------------------------------------------
-  // SLIDE 4 HELPER: Etappenfortschritt & Bestleistungen
-  // ------------------------------------------
-  Widget _buildProgressAndBestPerformancesPanel({
-    required BuildContext context,
-    required CreatedTournament t,
-    bool expand = true,
-  }) {
-    // Gather best performances from all matches
-    final allPerformances = <BestPerformance>[];
-    for (final stage in t.runStages) {
-      for (final m in _matchesOf(stage)) {
-        allPerformances.addAll(m.bestPerformances);
-      }
-    }
-
-    final oneEighties = allPerformances
-        .where((p) => p.type == BestPerformanceType.score180)
-        .toList();
-    final oneSeventies = allPerformances
-        .where((p) => p.type == BestPerformanceType.score170)
-        .toList();
-    final highFinishes = allPerformances
-        .where((p) => p.type == BestPerformanceType.highFinish)
-        .toList();
-    final shortLegs = allPerformances
-        .where((p) => p.type == BestPerformanceType.shortLeg)
-        .toList();
-    final bestHighFinish = highFinishes.isEmpty
-        ? null
-        : highFinishes.reduce(
-            (left, right) =>
-                (left.value ?? 0) >= (right.value ?? 0) ? left : right,
-          );
-    final bestShortLeg = shortLegs.isEmpty
-        ? null
-        : shortLegs.reduce(
-            (left, right) =>
-                (left.value ?? 99) <= (right.value ?? 99) ? left : right,
-          );
-    String namesFor(List<BestPerformance> performances) => performances
-        .map((performance) => performance.playerName.trim())
-        .where((name) => name.isNotEmpty)
-        .toSet()
-        .take(3)
-        .join(', ');
-
-    final breakdownContent = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text(
-          'Fortschritt nach Etappen',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-            color: Colors.white70,
-          ),
-        ),
-        const SizedBox(height: 6),
-        for (var i = 0; i < t.runStages.length; i++)
-          ..._buildStageProgressItems(t.runStages[i], i),
-
-        const SizedBox(height: 10),
-        // Best Performances section
-        const Text(
-          'Bestleistungen & Highlights:',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-            color: Colors.white70,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF14202B),
-            border: Border.all(color: const Color(0xFF263D52)),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            children: [
-              Wrap(
-                alignment: WrapAlignment.spaceAround,
-                spacing: 16,
-                runSpacing: 12,
-                children: [
-                  _buildHighlightItem(
-                    '170+',
-                    '${oneSeventies.length}x geworfen',
-                    player: namesFor(oneSeventies),
-                  ),
-                  _buildHighlightItem(
-                    '180er',
-                    '${oneEighties.length}x geworfen',
-                    player: namesFor(oneEighties),
-                  ),
-                  _buildHighlightItem(
-                    'High Finish',
-                    bestHighFinish == null
-                        ? '–'
-                        : '${bestHighFinish.value ?? 100} Punkte',
-                    player: bestHighFinish?.playerName,
-                  ),
-                  _buildHighlightItem(
-                    'Bestes Shortleg',
-                    bestShortLeg == null
-                        ? '–'
-                        : '${bestShortLeg.value ?? 18} Darts',
-                    player: bestShortLeg?.playerName,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Stages breakdown
-        if (expand)
-          Expanded(child: SingleChildScrollView(child: breakdownContent))
-        else
-          breakdownContent,
-      ],
-    );
-  }
-
-  List<Widget> _buildStageProgressItems(TournamentRunStage stage, int index) {
-    return [
-      Builder(
-        builder: (context) {
-          final matches = _matchesOf(
-            stage,
-          ).where((match) => match.hasPlayers).toList();
-          final played = matches.where((match) => match.hasResult).length;
-          final total = matches.length;
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF142B40),
-              border: Border.all(color: const Color(0xFF244B6B)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${index + 1}. ${stage.name}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: total > 0
-                              ? (played / total).clamp(0.0, 1.0)
-                              : 0.0,
-                          minHeight: 6,
-                          backgroundColor: const Color(0xFF20384D),
-                          valueColor: const AlwaysStoppedAnimation(
-                            Color(0xFFC4A96F),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$played/$total gespielt',
-                      style: const TextStyle(
-                        color: Color(0xFFC4A96F),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    ];
-  }
-
-  Widget _buildHighlightItem(String label, String value, {String? player}) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: Colors.white54),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF70E0BA),
-          ),
-        ),
-        if (player != null && player.trim().isNotEmpty)
-          Text(
-            player,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11, color: Colors.white70),
-          ),
-      ],
-    );
-  }
+  ) => RecentMatchResultLogEntry(
+    tournament: tournament,
+    match: m,
+    eloChanges: eloChanges,
+  );
 
   List<PlayerStanding> _calculateGroupStandings(
     TournamentGroup group,
     List<String> tieBreakers,
-  ) {
-    final standings = {
-      for (final player in group.players) player.name: PlayerStanding(player),
-    };
-
-    for (final match in group.matches.where(
-      (m) => m.hasResult && !m.isDecider,
-    )) {
-      final homePlayer = match.homePlayer;
-      final awayPlayer = match.awayPlayer;
-      if (homePlayer == null || awayPlayer == null) continue;
-      final home = standings[homePlayer.name];
-      final away = standings[awayPlayer.name];
-      if (home == null || away == null) continue;
-      final homeLegs = match.homeLegs ?? 0;
-      final awayLegs = match.awayLegs ?? 0;
-
-      home.played++;
-      home.legsFor += homeLegs;
-      home.legsAgainst += awayLegs;
-      away.played++;
-      away.legsFor += awayLegs;
-      away.legsAgainst += homeLegs;
-
-      if (match.winner == homePlayer) {
-        home.wins++;
-        home.points += 3;
-        away.losses++;
-      } else if (match.winner == awayPlayer) {
-        away.wins++;
-        away.points += 3;
-        home.losses++;
-      } else {
-        home.draws++;
-        home.points++;
-        away.draws++;
-        away.points++;
-      }
-    }
-
-    final sorted = standings.values.toList();
-    sorted.sort((a, b) {
-      for (final rule in tieBreakers) {
-        final cmp = switch (rule) {
-          'points' => b.points.compareTo(a.points),
-          'legDifference' => b.legDifference.compareTo(a.legDifference),
-          'legsFor' => b.legsFor.compareTo(a.legsFor),
-          _ => 0,
-        };
-        if (cmp != 0) return cmp;
-      }
-      return a.player.name.compareTo(b.player.name);
-    });
-    return sorted;
-  }
+  ) => const GroupStandingsEngine().calculate(
+    group,
+    tieBreakers,
+    tournament: widget.tournament,
+  );
 }
 
 class _KnockoutPreviewConnectorPainter extends CustomPainter {

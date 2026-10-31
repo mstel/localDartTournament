@@ -1,7 +1,16 @@
 part of '../../../../tournament_workspace.dart';
 
+enum _TournamentSaveChoice { update, create }
+
 class TournamentCreationPage extends StatefulWidget {
-  const TournamentCreationPage({super.key});
+  const TournamentCreationPage({
+    super.key,
+    this.tournamentStorage,
+    this.existingTournament,
+  });
+
+  final TournamentStorage? tournamentStorage;
+  final CreatedTournament? existingTournament;
 
   @override
   State<TournamentCreationPage> createState() => _TournamentCreationPageState();
@@ -58,6 +67,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   String _groupPlayType = 'round_robin';
   GroupPlayerAllocationMode _groupAllocationMode =
       GroupPlayerAllocationMode.strengthLevels;
+  List<int?>? _manualGroupSlotOrder;
   List<int?>? _manualKnockoutSlotOrder;
   final Set<int> _placementPlaces = {};
   bool _finalEndsTournament = true;
@@ -82,6 +92,18 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   void initState() {
     super.initState();
     _stageNameController.text = _defaultStageName();
+    final existing = widget.existingTournament;
+    if (existing != null) {
+      _showEntryChoices = false;
+      _countsForRanking = existing.countsForRanking;
+      _rankingSetupTouched = true;
+      _localRankingIds.addAll(existing.rankingIds);
+      _tournamentNameController.text = existing.name;
+      _players.addAll(existing.players);
+      _playerCountController.text = '${existing.players.length}';
+      _plannedBoardCount = existing.boardCount;
+      _stages.addAll(existing.stages);
+    }
     unawaited(_loadGroupTieBreakers());
     unawaited(_applyDefaultRanking());
   }
@@ -142,6 +164,85 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     });
   }
 
+  Future<void> _saveTournamentNameDraft() async {
+    final name = _tournamentNameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Der Turniername darf nicht leer sein.')),
+      );
+      return;
+    }
+    _tournamentNameController.text = name;
+    FocusScope.of(context).unfocus();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Der Turniername wird beim Speichern übernommen.'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _pickTournamentName() async {
+    try {
+      final tournaments =
+          await (widget.tournamentStorage ?? TournamentStorage())
+                .loadTournaments()
+            ..sort((a, b) {
+              final aDate = a.startedAt ?? a.finishedAt ?? a.createdAt;
+              final bDate = b.startedAt ?? b.finishedAt ?? b.createdAt;
+              return bDate.compareTo(aDate);
+            });
+      if (!mounted) return;
+      final selected = await showDialog<CreatedTournament>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Name eines anderen Turniers öffnen'),
+          content: SizedBox(
+            width: 480,
+            height: 360,
+            child: tournaments.isEmpty
+                ? const Center(
+                    child: Text('Keine anderen Turniere gespeichert.'),
+                  )
+                : ListView.separated(
+                    itemCount: tournaments.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final tournament = tournaments[index];
+                      return ListTile(
+                        title: Text(tournament.name),
+                        subtitle: Text(
+                          tournament.createdAt
+                              .toLocal()
+                              .toString()
+                              .split(' ')
+                              .first,
+                        ),
+                        onTap: () => Navigator.pop(context, tournament),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Schließen'),
+            ),
+          ],
+        ),
+      );
+      if (selected == null || !mounted) return;
+      _tournamentNameController.text = selected.name;
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Turniere konnten nicht geladen werden: $error'),
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _tournamentNameController.dispose();
@@ -170,6 +271,105 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       cappedGroupCount,
       (index) => baseSize + (index < remainder ? 1 : 0),
     );
+  }
+
+  bool get _canConfigureManualGroups =>
+      (_editingStageIndex ?? _stages.length) == 0;
+
+  Future<void> _selectGroupAllocationMode(
+    GroupPlayerAllocationMode mode,
+  ) async {
+    if (mode != GroupPlayerAllocationMode.manual) {
+      setState(() {
+        _groupAllocationMode = mode;
+        _groupDrawOnStart = false;
+      });
+      return;
+    }
+
+    final groupSizes = _calculateGroupSizes();
+    final participantCount = groupSizes.fold<int>(0, (sum, size) => sum + size);
+    if (!_canConfigureManualGroups ||
+        _players.isEmpty ||
+        participantCount != _players.length ||
+        !hasValidGroupSizes(groupSizes)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Benutzerdefinierte Gruppen können für die erste Gruppenetappe festgelegt werden. '
+            'Spätere Etappen lassen sich nach der Qualifikation anpassen.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    List<List<TournamentPlayer>> initialGroups;
+    final savedOrder = _manualGroupSlotOrder;
+    if (_groupAllocationMode == GroupPlayerAllocationMode.manual &&
+        savedOrder != null &&
+        savedOrder.length == participantCount) {
+      initialGroups = GroupDrawAssignment.partitionDraw(
+        items: _players,
+        slotOrder: savedOrder,
+        groupSizes: groupSizes,
+      );
+    } else {
+      final previousMode =
+          _groupAllocationMode == GroupPlayerAllocationMode.manual
+          ? GroupPlayerAllocationMode.strengthLevels
+          : _groupAllocationMode;
+      final Map<String, int> ratings;
+      try {
+        ratings = previousMode == GroupPlayerAllocationMode.random
+            ? const <String, int>{}
+            : await _loadGroupRatings();
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gruppen konnten nicht vorbereitet werden: $error'),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+      final arranged = const GroupPlayerAllocationEngine().allocate(
+        players: _players,
+        groupSizes: groupSizes,
+        mode: previousMode,
+        ratings: ratings,
+      );
+      initialGroups = GroupDrawAssignment.partition(arranged, groupSizes);
+    }
+
+    final groups = await showDialog<List<List<TournamentPlayer>>>(
+      context: context,
+      builder: (context) =>
+          GroupPlayerAllocationDialog(initialGroups: initialGroups),
+    );
+    if (!mounted || groups == null) return;
+    final groupOrder = groups.expand((group) => group).toList();
+    final playerIndexes = groupOrder
+        .map((player) => _players.indexOf(player) + 1)
+        .toList();
+    if (playerIndexes.length != participantCount ||
+        playerIndexes.any((playerIndex) => playerIndex < 1) ||
+        playerIndexes.toSet().length != participantCount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Die manuelle Gruppeneinteilung ist ungültig. Bitte erneut versuchen.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _groupAllocationMode = GroupPlayerAllocationMode.manual;
+      _groupDrawOnStart = false;
+      _manualGroupSlotOrder = playerIndexes;
+    });
   }
 
   List<int> _roundRobinRepeatsForGroupSizes(List<int> groupSizes) {
@@ -1227,6 +1427,30 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       );
       return;
     }
+    final groupSizes = _calculateGroupSizes();
+    final participantCount = groupSizes.fold<int>(0, (sum, size) => sum + size);
+    final manualOrder = _manualGroupSlotOrder;
+    if (_selectedStageType == 'groups' &&
+        _groupAllocationMode == GroupPlayerAllocationMode.manual &&
+        (manualOrder == null ||
+            manualOrder.length != participantCount ||
+            manualOrder.any(
+              (playerIndex) =>
+                  playerIndex == null ||
+                  playerIndex < 1 ||
+                  playerIndex > participantCount,
+            ) ||
+            manualOrder.toSet().length != participantCount)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Bitte die benutzerdefinierten Gruppen erneut einteilen, '
+            'damit alle aktuellen Spieler genau einmal zugeordnet sind.',
+          ),
+        ),
+      );
+      return;
+    }
     if (_stageGameFormat.bestOfLegs.isEven &&
         (_stageGameFormat.bestOfSets > 1 ||
             _selectedStageType != 'groups' ||
@@ -1307,7 +1531,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       groupDrawOnStart: _selectedStageType == 'groups'
           ? _groupDrawOnStart
           : false,
-      groupSlotOrder: const [],
+      groupSlotOrder:
+          _selectedStageType == 'groups' &&
+              _groupAllocationMode == GroupPlayerAllocationMode.manual
+          ? List<int?>.unmodifiable(_manualGroupSlotOrder ?? const [])
+          : const [],
       knockoutParticipantCount: _isKnockoutStageType(_selectedStageType)
           ? _knockoutParticipantCount()
           : null,
@@ -1376,6 +1604,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _manualKnockoutSlotOrder = null;
     _knockoutSeedingMode = 'cross';
     _groupDrawOnStart = false;
+    _manualGroupSlotOrder = null;
+    if (_groupAllocationMode == GroupPlayerAllocationMode.manual) {
+      _groupAllocationMode = GroupPlayerAllocationMode.strengthLevels;
+    }
     _knockoutDrawOnStart = false;
     _stageGameFormat = const TournamentGameFormat();
     _setDefaultStageNameIfNeeded();
@@ -1427,9 +1659,16 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             '${stage.extraQualifierCount ?? 0}';
         _autoAdjustQualification = stage.qualificationAutoAdjust;
         _groupDrawOnStart = false;
-        _groupAllocationMode = stage.groupDrawOnStart
-            ? GroupPlayerAllocationMode.random
-            : GroupPlayerAllocationMode.strengthLevels;
+        if (stage.groupDrawOnStart) {
+          _groupAllocationMode = GroupPlayerAllocationMode.random;
+          _manualGroupSlotOrder = null;
+        } else if (stage.groupSlotOrder.isNotEmpty) {
+          _groupAllocationMode = GroupPlayerAllocationMode.manual;
+          _manualGroupSlotOrder = List<int?>.from(stage.groupSlotOrder);
+        } else {
+          _groupAllocationMode = GroupPlayerAllocationMode.strengthLevels;
+          _manualGroupSlotOrder = null;
+        }
       } else {
         _selectedExtraGroups.clear();
         _groupPlayTypes.clear();
@@ -1444,6 +1683,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ..clear()
           ..addAll(defaultGroupTieBreakers);
         _groupDrawOnStart = false;
+        _manualGroupSlotOrder = null;
       }
 
       if (_isKnockoutStageType(stage.type)) {
@@ -1646,10 +1886,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       return;
     }
 
-    late final CreatedTournament tournament;
     setState(() => _isCreatingTournament = true);
     try {
-      final controller = const TournamentCreationController();
+      final controller = TournamentCreationController(
+        storage: widget.tournamentStorage,
+      );
       final name = _tournamentNameController.text.trim().isEmpty
           ? 'Neues Turnier'
           : _tournamentNameController.text.trim();
@@ -1658,15 +1899,82 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           _groupAllocationMode == GroupPlayerAllocationMode.random
           ? const <String, int>{}
           : await _loadGroupRatings();
-      final runStages = _buildRunStages(stages: stages, ratings: groupRatings);
-      tournament = controller.createTournament(
-        boardCount: _plannedBoardCount,
-        countsForRanking: _countsForRanking,
-        rankingIds: _localRankingIds,
-        name: name,
-        players: _players,
-        stages: stages,
-        runStages: runStages,
+      final existing = widget.existingTournament;
+      final settingsChanged =
+          existing != null &&
+          (jsonEncode(
+                    existing.players.map((player) => player.toJson()).toList(),
+                  ) !=
+                  jsonEncode(
+                    _players.map((player) => player.toJson()).toList(),
+                  ) ||
+              jsonEncode(
+                    existing.stages.map((stage) => stage.toJson()).toList(),
+                  ) !=
+                  jsonEncode(stages.map((stage) => stage.toJson()).toList()));
+      final runStages =
+          existing != null && !settingsChanged && existing.runStages.isNotEmpty
+          ? existing.runStages
+          : _buildRunStages(stages: stages, ratings: groupRatings);
+
+      final choice = existing == null
+          ? _TournamentSaveChoice.create
+          : await _chooseTournamentSaveAction(
+              canUpdate: !controller.hasRecordedResults(existing),
+            );
+      if (choice == null || !mounted) {
+        setState(() => _isCreatingTournament = false);
+        return;
+      }
+
+      final copyRunStages =
+          existing != null && controller.hasRecordedResults(existing)
+          ? _buildRunStages(stages: stages, ratings: groupRatings)
+          : runStages;
+      final CreatedTournament tournament;
+      if (existing != null && choice == _TournamentSaveChoice.update) {
+        tournament = await controller.updateTournament(
+          existing,
+          boardCount: _plannedBoardCount,
+          countsForRanking: _countsForRanking,
+          rankingIds: _localRankingIds,
+          name: name,
+          players: _players,
+          stages: stages,
+          runStages: runStages,
+          settingsChanged: settingsChanged,
+        );
+      } else if (existing != null) {
+        tournament = await controller.createTournamentCopy(
+          boardCount: _plannedBoardCount,
+          countsForRanking: _countsForRanking,
+          rankingIds: _localRankingIds,
+          name: name,
+          players: _players,
+          stages: stages,
+          runStages: copyRunStages,
+        );
+      } else {
+        tournament = await controller.createTournament(
+          boardCount: _plannedBoardCount,
+          countsForRanking: _countsForRanking,
+          rankingIds: _localRankingIds,
+          name: name,
+          players: _players,
+          stages: stages,
+          runStages: runStages,
+        );
+      }
+      if (!mounted) return;
+      setState(() => _isCreatingTournament = false);
+      if (existing != null) {
+        Navigator.of(context).pop(tournament);
+        return;
+      }
+      Navigator.of(context).pushReplacement<void, void>(
+        MaterialPageRoute<void>(
+          builder: (_) => TournamentRunPage(tournament: tournament),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
@@ -1678,17 +1986,37 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       );
       return;
     }
-
-    if (!mounted) {
-      return;
-    }
-    setState(() => _isCreatingTournament = false);
-    Navigator.of(context).pushReplacement<void, void>(
-      MaterialPageRoute<void>(
-        builder: (_) => TournamentRunPage(tournament: tournament),
-      ),
-    );
   }
+
+  Future<_TournamentSaveChoice?> _chooseTournamentSaveAction({
+    required bool canUpdate,
+  }) => showDialog<_TournamentSaveChoice>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Turnier speichern'),
+      content: Text(
+        canUpdate
+            ? 'Soll die bestehende Konfiguration ersetzt oder ein neues Turnier mit diesen Einstellungen angelegt werden?'
+            : 'Das bestehende Turnier enthält Ergebnisse und kann deshalb nicht überschrieben werden. Du kannst die Einstellungen als neues Turnier speichern.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+        if (canUpdate)
+          OutlinedButton(
+            onPressed: () =>
+                Navigator.pop(context, _TournamentSaveChoice.update),
+            child: const Text('Bestehendes Turnier aktualisieren'),
+          ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _TournamentSaveChoice.create),
+          child: const Text('Als neues Turnier anlegen'),
+        ),
+      ],
+    ),
+  );
 
   Future<Map<String, int>> _loadGroupRatings() async {
     if (_players.every((player) => player.profileId == null)) {
@@ -2109,6 +2437,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
     final textTheme = Theme.of(context).textTheme;
     final groupSizes = _calculateGroupSizes();
+    final canConfigureManualGroups =
+        _canConfigureManualGroups && _players.isNotEmpty;
     final latestGroupStage = _latestGroupStage();
     final knockoutParticipantCount = _knockoutParticipantCount();
     final knockoutBracketSize = _knockoutBracketSize();
@@ -2126,7 +2456,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Turnier erstellen')),
+      appBar: AppBar(
+        title: Text(
+          widget.existingTournament == null
+              ? 'Turnier erstellen'
+              : 'Turnierkonfiguration bearbeiten',
+        ),
+      ),
       body: SafeArea(
         child: AdaptiveContentList(
           padding: const EdgeInsets.all(24),
@@ -2153,14 +2489,55 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               summary: '${_players.length} Teilnehmer ausgewählt',
               initiallyExpanded: true,
               children: [
-                TextField(
-                  key: const ValueKey('tournament-name-field'),
-                  controller: _tournamentNameController,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Turniername',
-                    prefixIcon: Icon(Icons.emoji_events_outlined),
-                  ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final field = TextField(
+                      key: const ValueKey('tournament-name-field'),
+                      controller: _tournamentNameController,
+                      maxLength: 100,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Turniername',
+                        prefixIcon: Icon(Icons.emoji_events_outlined),
+                        counterText: '',
+                      ),
+                      onSubmitted: (_) => _saveTournamentNameDraft(),
+                    );
+                    final pickNameButton = OutlinedButton.icon(
+                      onPressed: _pickTournamentName,
+                      icon: const Icon(Icons.folder_open_outlined),
+                      label: const Text('Name eines anderen Turniers öffnen'),
+                    );
+                    final saveButton = FilledButton.icon(
+                      onPressed: _saveTournamentNameDraft,
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text('Namen speichern'),
+                    );
+                    if (constraints.maxWidth < 900 ||
+                        MediaQuery.textScalerOf(context).scale(16) > 24) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          field,
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [pickNameButton, saveButton],
+                          ),
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: field),
+                        const SizedBox(width: 12),
+                        pickNameButton,
+                        const SizedBox(width: 8),
+                        saveButton,
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 32),
                 SwitchListTile(
@@ -2513,7 +2890,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           labelText: 'Gruppeneinteilung',
                           prefixIcon: Icon(Icons.groups_2_outlined),
                         ),
-                        items: const [
+                        items: [
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.strengthLevels,
                             child: Text('Wertungsstufen bündeln'),
@@ -2526,22 +2903,61 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                             value: GroupPlayerAllocationMode.random,
                             child: Text('Zufällig verteilen'),
                           ),
+                          DropdownMenuItem(
+                            value: GroupPlayerAllocationMode.manual,
+                            enabled: canConfigureManualGroups,
+                            child: Text('Benutzerdefinierte Gruppen'),
+                          ),
                         ],
                         onChanged: (mode) {
                           if (mode != null) {
-                            setState(() {
-                              _groupAllocationMode = mode;
-                              _groupDrawOnStart = false;
-                            });
+                            unawaited(_selectGroupAllocationMode(mode));
                           }
                         },
                       ),
+                      if (_groupAllocationMode ==
+                          GroupPlayerAllocationMode.manual) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('edit-custom-groups'),
+                            onPressed: canConfigureManualGroups
+                                ? () => unawaited(
+                                    _selectGroupAllocationMode(
+                                      GroupPlayerAllocationMode.manual,
+                                    ),
+                                  )
+                                : null,
+                            icon: const Icon(Icons.drag_indicator),
+                            label: Text(
+                              _manualGroupSlotOrder == null
+                                  ? 'Gruppen einteilen'
+                                  : 'Gruppeneinteilung bearbeiten',
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (!_canConfigureManualGroups)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Manuelle Gruppen sind für die erste Gruppenetappe verfügbar. '
+                            'Spätere Etappen können nach der Qualifikation angepasst werden.',
+                          ),
+                        ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'Wertungsstufen bündeln sortiert nach Wertung und '
-                        'bildet nacheinander Gruppenblöcke. Die stärksten '
-                        'Wertungen starten dabei in der ersten Gruppe.',
-                      ),
+                      Text(switch (_groupAllocationMode) {
+                        GroupPlayerAllocationMode.strengthLevels =>
+                          'Nach Wertung sortieren und nacheinander Gruppenblöcke bilden. '
+                              'Die stärksten Wertungen starten in der ersten Gruppe.',
+                        GroupPlayerAllocationMode.balanced =>
+                          'Nach Wertung sortieren und abwechselnd auf die Gruppen verteilen.',
+                        GroupPlayerAllocationMode.random =>
+                          'Spieler zufällig auf die Gruppen verteilen.',
+                        GroupPlayerAllocationMode.manual =>
+                          'Spieler per Drag-and-drop den gewünschten Gruppen zuordnen.',
+                      }),
                       const SizedBox(height: 12),
                       GroupPlayTypeSetup(
                         groupSizes: groupSizes,
@@ -2695,8 +3111,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
                       _players.isEmpty
-                          ? 'Zum Anlegen fehlen die Teilnehmer. Bitte oben Spieler hinzufügen oder auswählen.'
-                          : 'Zum Anlegen fehlt eine Etappe. Bitte eine Etappe hinzufügen oder einen Vorschlag übernehmen.',
+                          ? 'Zum Speichern fehlen die Teilnehmer. Bitte oben Spieler hinzufügen oder auswählen.'
+                          : 'Zum Speichern fehlt eine Etappe. Bitte eine Etappe hinzufügen oder einen Vorschlag übernehmen.',
                     ),
                   ),
                 FilledButton.icon(
@@ -2714,8 +3130,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       : const Icon(Icons.check_circle_outline),
                   label: Text(
                     _isCreatingTournament
-                        ? 'Wird angelegt …'
-                        : 'Turnier anlegen',
+                        ? 'Wird gespeichert …'
+                        : widget.existingTournament == null
+                        ? 'Turnier anlegen'
+                        : 'Einstellungen speichern',
                   ),
                 ),
               ],

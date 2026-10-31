@@ -1,3 +1,71 @@
+# 2.1.9+43
+
+- Begrenzt den sichtbaren Bereich der letzten Ergebnisse auf zwei Matches und
+  macht den vollständigen chronologischen Verlauf scrollbar.
+- Teilt Spielpläne bei wenigen Gruppen auf bis zu vier Spalten auf und
+  verteilt offene Begegnungen auf wiederholte Gruppenspalten.
+- Zeigt Gruppen-Ergebnisse auf breiten Bildschirmen in bis zu vier Spalten und
+  mit kompakteren Match-Zeilen an.
+
+# 2.1.8+42
+
+- Behebt abgeschnittene KO-Baum-Vorschauen und verteilt Gruppen-Spielpläne
+  besser über die verfügbare Breite.
+- Verdichtet die Ergebniseingabe zu kompakten Spielplanzeilen mit zentralem,
+  anklickbarem Ergebnisfeld.
+- Ersetzt die letzten Ergebnisse im Dashboard und Zweitmonitor durch ein
+  chronologisches Match-Protokoll mit optionalen Elo-Änderungen.
+- Sortiert Partien gegen bereits deutlich weitergespielte Teilnehmer innerhalb
+  der priorisierten Vorschläge nach hinten.
+- Richtet Statistikspalten rechtsbündig aus und nutzt Tabellenbreite besser.
+
+# 2.1.7+41
+
+- Platziert kompakte letzte Ergebnisse im separaten Monitor am unteren Rand
+  neben der Etappenvorschau und zeigt dort bis zu vier Partien.
+- Vereinheitlicht die letzten Ergebnisse im Dashboard und Monitor mit
+  Gewinner-/Verliererfarben, Setzungs- und Ausscheidungshinweisen,
+  Elo-Änderungen und Bestleistungs-Badges.
+- Aktualisiert den KO-Baum unmittelbar nach der Ergebniseingabe einschließlich
+  der weitergegebenen Spieler.
+- Entfernt automatisch erzeugte Decider beim Zurücksetzen einer Gruppenetappe,
+  damit keine veralteten offenen Entscheidungsspiele stehen bleiben.
+
+# 2.1.6+40
+
+- Verdichtet die Zweitmonitoransicht: Spielplan für bis zu vier Gruppen,
+  zwei letzte Ergebnisse mit Elo-Änderungen und Leistungs-Badges sowie
+  kompakte Tabellen.
+- Zeigt den Gesamtfortschritt neben der Turnieruhr und die Spielzahlen an den
+  Gruppen; in aktiven K.-o.-Etappen nutzt der lesbare Turnierbaum die volle
+  Monitorbreite.
+- Entfernt Ergebniseingaben und Bestleistungs-Badges aus dem Dashboard-
+  Spielplan beziehungsweise den Dashboard-Ergebnissen und ergänzt dort
+  stattdessen Elo-Änderungen.
+- Öffnet den K.-o.-Baum in der Ergebnisse-Ansicht mit direktem Zugriff auf
+  die Ergebniseingabe.
+
+# 2.1.3+37
+
+- Ergänzt Hinweise für Setzung, Freilose, Match-Ergebnisse, Bestleistungen und
+  Ausscheiden beziehungsweise verbleibende Leben im Spielplan und K.-o.-Baum.
+- Ergänzt die Bearbeitung bestehender Turniere mit Aktualisieren- oder
+  Kopieren-Option und schützt gespeicherte Ergebnisse vor versehentlichem
+  Überschreiben.
+- Ergänzt vier Gruppenverteilungen einschließlich manueller Gruppeneinteilung
+  sowie Einstellungen für Turnierhinweise und Tie-Breaker.
+- Protokolliert Supabase-Anmeldefehler datensparsam mit App-/Windows-Version,
+  Projekt-Host sowie DNS- und HTTPS-Tests und bietet den Export der Diagnose
+  an. Das Protokoll enthält keine Zugangsdaten oder Sitzungstoken.
+- Prüft im Windows-Release-Build, ob der konfigurierte Supabase-Projekt-Key
+  akzeptiert wird.
+- Reduziert den Datenverkehr der Turnierliste auf der Website durch einen
+  kompakten Turnierindex und paginierte Ergebnisse; ältere Konten ohne Index
+  bleiben kompatibel.
+- Stabilisiert die Warteschlange für lokale Speicherzugriffe, damit weitere
+  Speicherungen auch nach abgeschlossenen asynchronen Abläufen fortgesetzt
+  werden.
+
 # 2.1.0+34
 
 - Deaktiviert den automatischen Supabase-Workspace-Abgleich. Lokale Änderungen

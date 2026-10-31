@@ -1,14 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import '../../../../../shared/theme/tournament_display_palette.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
+import '../../../../rankings/application/tournament_match_elo_service.dart';
+import '../../../../rankings/domain/local_elo_calculator.dart';
 import '../../../application/tournament_flow_priority.dart';
+import '../../../application/tournament_flow_priority_preferences.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../domain/tournament_models.dart';
 import 'tournament_timing_panel.dart';
 import 'tournament_second_screen_view.dart';
+import 'recommended_matches_table.dart';
+import 'recent_match_result_card.dart';
 
 /// Embedded tournament controls for match scheduling and result entry.
 class TournamentDirectorDashboard extends StatefulWidget {
@@ -67,12 +74,20 @@ class _TournamentDirectorDashboardState
     extends State<TournamentDirectorDashboard> {
   Timer? _timer;
   final _matchSearchController = TextEditingController();
+  final _recentResultsController = ScrollController();
   bool _busy = false;
   String? _actionError;
   int _noticeIndex = 0;
+  TournamentFlowPrioritySettings _prioritySettings =
+      TournamentFlowPriority.defaultSettings;
+  late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
+  late String _eloInputFingerprint;
+
   @override
   void initState() {
     super.initState();
+    _refreshEloChanges();
+    unawaited(_loadPrioritySettings());
     _timer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (mounted) {
         setState(() => _noticeIndex++);
@@ -81,9 +96,39 @@ class _TournamentDirectorDashboardState
   }
 
   @override
+  void didUpdateWidget(covariant TournamentDirectorDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final fingerprint = jsonEncode(widget.tournament.toJson());
+    if (fingerprint != _eloInputFingerprint) {
+      _refreshEloChanges(fingerprint: fingerprint);
+    }
+  }
+
+  void _refreshEloChanges({String? fingerprint}) {
+    _eloInputFingerprint =
+        fingerprint ?? jsonEncode(widget.tournament.toJson());
+    _eloChanges = TournamentMatchEloService().calculate(widget.tournament);
+  }
+
+  Future<void> _loadPrioritySettings() async {
+    try {
+      final settings = await TournamentFlowPriorityPreferences().load();
+      if (mounted) setState(() => _prioritySettings = settings);
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _actionError =
+              'Hinweiseinstellungen konnten nicht geladen werden: $error',
+        );
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
     _matchSearchController.dispose();
+    _recentResultsController.dispose();
     super.dispose();
   }
 
@@ -291,6 +336,38 @@ class _TournamentDirectorDashboardState
     else
       LayoutBuilder(
         builder: (context, constraints) {
+          if (showResult) {
+            return FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
+              future: _eloChanges,
+              builder: (context, snapshot) => SizedBox(
+                key: const ValueKey('director-recent-results-scroll'),
+                height: 132,
+                child: Scrollbar(
+                  controller: _recentResultsController,
+                  thumbVisibility: entries.length > 2,
+                  child: ListView.separated(
+                    controller: _recentResultsController,
+                    padding: EdgeInsets.zero,
+                    itemCount: entries.length,
+                    separatorBuilder: (context, index) => const Divider(
+                      height: 1,
+                      color: TournamentDisplayPalette.border,
+                    ),
+                    itemBuilder: (context, index) => ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 66),
+                      child: _recentMatchLogEntry(
+                        entries[index].match,
+                        snapshot.data,
+                        eloError: snapshot.hasError
+                            ? 'Ranglistenänderungen konnten nicht geladen werden.'
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
           final columns = maxColumns == null
               ? constraints.maxWidth >= 1100
                     ? 6
@@ -400,19 +477,71 @@ class _TournamentDirectorDashboardState
     ]);
   }
 
+  Widget _recentMatchLogEntry(
+    GroupMatch match,
+    Map<String, List<TournamentMatchEloChange>>? changes, {
+    String? eloError,
+  }) {
+    final matchKey = const LocalEloCalculator().matchKey(
+      widget.tournament,
+      match,
+    );
+    return RecentMatchResultLogEntry(
+      key: ValueKey(
+        'director-match-log-${match.round}-${match.homePlayer?.name}-'
+        '${match.awayPlayer?.name}',
+      ),
+      tournament: widget.tournament,
+      match: match,
+      eloChanges: matchKey == null
+          ? const <TournamentMatchEloChange>[]
+          : changes?[matchKey] ?? const <TournamentMatchEloChange>[],
+      eloError: eloError,
+    );
+  }
+
   Widget _queueTile(
     PlayEntry entry, {
     required double width,
     required bool showResult,
     required bool isPriority,
   }) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final match = entry.match;
     final startOnBoard = widget.onStartOnBoard;
     final quickStartBoard = !showResult && startOnBoard != null
         ? _quickStartBoard(entry)
         : null;
+    if (showResult) {
+      return FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
+        future: _eloChanges,
+        builder: (context, snapshot) {
+          final matchKey = const LocalEloCalculator().matchKey(
+            widget.tournament,
+            match,
+          );
+          final changes = matchKey == null
+              ? const <TournamentMatchEloChange>[]
+              : snapshot.data?[matchKey] ?? const <TournamentMatchEloChange>[];
+          return SizedBox(
+            width: width,
+            child: RecentMatchResultLogEntry(
+              key: ValueKey(
+                'director-match-tile-result-'
+                '${match.round}-${match.homePlayer?.name}-'
+                '${match.awayPlayer?.name}',
+              ),
+              tournament: widget.tournament,
+              match: match,
+              eloChanges: changes,
+              eloError: snapshot.hasError
+                  ? 'Ranglistenänderungen konnten nicht geladen werden.'
+                  : null,
+            ),
+          );
+        },
+      );
+    }
+    final theme = Theme.of(context);
     return Container(
       key: ValueKey(
         'director-match-tile-${showResult ? 'result' : 'next'}-'
@@ -480,25 +609,6 @@ class _TournamentDirectorDashboardState
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          if (showResult) ...[
-            const SizedBox(height: 4),
-            Text(
-              '${match.homeLegs ?? 0}:${match.awayLegs ?? 0}',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: TournamentDisplayPalette.text,
-              ),
-            ),
-            for (final performance in match.bestPerformances.take(2))
-              Text(
-                '${performance.playerName} · ${performance.label}'
-                '${performance.value == null ? '' : ' ${performance.value}'}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.primary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-          ],
           if (quickStartBoard != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -522,10 +632,18 @@ class _TournamentDirectorDashboardState
     final state = TournamentDirectorSnapshot(t, widget.activeStage);
     final now = DateTime.now();
     final timing = TournamentTiming.snapshot(t, now);
-    final active = state.entries
-        .where((e) => e.stageIndex == widget.activeStage && e.match.hasPlayers)
+    final activeStageEntries = state.entries
+        .where((entry) => entry.stageIndex == widget.activeStage)
         .toList();
-    final completed = active.where((e) => e.match.isResolved).length;
+    final active = activeStageEntries
+        .where((entry) => entry.match.hasPlayers)
+        .toList();
+    final completed = activeStageEntries
+        .where((entry) => entry.match.hasPlayers && entry.match.hasResult)
+        .length;
+    final totalCompleted = state.entries
+        .where((entry) => entry.match.hasPlayers && entry.match.hasResult)
+        .length;
     final waiting = state.schedule.waiting
         .where((e) => e.stageIndex == widget.activeStage && !e.match.isResolved)
         .length;
@@ -536,23 +654,29 @@ class _TournamentDirectorDashboardState
               assignment.entry.match.hasPlayers,
         )
         .toList();
+    final pendingMatches = activeStageEntries
+        .where((entry) => entry.match.hasPlayers && !entry.match.isResolved)
+        .map((entry) => entry.match)
+        .toList();
+    final pendingOrder = {
+      for (var index = 0; index < activeStageEntries.length; index++)
+        activeStageEntries[index].match: index,
+    };
+    final pendingMatchSet = pendingMatches.toSet();
     final flowPriority = TournamentFlowPriority.forStage(
       t.runStages[widget.activeStage],
+      settings: _prioritySettings,
     );
-    upcoming.sort((a, b) {
-      final aIsPriority = flowPriority.prioritizedMatches.contains(
-        a.entry.match,
-      );
-      final bIsPriority = flowPriority.prioritizedMatches.contains(
-        b.entry.match,
-      );
+    pendingMatches.sort((a, b) {
+      final aIsPriority = flowPriority.prioritizedMatches.contains(a);
+      final bIsPriority = flowPriority.prioritizedMatches.contains(b);
       final priorityComparison = aIsPriority == bIsPriority
           ? 0
           : aIsPriority
           ? -1
           : 1;
       if (priorityComparison != 0) return priorityComparison;
-      return a.block.compareTo(b.block);
+      return pendingOrder[a]!.compareTo(pendingOrder[b]!);
     });
     final nextSix = upcoming
         .take(6)
@@ -715,6 +839,23 @@ class _TournamentDirectorDashboardState
           },
         ),
     ];
+    final recommendedGroups = <RecommendedMatchGroup>[];
+    final stage = t.runStages[widget.activeStage];
+    if (stage is GroupTournamentRunStage) {
+      for (final group in stage.groups) {
+        recommendedGroups.add(
+          RecommendedMatchGroup(
+            name: group.name,
+            matches: group.matches.where(pendingMatchSet.contains).toList(),
+            isDelayed: flowPriority.delayedGroups.contains(group.name),
+          ),
+        );
+      }
+    } else {
+      recommendedGroups.add(
+        RecommendedMatchGroup(name: stage.name, matches: pendingMatches),
+      );
+    }
     final resultEntryOrder = {
       for (var index = 0; index < state.entries.length; index++)
         state.entries[index].match: index,
@@ -745,16 +886,13 @@ class _TournamentDirectorDashboardState
               resultEntryOrder[a.match] ?? 0,
             );
           });
-    final latestResults = recentResults.take(4).toList();
-    final bestPerformances = [
-      for (final entry in recentResults) ...entry.match.bestPerformances,
-    ];
+    final latestResults = recentResults;
     final flowNotices = flowPriority.notices;
 
     final totalGames = active.length;
-    final progressPct = totalGames > 0
-        ? ((completed / totalGames) * 100).round()
-        : 0;
+    final totalTournamentGames = state.entries
+        .where((entry) => entry.match.hasPlayers)
+        .length;
 
     final status = _box([
       Wrap(
@@ -770,7 +908,6 @@ class _TournamentDirectorDashboardState
                 'Dashboard',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              Text('Aktive Etappe: ${t.runStages[widget.activeStage].name}'),
             ],
           ),
           if (widget.onCompleteStage != null ||
@@ -860,10 +997,10 @@ class _TournamentDirectorDashboardState
         runSpacing: 12,
         children: [
           Text(
-            '$completed von $totalGames Spielen fertig ($progressPct%)',
+            '$completed/$totalGames Spiele in dieser Etappe · '
+            '$totalCompleted/$totalTournamentGames gesamt',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          Text('${active.length - completed} offen'),
           Text(
             t.startedAt == null
                 ? 'Turnieruhr nicht gestartet'
@@ -984,8 +1121,20 @@ class _TournamentDirectorDashboardState
         const SizedBox(height: 12),
         _matchSearch(state),
         const SizedBox(height: 12),
+        _box([
+          Text('Spielplan', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          RecommendedMatchesTable(
+            groups: recommendedGroups,
+            prioritizedMatches: flowPriority.prioritizedMatches,
+            deprioritizedMatches: flowPriority.deprioritizedMatches,
+            emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+            dense: true,
+          ),
+        ]),
+        const SizedBox(height: 12),
         _matchQueue(
-          'Empfohlene Partien',
+          'Schnellstart · nächste Partien',
           nextSix,
           emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
           prioritizedMatches: flowPriority.prioritizedMatches,
@@ -998,30 +1147,6 @@ class _TournamentDirectorDashboardState
           showResult: true,
           maxColumns: 4,
         ),
-        if (bestPerformances.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _box([
-            Text(
-              'Bestleistungen',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                for (final performance in bestPerformances)
-                  Chip(
-                    avatar: const Icon(Icons.military_tech_outlined, size: 18),
-                    label: Text(
-                      '${performance.playerName} · ${performance.label}'
-                      '${performance.value == null ? '' : ' ${performance.value}'}',
-                    ),
-                  ),
-              ],
-            ),
-          ]),
-        ],
       ],
     );
   }

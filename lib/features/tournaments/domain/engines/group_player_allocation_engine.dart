@@ -2,7 +2,7 @@ import 'dart:math';
 
 import '../tournament_models.dart';
 
-enum GroupPlayerAllocationMode { strengthLevels, balanced, random }
+enum GroupPlayerAllocationMode { strengthLevels, balanced, random, manual }
 
 class GroupPlayerAllocationEngine {
   const GroupPlayerAllocationEngine();
@@ -35,6 +35,10 @@ class GroupPlayerAllocationEngine {
         });
       case GroupPlayerAllocationMode.random:
         ordered.shuffle(random ?? Random());
+      case GroupPlayerAllocationMode.manual:
+        throw ArgumentError(
+          'Manual group allocation requires a saved group slot order.',
+        );
     }
 
     final groups = List.generate(
@@ -61,6 +65,16 @@ class GroupPlayerAllocationEngine {
     return groups.expand((group) => group).toList(growable: false);
   }
 
-  int _rating(TournamentPlayer player, Map<String, int> ratings) =>
-      player.profileId == null ? 1000 : ratings[player.profileId!] ?? 1000;
+  int _rating(TournamentPlayer player, Map<String, int> ratings) {
+    final individualRatings = player.individuals.map((individual) {
+      final profileId = individual.profileId;
+      return (profileId == null ? null : ratings[profileId]) ??
+          ratings[individual.name.toLowerCase()] ??
+          ratings[individual.name] ??
+          1000;
+    }).toList();
+    return (individualRatings.reduce((sum, value) => sum + value) /
+            individualRatings.length)
+        .round();
+  }
 }

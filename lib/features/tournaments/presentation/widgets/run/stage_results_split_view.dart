@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../domain/knockout_round_names.dart';
@@ -18,6 +21,7 @@ class StageResultsSplitView extends StatefulWidget {
     required this.canEditResults,
     this.tournament,
     this.bracketBuilder,
+    this.onEditBracketResult,
     this.onPreviewBracket,
     this.qualifyingRank = 1,
     this.isBracketEditMode = false,
@@ -31,10 +35,12 @@ class StageResultsSplitView extends StatefulWidget {
     List<String> tieBreakers,
   )
   standingsFor;
-  final void Function(GroupMatch match) onEditResult;
+  final FutureOr<void> Function(GroupMatch match) onEditResult;
   final bool canEditResults;
   final CreatedTournament? tournament;
   final KnockoutBracketBuilder? bracketBuilder;
+  final FutureOr<void> Function(GroupMatch match, VoidCallback onUpdated)?
+  onEditBracketResult;
   final VoidCallback? onPreviewBracket;
   final int qualifyingRank;
   final bool isBracketEditMode;
@@ -56,11 +62,11 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     setState(() => _filteredPlayer = player);
   }
 
-  void _editResult(GroupMatch match) {
+  Future<void> _editResult(GroupMatch match) async {
     if (_filteredPlayer != null) {
       setState(() => _filteredPlayer = null);
     }
-    widget.onEditResult(match);
+    await widget.onEditResult(match);
   }
 
   bool _matchesPlayerFilter(GroupMatch match) {
@@ -233,11 +239,14 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
         LayoutBuilder(
           builder: (context, constraints) {
-            final columns =
-                constraints.maxWidth >= 900 && stage.groups.length > 1 ? 2 : 1;
+            final columns = constraints.maxWidth >= 1200
+                ? math.min(4, stage.groups.length)
+                : constraints.maxWidth >= 900 && stage.groups.length > 1
+                ? 2
+                : 1;
             final groupWidth = columns == 1
                 ? constraints.maxWidth
-                : (constraints.maxWidth - 12) / columns;
+                : (constraints.maxWidth - 12 * (columns - 1)) / columns;
 
             return Wrap(
               spacing: 12,
@@ -250,7 +259,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                       context: context,
                       group: group,
                       showGroupHeader: true,
-                      compact: true,
+                      compact: columns > 1,
                     ),
                   ),
               ],
@@ -349,7 +358,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
         else
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 900 ? 2 : 1;
+              final columns = constraints.maxWidth >= 560 ? 2 : 1;
               final width =
                   (constraints.maxWidth - (columns - 1) * 8) / columns;
               return Wrap(
@@ -538,7 +547,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                             widget.onPreviewBracket ??
                             () => _openFullBracketPreview(context, stage),
                         icon: const Icon(Icons.open_in_full),
-                        label: const Text('Vorschau nächste Etappe'),
+                        label: const Text('KO Baum öffnen'),
                       ),
                     ],
                   ),
@@ -575,29 +584,49 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   ) {
     final bracketBuilder = widget.bracketBuilder;
     if (bracketBuilder == null) return;
+    var bracketRevision = 0;
     showDialog<void>(
       context: context,
-      builder: (context) => Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text('${stage.name} · Turnierbaum'),
-            leading: IconButton(
-              tooltip: 'Zurück zu Ergebnisse',
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_back),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog.fullscreen(
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text('${stage.name} · Turnierbaum'),
+              leading: IconButton(
+                tooltip: 'Zurück zu Ergebnisse',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back),
+              ),
             ),
-          ),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: bracketBuilder(
-                  stage,
-                  widget.qualifyingRank,
-                  widget.onEditResult,
-                  widget.canEditResults,
-                  widget.isBracketEditMode && widget.canEditBracket,
-                  widget.onSwapSlot ?? (a, b) {},
+            body: SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: KeyedSubtree(
+                    key: ValueKey(bracketRevision),
+                    child: bracketBuilder(
+                      stage,
+                      widget.qualifyingRank,
+                      (match) async {
+                        void refreshBracket() {
+                          if (dialogContext.mounted) {
+                            setDialogState(() => bracketRevision++);
+                          }
+                        }
+
+                        final editBracketResult = widget.onEditBracketResult;
+                        if (editBracketResult == null) {
+                          await widget.onEditResult(match);
+                          refreshBracket();
+                        } else {
+                          await editBracketResult(match, refreshBracket);
+                        }
+                      },
+                      widget.canEditResults,
+                      widget.isBracketEditMode && widget.canEditBracket,
+                      widget.onSwapSlot ?? (a, b) {},
+                    ),
+                  ),
                 ),
               ),
             ),

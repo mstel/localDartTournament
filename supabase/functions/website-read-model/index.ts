@@ -1,7 +1,14 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import {
+  isTournamentIndex,
+  pageTournamentIndex,
+  parseTournamentPage,
+  summarizeFullTournament,
+} from './tournament_index.ts';
 
 const bucket = 'dart-app-backups';
 const objectName = 'website-read-model.json';
+const tournamentIndexObjectName = 'website-tournament-index.json';
 const maximumBytes = 32 * 1024 * 1024;
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -49,6 +56,47 @@ Deno.serve(async (request: Request) => {
   }
   if (!user) {
     return jsonResponse({ error: 'authentication_required' }, 401);
+  }
+
+  const tournamentView = new URL(request.url).searchParams.get('view') ===
+    'tournaments';
+  const tournamentPage = tournamentView
+    ? parseTournamentPage(new URL(request.url).searchParams)
+    : null;
+  if (tournamentView && tournamentPage === null) {
+    return jsonResponse({ error: 'invalid_page' }, 400);
+  }
+
+  if (tournamentView) {
+    const indexPath = `${user.id}/${tournamentIndexObjectName}`;
+    const { data: indexFile, error: indexDownloadError } = await supabase.storage
+      .from(bucket)
+      .download(indexPath);
+    if (!indexDownloadError && indexFile) {
+      if (indexFile.size > maximumBytes) {
+        return jsonResponse({ error: 'website_data_too_large' }, 413);
+      }
+      let tournamentIndex: unknown;
+      try {
+        tournamentIndex = JSON.parse(await indexFile.text());
+      } catch {
+        return jsonResponse({ error: 'website_data_invalid' }, 502);
+      }
+      if (!isTournamentIndex(tournamentIndex)) {
+        return jsonResponse({ error: 'website_data_invalid' }, 502);
+      }
+      return jsonResponse(pageTournamentIndex(tournamentIndex, tournamentPage!));
+    }
+    if (indexDownloadError && Number(indexDownloadError.statusCode) !== 404) {
+      console.error('website-read-model tournament index download failed', {
+        statusCode: indexDownloadError.statusCode,
+      });
+      return jsonResponse({ error: 'website_data_unavailable' }, 502);
+    }
+    if (!indexDownloadError && !indexFile) {
+      console.error('website-read-model storage returned no index or error');
+      return jsonResponse({ error: 'website_data_unavailable' }, 502);
+    }
   }
 
   const objectPath = `${user.id}/${objectName}`;
@@ -107,6 +155,33 @@ Deno.serve(async (request: Request) => {
     !completedTournaments.every(isRecord)
   ) {
     return jsonResponse({ error: 'website_data_invalid' }, 502);
+  }
+
+  if (tournamentView) {
+    const summaries = completedTournaments
+      .filter(
+        (tournament) =>
+          typeof tournament.finishedAt === 'string' &&
+          Number.isFinite(Date.parse(tournament.finishedAt)) &&
+          tournament.reopenedForCorrections !== true,
+      )
+      .map(summarizeFullTournament);
+    if (summaries.some((summary) => summary === null)) {
+      return jsonResponse({ error: 'website_data_invalid' }, 502);
+    }
+    const validSummaries = summaries.filter(
+      (summary): summary is NonNullable<typeof summary> => summary !== null,
+    );
+    return jsonResponse(
+      pageTournamentIndex(
+        {
+          schemaVersion: 1,
+          generatedAt,
+          completedTournaments: validSummaries,
+        },
+        tournamentPage!,
+      ),
+    );
   }
 
   return jsonResponse({
