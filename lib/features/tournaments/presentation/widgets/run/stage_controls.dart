@@ -171,6 +171,12 @@ class StageViewModeSwitch extends StatelessWidget {
             'Dashboard',
             Icons.dashboard_outlined,
           ),
+        if (canLead)
+          const SportSection(
+            StageViewMode.director,
+            'Leitung',
+            Icons.sports_score_rounded,
+          ),
         const SportSection(
           StageViewMode.results,
           'Ergebnisse',

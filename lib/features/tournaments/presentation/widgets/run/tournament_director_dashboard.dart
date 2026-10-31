@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../../../../shared/theme/tournament_display_palette.dart';
+import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../application/tournament_flow_priority.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../domain/tournament_models.dart';
-import '../../../domain/engines/board_scheduling_engine.dart';
+import 'tournament_timing_panel.dart';
 import 'tournament_second_screen_view.dart';
 
 /// Embedded tournament controls for match scheduling and result entry.
@@ -18,6 +19,12 @@ class TournamentDirectorDashboard extends StatefulWidget {
     required this.onChange,
     required this.onResult,
     required this.onBlock,
+    this.onStartOnBoard,
+    this.onMoveMatch,
+    this.onStartClock,
+    this.onPauseClock,
+    this.onEditTimes,
+    this.onResetClock,
     this.saveError,
     this.canOperate = true,
     this.onCompleteStage,
@@ -34,6 +41,13 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final Future<void> Function() onChange;
   final Future<void> Function(GroupMatch) onResult;
   final Future<void> Function(int) onBlock;
+  final Future<void> Function(int board, {GroupMatch? match})? onStartOnBoard;
+  final Future<void> Function(GroupMatch match, int board)? onMoveMatch;
+  final Future<void> Function()? onStartClock;
+  final Future<void> Function()? onPauseClock;
+  final Future<void> Function(DateTime? startedAt, DateTime? finishedAt)?
+  onEditTimes;
+  final Future<void> Function()? onResetClock;
   final String? saveError;
   final bool canOperate;
   final VoidCallback? onCompleteStage;
@@ -52,6 +66,7 @@ class TournamentDirectorDashboard extends StatefulWidget {
 class _TournamentDirectorDashboardState
     extends State<TournamentDirectorDashboard> {
   Timer? _timer;
+  final _matchSearchController = TextEditingController();
   bool _busy = false;
   String? _actionError;
   int _noticeIndex = 0;
@@ -68,6 +83,7 @@ class _TournamentDirectorDashboardState
   @override
   void dispose() {
     _timer?.cancel();
+    _matchSearchController.dispose();
     super.dispose();
   }
 
@@ -130,6 +146,136 @@ class _TournamentDirectorDashboardState
   String _timeOfDay(DateTime t) =>
       '${t.toLocal().hour.toString().padLeft(2, '0')}:${t.toLocal().minute.toString().padLeft(2, '0')} Uhr';
 
+  int? _quickStartBoard(PlayEntry entry) {
+    if (!widget.canOperate ||
+        widget.tournament.completedStageIndexes.contains(widget.activeStage)) {
+      return null;
+    }
+    final snapshot = TournamentDirectorSnapshot(
+      widget.tournament,
+      widget.activeStage,
+    );
+    if (!snapshot.schedule.planned.any(
+      (assignment) => identical(assignment.entry.match, entry.match),
+    )) {
+      return null;
+    }
+    if (snapshot.schedule.running.any(
+      (running) => running.players.any(entry.players.contains),
+    )) {
+      return null;
+    }
+    return snapshot.freeBoards.firstOrNull;
+  }
+
+  Future<void> _chooseMatchForBoard(
+    int board,
+    TournamentDirectorSnapshot state,
+  ) async {
+    final startOnBoard = widget.onStartOnBoard;
+    if (startOnBoard == null ||
+        !widget.canOperate ||
+        widget.tournament.completedStageIndexes.contains(widget.activeStage)) {
+      return;
+    }
+    final busyPlayers = {
+      for (final running in state.schedule.running) ...running.players,
+    };
+    final choices = state.schedule.planned
+        .where(
+          (assignment) =>
+              assignment.entry.stageIndex == widget.activeStage &&
+              assignment.entry.match.hasPlayers &&
+              !assignment.entry.match.isResolved &&
+              !assignment.entry.players.any(busyPlayers.contains),
+        )
+        .toList();
+    if (choices.isEmpty) return;
+
+    final match = await showDialog<GroupMatch>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Partie für Board $board auswählen'),
+        content: SizedBox(
+          width: 440,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.65,
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: choices.length,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final assignment = choices[index];
+                final entry = assignment.entry;
+                return ListTile(
+                  title: Text(
+                    '${entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
+                    '${entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                  ),
+                  subtitle: Text(
+                    '${entry.origin} · Warteschritt ${assignment.block + 1}',
+                  ),
+                  onTap: () => Navigator.of(context).pop(entry.match),
+                );
+              },
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Abbrechen'),
+          ),
+        ],
+      ),
+    );
+    if (match == null || !mounted) return;
+    await startOnBoard(board, match: match);
+  }
+
+  Future<void> _chooseBoardForRunningMatch(
+    PlayEntry entry,
+    TournamentDirectorSnapshot state,
+  ) async {
+    final moveMatch = widget.onMoveMatch;
+    if (moveMatch == null || !widget.canOperate) return;
+    final availableBoards = state.freeBoards;
+    if (availableBoards.isEmpty) return;
+    final board = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Laufende Partie verschieben'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
+              '${entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+            ),
+            const SizedBox(height: 8),
+            for (final board in availableBoards)
+              ListTile(
+                leading: const Icon(Icons.dashboard_outlined),
+                title: Text('Auf Board $board verschieben'),
+                onTap: () => Navigator.of(context).pop(board),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Abbrechen'),
+          ),
+        ],
+      ),
+    );
+    if (board == null || !mounted) return;
+    await _act(() => moveMatch(entry.match, board));
+  }
+
   Widget _matchQueue(
     String title,
     List<PlayEntry> entries, {
@@ -170,6 +316,90 @@ class _TournamentDirectorDashboardState
       ),
   ]);
 
+  Widget _matchSearch(TournamentDirectorSnapshot state) {
+    final query = _matchSearchController.text.trim();
+    final matches = query.isEmpty ? <PlayEntry>[] : state.search(query);
+    final busyPlayers = {
+      for (final running in state.schedule.running) ...running.players,
+    };
+    final freeBoard = state.freeBoards.firstOrNull;
+    final startOnBoard = widget.onStartOnBoard;
+
+    return _box([
+      Text(
+        'Partien eines Spielers finden',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 8),
+      TextField(
+        key: const ValueKey('director-player-search'),
+        controller: _matchSearchController,
+        decoration: const InputDecoration(
+          labelText: 'Spielername suchen',
+          hintText: 'Name eingeben',
+          prefixIcon: Icon(Icons.search),
+          border: OutlineInputBorder(),
+        ),
+        textInputAction: TextInputAction.search,
+        onChanged: (_) => setState(() {}),
+      ),
+      if (query.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        if (matches.isEmpty)
+          const Text('Keine offene Partie mit diesem Spieler gefunden.')
+        else
+          for (final entry in matches)
+            Builder(
+              builder: (context) {
+                final running = state.schedule.running
+                    .where(
+                      (candidate) => identical(candidate.match, entry.match),
+                    )
+                    .firstOrNull;
+                final isPlanned = state.schedule.planned.any(
+                  (assignment) =>
+                      identical(assignment.entry.match, entry.match),
+                );
+                final canStart =
+                    running == null &&
+                    isPlanned &&
+                    freeBoard != null &&
+                    startOnBoard != null &&
+                    widget.canOperate &&
+                    !widget.tournament.completedStageIndexes.contains(
+                      widget.activeStage,
+                    ) &&
+                    !entry.players.any(busyPlayers.contains);
+                final status = running != null
+                    ? 'Läuft auf Board ${running.match.boardNumber ?? '—'}'
+                    : canStart
+                    ? 'Startbar · ${entry.origin}'
+                    : isPlanned
+                    ? 'Wartet auf ein freies Board oder die Etappenfreigabe'
+                    : 'Wartet auf vorherige Ergebnisse';
+
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    '${entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
+                    '${entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                  ),
+                  subtitle: Text(status),
+                  trailing: canStart
+                      ? FilledButton.tonal(
+                          onPressed: () => _act(
+                            () => startOnBoard(freeBoard, match: entry.match),
+                          ),
+                          child: const Text('Starten'),
+                        )
+                      : null,
+                );
+              },
+            ),
+      ],
+    ]);
+  }
+
   Widget _queueTile(
     PlayEntry entry, {
     required double width,
@@ -179,6 +409,10 @@ class _TournamentDirectorDashboardState
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final match = entry.match;
+    final startOnBoard = widget.onStartOnBoard;
+    final quickStartBoard = !showResult && startOnBoard != null
+        ? _quickStartBoard(entry)
+        : null;
     return Container(
       key: ValueKey(
         'director-match-tile-${showResult ? 'result' : 'next'}-'
@@ -265,6 +499,16 @@ class _TournamentDirectorDashboardState
                 overflow: TextOverflow.ellipsis,
               ),
           ],
+          if (quickStartBoard != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: FilledButton.icon(
+                onPressed: () =>
+                    _act(() => startOnBoard!(quickStartBoard, match: match)),
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: const Text('Schnellstart'),
+              ),
+            ),
         ],
       ),
     );
@@ -314,6 +558,163 @@ class _TournamentDirectorDashboardState
         .take(6)
         .map((assignment) => assignment.entry)
         .toList();
+    final boardCards = [
+      for (var board = 1; board <= t.boardCount; board++)
+        Builder(
+          builder: (context) {
+            final running = state.runningOn(board);
+            final blocked = t.blockedBoards.contains(board);
+            final suggestion =
+                widget.onStartOnBoard != null && widget.canOperate
+                ? OrderOfPlayController().suggestForBoard(
+                    t,
+                    widget.activeStage,
+                    board,
+                  )
+                : null;
+            final label = running != null
+                ? 'Läuft'
+                : blocked
+                ? 'Gesperrt'
+                : suggestion != null
+                ? 'Frei'
+                : 'Reserve';
+            final accent = running != null
+                ? TournamentDisplayPalette.accent
+                : blocked
+                ? Theme.of(context).colorScheme.error
+                : suggestion != null
+                ? Colors.green.shade700
+                : TournamentDisplayPalette.mutedText;
+            return Container(
+              width: 180,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: TournamentDisplayPalette.card,
+                border: Border.all(
+                  color: blocked
+                      ? Theme.of(context).colorScheme.error.withAlpha(180)
+                      : TournamentDisplayPalette.border,
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        running != null
+                            ? Icons.sports_score
+                            : blocked
+                            ? Icons.block
+                            : Icons.dashboard_outlined,
+                        size: 18,
+                        color: accent,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Board $board',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (running != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${running.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
+                            '${running.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          if (widget.onMoveMatch != null &&
+                              widget.canOperate &&
+                              state.freeBoards.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    _chooseBoardForRunningMatch(running, state),
+                                icon: const Icon(Icons.swap_horiz_rounded),
+                                label: const Text('Board wechseln'),
+                              ),
+                            ),
+                          if (widget.canOperate)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    _act(() => widget.onResult(running.match)),
+                                icon: const Icon(Icons.edit_note_rounded),
+                                label: const Text('Ergebnis erfassen'),
+                              ),
+                            ),
+                        ],
+                      ),
+                    )
+                  else if (blocked)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text('Für manuellen Betrieb gesperrt.'),
+                    )
+                  else if (suggestion != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: FilledButton.icon(
+                        onPressed: widget.onStartOnBoard == null
+                            ? null
+                            : () => _act(() => widget.onStartOnBoard!(board)),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: const Text('Starten'),
+                      ),
+                    ),
+                  if (running == null &&
+                      !blocked &&
+                      suggestion != null &&
+                      widget.onStartOnBoard != null &&
+                      widget.canOperate)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: OutlinedButton.icon(
+                        onPressed: () => _chooseMatchForBoard(board, state),
+                        icon: const Icon(Icons.swap_horiz_rounded),
+                        label: const Text('Partie wählen'),
+                      ),
+                    ),
+                  if (running == null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: OutlinedButton.icon(
+                        onPressed: () => _act(() => widget.onBlock(board)),
+                        icon: Icon(
+                          blocked
+                              ? Icons.lock_open_rounded
+                              : Icons.lock_rounded,
+                        ),
+                        label: Text(blocked ? 'Freigeben' : 'Sperren'),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+    ];
     final resultEntryOrder = {
       for (var index = 0; index < state.entries.length; index++)
         state.entries[index].match: index,
@@ -481,6 +882,21 @@ class _TournamentDirectorDashboardState
         ),
     ]);
 
+    final boardOverview = _box([
+      Text('Boards', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: boardCards),
+    ]);
+    final clock = _box([
+      TournamentTimingPanel(
+        tournament: t,
+        onStart: widget.onStartClock,
+        onPauseToggle: widget.onPauseClock,
+        onEditTimes: widget.onEditTimes,
+        onResetClock: widget.onResetClock,
+        allowManualStart: widget.onStartClock != null,
+      ),
+    ]);
     final notices = _box([
       Text(
         'Hinweise & Empfehlungen',
@@ -561,6 +977,12 @@ class _TournamentDirectorDashboardState
         notices,
         const SizedBox(height: 12),
         status,
+        const SizedBox(height: 12),
+        clock,
+        const SizedBox(height: 12),
+        boardOverview,
+        const SizedBox(height: 12),
+        _matchSearch(state),
         const SizedBox(height: 12),
         _matchQueue(
           'Empfohlene Partien',

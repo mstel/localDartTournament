@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_director_snapshot.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/tournament_timing.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
@@ -77,8 +78,10 @@ void main() {
     }
   });
   for (final size in [
+    const Size(320, 568),
     const Size(360, 800),
     const Size(800, 600),
+    const Size(800, 360),
     const Size(1440, 900),
   ]) {
     for (final scale in [1.0, 2.0]) {
@@ -159,6 +162,47 @@ void main() {
     t.blockedBoards.remove(1);
     expect(c.plan(t, 0).planned.length, 15);
   });
+  test('board suggestion starts a ready match on a free board', () {
+    final t = fixture();
+    final suggestion = c.suggestForBoard(t, 0, 2);
+    expect(suggestion, isNotNull);
+    expect(c.start(t, 0, suggestion!.entry.match, 2), isTrue);
+    expect(suggestion.entry.match.boardNumber, 2);
+    expect(c.suggestForBoard(t, 0, 2), isNull);
+  });
+  test(
+    'running match can move to a free board without losing its start state',
+    () {
+      final t = fixture(boards: 3);
+      final schedule = c.plan(t, 0);
+      final match = schedule.planned.first.entry.match;
+      expect(c.start(t, 0, match, 1), isTrue);
+      final startedAt = match.startedAt;
+      final startedPlayers = match.startedPlayers;
+
+      expect(c.moveRunningMatch(t, 0, match, 3), isTrue);
+      expect(match.boardNumber, 3);
+      expect(match.startedAt, startedAt);
+      expect(match.startedPlayers, startedPlayers);
+      expect(c.plan(t, 0).running.single.match, same(match));
+    },
+  );
+  test('running match cannot move to occupied, blocked, or invalid board', () {
+    final t = fixture(boards: 3);
+    final schedule = c.plan(t, 0);
+    final first = schedule.planned[0];
+    final second = schedule.planned[1];
+    expect(c.start(t, 0, first.entry.match, 1), isTrue);
+    expect(c.start(t, 0, second.entry.match, 2), isTrue);
+    t.blockedBoards.add(3);
+
+    expect(c.moveRunningMatch(t, 0, first.entry.match, 2), isFalse);
+    expect(c.moveRunningMatch(t, 0, first.entry.match, 3), isFalse);
+    expect(c.moveRunningMatch(t, 0, first.entry.match, 4), isFalse);
+    expect(c.moveRunningMatch(t, 0, second.entry.match, 1), isFalse);
+    expect(first.entry.match.boardNumber, 1);
+    expect(second.entry.match.boardNumber, 2);
+  });
   test('search prioritizes running match, excludes completed pairings', () {
     final t = fixture();
     final first = c.plan(t, 0).planned.first;
@@ -207,7 +251,65 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 28);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 29);
+    },
+  );
+  test('director mode and strategy persist in tournament JSON', () {
+    final t = fixture();
+    t.directorModeEnabled = true;
+    t.directorSchedulingStrategy = 'global';
+    final json = t.toJson();
+    final restored = CreatedTournament.fromJson(json);
+    expect(restored.directorModeEnabled, isTrue);
+    expect(restored.directorSchedulingStrategy, 'global');
+  });
+  test(
+    'group strategy clusters matches by group while global strategy keeps urgency-first ordering',
+    () {
+      final players = [
+        for (var i = 1; i <= 8; i++) TournamentPlayer.generated(i),
+      ];
+      final a1 = PlayEntry(
+        GroupMatch(homePlayer: players[0], awayPlayer: players[1], round: 1),
+        0,
+        'A · Spiel 1',
+        'A',
+      );
+      final a2 = PlayEntry(
+        GroupMatch(homePlayer: players[2], awayPlayer: players[3], round: 1),
+        0,
+        'A · Spiel 2',
+        'A',
+      );
+      final b1 = PlayEntry(
+        GroupMatch(homePlayer: players[4], awayPlayer: players[5], round: 1),
+        0,
+        'B · Spiel 1',
+        'B',
+      );
+      final b2 = PlayEntry(
+        GroupMatch(homePlayer: players[6], awayPlayer: players[7], round: 1),
+        0,
+        'B · Spiel 2',
+        'B',
+      );
+
+      final ready = [b1, a1, b2, a2];
+      final groupSchedule = const BoardSchedulingEngine().schedule(
+        all: ready,
+        ready: ready,
+        boardCount: 2,
+        strategy: 'group',
+      );
+      final globalSchedule = const BoardSchedulingEngine().schedule(
+        all: ready,
+        ready: ready,
+        boardCount: 2,
+        strategy: 'global',
+      );
+
+      expect(groupSchedule.first.entry.groupKey, 'A');
+      expect(globalSchedule.first.entry.groupKey, 'B');
     },
   );
   testWidgets('director dashboard survives width changes', (tester) async {
@@ -419,6 +521,294 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Priorisierte Partie'), findsWidgets);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('board override starts the selected ready match on that board', (
+    tester,
+  ) async {
+    final tournament = fixture();
+    final expectedMatch = const OrderOfPlayController()
+        .plan(tournament, 0)
+        .planned[1]
+        .entry
+        .match;
+    GroupMatch? startedMatch;
+    var startedBoard = -1;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onStartOnBoard: (board, {match}) async {
+                startedBoard = board;
+                startedMatch = match;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final chooseMatch = find.text('Partie wählen').first;
+    await tester.ensureVisible(chooseMatch);
+    await tester.tap(chooseMatch);
+    await tester.pumpAndSettle();
+    expect(find.text('Partie für Board 1 auswählen'), findsOneWidget);
+    await tester.tap(find.byType(ListTile).at(1));
+    await tester.pumpAndSettle();
+
+    expect(startedBoard, 1);
+    expect(startedMatch, same(expectedMatch));
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('running board card can move a match to another free board', (
+    tester,
+  ) async {
+    final tournament = fixture(boards: 3);
+    final match = const OrderOfPlayController()
+        .plan(tournament, 0)
+        .planned
+        .first
+        .entry
+        .match;
+    const OrderOfPlayController().start(tournament, 0, match, 1);
+    GroupMatch? movedMatch;
+    var targetBoard = -1;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onMoveMatch: (selectedMatch, board) async {
+                movedMatch = selectedMatch;
+                targetBoard = board;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final changeBoard = find.text('Board wechseln');
+    await tester.ensureVisible(changeBoard);
+    await tester.tap(changeBoard);
+    await tester.pumpAndSettle();
+    expect(find.text('Laufende Partie verschieben'), findsOneWidget);
+    await tester.tap(find.text('Auf Board 2 verschieben'));
+    await tester.pumpAndSettle();
+
+    expect(movedMatch, same(match));
+    expect(targetBoard, 2);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('director can control the tournament clock and enter a result', (
+    tester,
+  ) async {
+    final tournament = fixture();
+    final match = const OrderOfPlayController()
+        .plan(tournament, 0)
+        .planned
+        .first
+        .entry
+        .match;
+    const OrderOfPlayController().start(tournament, 0, match, 1);
+    var resultRequested = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {
+                resultRequested = true;
+              },
+              onBlock: (_) async {},
+              onStartClock: () async {
+                tournament.startedAt = DateTime.now();
+              },
+              onPauseClock: () async {
+                TournamentTiming.togglePause(tournament);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final startClock = find.text('Turnieruhr starten');
+    await tester.ensureVisible(startClock);
+    await tester.tap(startClock);
+    await tester.pumpAndSettle();
+    expect(tournament.startedAt, isNotNull);
+
+    final pauseClock = find.text('Uhr pausieren');
+    await tester.ensureVisible(pauseClock);
+    await tester.tap(pauseClock);
+    await tester.pumpAndSettle();
+    expect(tournament.isClockPaused, isTrue);
+    expect(find.text('Uhr fortsetzen'), findsOneWidget);
+
+    final recordResult = find.text('Ergebnis erfassen');
+    await tester.ensureVisible(recordResult);
+    await tester.tap(recordResult);
+    await tester.pumpAndSettle();
+    expect(resultRequested, isTrue);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('director disables match operations when the stage is locked', (
+    tester,
+  ) async {
+    final tournament = fixture();
+    final match = const OrderOfPlayController()
+        .plan(tournament, 0)
+        .planned
+        .first
+        .entry
+        .match;
+    const OrderOfPlayController().start(tournament, 0, match, 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              canOperate: false,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onStartOnBoard: (_, {match}) async {},
+              onMoveMatch: (_, _) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Starten'), findsNothing);
+    expect(find.text('Schnellstart'), findsNothing);
+    expect(find.text('Partie wählen'), findsNothing);
+    expect(find.text('Board wechseln'), findsNothing);
+    expect(find.text('Ergebnis erfassen'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('player search offers matching startable matches', (
+    tester,
+  ) async {
+    final tournament = fixture();
+    GroupMatch? startedMatch;
+    var startedBoard = -1;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onStartOnBoard: (board, {match}) async {
+                startedBoard = board;
+                startedMatch = match;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('director-player-search')),
+      tournament.players.first.name,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Startbar · Gruppen · A'), findsWidgets);
+    final firstResult = find.byType(ListTile).first;
+    final startButton = find.descendant(
+      of: firstResult,
+      matching: find.byType(FilledButton),
+    );
+    expect(startButton, findsOneWidget);
+    await tester.ensureVisible(startButton);
+    await tester.tap(startButton);
+    await tester.pumpAndSettle();
+
+    expect(startedBoard, 1);
+    expect(startedMatch, isNotNull);
+    expect(
+      (tournament.runStages.single as GroupTournamentRunStage)
+          .groups
+          .single
+          .matches
+          .any((match) => identical(match, startedMatch)),
+      isTrue,
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('recommended queue supports quick start on a free board', (
+    tester,
+  ) async {
+    GroupMatch? startedMatch;
+    var startedBoard = -1;
+    final tournament = fixture();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onStartOnBoard: (board, {match}) async {
+                startedBoard = board;
+                startedMatch = match;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final quickStart = find.text('Schnellstart').first;
+    expect(quickStart, findsOneWidget);
+    await tester.ensureVisible(quickStart);
+    await tester.tap(quickStart);
+    await tester.pumpAndSettle();
+
+    expect(startedBoard, isNot(-1));
+    expect(startedMatch, isNotNull);
+    final allMatches = (tournament.runStages.single as GroupTournamentRunStage)
+        .groups
+        .expand((group) => group.matches)
+        .toList();
+    expect(allMatches.any((match) => identical(match, startedMatch)), isTrue);
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets('save and synchronization errors stay visible and offer retry', (

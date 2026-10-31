@@ -22,14 +22,33 @@ class TournamentFlowPriority {
     final groupPlayedCounts = [
       for (final group in stage.groups) _playedMatches(group.matches),
     ];
+    final groupMatchTotals = [
+      for (final group in stage.groups) group.matches.length,
+    ];
     final mostPlayedGroup = groupPlayedCounts.reduce((a, b) => a > b ? a : b);
     final leastPlayedGroup = groupPlayedCounts.reduce((a, b) => a < b ? a : b);
     final groupDeficit = mostPlayedGroup - leastPlayedGroup;
-    if (groupDeficit >= groupMatchDeficitThreshold) {
+    final groupProgress = <double>[];
+    for (var index = 0; index < stage.groups.length; index++) {
+      final total = groupMatchTotals[index];
+      groupProgress.add(total == 0 ? 0.0 : groupPlayedCounts[index] / total);
+    }
+    final mostPlayedRatio = groupProgress.isEmpty ? 0.0 : groupProgress.reduce((a, b) => a > b ? a : b);
+    final lowestPlayedRatio = groupProgress.isEmpty ? 0.0 : groupProgress.reduce((a, b) => a < b ? a : b);
+    final shouldPrioritizeGroupLag =
+        groupDeficit >= groupMatchDeficitThreshold ||
+        (groupProgress.length > 1 && (mostPlayedRatio - lowestPlayedRatio) >= 0.5);
+    if (shouldPrioritizeGroupLag) {
       final trailingGroups = <String>[];
       for (var index = 0; index < stage.groups.length; index++) {
-        if (mostPlayedGroup - groupPlayedCounts[index] <
-            groupMatchDeficitThreshold) {
+        final groupMatches = groupPlayedCounts[index];
+        final totalMatches = groupMatchTotals[index];
+        final ratio = totalMatches == 0 ? 0.0 : groupMatches / totalMatches;
+        final lagBehindLeader =
+            mostPlayedGroup - groupMatches >= groupMatchDeficitThreshold ||
+            (groupDeficit >= groupMatchDeficitThreshold &&
+                (mostPlayedRatio - ratio) >= 0.25);
+        if (!lagBehindLeader) {
           continue;
         }
         final group = stage.groups[index];

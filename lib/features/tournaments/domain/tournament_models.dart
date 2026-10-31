@@ -57,6 +57,11 @@ List<int> _intListFromJson(Object? value) {
   ];
 }
 
+String _directorSchedulingStrategyFromJson(Object? value) {
+  final strategy = (value as String? ?? 'group').trim().toLowerCase();
+  return strategy == 'global' ? 'global' : 'group';
+}
+
 List<String> _groupTieBreakersFromJson(Object? value) {
   final tieBreakers = _stringListFromJson(
     value,
@@ -556,6 +561,8 @@ class CreatedTournament {
     List<String> rankingIds = const [],
     this.activeStageIndex = 0,
     this.boardCount = 1,
+    this.directorModeEnabled = false,
+    this.directorSchedulingStrategy = 'group',
     this.syncRevision = 0,
     List<PlayerWithdrawal>? withdrawals,
     Set<int>? blockedBoards,
@@ -615,6 +622,10 @@ class CreatedTournament {
       ),
       activeStageIndex: json['activeStageIndex'] as int? ?? 0,
       boardCount: (json['boardCount'] as int? ?? 1).clamp(1, 64),
+      directorModeEnabled: json['directorModeEnabled'] as bool? ?? false,
+      directorSchedulingStrategy: _directorSchedulingStrategyFromJson(
+        json['directorSchedulingStrategy'],
+      ),
       syncRevision: json['syncRevision'] as int? ?? 0,
       withdrawals: _mapListFromJson(
         json['withdrawals'],
@@ -651,6 +662,8 @@ class CreatedTournament {
   List<String> rankingIds;
   int activeStageIndex;
   int boardCount;
+  bool directorModeEnabled;
+  String directorSchedulingStrategy;
   int syncRevision;
   final List<PlayerWithdrawal> withdrawals;
   final Set<int> blockedBoards;
@@ -680,6 +693,9 @@ class CreatedTournament {
       if (rankingIds.isNotEmpty) 'rankingIds': rankingIds,
       'activeStageIndex': activeStageIndex,
       'boardCount': boardCount,
+      if (directorModeEnabled) 'directorModeEnabled': true,
+      if (directorSchedulingStrategy != 'group')
+        'directorSchedulingStrategy': directorSchedulingStrategy,
       if (syncRevision != 0) 'syncRevision': syncRevision,
       if (blockedBoards.isNotEmpty)
         'blockedBoards': blockedBoards.toList()..sort(),
