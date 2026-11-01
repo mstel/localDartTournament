@@ -1031,6 +1031,89 @@ void main() {
     },
   );
 
+  testWidgets('loaded layout displays widget content without extra cards', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..secondScreenLayouts['Standard'] = const [
+        SecondScreenWidgetPlacement(
+          widgetId: 'boards',
+          widthUnits: 2,
+          columnIndex: 0,
+        ),
+        SecondScreenWidgetPlacement(
+          widgetId: 'standings',
+          widthUnits: 2,
+          columnIndex: 1,
+        ),
+      ]
+      ..secondScreenActiveLayout = 'Standard';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Tabellen & Zwischenstände'), findsOneWidget);
+    expect(find.text('Spielplan'), findsOneWidget);
+    expect(find.text('Boards & nächste Begegnungen'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('monitor-widget-standings')),
+        matching: find.byType(Card),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('standard layout cannot be deleted', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..secondScreenLayouts['Standard'] = const [
+        SecondScreenWidgetPlacement(widgetId: 'boards'),
+      ]
+      ..secondScreenLayouts['Vereins-TV'] = const [
+        SecondScreenWidgetPlacement(widgetId: 'standings'),
+      ]
+      ..secondScreenActiveLayout = 'Vereins-TV';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout laden'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byTooltip('Layout "Standard" löschen'), findsNothing);
+    expect(find.byTooltip('Layout "Vereins-TV" löschen'), findsOneWidget);
+    expect(tournament.secondScreenLayouts, contains('Standard'));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('layout loading offers confirmed deletion', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;

@@ -47,6 +47,8 @@ enum _StandingsDisplayMode { standings, forecast }
 
 enum _MonitorLayoutAction { add, save, load, reset, standard }
 
+const String _standardMonitorLayoutName = 'Standard';
+
 const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
   SecondScreenWidgetPlacement(
     widgetId: 'boards',
@@ -1200,6 +1202,23 @@ class _TournamentSecondScreenViewState
         ? 'Lebenstand'
         : _monitorWidgetTitles[placement.widgetId];
     if (title == null) return const SizedBox.shrink();
+    final widgetContent = _buildMonitorWidgetContent(
+      context,
+      placement.widgetId,
+      tournament,
+      activeIndex,
+      activeStage,
+      playedMatches,
+    );
+    if (!isEditing) {
+      return SizedBox(
+        key: ValueKey('monitor-widget-${placement.widgetId}'),
+        width: width,
+        height: height,
+        child: ClipRect(child: widgetContent),
+      );
+    }
+
     final maxWidthUnits = placement.columnIndex == null ? 4 : 2;
     final titleWidget = Text(
       title,
@@ -1278,9 +1297,6 @@ class _TournamentSecondScreenViewState
             children: [
               LayoutBuilder(
                 builder: (context, constraints) {
-                  if (!isEditing) {
-                    return Row(children: [Expanded(child: titleWidget)]);
-                  }
                   if (constraints.maxWidth < 560 ||
                       MediaQuery.textScalerOf(context).scale(1) > 1.3) {
                     return Row(
@@ -1332,18 +1348,7 @@ class _TournamentSecondScreenViewState
               ),
               const Divider(height: 1),
               const SizedBox(height: 6),
-              Expanded(
-                child: ClipRect(
-                  child: _buildMonitorWidgetContent(
-                    context,
-                    placement.widgetId,
-                    tournament,
-                    activeIndex,
-                    activeStage,
-                    playedMatches,
-                  ),
-                ),
-              ),
+              Expanded(child: ClipRect(child: widgetContent)),
             ],
           ),
         ),
@@ -1681,7 +1686,7 @@ class _TournamentSecondScreenViewState
       return;
     }
     final applied = await _persistMonitorLayout(
-      _loadedLayoutName ?? 'Standard',
+      _loadedLayoutName ?? _standardMonitorLayoutName,
     );
     if (applied && mounted) {
       setState(() {
@@ -1757,36 +1762,37 @@ class _TournamentSecondScreenViewState
                       child: Text(name),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Layout "$name" löschen',
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
+                  if (!_isStandardMonitorLayout(name))
+                    IconButton(
+                      tooltip: 'Layout "$name" löschen',
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Layout löschen?'),
+                            content: Text('„$name“ wird dauerhaft gelöscht.'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Abbrechen'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Löschen'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true || !mounted) return;
+                        final deleted = await _deleteMonitorLayout(name);
+                        if (deleted) updateDialog(() {});
+                      },
+                      icon: const Icon(Icons.delete_outline),
                     ),
-                    onPressed: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Layout löschen?'),
-                          content: Text('„$name“ wird dauerhaft gelöscht.'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('Abbrechen'),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('Löschen'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirmed != true || !mounted) return;
-                      final deleted = await _deleteMonitorLayout(name);
-                      if (deleted) updateDialog(() {});
-                    },
-                    icon: const Icon(Icons.delete_outline),
-                  ),
                 ],
               ),
           ],
@@ -1820,7 +1826,10 @@ class _TournamentSecondScreenViewState
   }
 
   Future<bool> _deleteMonitorLayout(String name) async {
-    if (!widget.tournament.secondScreenLayouts.containsKey(name)) return false;
+    if (_isStandardMonitorLayout(name) ||
+        !widget.tournament.secondScreenLayouts.containsKey(name)) {
+      return false;
+    }
     final previousActiveLayout = widget.tournament.secondScreenActiveLayout;
     try {
       await _storage.saveSecondScreenLayout(
@@ -1851,11 +1860,14 @@ class _TournamentSecondScreenViewState
     }
   }
 
+  bool _isStandardMonitorLayout(String name) =>
+      name.trim().toLowerCase() == _standardMonitorLayoutName.toLowerCase();
+
   Future<void> _resetMonitorLayout() async {
     try {
       await _storage.saveSecondScreenLayout(
         tournament: widget.tournament,
-        name: 'Standard',
+        name: _standardMonitorLayoutName,
         placements: _defaultMonitorLayout,
         activate: true,
       );

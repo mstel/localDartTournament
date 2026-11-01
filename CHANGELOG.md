@@ -1,3 +1,9 @@
+# 2.3.3+53
+
+- Entfernt im geladenen Zweitmonitor-Layout doppelte Widget-Überschriften und
+  zusätzliche Kartenhintergründe außerhalb des Layout-Editors.
+- Schützt das Standardlayout vor dem Löschen.
+
 # 2.3.2+52
 
 - Verschiebt gruppenbasierte Board-Zuweisungen in einen eigenen, standardmäßig
