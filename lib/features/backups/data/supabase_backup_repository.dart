@@ -33,6 +33,15 @@ class SupabaseBackupRepository {
     return '${user.id}/${WebsiteReadModelService.tournamentIndexObjectName}';
   }
 
+  String get _websiteUserId {
+    final user = _client.auth.currentUser;
+    if (user == null) throw StateError('Bitte zuerst als Betreiber anmelden.');
+    return user.id;
+  }
+
+  String get _websiteResourceManifestPath =>
+      '$_websiteUserId/${WebsiteReadModelService.resourceManifestObjectName}';
+
   Future<bool> hasBackup() async {
     final user = _client.auth.currentUser;
     if (user == null) throw StateError('Bitte zuerst als Betreiber anmelden.');
@@ -72,7 +81,19 @@ class SupabaseBackupRepository {
     );
   }
 
-  Future<void> uploadWebsiteReadModel(Map<String, dynamic> readModel) async {
+  Future<bool> hasWebsiteResources() async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw StateError('Bitte zuerst als Betreiber anmelden.');
+    final files = await _client.storage.from(bucket).list(path: user.id);
+    return files.any(
+      (file) => file.name == WebsiteReadModelService.resourceManifestObjectName,
+    );
+  }
+
+  Future<void> uploadWebsiteReadModel(
+    Map<String, dynamic> readModel, {
+    required Map<String, Map<String, dynamic>> version2Resources,
+  }) async {
     final bytes = Uint8List.fromList(utf8.encode(jsonEncode(readModel)));
     await _client.storage
         .from(bucket)
@@ -98,6 +119,82 @@ class SupabaseBackupRepository {
           fileOptions: const FileOptions(
             upsert: true,
             contentType: 'application/octet-stream',
+          ),
+        );
+    for (final entry in version2Resources.entries) {
+      final page = entry.key.startsWith('tournaments:')
+          ? int.parse(entry.key.substring('tournaments:'.length))
+          : null;
+      final resource = page == null ? entry.key : 'tournaments';
+      final objectName = WebsiteReadModelService.version2ResourceObjectName(
+        resource,
+        page: page,
+      );
+      final resourceBytes = Uint8List.fromList(
+        utf8.encode(jsonEncode(entry.value)),
+      );
+      await _client.storage
+          .from(bucket)
+          .uploadBinary(
+            '$_websiteUserId/$objectName',
+            resourceBytes,
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'application/json',
+            ),
+          );
+    }
+    final publishedTournamentPages = version2Resources.keys
+        .where((key) => key.startsWith('tournaments:'))
+        .map(
+          (key) => WebsiteReadModelService.version2ResourceObjectName(
+            'tournaments',
+            page: int.parse(key.substring('tournaments:'.length)),
+          ),
+        )
+        .toSet();
+    final existingFiles = await _client.storage
+        .from(bucket)
+        .list(
+          path: _websiteUserId,
+          searchOptions: const SearchOptions(limit: 1000),
+        );
+    final staleTournamentPages = existingFiles
+        .map((file) => file.name)
+        .where(
+          (name) =>
+              RegExp(
+                r'^website-v2-tournaments-page-\d+\.json$',
+              ).hasMatch(name) &&
+              !publishedTournamentPages.contains(name),
+        )
+        .map((name) => '$_websiteUserId/$name')
+        .toList();
+    if (staleTournamentPages.isNotEmpty) {
+      await _client.storage.from(bucket).remove(staleTournamentPages);
+    }
+    final manifest = {
+      'schemaVersion': WebsiteReadModelService.resourceSchemaVersion,
+      'generatedAt': readModel['generatedAt'],
+      'resources': [
+        for (final entry in version2Resources.entries)
+          WebsiteReadModelService.version2ResourceObjectName(
+            entry.key.startsWith('tournaments:') ? 'tournaments' : entry.key,
+            page: entry.key.startsWith('tournaments:')
+                ? int.parse(entry.key.substring('tournaments:'.length))
+                : null,
+          ),
+      ],
+    };
+    final manifestBytes = Uint8List.fromList(utf8.encode(jsonEncode(manifest)));
+    await _client.storage
+        .from(bucket)
+        .uploadBinary(
+          _websiteResourceManifestPath,
+          manifestBytes,
+          fileOptions: const FileOptions(
+            upsert: true,
+            contentType: 'application/json',
           ),
         );
   }

@@ -147,9 +147,21 @@ class TournamentScheduleView extends StatelessWidget {
               child: DataTable(
                 columns: [
                   const DataColumn(label: Text('Runde / Gruppe')),
-                  const DataColumn(label: Text('Spieler 1')),
+                  DataColumn(
+                    label: Text(
+                      stage is KnockoutTournamentRunStage && stage.isKratzer
+                          ? 'Teilnehmende'
+                          : 'Spieler 1',
+                    ),
+                  ),
                   const DataColumn(label: Text('Ergebnis')),
-                  const DataColumn(label: Text('Spieler 2')),
+                  DataColumn(
+                    label: Text(
+                      stage is KnockoutTournamentRunStage && stage.isKratzer
+                          ? 'Kratzer'
+                          : 'Spieler 2',
+                    ),
+                  ),
                   const DataColumn(label: Text('Status')),
                   const DataColumn(label: Text('Zusammenfassung')),
                   const DataColumn(label: Text('Board')),
@@ -161,13 +173,27 @@ class TournamentScheduleView extends StatelessWidget {
                     DataRow(
                       cells: [
                         DataCell(Text(row.round)),
-                        DataCell(Text(row.match.homePlayer?.name ?? 'Offen')),
+                        DataCell(
+                          Text(
+                            row.match.isKratzer
+                                ? row.match.players
+                                      .map((player) => player.name)
+                                      .join(' · ')
+                                : row.match.homePlayer?.name ?? 'Offen',
+                          ),
+                        ),
                         DataCell(
                           Text(
                             row.match.hasResult ? row.match.scoreLabel : '–',
                           ),
                         ),
-                        DataCell(Text(row.match.awayPlayer?.name ?? 'Offen')),
+                        DataCell(
+                          Text(
+                            row.match.isKratzer
+                                ? row.match.scratchedPlayer?.name ?? '–'
+                                : row.match.awayPlayer?.name ?? 'Offen',
+                          ),
+                        ),
                         DataCell(
                           Text(
                             row.match.isAnnulled
@@ -382,6 +408,60 @@ class _KnockoutTreePage extends StatelessWidget {
       return 'Gewinner Spiel ${matchIndex * 2 + (home ? 1 : 2)}';
     }
 
+    if (match.isKratzer) {
+      return Card(
+        margin: EdgeInsets.zero,
+        color: theme.colorScheme.surface,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Board ${match.boardNumber ?? '–'} · ${match.players.length} Spieler',
+                style: theme.textTheme.labelSmall,
+              ),
+              const SizedBox(height: 4),
+              for (final player in match.players)
+                Text(
+                  player.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: player == match.scratchedPlayer
+                        ? theme.colorScheme.error
+                        : null,
+                    fontWeight: player == match.scratchedPlayer
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+              Text(
+                match.scratchedPlayer == null
+                    ? 'Kratzer noch offen'
+                    : 'Kratzer: ${match.scratchedPlayer!.name}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+              if (onEditResult != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    tooltip: 'Kratzer eintragen',
+                    onPressed: match.hasPlayers
+                        ? () => onEditResult(match)
+                        : null,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
     Widget playerRow(String name, TournamentPlayer? player, int? score) => Row(
       children: [
         Expanded(
@@ -473,6 +553,19 @@ String _matchSummary(
   KnockoutTournamentRunStage? knockoutStage,
 }) {
   if (match.isAnnulled) return 'Spiel annulliert.';
+  if (match.isKratzer) {
+    final scratched = match.scratchedPlayer;
+    if (scratched == null) return 'Noch kein Kratzer eingetragen.';
+    final losses =
+        knockoutStage?.matches
+            .where((playedMatch) => playedMatch.scratchedPlayer == scratched)
+            .length ??
+        1;
+    final remaining = (knockoutStage?.eliminationLossLimit ?? 0) - losses;
+    return remaining <= 0
+        ? 'Kratzer: ${scratched.name} · ausgeschieden'
+        : 'Kratzer: ${scratched.name} · noch $remaining Leben';
+  }
   if (match.allowsBye && match.winner != null) {
     return 'Freilos: ${match.winner!.name} kommt weiter.';
   }

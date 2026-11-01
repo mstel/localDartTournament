@@ -168,11 +168,24 @@ class ExpandedFormatPlanner {
             if (sample.totalMatches > 0 && hasScheduledStage) {
               minutes += parameters.boardIdleMinutes;
             }
+            final swiss =
+                stages[i].type == 'groups' &&
+                stages[i].groupPlayType == 'swiss';
+            final baseMatchMinutes = planner.estimatedMatchMinutes(
+              stages[i].gameFormat,
+            );
+            final matchMinutes = planner.estimatedMatchMinutes(formats[i]);
             minutes +=
                 (sample.minutes - sample.waitMinutes) /
-                    planner.estimatedMatchMinutes(stages[i].gameFormat) *
-                    planner.estimatedMatchMinutes(formats[i]) +
+                    baseMatchMinutes *
+                    matchMinutes +
                 sample.waitMinutes;
+            if (swiss) {
+              minutes +=
+                  _swissMatchBatches(stages[i], request.boards) *
+                  (planner.estimatedWorstCaseMatchMinutes(formats[i]) -
+                      matchMinutes);
+            }
             hasScheduledStage = hasScheduledStage || sample.totalMatches > 0;
           }
           final configs = [
@@ -373,23 +386,25 @@ class ExpandedFormatPlanner {
                       : 3,
                 ]) {
         for (final target in targets) {
-          yield TournamentStage(
-            name: type == 'single_knockout'
-                ? 'Einfaches KO'
-                : type == 'double_knockout'
-                ? 'Doppel-KO'
-                : type == 'triple_knockout'
-                ? 'Triple-KO'
-                : 'Kratzer ($lives Leben)',
-            type: type,
-            knockoutParticipantCount: n,
-            knockoutBracketSize: bracket,
-            knockoutByeCount: bracket - n,
-            knockoutLives: lives,
-            finalEndsTournament: type != 'kratzer',
-            qualifiedParticipantCount: target,
-            gameFormat: const TournamentGameFormat(bestOfLegs: 1),
-          );
+          if (type != 'kratzer' || target == 1) {
+            yield TournamentStage(
+              name: type == 'single_knockout'
+                  ? 'Einfaches KO'
+                  : type == 'double_knockout'
+                  ? 'Doppel-KO'
+                  : type == 'triple_knockout'
+                  ? 'Triple-KO'
+                  : 'Kratzer ($lives Leben)',
+              type: type,
+              knockoutParticipantCount: n,
+              knockoutBracketSize: bracket,
+              knockoutByeCount: bracket - n,
+              knockoutLives: lives,
+              finalEndsTournament: true,
+              qualifiedParticipantCount: target,
+              gameFormat: const TournamentGameFormat(bestOfLegs: 1),
+            );
+          }
         }
       }
     }
@@ -499,3 +514,25 @@ Future<List<TournamentFormatSuggestion>> _planInBackground(
 ) => ExpandedFormatPlanner(
   parameters: input.$1,
 )._suggest(input.$2, allResults: input.$3);
+
+int _swissMatchBatches(TournamentStage stage, int boards) {
+  final groupRoundCounts = [
+    for (var index = 0; index < stage.groupSizes.length; index++)
+      index < stage.groupRoundRobinRepeats.length
+          ? stage.groupRoundRobinRepeats[index]
+          : 1,
+  ];
+  final rounds = groupRoundCounts.fold<int>(
+    0,
+    (current, count) => current > count ? current : count,
+  );
+  var batches = 0;
+  for (var round = 1; round <= rounds; round++) {
+    final matches = [
+      for (var index = 0; index < stage.groupSizes.length; index++)
+        if (groupRoundCounts[index] >= round) stage.groupSizes[index] ~/ 2,
+    ].fold<int>(0, (total, count) => total + count);
+    batches += (matches + boards - 1) ~/ boards;
+  }
+  return batches;
+}

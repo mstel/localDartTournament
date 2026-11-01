@@ -154,9 +154,12 @@ void main() {
       expect(three.totalMatches, 12);
       expect(three.minimumMatches, 3);
       expect(three.waitMinutes, 10);
-      expect(three.minutes, 160); // 3 rounds × 2 batches × 25 + 2 × 5
-      expect(four.minutes, 85); // 3 rounds × 25 + 2 × 5
-      expect(four.matchEndSeconds.last, 85 * 60);
+      expect(
+        three.minutes,
+        190,
+      ); // 3 rounds × 2 full-distance batches + 2 Swiss-round waits.
+      expect(four.minutes, 100); // 3 full-distance rounds + 2 round changes.
+      expect(four.matchEndSeconds.last, 100 * 60);
     },
   );
 }

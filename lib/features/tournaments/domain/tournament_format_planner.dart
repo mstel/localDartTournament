@@ -384,6 +384,9 @@ class TournamentFormatPlanner {
   double estimatedMatchMinutes(TournamentGameFormat format) =>
       _matchMinutes(format);
 
+  double estimatedWorstCaseMatchMinutes(TournamentGameFormat format) =>
+      _legMinutes(format) * format.bestOfLegs * format.bestOfSets.toDouble();
+
   bool _fits(
     TournamentFormatSuggestion suggestion,
     TournamentPlanningRequest request,

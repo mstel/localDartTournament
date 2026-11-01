@@ -271,10 +271,7 @@ class _TournamentDirectorDashboardState
                 final assignment = choices[index];
                 final entry = assignment.entry;
                 return ListTile(
-                  title: Text(
-                    '${entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
-                    '${entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
-                  ),
+                  title: Text(entry.match.participantShortLabel),
                   subtitle: Text(
                     '${entry.origin} · Warteschritt ${assignment.block + 1}',
                   ),
@@ -435,10 +432,7 @@ class _TournamentDirectorDashboardState
 
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    '${entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
-                    '${entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
-                  ),
+                  title: Text(entry.match.participantShortLabel),
                   subtitle: Text(status),
                   trailing: canStart
                       ? FilledButton.tonal(
@@ -471,8 +465,7 @@ class _TournamentDirectorDashboardState
     );
     return RecentMatchResultLogEntry(
       key: ValueKey(
-        'director-match-log-${match.round}-${match.homePlayer?.name}-'
-        '${match.awayPlayer?.name}',
+        'director-match-log-${match.round}-${match.participantLabel}',
       ),
       tournament: widget.tournament,
       match: match,
@@ -516,8 +509,7 @@ class _TournamentDirectorDashboardState
             child: RecentMatchResultLogEntry(
               key: ValueKey(
                 'director-match-tile-result-'
-                '${match.round}-${match.homePlayer?.name}-'
-                '${match.awayPlayer?.name}',
+                '${match.round}-${match.participantLabel}',
               ),
               tournament: widget.tournament,
               match: match,
@@ -538,7 +530,7 @@ class _TournamentDirectorDashboardState
     return Container(
       key: ValueKey(
         'director-match-tile-${showResult ? 'result' : 'next'}-'
-        '${match.round}-${match.homePlayer?.name}-${match.awayPlayer?.name}',
+        '${match.round}-${match.participantLabel}',
       ),
       width: width,
       padding: const EdgeInsets.all(10),
@@ -603,8 +595,7 @@ class _TournamentDirectorDashboardState
             children: [
               Expanded(
                 child: Text(
-                  '${match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
-                  '${match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                  match.participantShortLabel,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: TournamentDisplayPalette.text,
@@ -800,8 +791,7 @@ class _TournamentDirectorDashboardState
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${running.match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
-                                  '${running.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                  running.match.participantShortLabel,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.bodySmall,
@@ -897,8 +887,10 @@ class _TournamentDirectorDashboardState
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Text(
-                                    '${assignment.entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
-                                    '${assignment.entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                    assignment
+                                        .entry
+                                        .match
+                                        .participantShortLabel,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: Theme.of(
@@ -1120,6 +1112,36 @@ class _TournamentDirectorDashboardState
           minHeight: 8,
         ),
       ),
+      if (stage is KnockoutTournamentRunStage && stage.isKratzer) ...[
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final player in stage.participants)
+              Builder(
+                builder: (context) {
+                  final scratches = stage.matches
+                      .where((match) => match.scratchedPlayer == player)
+                      .length;
+                  final lives = (stage.eliminationLossLimit - scratches).clamp(
+                    0,
+                    stage.eliminationLossLimit,
+                  );
+                  return Chip(
+                    avatar: Icon(
+                      lives == 0
+                          ? Icons.person_off_outlined
+                          : Icons.favorite_outline,
+                      size: 18,
+                    ),
+                    label: Text('${player.shortDisplayName} · $lives Leben'),
+                  );
+                },
+              ),
+          ],
+        ),
+      ],
       const SizedBox(height: 8),
       Wrap(
         spacing: 20,

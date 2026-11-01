@@ -14,8 +14,17 @@ class WebsiteReadModelService {
        _tournamentStorage = tournamentStorage ?? TournamentStorage();
 
   static const schemaVersion = 1;
+  static const resourceSchemaVersion = 2;
   static const objectName = 'website-read-model.json';
   static const tournamentIndexObjectName = 'website-tournament-index.json';
+  static const resourceManifestObjectName = 'website-v2-manifest.json';
+  static const resourcePageSize = 10;
+  static const _resourceObjectNames = {
+    'players': 'website-v2-players.json',
+    'rankings': 'website-v2-rankings.json',
+    'statistics': 'website-v2-statistics.json',
+    'performance': 'website-v2-performance.json',
+  };
   final LocalAppDatabase _database;
   final TournamentStorage _tournamentStorage;
 
@@ -28,7 +37,8 @@ class WebsiteReadModelService {
           right,
         ) {
           final leftDate = left.finishedAt ?? left.startedAt ?? left.createdAt;
-          final rightDate = right.finishedAt ?? right.startedAt ?? right.createdAt;
+          final rightDate =
+              right.finishedAt ?? right.startedAt ?? right.createdAt;
           final byDate = rightDate.compareTo(leftDate);
           return byDate != 0 ? byDate : left.id.compareTo(right.id);
         });
@@ -153,6 +163,104 @@ class WebsiteReadModelService {
           },
       ],
     };
+  }
+
+  /// Builds independently downloadable v2 resources without changing v1.
+  Future<Map<String, Map<String, dynamic>>> createVersion2Resources(
+    Map<String, dynamic> readModel,
+  ) async {
+    final generatedAt = readModel['generatedAt'];
+    final players = (readModel['players'] as List).cast<Map<String, dynamic>>();
+    final tournaments = createTournamentIndex(readModel);
+    final resources = <String, Map<String, dynamic>>{
+      'players': _version2Resource('players', generatedAt, {
+        'players': players,
+      }),
+      'rankings': _version2Resource('rankings', generatedAt, {
+        'rankings': readModel['rankings'],
+        'rankingStandings': readModel['rankingStandings'],
+      }),
+      'statistics': _version2Resource('statistics', generatedAt, {
+        'statistics': readModel['statistics'],
+        'bestPerformances': readModel['bestPerformances'],
+      }),
+    };
+
+    final monthlyPerformance = <Map<String, dynamic>>[];
+    for (final player in players) {
+      final playerId = player['id'] as String;
+      for (final entry in await _database.loadPlayerMonthlyPerformance(
+        playerId,
+      )) {
+        monthlyPerformance.add({
+          'playerId': entry.playerId,
+          'period': entry.periodKey,
+          'year': entry.year,
+          'month': entry.month,
+          'weightedLegs': entry.weightedLegs,
+          'scoring': entry.scoring,
+          'average': entry.average,
+          'checkoutQuote': entry.checkoutRate,
+        });
+      }
+    }
+    resources['performance'] = _version2Resource('performance', generatedAt, {
+      'monthlyPerformance': monthlyPerformance,
+    });
+
+    final tournamentSummaries =
+        tournaments['completedTournaments'] as List<dynamic>;
+    final pageCount = (tournamentSummaries.length / resourcePageSize).ceil();
+    final pageTotal = pageCount == 0 ? 1 : pageCount;
+    for (var page = 1; page <= pageTotal; page++) {
+      final start = (page - 1) * resourcePageSize;
+      final end = (start + resourcePageSize)
+          .clamp(0, tournamentSummaries.length)
+          .toInt();
+      resources['tournaments:$page'] = _version2Resource(
+        'tournaments',
+        generatedAt,
+        {
+          'completedTournaments': tournamentSummaries.sublist(start, end),
+          'tournamentPage': {
+            'page': page,
+            'pageSize': resourcePageSize,
+            'total': tournamentSummaries.length,
+            'hasMore': end < tournamentSummaries.length,
+          },
+        },
+      );
+    }
+    return resources;
+  }
+
+  static Map<String, dynamic> _version2Resource(
+    String resource,
+    Object? generatedAt,
+    Map<String, dynamic> content,
+  ) => {
+    'schemaVersion': resourceSchemaVersion,
+    'resource': resource,
+    'generatedAt': generatedAt,
+    ...content,
+  };
+
+  static String version2ResourceObjectName(String resource, {int? page}) {
+    if (resource == 'tournaments') {
+      if (page == null || page < 1) {
+        throw ArgumentError.value(page, 'page', 'Must be a positive page.');
+      }
+      return 'website-v2-tournaments-page-$page.json';
+    }
+    final objectName = _resourceObjectNames[resource];
+    if (objectName == null) {
+      throw ArgumentError.value(
+        resource,
+        'resource',
+        'Unknown website resource.',
+      );
+    }
+    return objectName;
   }
 
   static Map<String, dynamic> createTournamentIndex(

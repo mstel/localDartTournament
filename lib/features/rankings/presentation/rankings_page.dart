@@ -583,16 +583,70 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                     'Performance-Entwicklung konnte nicht geladen werden.',
                                   );
                                 }
-                                if (!performanceSnapshot.hasData ||
-                                    performanceSnapshot.data!.isEmpty) {
+                                if (!performanceSnapshot.hasData) {
                                   return const SizedBox.shrink();
                                 }
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 20),
-                                  child: PlayerPerformanceTrendChart(
-                                    entries: performanceSnapshot.data!,
-                                    year: _year,
-                                  ),
+                                final entries = performanceSnapshot.data!;
+                                final highestAverage = _maximumPerformanceValue(
+                                  entries.map((entry) => entry.average),
+                                );
+                                final highestScoring = _maximumPerformanceValue(
+                                  entries.map((entry) => entry.scoring),
+                                );
+                                final highestCheckoutRate =
+                                    _maximumPerformanceValue(
+                                      entries.map(
+                                        (entry) => entry.checkoutRate,
+                                      ),
+                                    );
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      'Monatsbestwerte',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      children: [
+                                        _StatMiniCard(
+                                          label: 'Höchster Average',
+                                          value:
+                                              highestAverage?.toStringAsFixed(
+                                                1,
+                                              ) ??
+                                              '–',
+                                        ),
+                                        _StatMiniCard(
+                                          label: 'Höchstes Scoring',
+                                          value:
+                                              highestScoring?.toStringAsFixed(
+                                                1,
+                                              ) ??
+                                              '–',
+                                        ),
+                                        _StatMiniCard(
+                                          label: 'Höchste Checkout-Quote',
+                                          value: highestCheckoutRate == null
+                                              ? '–'
+                                              : '${highestCheckoutRate.toStringAsFixed(1)} %',
+                                        ),
+                                      ],
+                                    ),
+                                    if (entries.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 20),
+                                        child: PlayerPerformanceTrendChart(
+                                          entries: entries,
+                                          year: _year,
+                                        ),
+                                      ),
+                                  ],
                                 );
                               },
                             ),
@@ -646,6 +700,12 @@ class _StatMiniCard extends StatelessWidget {
       ),
     ),
   );
+}
+
+double? _maximumPerformanceValue(Iterable<double?> values) {
+  final present = values.whereType<double>();
+  if (present.isEmpty) return null;
+  return present.reduce((left, right) => left > right ? left : right);
 }
 
 class _ReviewLeaders extends StatefulWidget {

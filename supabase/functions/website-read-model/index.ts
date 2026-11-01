@@ -5,6 +5,11 @@ import {
   parseTournamentPage,
   summarizeFullTournament,
 } from './tournament_index.ts';
+import {
+  isWebsiteResourcePayload,
+  parseWebsiteResourceRequest,
+  websiteResourceObjectName,
+} from './versioned_resource.ts';
 
 const bucket = 'dart-app-backups';
 const objectName = 'website-read-model.json';
@@ -58,10 +63,56 @@ Deno.serve(async (request: Request) => {
     return jsonResponse({ error: 'authentication_required' }, 401);
   }
 
-  const tournamentView = new URL(request.url).searchParams.get('view') ===
-    'tournaments';
+  const searchParams = new URL(request.url).searchParams;
+  const requestedVersion = searchParams.get('version');
+  if (
+    requestedVersion !== null &&
+    requestedVersion !== '2'
+  ) {
+    return jsonResponse({ error: 'unsupported_version' }, 400);
+  }
+  if (requestedVersion === '2' || searchParams.has('resource')) {
+    if (requestedVersion !== '2') {
+      return jsonResponse({ error: 'version_required' }, 400);
+    }
+    const resourceRequest = parseWebsiteResourceRequest(searchParams);
+    if (!resourceRequest) {
+      return jsonResponse({ error: 'invalid_resource_request' }, 400);
+    }
+    const objectPath =
+      `${user.id}/${websiteResourceObjectName(resourceRequest)}`;
+    const { data: resourceFile, error: resourceDownloadError } =
+      await supabase.storage.from(bucket).download(objectPath);
+    if (resourceDownloadError) {
+      if (Number(resourceDownloadError.statusCode) === 404) {
+        return jsonResponse({ error: 'website_resource_not_published' }, 404);
+      }
+      console.error('website-read-model resource download failed', {
+        statusCode: resourceDownloadError.statusCode,
+      });
+      return jsonResponse({ error: 'website_data_unavailable' }, 502);
+    }
+    if (!resourceFile) {
+      return jsonResponse({ error: 'website_data_unavailable' }, 502);
+    }
+    if (resourceFile.size > maximumBytes) {
+      return jsonResponse({ error: 'website_data_too_large' }, 413);
+    }
+    let resourcePayload: unknown;
+    try {
+      resourcePayload = JSON.parse(await resourceFile.text());
+    } catch {
+      return jsonResponse({ error: 'website_data_invalid' }, 502);
+    }
+    if (!isWebsiteResourcePayload(resourcePayload, resourceRequest)) {
+      return jsonResponse({ error: 'website_data_invalid' }, 502);
+    }
+    return jsonResponse(resourcePayload);
+  }
+
+  const tournamentView = searchParams.get('view') === 'tournaments';
   const tournamentPage = tournamentView
-    ? parseTournamentPage(new URL(request.url).searchParams)
+    ? parseTournamentPage(searchParams)
     : null;
   if (tournamentView && tournamentPage === null) {
     return jsonResponse({ error: 'invalid_page' }, 400);

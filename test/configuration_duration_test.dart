@@ -16,6 +16,18 @@ void main() {
     groupCount: 1,
     gameFormat: TournamentGameFormat(bestOfLegs: 3),
   );
+  TournamentStage swissGroup(int players, {int bestOfLegs = 3}) =>
+      TournamentStage(
+        name: 'Swiss',
+        type: 'groups',
+        groupSizes: [players],
+        groupCount: 1,
+        groupPlayType: 'swiss',
+        groupPlayTypes: const ['swiss'],
+        groupRoundRobinRepeats: const [1],
+        gameFormat: TournamentGameFormat(bestOfLegs: bestOfLegs),
+      );
+
   test('boards affect duration without modifying configuration', () {
     final summary = estimator.preview([group], 1, parameters)!;
     expect(summary.totalMatches, 6);
@@ -63,6 +75,41 @@ void main() {
     expect(estimator.preview([repeat], 1, parameters)!.minimumMatches, 6);
     expect(estimator.preview([repeat], 1, parameters)!.totalMatches, 12);
   });
+  test(
+    'Swiss rounds estimate full match distance and partial-board waiting',
+    () {
+      final swissParameters = TournamentPlanningParameters.fromValues({
+        PlanningParameter.minutes501DoubleOut: 10,
+        PlanningParameter.boardIdleMinutes: 4,
+        PlanningParameter.swissRoundWaitMinutes: 0,
+      });
+      final fiveMatchesOnFourBoards = estimator.preview(
+        [swissGroup(10)],
+        4,
+        swissParameters,
+      )!;
+      expect(fiveMatchesOnFourBoards.totalMatches, 5);
+      expect(fiveMatchesOnFourBoards.minimumMatches, 1);
+      expect(fiveMatchesOnFourBoards.minutes, 68);
+      expect(fiveMatchesOnFourBoards.waitMinutes, 8);
+
+      final eightMatchesOnFourBoards = estimator.preview(
+        [swissGroup(16)],
+        4,
+        swissParameters,
+      )!;
+      expect(eightMatchesOnFourBoards.totalMatches, 8);
+      expect(eightMatchesOnFourBoards.minutes, 64);
+      expect(eightMatchesOnFourBoards.waitMinutes, 4);
+
+      final bestOfFive = estimator.preview(
+        [swissGroup(10, bestOfLegs: 5)],
+        4,
+        swissParameters,
+      )!;
+      expect(bestOfFive.minutes, 108);
+    },
+  );
   test('KO byes and sequential stages use production runtime', () {
     const ko = TournamentStage(
       name: 'KO',

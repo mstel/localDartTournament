@@ -250,77 +250,80 @@ class _TripleEliminationPreview extends StatelessWidget {
     ];
     final finalMatches = _matchesWithLabel(rounds, _tripleFinalLabel);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var lossCount = 0; lossCount < lossLimit; lossCount++) ...[
-          _BracketBandTitle(title: _lossLevelBracketLabel(lossCount)),
+    return TripleKoPreviewSections(
+      phases: [
+        for (var lossCount = 0; lossCount < lossLimit; lossCount++)
+          TripleKoPreviewPhase(
+            title: _lossLevelBracketLabel(lossCount),
+            roundCount: lossRounds[lossCount].length,
+            encounterCount: lossRounds[lossCount].fold<int>(
+              0,
+              (total, round) => total + round.length,
+            ),
+            child: _BracketTreeLayout(
+              totalRounds: lossRounds[lossCount].length,
+              roundTitles: [
+                for (
+                  var roundNumber = 1;
+                  roundNumber <= lossRounds[lossCount].length;
+                  roundNumber++
+                )
+                  _bracketRoundTitle(
+                    roundNumber - 1,
+                    lossRounds[lossCount].length,
+                  ),
+              ],
+              roundCards: [
+                for (
+                  var roundIndex = 0;
+                  roundIndex < lossRounds[lossCount].length;
+                  roundIndex++
+                )
+                  _previewCardsFor(
+                    lossRounds[lossCount][roundIndex],
+                    rounds,
+                    matchNumbers,
+                    sourceLabels,
+                    roundIndex: roundIndex,
+                    totalRounds: lossRounds[lossCount].length,
+                  ),
+              ],
+              roundMatches: lossRounds[lossCount],
+              sourceMatches: sourceMatches,
+              columnWidth: 170,
+              cardHeight: _previewBracketCardHeight,
+              firstRoundGap: 10,
+              useBalancedColumnLayout: true,
+            ),
+          ),
+      ],
+      finalChild: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _BracketBandTitle(title: 'Finale'),
           const SizedBox(height: 8),
           _BracketTreeLayout(
-            totalRounds: lossRounds[lossCount].length,
-            roundTitles: [
-              for (
-                var roundNumber = 1;
-                roundNumber <= lossRounds[lossCount].length;
-                roundNumber++
-              )
-                lossCount == 0
-                    ? _bracketRoundTitle(
-                        roundNumber - 1,
-                        lossRounds[lossCount].length,
-                      )
-                    : _bracketRoundTitle(
-                        roundNumber - 1,
-                        lossRounds[lossCount].length,
-                      ),
-            ],
+            totalRounds: 1,
+            roundTitles: const ['Finale'],
             roundCards: [
-              for (
-                var roundIndex = 0;
-                roundIndex < lossRounds[lossCount].length;
-                roundIndex++
-              )
-                _previewCardsFor(
-                  lossRounds[lossCount][roundIndex],
-                  rounds,
-                  matchNumbers,
-                  sourceLabels,
-                  roundIndex: roundIndex,
-                  totalRounds: lossRounds[lossCount].length,
-                ),
+              _previewCardsFor(
+                finalMatches,
+                rounds,
+                matchNumbers,
+                sourceLabels,
+                roundIndex: 0,
+                totalRounds: 1,
+              ),
             ],
-            roundMatches: lossRounds[lossCount],
+            roundMatches: [finalMatches],
             sourceMatches: sourceMatches,
             columnWidth: 170,
             cardHeight: _previewBracketCardHeight,
             firstRoundGap: 10,
             useBalancedColumnLayout: true,
           ),
-          const SizedBox(height: 16),
         ],
-        const _BracketBandTitle(title: 'Finale'),
-        const SizedBox(height: 8),
-        _BracketTreeLayout(
-          totalRounds: 1,
-          roundTitles: const ['Finale'],
-          roundCards: [
-            _previewCardsFor(
-              finalMatches,
-              rounds,
-              matchNumbers,
-              sourceLabels,
-              roundIndex: 0,
-              totalRounds: 1,
-            ),
-          ],
-          roundMatches: [finalMatches],
-          sourceMatches: sourceMatches,
-          columnWidth: 170,
-          cardHeight: _previewBracketCardHeight,
-          firstRoundGap: 10,
-          useBalancedColumnLayout: true,
-        ),
-      ],
+      ),
     );
   }
 

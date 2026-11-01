@@ -114,8 +114,13 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
   bool _matchesPlayerFilter(GroupMatch match) {
     final player = _filteredPlayer;
-    return player == null ||
-        match.homePlayer != null &&
+    if (player == null) return true;
+    if (match.isKratzer) {
+      return match.players.any(
+        (participant) => _playerKey(participant) == _playerKey(player),
+      );
+    }
+    return match.homePlayer != null &&
             _playerKey(match.homePlayer!) == _playerKey(player) ||
         match.awayPlayer != null &&
             _playerKey(match.awayPlayer!) == _playerKey(player);
@@ -619,7 +624,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           ],
         );
 
-        final bracketSection = widget.bracketBuilder != null
+        final bracketSection = stage.isKratzer
+            ? _buildKratzerLifePanel(context, stage)
+            : widget.bracketBuilder != null
             ? Card(
                 clipBehavior: Clip.antiAlias,
                 child: Padding(
@@ -669,6 +676,48 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildKratzerLifePanel(
+    BuildContext context,
+    KnockoutTournamentRunStage stage,
+  ) {
+    final scratches = <TournamentPlayer, int>{};
+    for (final match in stage.matches) {
+      final scratched = match.scratchedPlayer;
+      if (scratched != null) {
+        scratches.update(scratched, (count) => count + 1, ifAbsent: () => 1);
+      }
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Lebenstand',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            for (final player in stage.participants)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  (scratches[player] ?? 0) >= stage.eliminationLossLimit
+                      ? Icons.person_off_outlined
+                      : Icons.favorite_outline,
+                ),
+                title: Text(player.name),
+                trailing: Text(
+                  '${(stage.eliminationLossLimit - (scratches[player] ?? 0)).clamp(0, stage.eliminationLossLimit)}',
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 

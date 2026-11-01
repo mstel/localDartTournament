@@ -8,6 +8,10 @@ class PlayEntry {
   final String origin;
   final String? groupKey;
   Set<String> get players => {
+    if (match.isKratzer)
+      ...match.players.expand(
+        (player) => player.individuals.map((p) => p.profileId ?? p.name),
+      ),
     if (match.homePlayer != null)
       ...match.homePlayer!.individuals.map((p) => p.profileId ?? p.name),
     if (match.awayPlayer != null)

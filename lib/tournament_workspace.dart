@@ -7,6 +7,7 @@ import 'features/tournaments/presentation/widgets/run/tournament_run_header.dart
 import 'features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_timing_panel.dart';
 import 'features/tournaments/presentation/widgets/creation/expert_setup_section.dart';
+import 'features/tournaments/presentation/widgets/creation/triple_ko_preview_sections.dart';
 import 'features/tournaments/presentation/widgets/tournament_summary_card.dart';
 import 'shared/widgets/sport_menu.dart';
 import 'app/navigation/sport_app_shell.dart';
@@ -18,6 +19,8 @@ import 'features/tournaments/domain/engines/placement_engine.dart';
 import 'features/tournaments/domain/knockout_round_names.dart';
 import 'features/tournaments/domain/group_size_rules.dart';
 import 'features/tournaments/modes/triple_ko/triple_ko_engine.dart';
+import 'features/tournaments/modes/kratzer/kratzer_engine.dart';
+import 'features/tournaments/modes/kratzer/kratzer_duration_preview.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';

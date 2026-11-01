@@ -342,6 +342,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       } else {
         widget.tournament.blockedBoards.add(board);
       }
+      final activeStage = _activeStageIndex < widget.tournament.runStages.length
+          ? widget.tournament.runStages[_activeStageIndex]
+          : null;
+      if (wasBlocked &&
+          activeStage is KnockoutTournamentRunStage &&
+          activeStage.isKratzer &&
+          activeStage.rounds.isNotEmpty &&
+          activeStage.rounds.last.isEmpty) {
+        _advanceKratzerRound(activeStage);
+      }
     });
     try {
       await _checkpoint();
@@ -1063,11 +1073,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     final result = await showDialog<MatchResult>(
       context: context,
-      builder: (context) => ResultDialog(
-        match: match,
-        format: widget.tournament.stages[_activeStageIndex].gameFormat,
-        allowAdministration: true,
-      ),
+      builder: (context) => match.isKratzer
+          ? KratzerResultDialog(match: match)
+          : ResultDialog(
+              match: match,
+              format: widget.tournament.stages[_activeStageIndex].gameFormat,
+              allowAdministration: true,
+            ),
     );
 
     if (result == null) {
@@ -1109,7 +1121,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
 
     setState(() {
-      match.finishedAt = result.isAnnulled || result.homeLegs == null
+      match.finishedAt =
+          result.isAnnulled ||
+              (match.isKratzer
+                  ? result.scratchedPlayer == null
+                  : result.homeLegs == null)
           ? null
           : match.finishedAt ?? DateTime.now();
       final stage = widget.tournament.runStages[_activeStageIndex];
@@ -1122,16 +1138,33 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
       match.isAnnulled = result.isAnnulled;
       match.bestPerformances = result.bestPerformances;
-      match.homeSets = result.homeSets;
-      match.awaySets = result.awaySets;
-      if (result.isAnnulled) {
+      if (match.isKratzer) {
+        match.scratchedPlayer = result.isAnnulled
+            ? null
+            : result.scratchedPlayer;
+        match.homeLegs = null;
+        match.awayLegs = null;
+        match.homeSets = null;
+        match.awaySets = null;
+      } else if (result.isAnnulled) {
         match.homeLegs = null;
         match.homeSets = null;
         match.awaySets = null;
         match.awayLegs = null;
       } else {
+        match.homeSets = result.homeSets;
+        match.awaySets = result.awaySets;
         match.homeLegs = result.homeLegs;
         match.awayLegs = result.awayLegs;
+      }
+      if (stage is KnockoutTournamentRunStage && stage.isKratzer) {
+        final roundIndex = stage.rounds.indexWhere(
+          (round) => round.contains(match),
+        );
+        if (roundIndex >= 0 && roundIndex < stage.rounds.length - 1) {
+          stage.rounds.removeRange(roundIndex + 1, stage.rounds.length);
+        }
+        _advanceKratzerRound(stage);
       }
       _advanceKnockoutWinners();
       _ensureGroupDeciders();
@@ -1401,7 +1434,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   void _advanceWithoutWithdrawals() {
     for (final stage in widget.tournament.runStages) {
-      if (stage is KnockoutTournamentRunStage) {
+      if (stage is KnockoutTournamentRunStage && !stage.isKratzer) {
         if (stage.eliminationLossLimit == 2) {
           _advanceDoubleEliminationRounds(
             stage.rounds,
@@ -2362,6 +2395,21 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   bool _knockoutHasWinner(KnockoutTournamentRunStage stage) {
+    if (stage.isKratzer) {
+      if (stage.participants.length == 1) return true;
+      if (stage.rounds.isEmpty ||
+          !stage.rounds.last.every((m) => m.isResolved)) {
+        return false;
+      }
+      return const KratzerEngine()
+              .activePlayers(
+                players: stage.participants,
+                completedMatches: stage.matches,
+                lives: stage.eliminationLossLimit,
+              )
+              .length <=
+          1;
+    }
     if (stage.finalEndsTournament &&
         stage.rounds.isNotEmpty &&
         stage.rounds.last.length == 1 &&
@@ -2471,6 +2519,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   int _participantCountForRunStage(TournamentRunStage stage) {
     if (stage is KnockoutTournamentRunStage) {
+      if (stage.isKratzer) return stage.participants.length;
       if (stage.rounds.isEmpty) {
         return 0;
       }
@@ -2507,6 +2556,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
 
     if (stage is KnockoutTournamentRunStage) {
+      if (stage.isKratzer) {
+        return const KratzerEngine().activePlayers(
+          players: stage.participants,
+          completedMatches: stage.matches,
+          lives: stage.eliminationLossLimit,
+        );
+      }
       if (stage.eliminationLossLimit > 1) {
         return _multiEliminationRanking(
           stage.rounds,
@@ -2818,6 +2874,42 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     TournamentStage stage,
     List<TournamentPlayer> players,
   ) {
+    if (stage.type == 'kratzer') {
+      final participantCount = stage.knockoutParticipantCount == null
+          ? players.length
+          : stage.knockoutParticipantCount!.clamp(0, players.length).toInt();
+      final participants = List<TournamentPlayer>.unmodifiable(
+        players.take(participantCount),
+      );
+      final availableBoards = [
+        for (var board = 1; board <= widget.tournament.boardCount; board++)
+          if (!widget.tournament.blockedBoards.contains(board)) board,
+      ];
+      final assignments = const KratzerEngine().assignRound(
+        players: participants,
+        availableBoards: availableBoards,
+        round: 1,
+      );
+      return KnockoutTournamentRunStage(
+        name: stage.name,
+        rounds: [
+          [
+            for (final assignment in assignments)
+              GroupMatch(
+                players: assignment.players,
+                scratchEligiblePlayers: assignment.scratchEligiblePlayers,
+                isKratzer: true,
+                round: 1,
+                boardNumber: assignment.boardNumber,
+              ),
+          ],
+        ],
+        eliminationLossLimit: stage.lossLimit,
+        finalEndsTournament: false,
+        isKratzer: true,
+        participants: participants,
+      );
+    }
     if (_isKnockoutStageType(stage.type)) {
       final participantCount = stage.knockoutParticipantCount == null
           ? players.length
@@ -2916,6 +3008,61 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       qualificationPlan: _qualificationPlanForStage(stage),
       tieBreakers: stage.groupTieBreakers,
     );
+  }
+
+  void _advanceKratzerRound(KnockoutTournamentRunStage stage) {
+    if (!stage.isKratzer || stage.rounds.isEmpty) return;
+    final lastRound = stage.rounds.last;
+    for (final match in lastRound) {
+      if (match.scratchedPlayer == null &&
+          match.homeLegs != null &&
+          match.awayLegs != null &&
+          match.scratchEligiblePlayers.isNotEmpty) {
+        match
+          ..scratchedPlayer = match.scratchEligiblePlayers.first
+          ..finishedAt ??= DateTime.now();
+      }
+    }
+    if (lastRound.isNotEmpty &&
+        !lastRound.every((match) => match.isResolved)) {
+      return;
+    }
+    final engine = const KratzerEngine();
+    final active = engine.activePlayers(
+      players: stage.participants,
+      completedMatches: stage.matches,
+      lives: stage.eliminationLossLimit,
+    );
+    if (active.length <= 1) return;
+    final eliminated = stage.participants
+        .where((player) => !active.contains(player))
+        .toList();
+    final availableBoards = [
+      for (var board = 1; board <= widget.tournament.boardCount; board++)
+        if (!widget.tournament.blockedBoards.contains(board)) board,
+    ];
+    final assignments = engine.assignRound(
+      players: active,
+      eliminatedFillers: eliminated,
+      availableBoards: availableBoards,
+      round: stage.rounds.length + 1,
+    );
+    if (assignments.isEmpty) return;
+    final nextRound = [
+      for (final assignment in assignments)
+        GroupMatch(
+          players: assignment.players,
+          scratchEligiblePlayers: assignment.scratchEligiblePlayers,
+          isKratzer: true,
+          round: stage.rounds.length + 1,
+          boardNumber: assignment.boardNumber,
+        ),
+    ];
+    if (lastRound.isEmpty) {
+      stage.rounds[stage.rounds.length - 1] = nextRound;
+    } else {
+      stage.rounds.add(nextRound);
+    }
   }
 
   QualificationPlan? _qualificationPlanForStage(TournamentStage stage) {

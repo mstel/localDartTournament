@@ -87,7 +87,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
           key ??
           ValueKey(
             'recent-result-${match.round}-'
-            '${homePlayer?.profileId ?? homePlayer?.name}-'
+            '${match.isKratzer ? match.participantLabel : homePlayer?.profileId ?? homePlayer?.name}-'
             '${awayPlayer?.profileId ?? awayPlayer?.name}',
           ),
       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -101,13 +101,23 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                 child: Text.rich(
                   TextSpan(
                     children: [
-                      if (awayIsWinner) awayTextSpan else homeTextSpan,
-                      TextSpan(
-                        text: homeIsWinner || awayIsWinner
-                            ? ' besiegte '
-                            : ' spielte gegen ',
-                      ),
-                      if (awayIsWinner) homeTextSpan else awayTextSpan,
+                      if (match.isKratzer)
+                        TextSpan(
+                          text: match.participantLabel,
+                          style: const TextStyle(
+                            color: TournamentDisplayPalette.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      else ...[
+                        if (awayIsWinner) awayTextSpan else homeTextSpan,
+                        TextSpan(
+                          text: homeIsWinner || awayIsWinner
+                              ? ' besiegte '
+                              : ' spielte gegen ',
+                        ),
+                        if (awayIsWinner) homeTextSpan else awayTextSpan,
+                      ],
                       if (showBoardNumber && match.boardNumber != null)
                         TextSpan(
                           text:
@@ -122,7 +132,9 @@ class RecentMatchResultLogEntry extends StatelessWidget {
               const SizedBox(width: 8),
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF123D2D),
+                  color: match.isKratzer
+                      ? const Color(0xFF4A2527)
+                      : const Color(0xFF123D2D),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Padding(
@@ -133,9 +145,15 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                   child: Text(
                     match.isAnnulled
                         ? 'annulliert'
+                        : match.isKratzer
+                        ? match.scratchedPlayer == null
+                              ? 'Kratzer offen'
+                              : 'Kratzer: ${match.scratchedPlayer!.name}'
                         : '${match.homeScore ?? 0}:${match.awayScore ?? 0}',
-                    style: const TextStyle(
-                      color: Color(0xFF4ED9A4),
+                    style: TextStyle(
+                      color: match.isKratzer
+                          ? const Color(0xFFFFAAAA)
+                          : const Color(0xFF4ED9A4),
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),

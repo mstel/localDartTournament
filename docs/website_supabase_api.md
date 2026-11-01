@@ -1,7 +1,8 @@
 # Website read-only API
 
-The app publishes one versioned read model alongside its existing private
-workspace backup. The read model contains the active player catalog (names,
+For compatibility, the app continues to publish the version-1 full read model
+alongside its existing private workspace backup. That model contains the
+active player catalog (names,
 nickname, city and country), configured ranking names and computed standings,
 per-player statistics, best performances, and completed tournaments. Player
 profile birthdays, external service IDs and darts setup details are omitted.
@@ -14,18 +15,24 @@ The function uses the caller's JWT and the existing owner-folder Storage RLS
 policy to read only
 objects under `dart-app-backups/<authenticated-user-id>/`. It does not use a
 service-role key or perform database/storage writes. Anonymous requests are
-rejected. The app publishes the full
-`website-read-model.json` plus the compact `website-tournament-index.json`.
-Requests without a view parameter still return the full schema; the tournament
-view reads the compact index to reduce Storage egress.
+rejected. The app publishes the full `website-read-model.json` and compact
+`website-tournament-index.json` for version-1 compatibility, plus independent
+version-2 resources. New consumers should use the version-2 route, which reads
+only the requested resource or tournament page from Storage.
 
 Use
-`GET /functions/v1/website-read-model?view=tournaments&page=1` to load up to ten
-completed tournament summaries. Increase the 1-based page number to load more.
-An invalid page value returns `400`; an empty result is a successful response
-with an empty `completedTournaments` list and `hasMore: false`. Older accounts
-that have not published the compact index yet receive the same paged contract
-derived from their full model.
+`GET /functions/v1/website-read-model?version=2&resource=tournaments&page=1`
+to load up to ten completed tournament summaries. Increase the 1-based page
+number to load the next page. Version-2 reads require a resource name. Invalid
+resource/page combinations return `400`; a resource not yet published returns
+`404`. Empty tournament data is published as an empty page 1 with
+`hasMore: false`.
+
+The version-1 route remains available:
+`GET /functions/v1/website-read-model?view=tournaments&page=1` still reads its
+compact index and falls back to the full v1 object for accounts that have not
+published the index. Requests without a view or version parameter retain the
+legacy full v1 response.
 
 ## Deploy
 
@@ -48,9 +55,10 @@ derived from their full model.
    migrated, replaced or deleted by this feature.
 4. Verify the endpoint with the operator's short-lived access token. A logged
    out request must return `401`; before the first publication an authenticated
-   request returns `404`; after sync it returns a document with
-   `schemaVersion: 1`. The tournament view returns at most ten summaries and a
-   `tournamentPage` object containing `page`, `pageSize`, `total`, and
+   request returns `404`; after sync the legacy request returns a document with
+   `schemaVersion: 1` and a v2 resource request returns `schemaVersion: 2` and
+   the matching `resource`. Tournament requests return at most ten summaries
+   and a `tournamentPage` object containing `page`, `pageSize`, `total`, and
    `hasMore`.
 
 ## Astro server-side use
@@ -62,15 +70,17 @@ client-side JavaScript, place credentials in page HTML, or use a service-role
 key. The browser should receive rendered page data only after the server has
 confirmed the user's session.
 
-Example server-side request after the Astro Supabase integration has resolved
-the current user session:
+Example server-side request for one resource (choose the resource needed by
+the current server-rendered page) after the Astro Supabase integration has
+resolved the current user session:
 
 ```ts
 const session = await getAuthenticatedSession(Astro);
 if (!session) return Astro.redirect('/login');
 
+const resource = 'players';
 const response = await fetch(
-  `${import.meta.env.SUPABASE_URL}/functions/v1/website-read-model`,
+  `${import.meta.env.SUPABASE_URL}/functions/v1/website-read-model?version=2&resource=${resource}`,
   {
     headers: {
       apikey: import.meta.env.SUPABASE_PUBLISHABLE_KEY,
@@ -79,12 +89,12 @@ const response = await fetch(
   },
 );
 if (!response.ok) throw new Error(`Website data API returned ${response.status}`);
-const websiteData = await response.json();
+const pageData = await response.json();
 ```
 
 `getAuthenticatedSession` above stands for the session helper provided by the
 Astro project's Supabase SSR integration; this repository does not include or
-modify that separate website project. Render `websiteData` in server-rendered
+modify that separate website project. Render `pageData` in server-rendered
 pages only, and leave tournament administration and write actions in the app.
 The API response is privately cacheable for 60 seconds and is varied by the
 authorization header.
@@ -114,3 +124,43 @@ contains only compact entries in `completedTournaments`: `id`, `name`,
 and `hasImportedArchive`. `tournamentPage` contains the requested `page`, the
 fixed `pageSize` of 10, the total number of completed tournaments, and
 `hasMore`.
+
+## Version-2 resource contract
+
+Request one resource per call. `version=2` and `resource` are required;
+`page` is accepted only for `tournaments`.
+
+| Request | Response data |
+| --- | --- |
+| `?version=2&resource=players` | `players` |
+| `?version=2&resource=rankings` | `rankings`, `rankingStandings` |
+| `?version=2&resource=statistics` | `statistics`, `bestPerformances` |
+| `?version=2&resource=performance` | `monthlyPerformance` |
+| `?version=2&resource=tournaments&page=N` | One page of `completedTournaments` and `tournamentPage` |
+
+Every response has `schemaVersion: 2`, `resource`, and `generatedAt`. A
+resource response contains only its listed data keys; the endpoint reads and
+validates exactly the corresponding Storage object. Tournament pages are
+pre-sliced and persisted separately, so a page request does not download the
+index or any other tournament page. Pages contain at most ten summaries. An
+empty tournament collection is represented by page 1 with an empty list.
+
+`monthlyPerformance` contains one row per manually maintained player/month
+record: `playerId`, `period` (`YYYY-MM`), `year`, `month`, `weightedLegs`,
+`scoring`, `average`, and `checkoutQuote` (the app's stored checkout-rate
+percentage). Nullable scoring values stay null; no values are inferred from
+tournament results. Profile-private details appear only in the independently
+requested `players` resource.
+
+### Compatibility and migration
+
+The v1 full read-model and `view=tournaments` contract are intentionally kept
+for currently deployed homepage consumers. Installing the app update and
+running its normal manual synchronization publishes both v1 and v2 objects;
+no local records or existing backups are migrated or removed. Existing
+accounts publish the additional objects on their next synchronization. The
+homepage can migrate resource by resource in its separate project, then stop
+requesting the v1 full document when ready. Do not remove v1 objects or change
+the default route until that consumer migration has been coordinated. Future
+incompatible resource changes must increment the resource schema version and
+keep the legacy v1 route available for the compatibility period.

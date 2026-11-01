@@ -6,52 +6,274 @@ import '../../league/domain/league_match.dart';
 /// League fixtures have team points instead of advancing players.
 /// Shared production preset for the league branch of the development matrix.
 LeagueMatch rhlDevelopmentScenario() => LeagueMatch.rhl(
-  homeTeam: 'Heim', awayTeam: 'Gast',
+  homeTeam: 'Heim',
+  awayTeam: 'Gast',
   homePlayers: ['H1', 'H2', 'H3', 'H4'],
   awayPlayers: ['G1', 'G2', 'G3', 'G4'],
 );
 
 const tournamentDevelopmentScenarios = [
-  TournamentSimulationScenario(name: 'Begrenzte Gruppe: 13 Spieler mit maximal 5 Spielen und Finale', playerCount: 13, stages: [
-    SimulationGroupStageSpec(name: 'Gruppe', qualifiers: 2, groupSizes: [13], maxGamesPerPlayer: [5], fixedPerGroup: 2),
-    SimulationEliminationStageSpec(name: 'Finale', qualifiers: 1, lossLimit: 1),
-  ]),
-  TournamentSimulationScenario(name: 'Begrenzte Gruppe: 12 Spieler mit maximal 5 Spielen', playerCount: 12, stages: [
-    SimulationGroupStageSpec(name: 'Gruppe', qualifiers: 1, groupSizes: [12], maxGamesPerPlayer: [5], fixedPerGroup: 1),
-  ]),
-  TournamentSimulationScenario(name: 'Challonge 37: Siebenergruppe und KO mit Platz 3', playerCount: 7, stages: [
-    SimulationGroupStageSpec(name: 'Gruppe A', qualifiers: 4, groupSizes: [7], fixedPerGroup: 4),
-    SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1, placementPlaces: [3]),
-  ]),
-  TournamentSimulationScenario(name: 'Ausstieg: zwei Spieler im KO', playerCount: 8, withdrawnPlayers: [0,7],
-    stages: [SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1)]),
-  TournamentSimulationScenario(name: 'Ausstieg: Gruppe und KO', playerCount: 8, withdrawnPlayers: [0], stages: [
-    SimulationGroupStageSpec(name: 'Gruppe', qualifiers: 4, groupSizes: [4,4], fixedPerGroup: 2),
-    SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1)]),
-  TournamentSimulationScenario(name: 'Ausstieg: ignorierte Doppel-KO-Spiele', playerCount: 8, withdrawnPlayers: [0], withdrawalMode: WithdrawalResultMode.ignoreOpen,
-    stages: [SimulationEliminationStageSpec(name: 'Doppel KO', qualifiers: 1, lossLimit: 2)]),
-  TournamentSimulationScenario(name: 'Ausstieg: Triple-KO', playerCount: 7, withdrawnPlayers: [0],
-    stages: [SimulationEliminationStageSpec(name: 'Triple KO', qualifiers: 1, lossLimit: 3)]),
-  TournamentSimulationScenario(name: 'Swiss mit Freilosen und KO', playerCount: 13, stages: [
-    SimulationGroupStageSpec(name: 'Swiss', qualifiers: 4, groupSizes: [13], playTypes: ['swiss'], roundRobinRepeats: [4], fixedPerGroup: 4),
-    SimulationEliminationStageSpec(name: 'Finale', qualifiers: 1, lossLimit: 1),
-  ]),
-  TournamentSimulationScenario(name: 'Swiss mit Unentschieden', playerCount: 8, stages: [
-    SimulationGroupStageSpec(name: 'Swiss', qualifiers: 1, groupSizes: [8], playTypes: ['swiss'], roundRobinRepeats: [3], fixedPerGroup: 1, gameFormat: TournamentGameFormat(bestOfLegs: 4)),
-  ]),
-  TournamentSimulationScenario(name: 'Finder: KO-Vorrunde, Mini-KO-Gruppen und Triple-KO', playerCount: 12, stages: [
-    SimulationEliminationStageSpec(name: 'Vorrunde', qualifiers: 6, lossLimit: 1),
-    SimulationGroupStageSpec(name: 'Mini-KO-Gruppen', qualifiers: 4, groupSizes: [3,3], playTypes: ['mini_knockout','mini_knockout'], fixedPerGroup: 2),
-    SimulationEliminationStageSpec(name: 'Triple-KO-Finale', qualifiers: 1, lossLimit: 3, finalEndsTournament: true),
-  ]),
-  TournamentSimulationScenario(name: 'Doppel: Gruppen und KO', playerCount: 6, teamSize: 2, stages: [SimulationGroupStageSpec(name: 'Gruppen', qualifiers: 4, groupSizes: [3, 3], fixedPerGroup: 2), SimulationEliminationStageSpec(name: 'Finale', qualifiers: 1, lossLimit: 1)]),
-  TournamentSimulationScenario(name: 'Viererteams mit Freilosen', playerCount: 5, teamSize: 4, stages: [SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1)]),
-  TournamentSimulationScenario(name: 'KO mit Platz 3, 5, 7, 9 und 15', playerCount: 16, stages: [SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1, placementPlaces: [3, 5, 7, 9, 15])]),
-  TournamentSimulationScenario(name: 'Mini-KO mit optionalen Platzierungsspielen', playerCount: 16, stages: [SimulationGroupStageSpec(name: 'Mini-KO', qualifiers: 6, groupSizes: [8, 8], playTypes: ['mini_knockout', 'mini_knockout'], fixedPerGroup: 3, placementPlaces: [5, 7]), SimulationEliminationStageSpec(name: 'Finale', qualifiers: 1, lossLimit: 1)]),
-  TournamentSimulationScenario(name: 'Doppel-KO mit entscheidendem Finale', playerCount: 7, stages: [SimulationEliminationStageSpec(name: 'Doppel-KO', qualifiers: 1, lossLimit: 2, finalEndsTournament: true)]),
-  TournamentSimulationScenario(name: 'Triple-KO mit entscheidendem Finale', playerCount: 7, stages: [SimulationEliminationStageSpec(name: 'Triple-KO', qualifiers: 1, lossLimit: 3, finalEndsTournament: true)]),
-  TournamentSimulationScenario(name: 'Kratzer mit 5 Leben und Freilosen', playerCount: 7, stages: [SimulationEliminationStageSpec(name: 'Kratzer', qualifiers: 1, lossLimit: 5)]),
-  TournamentSimulationScenario(name: 'Kratzer mit 10 Leben', playerCount: 4, stages: [SimulationEliminationStageSpec(name: 'Kratzer', qualifiers: 1, lossLimit: 10)]),
+  TournamentSimulationScenario(
+    name: 'Begrenzte Gruppe: 13 Spieler mit maximal 5 Spielen und Finale',
+    playerCount: 13,
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Gruppe',
+        qualifiers: 2,
+        groupSizes: [13],
+        maxGamesPerPlayer: [5],
+        fixedPerGroup: 2,
+      ),
+      SimulationEliminationStageSpec(
+        name: 'Finale',
+        qualifiers: 1,
+        lossLimit: 1,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Begrenzte Gruppe: 12 Spieler mit maximal 5 Spielen',
+    playerCount: 12,
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Gruppe',
+        qualifiers: 1,
+        groupSizes: [12],
+        maxGamesPerPlayer: [5],
+        fixedPerGroup: 1,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Challonge 37: Siebenergruppe und KO mit Platz 3',
+    playerCount: 7,
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Gruppe A',
+        qualifiers: 4,
+        groupSizes: [7],
+        fixedPerGroup: 4,
+      ),
+      SimulationEliminationStageSpec(
+        name: 'KO',
+        qualifiers: 1,
+        lossLimit: 1,
+        placementPlaces: [3],
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Ausstieg: zwei Spieler im KO',
+    playerCount: 8,
+    withdrawnPlayers: [0, 7],
+    stages: [
+      SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Ausstieg: Gruppe und KO',
+    playerCount: 8,
+    withdrawnPlayers: [0],
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Gruppe',
+        qualifiers: 4,
+        groupSizes: [4, 4],
+        fixedPerGroup: 2,
+      ),
+      SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Ausstieg: ignorierte Doppel-KO-Spiele',
+    playerCount: 8,
+    withdrawnPlayers: [0],
+    withdrawalMode: WithdrawalResultMode.ignoreOpen,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Doppel KO',
+        qualifiers: 1,
+        lossLimit: 2,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Ausstieg: Triple-KO',
+    playerCount: 7,
+    withdrawnPlayers: [0],
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Triple KO',
+        qualifiers: 1,
+        lossLimit: 3,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Swiss mit Freilosen und KO',
+    playerCount: 13,
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Swiss',
+        qualifiers: 4,
+        groupSizes: [13],
+        playTypes: ['swiss'],
+        roundRobinRepeats: [4],
+        fixedPerGroup: 4,
+      ),
+      SimulationEliminationStageSpec(
+        name: 'Finale',
+        qualifiers: 1,
+        lossLimit: 1,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Swiss mit Unentschieden',
+    playerCount: 8,
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Swiss',
+        qualifiers: 1,
+        groupSizes: [8],
+        playTypes: ['swiss'],
+        roundRobinRepeats: [3],
+        fixedPerGroup: 1,
+        gameFormat: TournamentGameFormat(bestOfLegs: 4),
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Finder: KO-Vorrunde, Mini-KO-Gruppen und Triple-KO',
+    playerCount: 12,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Vorrunde',
+        qualifiers: 6,
+        lossLimit: 1,
+      ),
+      SimulationGroupStageSpec(
+        name: 'Mini-KO-Gruppen',
+        qualifiers: 4,
+        groupSizes: [3, 3],
+        playTypes: ['mini_knockout', 'mini_knockout'],
+        fixedPerGroup: 2,
+      ),
+      SimulationEliminationStageSpec(
+        name: 'Triple-KO-Finale',
+        qualifiers: 1,
+        lossLimit: 3,
+        finalEndsTournament: true,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Doppel: Gruppen und KO',
+    playerCount: 6,
+    teamSize: 2,
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Gruppen',
+        qualifiers: 4,
+        groupSizes: [3, 3],
+        fixedPerGroup: 2,
+      ),
+      SimulationEliminationStageSpec(
+        name: 'Finale',
+        qualifiers: 1,
+        lossLimit: 1,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Viererteams mit Freilosen',
+    playerCount: 5,
+    teamSize: 4,
+    stages: [
+      SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'KO mit Platz 3, 5, 7, 9 und 15',
+    playerCount: 16,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'KO',
+        qualifiers: 1,
+        lossLimit: 1,
+        placementPlaces: [3, 5, 7, 9, 15],
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Mini-KO mit optionalen Platzierungsspielen',
+    playerCount: 16,
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Mini-KO',
+        qualifiers: 6,
+        groupSizes: [8, 8],
+        playTypes: ['mini_knockout', 'mini_knockout'],
+        fixedPerGroup: 3,
+        placementPlaces: [5, 7],
+      ),
+      SimulationEliminationStageSpec(
+        name: 'Finale',
+        qualifiers: 1,
+        lossLimit: 1,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Doppel-KO mit entscheidendem Finale',
+    playerCount: 7,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Doppel-KO',
+        qualifiers: 1,
+        lossLimit: 2,
+        finalEndsTournament: true,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Triple-KO mit entscheidendem Finale',
+    playerCount: 7,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Triple-KO',
+        qualifiers: 1,
+        lossLimit: 3,
+        finalEndsTournament: true,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Kratzer mit 5 Leben und einem unbesetzten Sitz',
+    playerCount: 7,
+    boards: 1,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Kratzer',
+        qualifiers: 1,
+        lossLimit: 5,
+        isKratzer: true,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Kratzer mit 10 Leben und mehreren Boards',
+    playerCount: 13,
+    boards: 3,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Kratzer',
+        qualifiers: 1,
+        lossLimit: 10,
+        isKratzer: true,
+      ),
+    ],
+  ),
   TournamentSimulationScenario(
     name: 'Bo4 Gruppen mit Unentschieden und Bo5 KO',
     playerCount: 8,

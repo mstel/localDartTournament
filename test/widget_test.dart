@@ -350,12 +350,50 @@ void main() {
     expect(find.text('Zufall'), findsOneWidget);
     expect(find.text('Cross seeded'), findsNothing);
     expect(find.textContaining('automatisch gesetzt'), findsWidgets);
-    expect(find.text('Halbfinale'), findsWidgets);
     expect(find.text('1 Niederlage Bracket'), findsOneWidget);
     expect(find.text('2 Niederlagen Bracket'), findsOneWidget);
-    expect(find.textContaining('Verlierer Spiel'), findsWidgets);
     expect(find.text('Finale'), findsWidgets);
+    expect(find.text('Halbfinale'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('triple-preview-loss-level-0')),
+      500,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('triple-preview-loss-level-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('Halbfinale'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('triple-preview-loss-level-1')),
+      500,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('triple-preview-loss-level-1')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Verlierer Spiel'), findsWidgets);
 
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('stage-type-field')),
+      500,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('stage-type-field')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Gruppenphase').last);

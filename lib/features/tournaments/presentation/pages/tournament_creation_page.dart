@@ -436,6 +436,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   int _currentStageMatchCount() {
+    if (_selectedStageType == 'kratzer') {
+      return const KratzerEngine().estimatedGameCount(
+        playerCount: _knockoutParticipantCount() ?? 0,
+        lives: _selectedLossLimit,
+        boards: _plannedBoardCount,
+      );
+    }
     if (_isKnockoutStageType(_selectedStageType)) {
       return _eliminationMatchEstimate(
             _knockoutParticipantCount() ?? 0,
@@ -486,7 +493,23 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     return totalMatches;
   }
 
+  bool get _hasKratzerStage =>
+      _selectedStageType == 'kratzer' ||
+      _stages.any((stage) => stage.type == 'kratzer');
+
   List<String> _currentStageMatchDetails() {
+    if (_selectedStageType == 'kratzer') {
+      final participants = _knockoutParticipantCount() ?? 0;
+      final boards = _plannedBoardCount;
+      final usedBoards = (participants ~/ 3).clamp(0, boards);
+      return [
+        '$participants aktive Teilnehmende',
+        if (participants < 3) 'Für den Start sind mindestens 3 nötig',
+        '$usedBoards von $boards Boards pro Runde',
+        '3–6 Spieler je Board, gleichmäßig verteilt',
+        '${const KratzerEngine().estimatedGameCount(playerCount: participants, lives: _selectedLossLimit, boards: boards)} Partien bis zur letzten Person (Verlaufsschätzung)',
+      ];
+    }
     if (_isKnockoutStageType(_selectedStageType)) {
       final participants = _knockoutParticipantCount() ?? 0;
       final byeCount = _knockoutByeCount();
@@ -1416,6 +1439,17 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _saveStage() {
+    if (_selectedStageType == 'kratzer' &&
+        (_knockoutParticipantCount() ?? 0) < 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Für Kratzer werden mindestens drei Teilnehmende benötigt.',
+          ),
+        ),
+      );
+      return;
+    }
     if (_selectedStageType == 'groups' &&
         !hasValidGroupSizes(_calculateGroupSizes())) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2542,17 +2576,21 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 const SizedBox(height: 32),
                 SwitchListTile(
                   title: const Text('Für Rangliste/n berücksichtigen'),
-                  subtitle: const Text(
-                    'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
+                  subtitle: Text(
+                    _hasKratzerStage
+                        ? 'Kratzer-Turniere fließen grundsätzlich nicht in Ranglisten ein.'
+                        : 'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
                   ),
-                  value: _countsForRanking,
-                  onChanged: (value) => setState(() {
-                    _rankingSetupTouched = true;
-                    _countsForRanking = value;
-                    if (!value) _localRankingIds.clear();
-                  }),
+                  value: _hasKratzerStage ? false : _countsForRanking,
+                  onChanged: _hasKratzerStage
+                      ? null
+                      : (value) => setState(() {
+                          _rankingSetupTouched = true;
+                          _countsForRanking = value;
+                          if (!value) _localRankingIds.clear();
+                        }),
                 ),
-                if (_countsForRanking)
+                if (!_hasKratzerStage && _countsForRanking)
                   FutureBuilder<List<LocalRanking>>(
                     future: _localRankings,
                     builder: (context, snapshot) {
@@ -2748,6 +2786,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
                     setState(() {
                       _selectedStageType = value;
+                      if (value == 'kratzer') {
+                        _countsForRanking = false;
+                        _localRankingIds.clear();
+                      }
                       _finalEndsTournament = value != 'kratzer';
                       _kratzerLives = _lossLimitForStageType(
                         value,
@@ -3091,19 +3133,34 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               summary:
                   '${_players.length} Teilnehmer · ${_stages.length} Etappen · $_plannedBoardCount Boards',
               children: [
-                ConfigurationDurationBar(
-                  stages: [
-                    if (_stages.isEmpty) _currentStageConfiguration(),
-                    for (var i = 0; i < _stages.length; i++)
-                      i == _editingStageIndex
-                          ? _currentStageConfiguration()
-                          : _stages[i],
-                  ],
-                  editing: _editingStageIndex != null || _stages.isEmpty,
-                  boards: _plannedBoardCount,
-                  onBoardsChanged: (boards) =>
-                      setState(() => _plannedBoardCount = boards),
-                ),
+                if (_hasKratzerStage)
+                  KratzerDurationPreview(
+                    stages: [
+                      if (_stages.isEmpty) _currentStageConfiguration(),
+                      for (var i = 0; i < _stages.length; i++)
+                        i == _editingStageIndex
+                            ? _currentStageConfiguration()
+                            : _stages[i],
+                    ],
+                    participantCount: _players.length,
+                    boards: _plannedBoardCount,
+                    onBoardsChanged: (boards) =>
+                        setState(() => _plannedBoardCount = boards),
+                  )
+                else
+                  ConfigurationDurationBar(
+                    stages: [
+                      if (_stages.isEmpty) _currentStageConfiguration(),
+                      for (var i = 0; i < _stages.length; i++)
+                        i == _editingStageIndex
+                            ? _currentStageConfiguration()
+                            : _stages[i],
+                    ],
+                    editing: _editingStageIndex != null || _stages.isEmpty,
+                    boards: _plannedBoardCount,
+                    onBoardsChanged: (boards) =>
+                        setState(() => _plannedBoardCount = boards),
+                  ),
                 const SizedBox(height: 12),
                 const SizedBox(height: 24),
                 if (_players.isEmpty || _stages.isEmpty)

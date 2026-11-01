@@ -156,6 +156,11 @@ TournamentRunStage _runStageFromJson(Map<String, dynamic> json) {
       ),
       eliminationLossLimit: json['eliminationLossLimit'] as int? ?? 1,
       finalEndsTournament: json['finalEndsTournament'] as bool? ?? false,
+      isKratzer: json['isKratzer'] as bool? ?? false,
+      participants: _mapListFromJson(
+        json['participants'],
+        TournamentPlayer.fromJson,
+      ),
     );
   }
 
@@ -558,7 +563,7 @@ class CreatedTournament {
     required this.runStages,
     this.leagueMatch,
     this.importedArchive,
-    this.countsForRanking = true,
+    bool countsForRanking = true,
     List<String> rankingIds = const [],
     this.activeStageIndex = 0,
     this.boardCount = 1,
@@ -583,7 +588,8 @@ class CreatedTournament {
     this.plannedMatches,
     this.plannedMatchEndSeconds = const [],
     Set<int>? completedStageIndexes,
-  }) : id = id ?? _newTournamentId(),
+  }) : _countsForRanking = countsForRanking,
+       id = id ?? _newTournamentId(),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now(),
        completedStageIndexes = completedStageIndexes ?? <int>{},
@@ -710,7 +716,11 @@ class CreatedTournament {
   final List<TournamentRunStage> runStages;
   final LeagueMatch? leagueMatch;
   final ImportedTournamentArchive? importedArchive;
-  bool countsForRanking;
+  bool _countsForRanking;
+  bool get isKratzerTournament =>
+      stages.any((stage) => stage.type == 'kratzer');
+  bool get countsForRanking => !isKratzerTournament && _countsForRanking;
+  set countsForRanking(bool value) => _countsForRanking = value;
   List<String> rankingIds;
   int activeStageIndex;
   int boardCount;
@@ -841,12 +851,16 @@ class KnockoutTournamentRunStage extends TournamentRunStage {
     this.placementMatches = const [],
     this.eliminationLossLimit = 1,
     this.finalEndsTournament = false,
+    this.isKratzer = false,
+    this.participants = const [],
   });
 
   final List<List<GroupMatch>> rounds;
   final List<GroupMatch> placementMatches;
   final int eliminationLossLimit;
   final bool finalEndsTournament;
+  final bool isKratzer;
+  final List<TournamentPlayer> participants;
 
   List<GroupMatch> get matches => [
     for (final round in rounds) ...round,
@@ -865,6 +879,9 @@ class KnockoutTournamentRunStage extends TournamentRunStage {
           .toList(),
       'eliminationLossLimit': eliminationLossLimit,
       'finalEndsTournament': finalEndsTournament,
+      if (isKratzer) 'isKratzer': true,
+      if (participants.isNotEmpty)
+        'participants': participants.map((player) => player.toJson()).toList(),
     };
   }
 }
@@ -942,6 +959,10 @@ class GroupMatch {
   GroupMatch({
     this.homePlayer,
     this.awayPlayer,
+    this.players = const [],
+    this.scratchedPlayer,
+    this.scratchEligiblePlayers = const [],
+    this.isKratzer = false,
     required this.round,
     this.homeLegs,
     this.awayLegs,
@@ -967,6 +988,13 @@ class GroupMatch {
     return GroupMatch(
       homePlayer: _playerFromJson(json['homePlayer']),
       awayPlayer: _playerFromJson(json['awayPlayer']),
+      players: _mapListFromJson(json['players'], TournamentPlayer.fromJson),
+      scratchedPlayer: _playerFromJson(json['scratchedPlayer']),
+      scratchEligiblePlayers: _mapListFromJson(
+        json['scratchEligiblePlayers'],
+        TournamentPlayer.fromJson,
+      ),
+      isKratzer: json['isKratzer'] == true,
       round: json['round'] as int? ?? 1,
       homeLegs: json['homeLegs'] as int?,
       awayLegs: json['awayLegs'] as int?,
@@ -996,6 +1024,10 @@ class GroupMatch {
 
   TournamentPlayer? homePlayer;
   TournamentPlayer? awayPlayer;
+  List<TournamentPlayer> players;
+  TournamentPlayer? scratchedPlayer;
+  List<TournamentPlayer> scratchEligiblePlayers;
+  bool isKratzer;
   final int round;
   int? homeLegs;
   int? awayLegs;
@@ -1004,7 +1036,11 @@ class GroupMatch {
   bool get hasSetScore => homeSets != null && awaySets != null;
   int? get homeScore => hasSetScore ? homeSets : homeLegs;
   int? get awayScore => hasSetScore ? awaySets : awayLegs;
-  String get scoreLabel => withdrawalIgnored
+  String get scoreLabel => isKratzer
+      ? scratchedPlayer == null
+            ? 'Noch offen'
+            : 'Kratzer: ${scratchedPlayer!.name}'
+      : withdrawalIgnored
       ? 'Nicht gewertet'
       : '$homeScore:$awayScore${hasSetScore ? ' Sets' : ''}${withdrawalSignature != null && !withdrawalHadResult ? ' · kampflos' : ''}';
   bool allowsBye;
@@ -1023,12 +1059,24 @@ class GroupMatch {
   List<BestPerformance> bestPerformances;
   bool get countsForStatistics => hasResult && !withdrawalIgnored;
 
-  bool get hasPlayers => homePlayer != null && awayPlayer != null;
-  bool get hasScore => hasPlayers && homeLegs != null && awayLegs != null;
-  bool get hasResult => hasScore && !isAnnulled;
+  bool get hasPlayers => isKratzer
+      ? players.length >= 3 && players.length <= 6
+      : homePlayer != null && awayPlayer != null;
+  String get participantLabel => isKratzer
+      ? players.map((player) => player.name).join(' · ')
+      : '${homePlayer?.name ?? 'Offen'} – ${awayPlayer?.name ?? 'Offen'}';
+  String get participantShortLabel => isKratzer
+      ? players.map((player) => player.shortDisplayName).join(' · ')
+      : '${homePlayer?.shortDisplayName ?? 'Offen'} – ${awayPlayer?.shortDisplayName ?? 'Offen'}';
+  bool get hasScore => isKratzer
+      ? scratchedPlayer != null
+      : hasPlayers && homeLegs != null && awayLegs != null;
+  bool get hasResult =>
+      isKratzer ? scratchedPlayer != null : hasScore && !isAnnulled;
   bool get isResolved => isAnnulled || hasResult || winner != null;
 
   TournamentPlayer? get winner {
+    if (isKratzer) return null;
     if (allowsBye && homePlayer != null && awayPlayer == null) {
       return homePlayer;
     }
@@ -1046,6 +1094,7 @@ class GroupMatch {
   }
 
   TournamentPlayer? get loser {
+    if (isKratzer) return scratchedPlayer;
     final winningPlayer = winner;
     if (winningPlayer == null || !hasResult) {
       return null;
@@ -1056,6 +1105,14 @@ class GroupMatch {
 
   Map<String, dynamic> toJson() {
     return {
+      if (players.isNotEmpty)
+        'players': players.map((player) => player.toJson()).toList(),
+      if (scratchedPlayer != null) 'scratchedPlayer': scratchedPlayer!.toJson(),
+      if (scratchEligiblePlayers.isNotEmpty)
+        'scratchEligiblePlayers': scratchEligiblePlayers
+            .map((player) => player.toJson())
+            .toList(),
+      if (isKratzer) 'isKratzer': true,
       'homePlayer': homePlayer?.toJson(),
       'awayPlayer': awayPlayer?.toJson(),
       'round': round,

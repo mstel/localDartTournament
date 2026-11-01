@@ -150,32 +150,178 @@ class MatchResultTile extends StatelessWidget {
                 ),
               Padding(
                 padding: EdgeInsets.only(bottom: compact ? 0 : 4),
-                child: Row(
-                  children: [
-                    Expanded(child: playerName(true)),
-                    _ScoreBadge(
-                      match: match,
-                      compact: compact,
-                      onTap: canEdit
-                          ? () => onEditResult(match)
-                          : match.hasResult
-                          ? () => MatchStatisticsTapTarget.open(
-                              context,
-                              match,
-                              tournament: tournament,
-                            )
-                          : null,
-                    ),
-                    Expanded(
-                      child: playerName(false, textAlign: TextAlign.right),
-                    ),
-                  ],
-                ),
+                child: match.isKratzer
+                    ? _KratzerPlayersRow(
+                        match: match,
+                        compact: compact,
+                        onPlayerTap: onPlayerTap,
+                        onResultTap: canEdit ? () => onEditResult(match) : null,
+                      )
+                    : Row(
+                        children: [
+                          Expanded(child: playerName(true)),
+                          _ScoreBadge(
+                            match: match,
+                            compact: compact,
+                            onTap: canEdit
+                                ? () => onEditResult(match)
+                                : match.hasResult
+                                ? () => MatchStatisticsTapTarget.open(
+                                    context,
+                                    match,
+                                    tournament: tournament,
+                                  )
+                                : null,
+                          ),
+                          Expanded(
+                            child: playerName(
+                              false,
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _KratzerPlayersRow extends StatelessWidget {
+  const _KratzerPlayersRow({
+    required this.match,
+    required this.compact,
+    required this.onPlayerTap,
+    required this.onResultTap,
+  });
+
+  final GroupMatch match;
+  final bool compact;
+  final ValueChanged<TournamentPlayer>? onPlayerTap;
+  final VoidCallback? onResultTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scratched = match.scratchedPlayer;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final player in match.players)
+              ActionChip(
+                visualDensity: compact
+                    ? VisualDensity.compact
+                    : VisualDensity.standard,
+                label: Text(
+                  player.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                backgroundColor: player == scratched
+                    ? Theme.of(context).colorScheme.errorContainer
+                    : null,
+                labelStyle: player == scratched
+                    ? TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.bold,
+                      )
+                    : null,
+                onPressed: onPlayerTap == null
+                    ? null
+                    : () => onPlayerTap!(player),
+              ),
+          ],
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onResultTap,
+            icon: Icon(
+              scratched == null ? Icons.edit_outlined : Icons.warning_amber,
+              size: 18,
+            ),
+            label: Text(
+              scratched == null
+                  ? 'Kratzer eintragen'
+                  : 'Kratzer: ${scratched.name}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class KratzerResultDialog extends StatefulWidget {
+  const KratzerResultDialog({super.key, required this.match});
+
+  final GroupMatch match;
+
+  @override
+  State<KratzerResultDialog> createState() => _KratzerResultDialogState();
+}
+
+class _KratzerResultDialogState extends State<KratzerResultDialog> {
+  late TournamentPlayer? _selected = widget.match.scratchedPlayer;
+
+  @override
+  Widget build(BuildContext context) {
+    final eligible = widget.match.scratchEligiblePlayers.isEmpty
+        ? widget.match.players
+        : widget.match.scratchEligiblePlayers;
+    return AlertDialog(
+      title: const Text('Kratzer eintragen'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Es gibt keinen Matchsieger. Wähle nur die Person aus, die ein Leben verliert.',
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<TournamentPlayer>(
+              groupValue: _selected,
+              onChanged: (value) => setState(() => _selected = value),
+              child: Column(
+                children: [
+                  for (final player in eligible)
+                    RadioListTile<TournamentPlayer>(
+                      value: player,
+                      title: Text(player.name),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+        if (widget.match.scratchedPlayer != null)
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, const MatchResult.cleared()),
+            child: const Text('Eintrag entfernen'),
+          ),
+        FilledButton(
+          onPressed: _selected == null
+              ? null
+              : () => Navigator.pop(context, MatchResult.kratzer(_selected)),
+          child: const Text('Kratzer speichern'),
+        ),
+      ],
     );
   }
 }

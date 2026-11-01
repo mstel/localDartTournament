@@ -101,6 +101,61 @@ class ConfigurationDurationEstimator {
           (stage is GroupTournamentRunStage &&
               stage.groups.any((g) => g.eliminationLossLimit > 1));
       if (stage is GroupTournamentRunStage &&
+          stage.groups.isNotEmpty &&
+          stage.groups.every((group) => group.playType == 'swiss')) {
+        final rounds =
+            stage.groups
+                .expand((group) => group.matches.map((match) => match.round))
+                .toSet()
+                .toList()
+              ..sort();
+        final matchMinutes = planner.estimatedWorstCaseMatchMinutes(
+          config.gameFormat,
+        );
+        for (final round in rounds) {
+          final matchesPerRound = stage.groups
+              .where(
+                (group) => group.matches.any((match) => match.round == round),
+              )
+              .fold<int>(
+                0,
+                (total, group) => total + group.players.length ~/ 2,
+              );
+          if (round > 1) {
+            final reserve = parameters.value(
+              PlanningParameter.swissRoundWaitMinutes,
+            );
+            minutes += reserve;
+            waitMinutes += reserve;
+          }
+          if (matchesPerRound > 0 && (hasScheduledBlocks || round > 1)) {
+            minutes += parameters.boardIdleMinutes;
+            waitMinutes += parameters.boardIdleMinutes;
+          }
+          final batches = (matchesPerRound + boards - 1) ~/ boards;
+          for (var batch = 0; batch < batches; batch++) {
+            if (batch > 0) {
+              minutes += parameters.boardIdleMinutes;
+              waitMinutes += parameters.boardIdleMinutes;
+            }
+            final batchMatches = min(boards, matchesPerRound - batch * boards);
+            minutes += matchMinutes;
+            matchEndSeconds.addAll(
+              List.filled(batchMatches, (minutes * 60).round()),
+            );
+          }
+          // A partial final batch leaves boards waiting for its last match
+          // before the synchronous Swiss round barrier can open.
+          if (matchesPerRound % boards != 0) {
+            minutes += parameters.boardIdleMinutes;
+            waitMinutes += parameters.boardIdleMinutes;
+          }
+          totalMatches += matchesPerRound;
+        }
+        hasScheduledBlocks = hasScheduledBlocks || rounds.isNotEmpty;
+        continue;
+      }
+      if (stage is GroupTournamentRunStage &&
           stage.groups.every((group) => group.playType == 'round_robin')) {
         final entries = [
           for (final group in stage.groups)
@@ -218,7 +273,13 @@ class ConfigurationDurationEstimator {
       var matches = 0;
       for (var index = 0; index < stage.groups.length; index++) {
         final group = stage.groups[index];
-        if (group.playType == 'round_robin' || group.playType == 'swiss') {
+        if (group.playType == 'swiss') {
+          matches +=
+              (group.players.length ~/ 2) *
+              group.matches.map((match) => match.round).toSet().length;
+          continue;
+        }
+        if (group.playType == 'round_robin') {
           matches += group.matches.where((match) => match.hasPlayers).length;
           continue;
         }

@@ -763,7 +763,10 @@ class _TournamentSecondScreenViewState
     required TournamentRunStage? activeStage,
     required List<GroupMatch> playedMatches,
   }) {
-    final title = _monitorWidgetTitles[placement.widgetId];
+    final title = placement.widgetId == 'ranking' &&
+            tournament.isKratzerTournament
+        ? 'Lebenstand'
+        : _monitorWidgetTitles[placement.widgetId];
     if (title == null) return const SizedBox.shrink();
     return SizedBox(
       key: ValueKey('monitor-widget-${placement.widgetId}'),
@@ -1201,6 +1204,42 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     CreatedTournament tournament,
   ) {
+    if (tournament.isKratzerTournament) {
+      final stage = tournament.stages.lastWhere(
+        (stage) => stage.type == 'kratzer',
+      );
+      final scratches = <TournamentPlayer, int>{};
+      for (final match in TournamentTiming.matches(tournament)) {
+        final scratched = match.scratchedPlayer;
+        if (scratched != null) {
+          scratches.update(scratched, (count) => count + 1, ifAbsent: () => 1);
+        }
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Lebenstand · Kratzer-Turnier',
+            style: TextStyle(color: Colors.white70),
+          ),
+          for (final player in tournament.players)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                (scratches[player] ?? 0) >= stage.lossLimit
+                    ? Icons.person_off_outlined
+                    : Icons.favorite_outline,
+                color: Colors.white,
+              ),
+              title: Text(player.name),
+              trailing: Text(
+                '${(stage.lossLimit - (scratches[player] ?? 0)).clamp(0, stage.lossLimit)} Leben',
+              ),
+            ),
+        ],
+      );
+    }
     final wins = <String, int>{};
     for (final match in TournamentTiming.matches(tournament)) {
       final winner = match.winner;
@@ -2631,8 +2670,7 @@ class _TournamentSecondScreenViewState
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
                                   child: Text(
-                                    'Aktuell: ${running.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
-                                    '${running.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                    'Aktuell: ${running.match.participantShortLabel}',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -2672,8 +2710,10 @@ class _TournamentSecondScreenViewState
                                       ),
                                       Expanded(
                                         child: Text(
-                                          '${upcoming[index].entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
-                                          '${upcoming[index].entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                          upcoming[index]
+                                              .entry
+                                              .match
+                                              .participantShortLabel,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
