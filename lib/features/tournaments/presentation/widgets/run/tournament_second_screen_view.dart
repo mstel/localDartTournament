@@ -34,7 +34,7 @@ import 'recent_match_result_card.dart';
 const Map<String, String> _monitorWidgetTitles = {
   'standings': 'Tabellen & Zwischenstände',
   'forecast': 'Siegprognose & Weiterkommen',
-  'combined': 'Tabellen & Prognose kombiniert',
+  'combined': 'Tabellen & Prognose (Umschalter)',
   'recent': 'Zuletzt beendete Matches',
   'boards': 'Boards & nächste Begegnungen',
   'liveBoard': 'Live Board Ansicht',
@@ -43,7 +43,7 @@ const Map<String, String> _monitorWidgetTitles = {
   'ranking': 'Rangliste',
 };
 
-enum _StandingsDisplayMode { standings, forecast, combined }
+enum _StandingsDisplayMode { standings, forecast }
 
 enum _MonitorLayoutAction { add, save, load, reset, standard }
 
@@ -106,8 +106,11 @@ class _TournamentSecondScreenViewState
   String? _loadedLayoutName;
   bool _useCustomLayout = false;
   bool _isEditingLayout = false;
+  bool _customLayoutBeforeEditing = false;
+  List<SecondScreenWidgetPlacement>? _placementsBeforeEditing;
   String? _dragTargetWidgetId;
   int? _dragTargetEdge;
+  final Map<String, GlobalKey> _monitorDropTargetKeys = {};
 
   TournamentStorage get _storage => widget.storage ?? TournamentStorage();
 
@@ -373,6 +376,7 @@ class _TournamentSecondScreenViewState
                     activeIndex: activeIndex,
                     activeStage: activeStage,
                     playedMatches: playedMatches,
+                    timing: timing,
                   )
                 : _buildOverview(
                     context,
@@ -563,10 +567,7 @@ class _TournamentSecondScreenViewState
                     ),
                   if (widget.isStandaloneWindow) ...[
                     OutlinedButton.icon(
-                      onPressed: () => setState(() {
-                        _useCustomLayout = true;
-                        _isEditingLayout = true;
-                      }),
+                      onPressed: _startMonitorLayoutEditing,
                       icon: const Icon(Icons.dashboard_customize),
                       label: const Text('Layout anpassen'),
                     ),
@@ -594,6 +595,7 @@ class _TournamentSecondScreenViewState
     required int activeIndex,
     required TournamentRunStage? activeStage,
     required List<GroupMatch> playedMatches,
+    required TimingSnapshot timing,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -614,6 +616,7 @@ class _TournamentSecondScreenViewState
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _buildCustomLayoutStatusBar(t, activeStage, timing),
             LayoutBuilder(
               builder: (context, toolbarConstraints) =>
                   _buildCustomLayoutToolbar(
@@ -633,59 +636,19 @@ class _TournamentSecondScreenViewState
             const SizedBox(height: 8),
             Expanded(
               child: SingleChildScrollView(
-                child: Wrap(
-                  spacing: spacing,
-                  runSpacing: spacing,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < _monitorPlacements.length;
-                      index++
-                    )
-                      _buildMonitorWidgetDropTarget(
-                        context,
-                        _monitorPlacements[index].widgetId,
-                        width:
-                            unitWidth *
-                                _monitorPlacements[index].widthUnits.clamp(
-                                  1,
-                                  columns,
-                                ) +
-                            spacing *
-                                (_monitorPlacements[index].widthUnits.clamp(
-                                      1,
-                                      columns,
-                                    ) -
-                                    1),
-                        height:
-                            unitHeight * _monitorPlacements[index].heightUnits,
-                        child: _buildMonitorWidgetCard(
-                          context,
-                          _monitorPlacements[index],
-                          index,
-                          width:
-                              unitWidth *
-                                  _monitorPlacements[index].widthUnits.clamp(
-                                    1,
-                                    columns,
-                                  ) +
-                              spacing *
-                                  (_monitorPlacements[index].widthUnits.clamp(
-                                        1,
-                                        columns,
-                                      ) -
-                                      1),
-                          height:
-                              unitHeight *
-                              _monitorPlacements[index].heightUnits,
-                          tournament: t,
-                          activeIndex: activeIndex,
-                          activeStage: activeStage,
-                          playedMatches: playedMatches,
-                          isEditing: _isEditingLayout,
-                        ),
-                      ),
-                  ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _buildMonitorLayoutRows(
+                    context,
+                    t,
+                    activeIndex,
+                    activeStage,
+                    playedMatches,
+                    columns,
+                    unitWidth,
+                    unitHeight,
+                    spacing,
+                  ),
                 ),
               ),
             ),
@@ -693,6 +656,132 @@ class _TournamentSecondScreenViewState
         );
       },
     );
+  }
+
+  Widget _buildCustomLayoutStatusBar(
+    CreatedTournament tournament,
+    TournamentRunStage? activeStage,
+    TimingSnapshot timing,
+  ) {
+    final matches = TournamentTiming.matches(tournament);
+    final playedCount = matches
+        .where((match) => match.hasPlayers && match.hasResult)
+        .length;
+    final totalMatchCount = tournament.runStages.isEmpty
+        ? matches.where((match) => match.hasPlayers).length
+        : tournament.runStages.fold(
+            0,
+            (total, stage) => total + _countMatchesForProgress(stage),
+          );
+    final knockoutStage = activeStage is KnockoutTournamentRunStage
+        ? activeStage
+        : null;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
+          Text(
+            'Turnieruhr: ${_formatDuration(timing.elapsed)}',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          Text(
+            '$playedCount/$totalMatchCount gespielt',
+            style: const TextStyle(
+              color: Color(0xFF70E0BA),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (knockoutStage != null)
+            Text(
+              '${knockoutStage.name}: '
+              '${_matchesOf(knockoutStage).where((match) => match.hasResult).length}/'
+              '${_countMatchesForProgress(knockoutStage)}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+          if (timing.forecast != null)
+            Text(
+              'Ende ca. ${_formatClockTime(timing.forecast!)}',
+              style: const TextStyle(color: Colors.white),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildMonitorLayoutRows(
+    BuildContext context,
+    CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? activeStage,
+    List<GroupMatch> playedMatches,
+    int columns,
+    double unitWidth,
+    double unitHeight,
+    double spacing,
+  ) {
+    final rows = <List<int>>[[]];
+    for (var index = 0; index < _monitorPlacements.length; index++) {
+      if (index > 0 && _monitorPlacements[index].startsNewRow) {
+        rows.add([]);
+      }
+      rows.last.add(index);
+    }
+
+    return [
+      for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
+        if (rowIndex > 0) SizedBox(height: spacing),
+        Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final index in rows[rowIndex])
+              Builder(
+                builder: (context) {
+                  final placement = _monitorPlacements[index];
+                  final widthUnits = placement.widthUnits.clamp(1, columns);
+                  final width =
+                      unitWidth * widthUnits + spacing * (widthUnits - 1);
+                  final height = unitHeight * placement.heightUnits;
+                  return _buildMonitorWidgetDropTarget(
+                    context,
+                    placement.widgetId,
+                    width: width,
+                    height: height,
+                    child: _buildMonitorWidgetCard(
+                      context,
+                      placement,
+                      index,
+                      width: width,
+                      height: height,
+                      tournament: tournament,
+                      activeIndex: activeIndex,
+                      activeStage: activeStage,
+                      playedMatches: playedMatches,
+                      isEditing: _isEditingLayout,
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ],
+    ];
+  }
+
+  void _startMonitorLayoutEditing() {
+    setState(() {
+      _customLayoutBeforeEditing = _useCustomLayout;
+      _placementsBeforeEditing = List.of(_monitorPlacements);
+      _useCustomLayout = true;
+      _isEditingLayout = true;
+    });
   }
 
   Widget _buildCustomLayoutToolbar(
@@ -716,7 +805,7 @@ class _TournamentSecondScreenViewState
             )
           else
             OutlinedButton.icon(
-              onPressed: () => setState(() => _isEditingLayout = true),
+              onPressed: _startMonitorLayoutEditing,
               icon: const Icon(Icons.dashboard_customize),
               label: const Text('Layout anpassen'),
             ),
@@ -782,7 +871,7 @@ class _TournamentSecondScreenViewState
           ),
         ] else
           OutlinedButton.icon(
-            onPressed: () => setState(() => _isEditingLayout = true),
+            onPressed: _startMonitorLayoutEditing,
             icon: const Icon(Icons.dashboard_customize),
             label: const Text('Layout anpassen'),
           ),
@@ -830,8 +919,13 @@ class _TournamentSecondScreenViewState
     required Widget child,
   }) {
     if (!_isEditingLayout) return child;
-    return LayoutBuilder(
-      builder: (targetContext, constraints) => DragTarget<String>(
+    final targetKey = _monitorDropTargetKeys.putIfAbsent(
+      targetWidgetId,
+      GlobalKey.new,
+    );
+    return SizedBox(
+      key: targetKey,
+      child: DragTarget<String>(
         key: ValueKey('monitor-widget-drop-target-$targetWidgetId'),
         onWillAcceptWithDetails: (details) =>
             details.data != targetWidgetId &&
@@ -839,9 +933,11 @@ class _TournamentSecondScreenViewState
               (placement) => placement.widgetId == details.data,
             ),
         onMove: (details) {
-          final box = targetContext.findRenderObject();
+          final box = targetKey.currentContext?.findRenderObject();
           if (box is! RenderBox) return;
-          final edge = _nearestDropEdge(box, details.offset);
+          final edge = _dragTargetWidgetId == targetWidgetId
+              ? _dragTargetEdge ?? _nearestDropEdge(box, details.offset)
+              : _nearestDropEdge(box, details.offset);
           if (_dragTargetWidgetId == targetWidgetId &&
               _dragTargetEdge == edge) {
             return;
@@ -860,7 +956,7 @@ class _TournamentSecondScreenViewState
           }
         },
         onAcceptWithDetails: (details) {
-          final box = targetContext.findRenderObject();
+          final box = targetKey.currentContext?.findRenderObject();
           if (box is! RenderBox) {
             return;
           }
@@ -871,13 +967,14 @@ class _TournamentSecondScreenViewState
             (placement) => placement.widgetId == details.data,
           );
           if (targetIndex < 0 || fromIndex < 0) return;
-          final edge = _nearestDropEdge(box, details.offset);
+          final edge = _dragTargetWidgetId == targetWidgetId
+              ? _dragTargetEdge ?? _nearestDropEdge(box, details.offset)
+              : _nearestDropEdge(box, details.offset);
           setState(() {
             _dragTargetWidgetId = null;
             _dragTargetEdge = null;
           });
-          final insertAfter = edge == 1 || edge == 3;
-          _moveMonitorWidget(fromIndex, targetIndex + (insertAfter ? 1 : 0));
+          _moveMonitorWidget(fromIndex, targetIndex, edge: edge);
         },
         builder: (context, candidates, rejected) => Draggable<String>(
           key: ValueKey('monitor-widget-drag-$targetWidgetId'),
@@ -923,7 +1020,6 @@ class _TournamentSecondScreenViewState
                         width: 5,
                       ),
                     ),
-                    borderRadius: BorderRadius.circular(14),
                   ),
             child: child,
           ),
@@ -1162,12 +1258,11 @@ class _TournamentSecondScreenViewState
           expand: true,
         );
       case 'combined':
-        return _buildCombinedStandingsAndForecast(
+        return _buildStandingsAndForecastWidget(
           context,
           tournament,
           activeIndex,
           activeStage,
-          bounded: true,
         );
       case 'recent':
         return _buildRecentMatchesAndEloPanel(
@@ -1197,20 +1292,62 @@ class _TournamentSecondScreenViewState
     }
   }
 
-  void _moveMonitorWidget(int fromIndex, int insertionIndex) {
+  void _moveMonitorWidget(int fromIndex, int targetIndex, {required int edge}) {
     if (fromIndex < 0 ||
         fromIndex >= _monitorPlacements.length ||
-        insertionIndex < 0 ||
-        insertionIndex > _monitorPlacements.length) {
+        targetIndex < 0 ||
+        targetIndex >= _monitorPlacements.length ||
+        fromIndex == targetIndex) {
       return;
     }
-    final destination = insertionIndex > fromIndex
-        ? insertionIndex - 1
-        : insertionIndex;
-    if (destination == fromIndex) return;
     setState(() {
-      final placement = _monitorPlacements.removeAt(fromIndex);
-      _monitorPlacements.insert(destination, placement);
+      final target = _monitorPlacements[targetIndex];
+      final moving = _monitorPlacements.removeAt(fromIndex);
+      if (moving.startsNewRow &&
+          fromIndex > 0 &&
+          fromIndex < _monitorPlacements.length) {
+        final next = _monitorPlacements[fromIndex];
+        if (!next.startsNewRow) {
+          _monitorPlacements[fromIndex] = SecondScreenWidgetPlacement(
+            widgetId: next.widgetId,
+            widthUnits: next.widthUnits,
+            heightUnits: next.heightUnits,
+            startsNewRow: true,
+          );
+        }
+      }
+      final adjustedTargetIndex = _monitorPlacements.indexWhere(
+        (placement) => placement.widgetId == target.widgetId,
+      );
+      final insertBefore = edge == 0 || edge == 2;
+      final destination = adjustedTargetIndex + (insertBefore ? 0 : 1);
+      final startsNewRow = switch (edge) {
+        0 => target.startsNewRow,
+        1 => false,
+        2 => true,
+        3 => true,
+        _ => false,
+      };
+      final movedPlacement = SecondScreenWidgetPlacement(
+        widgetId: moving.widgetId,
+        widthUnits: moving.widthUnits,
+        heightUnits: moving.heightUnits,
+        startsNewRow: startsNewRow,
+      );
+      _monitorPlacements.insert(destination, movedPlacement);
+
+      if (edge == 0 || edge == 2) {
+        final updatedTargetIndex = _monitorPlacements.indexWhere(
+          (placement) => placement.widgetId == target.widgetId,
+        );
+        final currentTarget = _monitorPlacements[updatedTargetIndex];
+        _monitorPlacements[updatedTargetIndex] = SecondScreenWidgetPlacement(
+          widgetId: currentTarget.widgetId,
+          widthUnits: currentTarget.widthUnits,
+          heightUnits: currentTarget.heightUnits,
+          startsNewRow: edge == 2,
+        );
+      }
     });
   }
 
@@ -1221,12 +1358,28 @@ class _TournamentSecondScreenViewState
         widgetId: current.widgetId,
         widthUnits: widthUnits ?? current.widthUnits,
         heightUnits: heightUnits ?? current.heightUnits,
+        startsNewRow: current.startsNewRow,
       );
     });
   }
 
   void _removeMonitorWidget(int index) {
-    setState(() => _monitorPlacements.removeAt(index));
+    setState(() {
+      final removed = _monitorPlacements.removeAt(index);
+      if (removed.startsNewRow &&
+          index > 0 &&
+          index < _monitorPlacements.length) {
+        final next = _monitorPlacements[index];
+        if (!next.startsNewRow) {
+          _monitorPlacements[index] = SecondScreenWidgetPlacement(
+            widgetId: next.widgetId,
+            widthUnits: next.widthUnits,
+            heightUnits: next.heightUnits,
+            startsNewRow: true,
+          );
+        }
+      }
+    });
   }
 
   Future<void> _addMonitorWidget() async {
@@ -1287,10 +1440,26 @@ class _TournamentSecondScreenViewState
     );
     controller.dispose();
     if (name == null || name.isEmpty || !mounted) return;
-    await _persistMonitorLayout(name);
+    final saved = await _persistMonitorLayout(name);
+    if (saved) {
+      _customLayoutBeforeEditing = true;
+      _placementsBeforeEditing = List.of(_monitorPlacements);
+    }
   }
 
   Future<void> _applyMonitorLayout() async {
+    final unchanged = _placementsMatch(
+      _monitorPlacements,
+      _placementsBeforeEditing,
+    );
+    if (unchanged) {
+      setState(() {
+        _isEditingLayout = false;
+        _useCustomLayout = _customLayoutBeforeEditing;
+        _placementsBeforeEditing = null;
+      });
+      return;
+    }
     final applied = await _persistMonitorLayout(
       _loadedLayoutName ?? 'Standard',
     );
@@ -1298,8 +1467,27 @@ class _TournamentSecondScreenViewState
       setState(() {
         _isEditingLayout = false;
         _useCustomLayout = true;
+        _placementsBeforeEditing = null;
       });
     }
+  }
+
+  bool _placementsMatch(
+    List<SecondScreenWidgetPlacement> current,
+    List<SecondScreenWidgetPlacement>? previous,
+  ) {
+    if (previous == null || current.length != previous.length) return false;
+    for (var index = 0; index < current.length; index++) {
+      final currentPlacement = current[index];
+      final previousPlacement = previous[index];
+      if (currentPlacement.widgetId != previousPlacement.widgetId ||
+          currentPlacement.widthUnits != previousPlacement.widthUnits ||
+          currentPlacement.heightUnits != previousPlacement.heightUnits ||
+          currentPlacement.startsNewRow != previousPlacement.startsNewRow) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<bool> _persistMonitorLayout(String name) async {
@@ -1456,6 +1644,8 @@ class _TournamentSecondScreenViewState
           _loadedLayoutName = 'Standard';
           _useCustomLayout = true;
           _isEditingLayout = true;
+          _customLayoutBeforeEditing = true;
+          _placementsBeforeEditing = List.of(_defaultMonitorLayout);
         });
       }
     } catch (error) {
@@ -1763,7 +1953,7 @@ class _TournamentSecondScreenViewState
       children: [
         LayoutBuilder(
           builder: (context, constraints) =>
-              _buildStandingsDisplaySelector(constraints.maxWidth),
+              _buildStandingsDisplaySelector(context, constraints.maxWidth),
         ),
         const SizedBox(height: 8),
         if (expand)
@@ -1798,19 +1988,20 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  Widget _buildStandingsDisplaySelector(double width) {
-    const labels = {
-      _StandingsDisplayMode.standings: 'Tabellen & Zwischenstände',
-      _StandingsDisplayMode.forecast: 'Siegprognose & Weiterkommen',
-      _StandingsDisplayMode.combined: 'Kombiniert',
-    };
+  Widget _buildStandingsDisplaySelector(BuildContext context, double width) {
     if (width < 560) {
       return DropdownButton<_StandingsDisplayMode>(
         value: _standingsDisplayMode,
         isExpanded: true,
         items: [
-          for (final mode in _StandingsDisplayMode.values)
-            DropdownMenuItem(value: mode, child: Text(labels[mode]!)),
+          const DropdownMenuItem(
+            value: _StandingsDisplayMode.standings,
+            child: Text('Tabellen & Zwischenstände'),
+          ),
+          const DropdownMenuItem(
+            value: _StandingsDisplayMode.forecast,
+            child: Text('Siegprognose & Weiterkommen'),
+          ),
         ],
         onChanged: (mode) {
           if (mode != null) {
@@ -1830,11 +2021,6 @@ class _TournamentSecondScreenViewState
           value: _StandingsDisplayMode.forecast,
           label: Text('Siegprognose & Weiterkommen'),
           icon: Icon(Icons.account_tree_outlined),
-        ),
-        ButtonSegment(
-          value: _StandingsDisplayMode.combined,
-          label: Text('Kombiniert'),
-          icon: Icon(Icons.dashboard_outlined),
         ),
       ],
       selected: {_standingsDisplayMode},
@@ -1869,72 +2055,34 @@ class _TournamentSecondScreenViewState
           stage,
           expand: false,
         );
-      case _StandingsDisplayMode.combined:
-        return _buildCombinedStandingsAndForecast(
-          context,
-          tournament,
-          activeIndex,
-          stage,
-        );
     }
   }
 
-  Widget _buildCombinedStandingsAndForecast(
+  Widget _buildStandingsAndForecastWidget(
     BuildContext context,
     CreatedTournament tournament,
     int activeIndex,
-    TournamentRunStage? stage, {
-    bool bounded = false,
-  }) {
-    final standings = _buildStandingsPanel(
-      context,
-      tournament,
-      stage,
-      full: true,
-      expand: false,
-    );
-    final forecast = _buildKoPrognosisPanel(
-      context,
-      tournament,
-      activeIndex,
-      stage,
-      expand: false,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final sideBySide = constraints.maxWidth >= 900;
-        if (bounded) {
-          return sideBySide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: SingleChildScrollView(child: standings)),
-                    const SizedBox(width: 12),
-                    Expanded(child: SingleChildScrollView(child: forecast)),
-                  ],
-                )
-              : Column(
-                  children: [
-                    Expanded(child: SingleChildScrollView(child: standings)),
-                    const Divider(height: 12),
-                    Expanded(child: SingleChildScrollView(child: forecast)),
-                  ],
-                );
-        }
-        return sideBySide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: standings),
-                  const SizedBox(width: 12),
-                  Expanded(child: forecast),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [standings, const SizedBox(height: 12), forecast],
-              );
-      },
+    TournamentRunStage? stage,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) =>
+              _buildStandingsDisplaySelector(context, constraints.maxWidth),
+        ),
+        const Divider(height: 8),
+        Expanded(
+          child: SingleChildScrollView(
+            child: _buildStandingsDisplayPanel(
+              context,
+              tournament,
+              activeIndex,
+              stage,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

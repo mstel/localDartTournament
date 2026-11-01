@@ -12,6 +12,9 @@ class RankingYearPlayerStats {
       scores170 = 0,
       shortLegs = 0,
       highFinishes = 0;
+  double? highestAverage;
+  double? highestScoring;
+  double? highestCheckoutRate;
 }
 
 class RankingYearReview {
@@ -60,6 +63,26 @@ class RankingYearReviewService {
         entry.value.trim().toLowerCase(): entry.key,
     };
     final stats = {for (final id in roster) id: RankingYearPlayerStats()};
+    final monthlyPerformance = await db.loadPlayerMonthlyPerformanceForPlayers(
+      roster,
+      year: year,
+    );
+    for (final performance in monthlyPerformance) {
+      final playerStats = stats[performance.playerId];
+      if (playerStats == null) continue;
+      playerStats.highestAverage = _maximum(
+        playerStats.highestAverage,
+        performance.average,
+      );
+      playerStats.highestScoring = _maximum(
+        playerStats.highestScoring,
+        performance.scoring,
+      );
+      playerStats.highestCheckoutRate = _maximum(
+        playerStats.highestCheckoutRate,
+        performance.checkoutRate,
+      );
+    }
     final monthly = List<int>.filled(12, 0);
     final yearly = <int, int>{};
     var tournamentCount = 0;
@@ -174,6 +197,11 @@ class RankingYearReviewService {
       yearlyTournaments: yearly,
       profileIds: mappedProfileIds,
     );
+  }
+
+  double? _maximum(double? current, double? candidate) {
+    if (candidate == null) return current;
+    return current == null || candidate > current ? candidate : current;
   }
 
   Iterable<GroupMatch> _matches(CreatedTournament tournament) sync* {

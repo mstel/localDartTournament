@@ -1,3 +1,12 @@
+# 2.3.1+51
+
+- Ergänzt im Jahresrückblick nach Rangliste die höchsten Average-, Scoring-
+  und Checkout-Quotenwerte inklusive Spieler-Ranglisten und Grafikexport.
+- Korrigiert den Zweitmonitor-Umschalter auf genau zwei Ansichten und erhält
+  Uhr sowie Standardlayout beim unveränderten Öffnen und Anwenden des Editors.
+- Macht Widget-Zeilen im Zweitmonitor-Layout per Drag-and-drop gezielt
+  platzierbar und speichert die Zeilenumbrüche rückwärtskompatibel.
+
 # 2.3.0+50
 
 - Ergänzt im Zweitmonitor-Layout einen eigenen Editiermodus mit „Layout

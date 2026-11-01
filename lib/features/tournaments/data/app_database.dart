@@ -92,6 +92,40 @@ class LocalAppDatabase {
     }
   });
 
+  Future<List<PlayerMonthlyPerformance>> loadPlayerMonthlyPerformanceForPlayers(
+    Set<String> playerIds, {
+    int? year,
+  }) => StorageAccess.run(() async {
+    if (playerIds.isEmpty) return const [];
+    final database = await _openDatabase();
+    try {
+      final ids = playerIds.toList()..sort();
+      final performances = <PlayerMonthlyPerformance>[];
+      for (var start = 0; start < ids.length; start += 900) {
+        final batch = ids.skip(start).take(900).toList();
+        final rows = database.select(
+          '''SELECT player_profile_id, year, month, weighted_legs,
+                    scoring, average, checkout_rate
+             FROM player_monthly_performance
+             WHERE player_profile_id IN (${List.filled(batch.length, '?').join(',')})
+             ${year == null ? '' : 'AND year = ?'}
+             ORDER BY year, month, player_profile_id''',
+          [...batch, ?year],
+        );
+        performances.addAll(
+          rows.map(
+            (row) => PlayerMonthlyPerformance.fromRow(
+              Map<String, Object?>.from(row),
+            ),
+          ),
+        );
+      }
+      return performances;
+    } finally {
+      database.close();
+    }
+  });
+
   Future<void> savePlayerMonthlyPerformance(
     PlayerMonthlyPerformance performance,
   ) => StorageAccess.run(() async {

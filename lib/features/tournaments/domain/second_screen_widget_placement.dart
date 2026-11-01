@@ -3,6 +3,7 @@ class SecondScreenWidgetPlacement {
     required this.widgetId,
     this.widthUnits = 1,
     this.heightUnits = 1.0,
+    this.startsNewRow = false,
   });
 
   factory SecondScreenWidgetPlacement.fromJson(Map<String, dynamic> json) =>
@@ -10,16 +11,19 @@ class SecondScreenWidgetPlacement {
         widgetId: json['widgetId'] as String? ?? '',
         widthUnits: (json['widthUnits'] as int? ?? 1).clamp(1, 4),
         heightUnits: _heightUnitsFromJson(json['heightUnits']),
+        startsNewRow: json['startsNewRow'] as bool? ?? false,
       );
 
   final String widgetId;
   final int widthUnits;
   final double heightUnits;
+  final bool startsNewRow;
 
   Map<String, dynamic> toJson() => {
     'widgetId': widgetId,
     'widthUnits': widthUnits,
     'heightUnits': heightUnits,
+    if (startsNewRow) 'startsNewRow': true,
   };
 
   static double _heightUnitsFromJson(Object? value) {

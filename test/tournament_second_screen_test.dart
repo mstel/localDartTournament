@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
@@ -568,10 +570,10 @@ void main() {
     expect(find.textContaining('73.0 % Sieg'), findsAtLeastNWidgets(1));
     expect(find.textContaining('88.0 % weiter'), findsAtLeastNWidgets(1));
     expect(forecastService.calls, 1);
-    await tester.tap(find.text('Kombiniert'));
+    await tester.tap(find.text('Tabellen & Zwischenstände'));
     await tester.pumpAndSettle();
     expect(find.text('Tabellen & Zwischenstände'), findsAtLeastNWidgets(1));
-    expect(find.text('KO-Prognose & Weiterkommen'), findsOneWidget);
+    expect(find.text('Kombiniert'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -805,7 +807,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('layout apply exits editing and saves intermediate height', (
+  testWidgets('applying an unchanged layout restores the original overview', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -828,29 +830,114 @@ void main() {
       ),
     );
     await tester.pump();
+    final originalBoards = tester.getRect(find.text('Spielplan'));
+    final standingsTitle = find.text('Tabellen & Zwischenstände').first;
+    final originalStandings = tester.getRect(standingsTitle);
     await tester.tap(find.text('Layout anpassen'));
     await tester.pump();
 
-    final boardsCard = tester.getRect(
-      find.byKey(const ValueKey('monitor-widget-boards')),
-    );
-    final standingsCard = tester.getRect(
-      find.byKey(const ValueKey('monitor-widget-standings')),
-    );
-    expect(boardsCard.width, closeTo(standingsCard.width, 1));
-    expect(boardsCard.height, closeTo(standingsCard.height, 1));
-    expect(boardsCard.top, closeTo(standingsCard.top, 1));
+    expect(find.textContaining('Turnieruhr:'), findsOneWidget);
 
-    final reduceHeight = find.byTooltip('Höhe verkleinern').first;
-    await tester.tap(reduceHeight);
-    await tester.pump();
     await tester.tap(find.text('Layout anwenden'));
     await tester.pump();
 
     expect(find.text('Layout anwenden'), findsNothing);
     expect(find.byTooltip('Höhe verkleinern'), findsNothing);
-    expect(tournament.secondScreenActiveLayout, 'Standard');
+    expect(tester.getRect(find.text('Spielplan')), originalBoards);
+    expect(tester.getRect(standingsTitle), originalStandings);
+    expect(tournament.secondScreenActiveLayout, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('layout apply persists an edited intermediate height', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final storage = _MemoryTournamentStorage();
+    final tournament = _tournament();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: storage,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Höhe verkleinern').first);
+    await tester.pump();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pump();
+
     expect(tournament.secondScreenLayouts['Standard']!.first.heightUnits, 1.5);
+    expect(tournament.secondScreenActiveLayout, 'Standard');
+    expect(find.text('Layout anwenden'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dropping on a widget lower edge starts a new layout row', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Höhe verkleinern').first);
+    await tester.pump();
+    await tester.tap(find.byTooltip('Höhe verkleinern').first);
+    await tester.pump();
+
+    final source = find.byKey(const ValueKey('monitor-widget-drag-boards'));
+    final sourceRect = tester.getRect(source);
+    final target = find.byKey(
+      const ValueKey('monitor-widget-drop-target-standings'),
+    );
+    final targetRect = tester.getRect(target);
+    final start = sourceRect.topLeft + const Offset(80, 20);
+    final end = Offset(targetRect.center.dx, targetRect.bottom - 8);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: start);
+    await mouse.down(start);
+    await mouse.moveTo(end);
+    await tester.pump();
+    await mouse.up();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pump();
+
+    final placements = tournament.secondScreenLayouts['Standard']!;
+    expect(placements.map((placement) => placement.widgetId).toList(), [
+      'standings',
+      'boards',
+      'recent',
+      'stageProgress',
+    ]);
+    expect(placements[1].startsNewRow, isTrue);
     expect(tester.takeException(), isNull);
   });
 

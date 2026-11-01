@@ -22,6 +22,7 @@ void main() {
             widgetId: 'boards',
             widthUnits: 3,
             heightUnits: 2,
+            startsNewRow: true,
           ),
         ],
       },
@@ -40,6 +41,7 @@ void main() {
         widgetId: 'boards',
         widthUnits: 3,
         heightUnits: 2,
+        startsNewRow: true,
       ).toJson(),
     );
   });
@@ -63,6 +65,13 @@ void main() {
     expect(
       SecondScreenWidgetPlacement.fromJson(intermediate.toJson()).heightUnits,
       1.5,
+    );
+    expect(
+      SecondScreenWidgetPlacement.fromJson({
+        'widgetId': 'recent',
+        'startsNewRow': true,
+      }).startsNewRow,
+      isTrue,
     );
     expect(
       SecondScreenWidgetPlacement.fromJson({

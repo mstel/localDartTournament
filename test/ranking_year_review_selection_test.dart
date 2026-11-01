@@ -45,7 +45,19 @@ class _YearReviewDatabase extends LocalAppDatabase {
   ];
 
   @override
-  Future<List<String>> loadRankingPlayerIds(String rankingId) async => const [];
+  Future<List<String>> loadRankingPlayerIds(String rankingId) async =>
+      rankingId == 'default' ? const ['player', 'empty-player'] : const [];
+
+  @override
+  Future<List<PlayerMonthlyPerformance>> loadPlayerMonthlyPerformanceForPlayers(
+    Set<String> playerIds, {
+    int? year,
+  }) async => [
+    for (final entry in performance)
+      if (playerIds.contains(entry.playerId) &&
+          (year == null || entry.year == year))
+        entry,
+  ];
 
   @override
   Future<List<PlayerMonthlyPerformance>> loadPlayerMonthlyPerformance(
@@ -86,6 +98,49 @@ void main() {
 
     expect(rankingField.initialValue?.id, 'default');
     expect(yearField.initialValue, 2026);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ranking year review lists monthly performance highs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RankingYearReviewPage(
+          database: _YearReviewDatabase(
+            performance: const [
+              PlayerMonthlyPerformance(
+                playerId: 'player',
+                year: 2026,
+                month: 1,
+                weightedLegs: 10,
+                scoring: 57.8,
+                average: 94.2,
+                checkoutRate: 66.7,
+              ),
+              PlayerMonthlyPerformance(
+                playerId: 'player',
+                year: 2025,
+                month: 12,
+                weightedLegs: 10,
+                scoring: 71.4,
+                average: 102.6,
+                checkoutRate: 88.8,
+              ),
+            ],
+          ),
+          tournamentStorage: _YearReviewStorage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Höchster Average'), findsOneWidget);
+    expect(find.text('Höchstes Scoring'), findsOneWidget);
+    expect(find.text('Höchste Checkout-Quote'), findsOneWidget);
+    expect(find.textContaining('Robin Spieler (94.2)'), findsOneWidget);
+    expect(find.textContaining('Robin Spieler (57.8)'), findsOneWidget);
+    expect(find.textContaining('Robin Spieler (66.7 %)'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -61,6 +61,54 @@ void main() {
     },
   );
 
+  test(
+    'monthly performance can be loaded for multiple players and a year',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'dart_player_monthly_performance_batch_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final firstPlayer = await database.createPlayerProfile(
+        displayName: 'Spieler Eins',
+      );
+      final secondPlayer = await database.createPlayerProfile(
+        displayName: 'Spieler Zwei',
+      );
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: firstPlayer.id,
+          year: 2026,
+          month: 3,
+          weightedLegs: 10,
+          average: 88,
+        ),
+      );
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: secondPlayer.id,
+          year: 2025,
+          month: 8,
+          weightedLegs: 12,
+          average: 92,
+        ),
+      );
+
+      final currentYear = await database.loadPlayerMonthlyPerformanceForPlayers(
+        {firstPlayer.id, secondPlayer.id},
+        year: 2026,
+      );
+      final allYears = await database.loadPlayerMonthlyPerformanceForPlayers({
+        firstPlayer.id,
+        secondPlayer.id,
+      });
+
+      expect(currentYear, hasLength(1));
+      expect(currentYear.single.playerId, firstPlayer.id);
+      expect(allYears, hasLength(2));
+    },
+  );
+
   test('starts with an empty player catalog', () async {
     final directory = await Directory.systemTemp.createTemp(
       'dart_tournament_manager_database_test_',

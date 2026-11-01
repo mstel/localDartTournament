@@ -31,12 +31,12 @@ class RankingYearReviewImageGenerator {
 
     // Prepare leaderboard data
     final rows = review.players.entries.toList();
-    List<MapEntry<String, int>> leadersFor(
-      int Function(RankingYearPlayerStats) metric,
+    List<MapEntry<String, num>> leadersFor(
+      num? Function(RankingYearPlayerStats) metric,
     ) {
       return rows
-          .where((r) => metric(r.value) > 0)
-          .map((r) => MapEntry(r.key, metric(r.value)))
+          .where((r) => (metric(r.value) ?? 0) > 0)
+          .map((r) => MapEntry(r.key, metric(r.value)!))
           .toList()
         ..sort((a, b) => b.value.compareTo(a.value));
     }
@@ -49,17 +49,78 @@ class RankingYearReviewImageGenerator {
     final top170 = leadersFor((s) => s.scores170);
     final topShort = leadersFor((s) => s.shortLegs);
     final topHigh = leadersFor((s) => s.highFinishes);
+    final topAverage = leadersFor((s) => s.highestAverage);
+    final topScoring = leadersFor((s) => s.highestScoring);
+    final topCheckoutRate = leadersFor((s) => s.highestCheckoutRate);
 
-    final leaderboardSections = <(String, List<MapEntry<String, int>>)>[
-      ('Meiste Turniersiege', topWins),
-      ('Meiste Teilnahmen', topParts),
-      ('Meiste gewonnene Legs', topLegs),
-      ('Meiste Bestleistungen', topBests),
-      if (top180.isNotEmpty) ('Meiste 180+', top180),
-      if (top170.isNotEmpty) ('Meiste 170+', top170),
-      if (topShort.isNotEmpty) ('Meiste Shortlegs', topShort),
-      if (topHigh.isNotEmpty) ('Meiste High Finishes', topHigh),
-    ];
+    final leaderboardSections =
+        <
+          ({
+            String title,
+            List<MapEntry<String, num>> entries,
+            String Function(num) format,
+          })
+        >[
+          (
+            title: 'Meiste Turniersiege',
+            entries: topWins,
+            format: (value) => '$value',
+          ),
+          (
+            title: 'Meiste Teilnahmen',
+            entries: topParts,
+            format: (value) => '$value',
+          ),
+          (
+            title: 'Meiste gewonnene Legs',
+            entries: topLegs,
+            format: (value) => '$value',
+          ),
+          (
+            title: 'Meiste Bestleistungen',
+            entries: topBests,
+            format: (value) => '$value',
+          ),
+          if (top180.isNotEmpty)
+            (
+              title: 'Meiste 180+',
+              entries: top180,
+              format: (value) => '$value',
+            ),
+          if (top170.isNotEmpty)
+            (
+              title: 'Meiste 170+',
+              entries: top170,
+              format: (value) => '$value',
+            ),
+          if (topShort.isNotEmpty)
+            (
+              title: 'Meiste Shortlegs',
+              entries: topShort,
+              format: (value) => '$value',
+            ),
+          if (topHigh.isNotEmpty)
+            (
+              title: 'Meiste High Finishes',
+              entries: topHigh,
+              format: (value) => '$value',
+            ),
+          (
+            title: 'Höchster Average',
+            entries: topAverage,
+            format: (value) => value.toStringAsFixed(1),
+          ),
+          (
+            title: 'Höchstes Scoring',
+            entries: topScoring,
+            format: (value) => value.toStringAsFixed(1),
+          ),
+          (
+            title: 'Höchste Checkout-Quote',
+            entries: topCheckoutRate,
+            format: (value) => '${value.toStringAsFixed(1)} %',
+          ),
+        ];
 
     // Compute dynamic height
     // Header: ~140
@@ -295,7 +356,7 @@ class RankingYearReviewImageGenerator {
       // Section title
       final stPainter = TextPainter(
         text: TextSpan(
-          text: section.$1,
+          text: section.title,
           style: TextStyle(
             color: colors.primary,
             fontSize: 18,
@@ -307,7 +368,7 @@ class RankingYearReviewImageGenerator {
       stPainter.paint(canvas, Offset(x + 18, y + 16));
 
       // Items
-      final items = section.$2.take(5).toList();
+      final items = section.entries.take(5).toList();
       double itemY = y + 50.0;
       if (items.isEmpty) {
         final emptyPainter = TextPainter(
@@ -354,7 +415,7 @@ class RankingYearReviewImageGenerator {
           // Count
           final cPainter = TextPainter(
             text: TextSpan(
-              text: '${entry.value}',
+              text: section.format(entry.value),
               style: TextStyle(
                 color: colors.primary,
                 fontSize: 15,

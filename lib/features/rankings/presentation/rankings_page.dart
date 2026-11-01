@@ -440,6 +440,34 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                             profileIds: review.profileIds,
                             year: _year,
                           ),
+                          _ReviewLeaders(
+                            title: 'Höchster Average',
+                            rows: rows,
+                            metric: (s) => s.highestAverage,
+                            formatMetric: (value) => value.toStringAsFixed(1),
+                            includeZero: true,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Höchstes Scoring',
+                            rows: rows,
+                            metric: (s) => s.highestScoring,
+                            formatMetric: (value) => value.toStringAsFixed(1),
+                            includeZero: true,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Höchste Checkout-Quote',
+                            rows: rows,
+                            metric: (s) => s.highestCheckoutRate,
+                            formatMetric: (value) =>
+                                '${value.toStringAsFixed(1)} %',
+                            includeZero: true,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
                         ],
                       );
                     },
@@ -715,10 +743,14 @@ class _ReviewLeaders extends StatefulWidget {
     required this.metric,
     required this.profileIds,
     this.year,
+    this.formatMetric,
+    this.includeZero = false,
   });
   final String title;
   final List<MapEntry<String, RankingYearPlayerStats>> rows;
-  final int Function(RankingYearPlayerStats) metric;
+  final num? Function(RankingYearPlayerStats) metric;
+  final String Function(num)? formatMetric;
+  final bool includeZero;
   final Map<String, String> profileIds;
   final int? year;
 
@@ -732,10 +764,13 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ranked = widget.rows.where((r) => widget.metric(r.value) > 0).toList()
-      ..sort(
-        (a, b) => widget.metric(b.value).compareTo(widget.metric(a.value)),
-      );
+    final ranked =
+        widget.rows.where((row) {
+          final value = widget.metric(row.value);
+          return value != null && (widget.includeZero ? value >= 0 : value > 0);
+        }).toList()..sort(
+          (a, b) => widget.metric(b.value)!.compareTo(widget.metric(a.value)!),
+        );
     final visible = ranked.take(_showAll ? ranked.length : 5).toList();
 
     return Card(
@@ -767,7 +802,8 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '${ranked.first.key} (${widget.metric(ranked.first.value)})',
+                    '${ranked.first.key} '
+                    '(${_formattedMetric(widget.metric(ranked.first.value)!)})',
                     style: TextStyle(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w600,
@@ -808,7 +844,7 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${widget.metric(ranked[i].value)}',
+                          _formattedMetric(widget.metric(ranked[i].value)!),
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -852,6 +888,9 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
       ),
     );
   }
+
+  String _formattedMetric(num value) =>
+      widget.formatMetric?.call(value) ?? '$value';
 }
 
 class _MonthBar extends StatelessWidget {
