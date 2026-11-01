@@ -135,7 +135,12 @@ void main() {
     final bracketButton = knockoutButton.evaluate().isNotEmpty
         ? knockoutButton
         : find.text('Vorschau nächste Etappe');
-    await tester.ensureVisible(bracketButton);
+    await tester.dragUntilVisible(
+      bracketButton,
+      find.byType(CustomScrollView).first,
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(bracketButton);
     await tester.pumpAndSettle();
   }
