@@ -3848,118 +3848,150 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                                   .tournament
                                                   .directorSchedulingStrategy ==
                                               'group')
-                                            for (
-                                              var stageIndex = 0;
-                                              stageIndex <
-                                                  widget
-                                                      .tournament
-                                                      .runStages
-                                                      .length;
-                                              stageIndex++
-                                            )
-                                              if (widget
-                                                      .tournament
-                                                      .runStages[stageIndex]
-                                                  case final GroupTournamentRunStage
-                                                      stage) ...[
-                                                const Divider(height: 24),
-                                                Text(
-                                                  stage.name,
-                                                  style: Theme.of(
-                                                    context,
-                                                  ).textTheme.titleSmall,
-                                                ),
-                                                for (final group
-                                                    in stage.groups)
-                                                  Builder(
-                                                    builder: (context) {
-                                                      final key =
-                                                          GroupBoardAssignment.keyFor(
-                                                            stageIndex,
-                                                            group.name,
-                                                          );
-                                                      final defaults =
-                                                          GroupBoardAssignment.defaults(
-                                                            groupNames: stage
-                                                                .groups
-                                                                .map(
-                                                                  (
-                                                                    item,
-                                                                  ) => GroupBoardAssignment.keyFor(
-                                                                    stageIndex,
-                                                                    item.name,
-                                                                  ),
-                                                                )
-                                                                .toList(),
-                                                            boardCount: widget
-                                                                .tournament
-                                                                .boardCount,
-                                                          );
-                                                      final selected =
-                                                          (widget
-                                                                      .tournament
-                                                                      .directorGroupBoardAssignments[key] ??
-                                                                  defaults[key] ??
-                                                                  const <int>{})
-                                                              .toSet();
-                                                      return Padding(
-                                                        padding:
-                                                            const EdgeInsets.symmetric(
-                                                              vertical: 6,
-                                                            ),
-                                                        child: Column(
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .start,
-                                                          children: [
-                                                            Text(
-                                                              '${group.name} wird gespielt auf Board:',
-                                                            ),
-                                                            Wrap(
-                                                              spacing: 4,
-                                                              runSpacing: 2,
-                                                              children: [
-                                                                for (
-                                                                  var board = 1;
-                                                                  board <=
-                                                                      widget
-                                                                          .tournament
-                                                                          .boardCount;
-                                                                  board++
-                                                                )
-                                                                  FilterChip(
-                                                                    materialTapTargetSize:
-                                                                        MaterialTapTargetSize
-                                                                            .padded,
-                                                                    label: Text(
-                                                                      widget
-                                                                          .tournament
-                                                                          .boardDisplayName(
-                                                                            board,
-                                                                          ),
-                                                                    ),
-                                                                    selected: selected
-                                                                        .contains(
-                                                                          board,
+                                            ExpansionTile(
+                                              key: const ValueKey(
+                                                'group-board-assignments',
+                                              ),
+                                              leading: const Icon(
+                                                Icons.grid_view_outlined,
+                                              ),
+                                              title: const Text(
+                                                'Board Zuweisung',
+                                              ),
+                                              subtitle: const Text(
+                                                'Boards für einzelne Gruppen festlegen',
+                                              ),
+                                              children: [
+                                                for (
+                                                  var stageIndex = 0;
+                                                  stageIndex <
+                                                      widget
+                                                          .tournament
+                                                          .runStages
+                                                          .length;
+                                                  stageIndex++
+                                                )
+                                                  if (widget
+                                                          .tournament
+                                                          .runStages[stageIndex]
+                                                      case final GroupTournamentRunStage
+                                                          stage)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            bottom: 12,
+                                                          ),
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .stretch,
+                                                        children: [
+                                                          const Divider(
+                                                            height: 24,
+                                                          ),
+                                                          Text(
+                                                            stage.name,
+                                                            style:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
+                                                                    .titleSmall,
+                                                          ),
+                                                          for (final group
+                                                              in stage.groups)
+                                                            Builder(
+                                                              builder: (context) {
+                                                                final key =
+                                                                    GroupBoardAssignment.keyFor(
+                                                                      stageIndex,
+                                                                      group
+                                                                          .name,
+                                                                    );
+                                                                final defaults = GroupBoardAssignment.defaults(
+                                                                  groupNames: stage
+                                                                      .groups
+                                                                      .map(
+                                                                        (
+                                                                          item,
+                                                                        ) => GroupBoardAssignment.keyFor(
+                                                                          stageIndex,
+                                                                          item.name,
                                                                         ),
-                                                                    onSelected: (value) => _handleDirectorSettings(
-                                                                      () => _setDirectorGroupBoard(
-                                                                        stageIndex,
-                                                                        group
-                                                                            .name,
-                                                                        board,
-                                                                        value,
+                                                                      )
+                                                                      .toList(),
+                                                                  boardCount: widget
+                                                                      .tournament
+                                                                      .boardCount,
+                                                                );
+                                                                final selected =
+                                                                    (widget.tournament.directorGroupBoardAssignments[key] ??
+                                                                            defaults[key] ??
+                                                                            const <
+                                                                              int
+                                                                            >{})
+                                                                        .toSet();
+                                                                return Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        vertical:
+                                                                            6,
                                                                       ),
-                                                                    ),
+                                                                  child: Column(
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment
+                                                                            .start,
+                                                                    children: [
+                                                                      Text(
+                                                                        '${group.name} wird gespielt auf Board:',
+                                                                      ),
+                                                                      Wrap(
+                                                                        spacing:
+                                                                            4,
+                                                                        runSpacing:
+                                                                            2,
+                                                                        children: [
+                                                                          for (
+                                                                            var board =
+                                                                                1;
+                                                                            board <=
+                                                                                widget.tournament.boardCount;
+                                                                            board++
+                                                                          )
+                                                                            FilterChip(
+                                                                              materialTapTargetSize: MaterialTapTargetSize.padded,
+                                                                              label: Text(
+                                                                                widget.tournament.boardDisplayName(
+                                                                                  board,
+                                                                                ),
+                                                                              ),
+                                                                              selected: selected.contains(
+                                                                                board,
+                                                                              ),
+                                                                              onSelected:
+                                                                                  (
+                                                                                    value,
+                                                                                  ) => _handleDirectorSettings(
+                                                                                    () => _setDirectorGroupBoard(
+                                                                                      stageIndex,
+                                                                                      group.name,
+                                                                                      board,
+                                                                                      value,
+                                                                                    ),
+                                                                                  ),
+                                                                            ),
+                                                                        ],
+                                                                      ),
+                                                                    ],
                                                                   ),
-                                                              ],
+                                                                );
+                                                              },
                                                             ),
-                                                          ],
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
+                                                        ],
+                                                      ),
+                                                    ),
                                               ],
+                                            ),
                                         ],
                                       ),
                                     ),

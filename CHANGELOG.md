@@ -1,3 +1,12 @@
+# 2.3.2+52
+
+- Verschiebt gruppenbasierte Board-Zuweisungen in einen eigenen, standardmäßig
+  geschlossenen Bereich der erweiterten Board-Einstellungen.
+- Stapelt Widgets im Zweitmonitor unabhängig in linker und rechter Spalte und
+  übernimmt passende gespeicherte Layouts rückwärtskompatibel.
+- Korrigiert den MIME-Type der Website-Daten beim Supabase-Upload passend zur
+  privaten Bucket-Konfiguration und zeigt Storage-Fehler konkreter an.
+
 # 2.3.1+51
 
 - Ergänzt im Jahresrückblick nach Rangliste die höchsten Average-, Scoring-

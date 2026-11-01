@@ -849,6 +849,66 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('monitor widget columns stack independently', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..secondScreenActiveLayout = 'Standard'
+      ..secondScreenLayouts['Standard'] = const [
+        SecondScreenWidgetPlacement(
+          widgetId: 'boards',
+          widthUnits: 2,
+          heightUnits: 2,
+        ),
+        SecondScreenWidgetPlacement(
+          widgetId: 'standings',
+          widthUnits: 2,
+          heightUnits: 2,
+        ),
+        SecondScreenWidgetPlacement(widgetId: 'recent', widthUnits: 2),
+        SecondScreenWidgetPlacement(widgetId: 'stageProgress'),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+    for (var index = 0; index < 2; index++) {
+      await tester.tap(find.byTooltip('Höhe verkleinern').first);
+      await tester.pump();
+    }
+    await tester.pump();
+
+    final boards = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-boards')),
+    );
+    final recent = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-recent')),
+    );
+    final standings = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-standings')),
+    );
+    final stageProgress = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-stageProgress')),
+    );
+    expect(recent.top, greaterThan(boards.top));
+    expect(stageProgress.top, greaterThan(standings.top));
+    expect(recent.top, lessThan(stageProgress.top));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('layout apply persists an edited intermediate height', (
     tester,
   ) async {

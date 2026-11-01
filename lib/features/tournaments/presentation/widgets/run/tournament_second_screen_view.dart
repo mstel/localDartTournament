@@ -52,14 +52,20 @@ const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
     widgetId: 'boards',
     widthUnits: 2,
     heightUnits: 2,
+    columnIndex: 0,
   ),
   SecondScreenWidgetPlacement(
     widgetId: 'standings',
     widthUnits: 2,
     heightUnits: 2,
+    columnIndex: 1,
   ),
-  SecondScreenWidgetPlacement(widgetId: 'recent', widthUnits: 2),
-  SecondScreenWidgetPlacement(widgetId: 'stageProgress'),
+  SecondScreenWidgetPlacement(
+    widgetId: 'recent',
+    widthUnits: 2,
+    columnIndex: 0,
+  ),
+  SecondScreenWidgetPlacement(widgetId: 'stageProgress', columnIndex: 1),
 ];
 
 /// Feste, responsive Info-Tafel für den Vereinsheim-TV (2. Bildschirm).
@@ -136,7 +142,27 @@ class _TournamentSecondScreenViewState
     final saved = activeName == null
         ? null
         : widget.tournament.secondScreenLayouts[activeName];
-    return saved == null ? List.of(_defaultMonitorLayout) : List.of(saved);
+    return _withIndependentColumns(saved ?? _defaultMonitorLayout);
+  }
+
+  List<SecondScreenWidgetPlacement> _withIndependentColumns(
+    List<SecondScreenWidgetPlacement> placements,
+  ) {
+    if (placements.any((placement) => placement.widthUnits > 2)) {
+      return List.of(placements);
+    }
+    return [
+      for (var index = 0; index < placements.length; index++)
+        placements[index].columnIndex == null
+            ? SecondScreenWidgetPlacement(
+                widgetId: placements[index].widgetId,
+                widthUnits: placements[index].widthUnits,
+                heightUnits: placements[index].heightUnits,
+                startsNewRow: placements[index].startsNewRow,
+                columnIndex: index.isEven ? 0 : 1,
+              )
+            : placements[index],
+    ];
   }
 
   Future<void> _loadPrioritySettings() async {
@@ -726,6 +752,24 @@ class _TournamentSecondScreenViewState
     double unitHeight,
     double spacing,
   ) {
+    if (columns >= 4 &&
+        _monitorPlacements.every(
+          (placement) => placement.columnIndex != null,
+        )) {
+      return [
+        _buildMonitorLayoutColumns(
+          context,
+          tournament,
+          activeIndex,
+          activeStage,
+          playedMatches,
+          unitWidth,
+          unitHeight,
+          spacing,
+        ),
+      ];
+    }
+
     final rows = <List<int>>[[]];
     for (var index = 0; index < _monitorPlacements.length; index++) {
       if (index > 0 && _monitorPlacements[index].startsNewRow) {
@@ -773,6 +817,98 @@ class _TournamentSecondScreenViewState
         ),
       ],
     ];
+  }
+
+  Widget _buildMonitorLayoutColumns(
+    BuildContext context,
+    CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? activeStage,
+    List<GroupMatch> playedMatches,
+    double unitWidth,
+    double unitHeight,
+    double spacing,
+  ) {
+    final columns = [
+      for (var column = 0; column < 2; column++)
+        _buildMonitorLayoutColumn(
+          context,
+          tournament,
+          activeIndex,
+          activeStage,
+          playedMatches,
+          column,
+          unitWidth,
+          unitHeight,
+          spacing,
+        ),
+    ];
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var column = 0; column < columns.length; column++) ...[
+          if (column > 0) SizedBox(width: spacing),
+          columns[column],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMonitorLayoutColumn(
+    BuildContext context,
+    CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? activeStage,
+    List<GroupMatch> playedMatches,
+    int column,
+    double unitWidth,
+    double unitHeight,
+    double spacing,
+  ) {
+    final indexes = [
+      for (var index = 0; index < _monitorPlacements.length; index++)
+        if (_monitorPlacements[index].columnIndex == column) index,
+    ];
+    return SizedBox(
+      width: unitWidth * 2 + spacing,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var itemIndex = 0; itemIndex < indexes.length; itemIndex++) ...[
+            if (itemIndex > 0) SizedBox(height: spacing),
+            Builder(
+              builder: (context) {
+                final index = indexes[itemIndex];
+                final placement = _monitorPlacements[index];
+                final widthUnits = placement.widthUnits.clamp(1, 2);
+                final width =
+                    unitWidth * widthUnits + spacing * (widthUnits - 1);
+                final height = unitHeight * placement.heightUnits;
+                return _buildMonitorWidgetDropTarget(
+                  context,
+                  placement.widgetId,
+                  width: width,
+                  height: height,
+                  columnLayout: true,
+                  child: _buildMonitorWidgetCard(
+                    context,
+                    placement,
+                    index,
+                    width: width,
+                    height: height,
+                    tournament: tournament,
+                    activeIndex: activeIndex,
+                    activeStage: activeStage,
+                    playedMatches: playedMatches,
+                    isEditing: _isEditingLayout,
+                  ),
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _startMonitorLayoutEditing() {
@@ -916,6 +1052,7 @@ class _TournamentSecondScreenViewState
     String targetWidgetId, {
     required double width,
     required double height,
+    bool columnLayout = false,
     required Widget child,
   }) {
     if (!_isEditingLayout) return child;
@@ -974,7 +1111,12 @@ class _TournamentSecondScreenViewState
             _dragTargetWidgetId = null;
             _dragTargetEdge = null;
           });
-          _moveMonitorWidget(fromIndex, targetIndex, edge: edge);
+          _moveMonitorWidget(
+            fromIndex,
+            targetIndex,
+            edge: edge,
+            columnLayout: columnLayout,
+          );
         },
         builder: (context, candidates, rejected) => Draggable<String>(
           key: ValueKey('monitor-widget-drag-$targetWidgetId'),
@@ -1058,6 +1200,7 @@ class _TournamentSecondScreenViewState
         ? 'Lebenstand'
         : _monitorWidgetTitles[placement.widgetId];
     if (title == null) return const SizedBox.shrink();
+    final maxWidthUnits = placement.columnIndex == null ? 4 : 2;
     final titleWidget = Text(
       title,
       maxLines: 2,
@@ -1085,7 +1228,7 @@ class _TournamentSecondScreenViewState
       IconButton(
         tooltip: 'Breite vergrößern',
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-        onPressed: placement.widthUnits >= 4
+        onPressed: placement.widthUnits >= maxWidthUnits
             ? null
             : () => _resizeMonitorWidget(
                 index,
@@ -1154,7 +1297,7 @@ class _TournamentSecondScreenViewState
                             ),
                             PopupMenuItem(
                               value: 'width-larger',
-                              enabled: placement.widthUnits < 4,
+                              enabled: placement.widthUnits < maxWidthUnits,
                               child: const Text('Breite vergrößern'),
                             ),
                             PopupMenuItem(
@@ -1292,12 +1435,21 @@ class _TournamentSecondScreenViewState
     }
   }
 
-  void _moveMonitorWidget(int fromIndex, int targetIndex, {required int edge}) {
+  void _moveMonitorWidget(
+    int fromIndex,
+    int targetIndex, {
+    required int edge,
+    bool columnLayout = false,
+  }) {
     if (fromIndex < 0 ||
         fromIndex >= _monitorPlacements.length ||
         targetIndex < 0 ||
         targetIndex >= _monitorPlacements.length ||
         fromIndex == targetIndex) {
+      return;
+    }
+    if (columnLayout) {
+      _moveMonitorWidgetBetweenColumns(fromIndex, targetIndex, edge);
       return;
     }
     setState(() {
@@ -1313,6 +1465,7 @@ class _TournamentSecondScreenViewState
             widthUnits: next.widthUnits,
             heightUnits: next.heightUnits,
             startsNewRow: true,
+            columnIndex: next.columnIndex,
           );
         }
       }
@@ -1333,6 +1486,7 @@ class _TournamentSecondScreenViewState
         widthUnits: moving.widthUnits,
         heightUnits: moving.heightUnits,
         startsNewRow: startsNewRow,
+        columnIndex: moving.columnIndex,
       );
       _monitorPlacements.insert(destination, movedPlacement);
 
@@ -1346,8 +1500,53 @@ class _TournamentSecondScreenViewState
           widthUnits: currentTarget.widthUnits,
           heightUnits: currentTarget.heightUnits,
           startsNewRow: edge == 2,
+          columnIndex: currentTarget.columnIndex,
         );
       }
+    });
+  }
+
+  void _moveMonitorWidgetBetweenColumns(
+    int fromIndex,
+    int targetIndex,
+    int edge,
+  ) {
+    setState(() {
+      for (var index = 0; index < _monitorPlacements.length; index++) {
+        final placement = _monitorPlacements[index];
+        if (placement.columnIndex == null) {
+          _monitorPlacements[index] = SecondScreenWidgetPlacement(
+            widgetId: placement.widgetId,
+            widthUnits: placement.widthUnits,
+            heightUnits: placement.heightUnits,
+            startsNewRow: placement.startsNewRow,
+            columnIndex: index.isEven ? 0 : 1,
+          );
+        }
+      }
+
+      final targetId = _monitorPlacements[targetIndex].widgetId;
+      final moving = _monitorPlacements.removeAt(fromIndex);
+      final updatedTargetIndex = _monitorPlacements.indexWhere(
+        (placement) => placement.widgetId == targetId,
+      );
+      final target = _monitorPlacements[updatedTargetIndex];
+      final destination = updatedTargetIndex + (edge == 0 || edge == 2 ? 0 : 1);
+      final columnIndex = edge == 0
+          ? 0
+          : edge == 1
+          ? 1
+          : target.columnIndex!;
+      _monitorPlacements.insert(
+        destination,
+        SecondScreenWidgetPlacement(
+          widgetId: moving.widgetId,
+          widthUnits: moving.widthUnits.clamp(1, 2),
+          heightUnits: moving.heightUnits,
+          startsNewRow: edge == 2 || edge == 3,
+          columnIndex: columnIndex,
+        ),
+      );
     });
   }
 
@@ -1356,9 +1555,13 @@ class _TournamentSecondScreenViewState
       final current = _monitorPlacements[index];
       _monitorPlacements[index] = SecondScreenWidgetPlacement(
         widgetId: current.widgetId,
-        widthUnits: widthUnits ?? current.widthUnits,
+        widthUnits: (widthUnits ?? current.widthUnits).clamp(
+          1,
+          current.columnIndex == null ? 4 : 2,
+        ),
         heightUnits: heightUnits ?? current.heightUnits,
         startsNewRow: current.startsNewRow,
+        columnIndex: current.columnIndex,
       );
     });
   }
@@ -1376,6 +1579,7 @@ class _TournamentSecondScreenViewState
             widthUnits: next.widthUnits,
             heightUnits: next.heightUnits,
             startsNewRow: true,
+            columnIndex: next.columnIndex,
           );
         }
       }
@@ -1404,9 +1608,25 @@ class _TournamentSecondScreenViewState
       ),
     );
     if (selected == null || !mounted) return;
+    final columnHeights = [0.0, 0.0];
+    final hasIndependentColumns =
+        _monitorPlacements.isNotEmpty &&
+        _monitorPlacements.every((placement) => placement.columnIndex != null);
+    if (hasIndependentColumns) {
+      for (final placement in _monitorPlacements) {
+        columnHeights[placement.columnIndex!] += placement.heightUnits;
+      }
+    }
     setState(
       () => _monitorPlacements.add(
-        SecondScreenWidgetPlacement(widgetId: selected),
+        SecondScreenWidgetPlacement(
+          widgetId: selected,
+          columnIndex: hasIndependentColumns
+              ? columnHeights[0] <= columnHeights[1]
+                    ? 0
+                    : 1
+              : null,
+        ),
       ),
     );
   }
@@ -1483,7 +1703,8 @@ class _TournamentSecondScreenViewState
       if (currentPlacement.widgetId != previousPlacement.widgetId ||
           currentPlacement.widthUnits != previousPlacement.widthUnits ||
           currentPlacement.heightUnits != previousPlacement.heightUnits ||
-          currentPlacement.startsNewRow != previousPlacement.startsNewRow) {
+          currentPlacement.startsNewRow != previousPlacement.startsNewRow ||
+          currentPlacement.columnIndex != previousPlacement.columnIndex) {
         return false;
       }
     }
@@ -1584,7 +1805,7 @@ class _TournamentSecondScreenViewState
       );
       if (!mounted) return;
       setState(() {
-        _monitorPlacements = List.of(layout);
+        _monitorPlacements = _withIndependentColumns(layout);
         _loadedLayoutName = selected;
         _useCustomLayout = true;
         _isEditingLayout = false;

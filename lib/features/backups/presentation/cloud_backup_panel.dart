@@ -200,8 +200,7 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
       _error = true;
       _status = switch (error) {
         AuthException() => _authFailureMessage(error),
-        StorageException() =>
-          'Cloud-Backup fehlgeschlagen. Prüfe die Supabase-Storage-Regeln und Internetverbindung.',
+        StorageException() => 'Cloud-Storage fehlgeschlagen: $error',
         StateError() => '$error',
         _ => 'Cloud-Vorgang fehlgeschlagen: $error',
       };

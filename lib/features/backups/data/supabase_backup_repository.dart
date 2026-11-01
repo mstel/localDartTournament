@@ -12,6 +12,7 @@ class SupabaseBackupRepository {
 
   static const bucket = 'dart-app-backups';
   static const fileName = 'latest.dartbackup';
+  static const _bucketAllowedContentType = 'application/octet-stream';
   final SupabaseClient? _injectedClient;
   SupabaseClient get _client => _injectedClient ?? Supabase.instance.client;
 
@@ -94,6 +95,8 @@ class SupabaseBackupRepository {
     Map<String, dynamic> readModel, {
     required Map<String, Map<String, dynamic>> version2Resources,
   }) async {
+    // The private backup bucket only permits this MIME type; the read model
+    // function decodes the JSON payload independently of the object metadata.
     final bytes = Uint8List.fromList(utf8.encode(jsonEncode(readModel)));
     await _client.storage
         .from(bucket)
@@ -140,7 +143,7 @@ class SupabaseBackupRepository {
             resourceBytes,
             fileOptions: const FileOptions(
               upsert: true,
-              contentType: 'application/json',
+              contentType: _bucketAllowedContentType,
             ),
           );
     }
@@ -194,7 +197,7 @@ class SupabaseBackupRepository {
           manifestBytes,
           fileOptions: const FileOptions(
             upsert: true,
-            contentType: 'application/json',
+            contentType: _bucketAllowedContentType,
           ),
         );
   }

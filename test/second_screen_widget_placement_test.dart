@@ -80,6 +80,28 @@ void main() {
       }).heightUnits,
       3,
     );
+    final columnPlacement = SecondScreenWidgetPlacement.fromJson({
+      'widgetId': 'standings',
+      'columnIndex': 1,
+    });
+    expect(columnPlacement.columnIndex, 1);
+    expect(
+      SecondScreenWidgetPlacement.fromJson(
+        columnPlacement.toJson(),
+      ).columnIndex,
+      1,
+    );
+    expect(
+      SecondScreenWidgetPlacement.fromJson({
+        'widgetId': 'boards',
+        'columnIndex': 7,
+      }).columnIndex,
+      1,
+    );
+    expect(
+      SecondScreenWidgetPlacement.fromJson({'widgetId': 'boards'}).columnIndex,
+      isNull,
+    );
   });
 
   test(
