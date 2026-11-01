@@ -8,6 +8,16 @@ import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
+import '../domain/player_monthly_performance.dart';
+
+typedef _PlayerComparisonData = ({
+  LocalPlayerStatistics leftStats,
+  LocalPlayerStatistics rightStats,
+  LocalEloSnapshot? elo,
+  DirectEncounterSummary directEncounters,
+  List<PlayerMonthlyPerformance> leftPerformance,
+  List<PlayerMonthlyPerformance> rightPerformance,
+});
 
 class PlayerComparisonPage extends StatefulWidget {
   const PlayerComparisonPage({
@@ -35,29 +45,15 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
   String? _rightId;
   String? _rankingId = 'all';
   int? _selectedYear;
-  Future<
-    (
-      LocalPlayerStatistics,
-      LocalPlayerStatistics,
-      LocalEloSnapshot?,
-      DirectEncounterSummary,
-    )
-  >?
-  _comparison;
+  int? _selectedMonth;
+  Future<_PlayerComparisonData>? _comparison;
 
-  Future<
-    (
-      LocalPlayerStatistics,
-      LocalPlayerStatistics,
-      LocalEloSnapshot?,
-      DirectEncounterSummary,
-    )
-  >
-  _loadComparison(
+  Future<_PlayerComparisonData> _loadComparison(
     String leftId,
     String rightId,
     LocalRanking? ranking, {
     int? year,
+    int? month,
   }) async {
     final statsService = LocalStatisticsService(
       database: _database,
@@ -96,7 +92,22 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
             database: _database,
             tournamentStorage: _tournamentStorage,
           ).calculate(ranking, tournaments: filteredTournaments);
-    return (leftStats, rightStats, snapshot, directEncounters);
+    final leftPerformance = (await _database.loadPlayerMonthlyPerformance(
+      leftId,
+      year: year,
+    )).where((entry) => month == null || entry.month == month).toList();
+    final rightPerformance = (await _database.loadPlayerMonthlyPerformance(
+      rightId,
+      year: year,
+    )).where((entry) => month == null || entry.month == month).toList();
+    return (
+      leftStats: leftStats,
+      rightStats: rightStats,
+      elo: snapshot,
+      directEncounters: directEncounters,
+      leftPerformance: leftPerformance,
+      rightPerformance: rightPerformance,
+    );
   }
 
   Future<(List<PlayerProfile>, List<LocalRanking>, List<int>)>
@@ -104,13 +115,19 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     final players = await _database.loadPlayerProfiles();
     final rankings = await _database.loadLocalRankings();
     final tournaments = await _tournamentStorage.loadTournaments();
-    final years =
-        tournaments
-            .map((t) => (t.finishedAt ?? t.createdAt).toLocal().year)
-            .toSet()
-            .toList()
-          ..sort((a, b) => b.compareTo(a));
-    return (players, rankings, years);
+    final years = {
+      for (final tournament in tournaments)
+        (tournament.finishedAt ?? tournament.createdAt).toLocal().year,
+    };
+    for (final player in players) {
+      years.addAll(
+        (await _database.loadPlayerMonthlyPerformance(
+          player.id,
+        )).map((entry) => entry.year),
+      );
+    }
+    final sortedYears = years.toList()..sort((a, b) => b.compareTo(a));
+    return (players, rankings, sortedYears);
   }
 
   void _updateSelection({
@@ -124,7 +141,32 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       _rightId = rightId;
       _rankingId = ranking?.id ?? 'all';
       _selectedYear = year;
-      _comparison = _loadComparison(leftId, rightId, ranking, year: year);
+      _selectedMonth = year == null ? null : _selectedMonth;
+      _comparison = _loadComparison(
+        leftId,
+        rightId,
+        ranking,
+        year: year,
+        month: _selectedMonth,
+      );
+    });
+  }
+
+  void _updateMonth({
+    required String leftId,
+    required String rightId,
+    required LocalRanking? ranking,
+    required int? month,
+  }) {
+    setState(() {
+      _selectedMonth = month;
+      _comparison = _loadComparison(
+        leftId,
+        rightId,
+        ranking,
+        year: _selectedYear,
+        month: month,
+      );
     });
   }
 
@@ -309,15 +351,34 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
               },
             ),
             const SizedBox(height: 20),
+            if (_selectedYear != null)
+              DropdownButtonFormField<int?>(
+                initialValue: _selectedMonth,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Monat',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Gesamtes Jahr'),
+                  ),
+                  for (var month = 1; month <= 12; month++)
+                    DropdownMenuItem<int?>(
+                      value: month,
+                      child: Text(_monthName(month)),
+                    ),
+                ],
+                onChanged: (month) => _updateMonth(
+                  leftId: leftId,
+                  rightId: rightId,
+                  ranking: ranking,
+                  month: month,
+                ),
+              ),
             if (_comparison case final future?)
-              FutureBuilder<
-                (
-                  LocalPlayerStatistics,
-                  LocalPlayerStatistics,
-                  LocalEloSnapshot?,
-                  DirectEncounterSummary,
-                )
-              >(
+              FutureBuilder<_PlayerComparisonData>(
                 future: future,
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
@@ -329,7 +390,10 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                   if (data == null) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  final (leftStats, rightStats, elo, directEncounters) = data;
+                  final leftStats = data.leftStats;
+                  final rightStats = data.rightStats;
+                  final elo = data.elo;
+                  final directEncounters = data.directEncounters;
                   final rows = _comparisonRows(
                     leftStats: leftStats,
                     rightStats: rightStats,
@@ -337,6 +401,8 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                     rightId: right.id,
                     elo: elo,
                     ranking: ranking,
+                    leftPerformance: data.leftPerformance,
+                    rightPerformance: data.rightPerformance,
                   );
                   final statistics = Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -425,6 +491,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                           ],
                         );
                       }
+
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -466,6 +533,21 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       if (id != null) onChanged(id);
     },
   );
+
+  String _monthName(int month) => const [
+    'Januar',
+    'Februar',
+    'März',
+    'April',
+    'Mai',
+    'Juni',
+    'Juli',
+    'August',
+    'September',
+    'Oktober',
+    'November',
+    'Dezember',
+  ][month - 1];
 
   Widget _directEncountersPanel({
     required PlayerProfile left,
@@ -516,8 +598,22 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     required String rightId,
     required LocalEloSnapshot? elo,
     required LocalRanking? ranking,
+    required List<PlayerMonthlyPerformance> leftPerformance,
+    required List<PlayerMonthlyPerformance> rightPerformance,
   }) {
     String percent(double value) => '${value.toStringAsFixed(1)} %';
+    String mean(Iterable<double?> values) {
+      final present = values.whereType<double>().toList();
+      if (present.isEmpty) return '–';
+      return (present.reduce((left, right) => left + right) / present.length)
+          .toStringAsFixed(1);
+    }
+
+    String meanPercent(Iterable<double?> values) {
+      final average = mean(values);
+      return average == '–' ? average : '$average %';
+    }
+
     final rows = <({String category, String left, String right})>[
       (category: 'Elo aktuell', left: '', right: ''),
       (
@@ -569,6 +665,21 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
         category: 'Sets gewonnen / verloren',
         left: '${leftStats.setsWon} / ${leftStats.setsLost}',
         right: '${rightStats.setsWon} / ${rightStats.setsLost}',
+      ),
+      (
+        category: 'Performance · Scoring',
+        left: mean(leftPerformance.map((entry) => entry.scoring)),
+        right: mean(rightPerformance.map((entry) => entry.scoring)),
+      ),
+      (
+        category: 'Performance · Average',
+        left: mean(leftPerformance.map((entry) => entry.average)),
+        right: mean(rightPerformance.map((entry) => entry.average)),
+      ),
+      (
+        category: 'Performance · Checkout Quote',
+        left: meanPercent(leftPerformance.map((entry) => entry.checkoutRate)),
+        right: meanPercent(rightPerformance.map((entry) => entry.checkoutRate)),
       ),
       for (final type in BestPerformanceType.values)
         (

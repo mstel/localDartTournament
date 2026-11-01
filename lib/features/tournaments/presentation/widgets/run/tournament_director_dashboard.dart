@@ -599,33 +599,39 @@ class _TournamentDirectorDashboardState
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            '${match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
-            '${match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: TournamentDisplayPalette.text,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (quickStartBoard != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Tooltip(
-                message:
-                    'Partie auf ${widget.tournament.boardDisplayName(quickStartBoard)} starten',
-                child: FilledButton(
-                  onPressed: () =>
-                      _act(() => startOnBoard!(quickStartBoard, match: match)),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${match.homePlayer?.shortDisplayName ?? 'Freilos'} - '
+                  '${match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: TournamentDisplayPalette.text,
                   ),
-                  child: const Icon(Icons.play_arrow_rounded),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
+              if (quickStartBoard != null)
+                Tooltip(
+                  message:
+                      'Partie auf ${widget.tournament.boardDisplayName(quickStartBoard)} starten',
+                  child: IconButton.filledTonal(
+                    tooltip:
+                        'Partie auf ${widget.tournament.boardDisplayName(quickStartBoard)} starten',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: () => _act(
+                      () => startOnBoard!(quickStartBoard, match: match),
+                    ),
+                    icon: const Icon(Icons.play_arrow_rounded),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -924,32 +930,36 @@ class _TournamentDirectorDashboardState
                                 ],
                               ),
                             ),
-                        if (running == null &&
-                            !blocked &&
-                            suggestion != null &&
-                            widget.onStartOnBoard != null &&
-                            widget.canOperate)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: OutlinedButton.icon(
-                              onPressed: () =>
-                                  _chooseMatchForBoard(board, state),
-                              icon: const Icon(Icons.swap_horiz_rounded),
-                              label: const Text('Partie wählen'),
-                            ),
-                          ),
                         if (running == null)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
-                            child: OutlinedButton.icon(
-                              onPressed: () =>
-                                  _act(() => widget.onBlock(board)),
-                              icon: Icon(
-                                blocked
-                                    ? Icons.lock_open_rounded
-                                    : Icons.lock_rounded,
-                              ),
-                              label: Text(blocked ? 'Freigeben' : 'Sperren'),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (!blocked &&
+                                    suggestion != null &&
+                                    widget.onStartOnBoard != null &&
+                                    widget.canOperate)
+                                  OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _chooseMatchForBoard(board, state),
+                                    icon: const Icon(Icons.swap_horiz_rounded),
+                                    label: const Text('Partie wählen'),
+                                  ),
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _act(() => widget.onBlock(board)),
+                                  icon: Icon(
+                                    blocked
+                                        ? Icons.lock_open_rounded
+                                        : Icons.lock_rounded,
+                                  ),
+                                  label: Text(
+                                    blocked ? 'Freigeben' : 'Sperren',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                       ],

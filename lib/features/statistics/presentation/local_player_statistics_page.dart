@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/adaptive_content.dart';
 import '../../../shared/utils/png_image_export.dart';
 import '../../rankings/domain/local_ranking.dart';
+import '../../tournaments/data/app_database.dart';
 import '../application/player_statistics_image_generator.dart';
 import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
+import '../domain/player_monthly_performance.dart';
 import 'widgets/structured_best_performances_view.dart';
 
 class LocalPlayerStatisticsPage extends StatefulWidget {
@@ -23,16 +25,52 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
       _LocalPlayerStatisticsPageState();
 }
 
+double _meanWeightedLegs(List<PlayerMonthlyPerformance> entries) {
+  if (entries.isEmpty) return 0;
+  final currentMonth = DateTime.now().year * 12 + DateTime.now().month - 1;
+  var weightedLegs = 0;
+  var monthCount = 0;
+  for (final playerId in entries.map((entry) => entry.playerId).toSet()) {
+    final playerEntries = entries
+        .where((entry) => entry.playerId == playerId)
+        .toList();
+    final firstMonth = playerEntries
+        .map((entry) => entry.year * 12 + entry.month - 1)
+        .reduce((left, right) => left < right ? left : right);
+    final months = currentMonth - firstMonth + 1;
+    if (months <= 0) continue;
+    weightedLegs += playerEntries.fold(
+      0,
+      (total, entry) => total + entry.weightedLegs,
+    );
+    monthCount += months;
+  }
+  return monthCount == 0 ? 0 : weightedLegs / monthCount;
+}
+
 class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
   bool _exporting = false;
+  final _database = LocalAppDatabase();
   late Future<
-    (LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)
+    (
+      LocalPlayerStatistics,
+      List<LocalRanking>,
+      List<RankingPosition>,
+      List<PlayerMonthlyPerformance>,
+    )
   >
   _future = _load();
 
-  Future<(LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)>
+  Future<
+    (
+      LocalPlayerStatistics,
+      List<LocalRanking>,
+      List<RankingPosition>,
+      List<PlayerMonthlyPerformance>,
+    )
+  >
   _load() async {
-    const service = LocalStatisticsService();
+    final service = LocalStatisticsService(database: _database);
     final stats = await service.forPlayers(
       widget.profileIds,
       year: widget.year,
@@ -42,7 +80,17 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       widget.profileIds,
       rankings,
     );
-    return (stats, rankings, positions);
+    final performance = [
+      for (final profileId in widget.profileIds)
+        ...await _database.loadPlayerMonthlyPerformance(profileId),
+    ];
+    return (stats, rankings, positions, performance);
+  }
+
+  double? _mean(Iterable<double?> values) {
+    final present = values.whereType<double>().toList();
+    if (present.isEmpty) return null;
+    return present.reduce((left, right) => left + right) / present.length;
   }
 
   Future<void> _export(PlayerStatisticsImageOrientation orientation) async {
@@ -114,7 +162,12 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
     ),
     body:
         FutureBuilder<
-          (LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)
+          (
+            LocalPlayerStatistics,
+            List<LocalRanking>,
+            List<RankingPosition>,
+            List<PlayerMonthlyPerformance>,
+          )
         >(
           future: _future,
           builder: (context, snapshot) {
@@ -136,6 +189,16 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
             final stats = data.$1;
             final rankings = data.$2;
             final positions = data.$3;
+            final performance = data.$4;
+            final meanScoring = _mean(
+              performance.map((entry) => entry.scoring),
+            );
+            final meanAverage = _mean(
+              performance.map((entry) => entry.average),
+            );
+            final meanCheckout = _mean(
+              performance.map((entry) => entry.checkoutRate),
+            );
             final performanceCounts = {
               for (final type in BestPerformanceType.values)
                 type: stats.bestPerformances
@@ -241,6 +304,35 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                     _StatCard(
                       label: 'Siegquote Sets',
                       value: '${stats.setWinRate.toStringAsFixed(1)} %',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Performance',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _StatCard(
+                      label: 'Gewertete Legs',
+                      value: _meanWeightedLegs(performance).toStringAsFixed(1),
+                    ),
+                    _StatCard(
+                      label: 'Scoring',
+                      value: meanScoring?.toStringAsFixed(1) ?? '–',
+                    ),
+                    _StatCard(
+                      label: 'Average',
+                      value: meanAverage?.toStringAsFixed(1) ?? '–',
+                    ),
+                    _StatCard(
+                      label: 'Checkout Quote',
+                      value: meanCheckout == null
+                          ? '–'
+                          : '${meanCheckout.toStringAsFixed(1)} %',
                     ),
                   ],
                 ),

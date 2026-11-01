@@ -3,6 +3,7 @@ import '../../../shared/widgets/sport_page_heading.dart';
 import '../../statistics/presentation/local_player_statistics_page.dart';
 import '../../statistics/presentation/player_comparison_page.dart';
 import '../../rankings/presentation/rankings_page.dart';
+import 'player_performance_entry_page.dart';
 
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'package:flutter/material.dart';
@@ -334,6 +335,17 @@ class _PlayersPageState extends State<PlayersPage> {
                                       ),
                                     );
                                   }
+                                  if (action == 'performance') {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) =>
+                                            PlayerPerformanceEntryPage(
+                                              player: player,
+                                              database: _database,
+                                            ),
+                                      ),
+                                    );
+                                  }
                                   if (action == 'challonge') {
                                     _challongeLinks(player);
                                   }
@@ -344,6 +356,13 @@ class _PlayersPageState extends State<PlayersPage> {
                                     child: SportMenuLabel(
                                       label: 'Profilstatistiken öffnen',
                                       icon: Icons.bar_chart_outlined,
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'performance',
+                                    child: SportMenuLabel(
+                                      label: 'Performance Stats erfassen',
+                                      icon: Icons.insights_outlined,
                                     ),
                                   ),
                                   PopupMenuItem(

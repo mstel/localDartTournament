@@ -644,9 +644,8 @@ class _TournamentSecondScreenViewState
                       index < _monitorPlacements.length;
                       index++
                     )
-                      _buildMonitorWidgetCard(
+                      _buildMonitorWidgetDropTarget(
                         context,
-                        _monitorPlacements[index],
                         index,
                         width:
                             unitWidth *
@@ -662,10 +661,30 @@ class _TournamentSecondScreenViewState
                                     1),
                         height:
                             unitHeight * _monitorPlacements[index].heightUnits,
-                        tournament: t,
-                        activeIndex: activeIndex,
-                        activeStage: activeStage,
-                        playedMatches: playedMatches,
+                        child: _buildMonitorWidgetCard(
+                          context,
+                          _monitorPlacements[index],
+                          index,
+                          width:
+                              unitWidth *
+                                  _monitorPlacements[index].widthUnits.clamp(
+                                    1,
+                                    columns,
+                                  ) +
+                              spacing *
+                                  (_monitorPlacements[index].widthUnits.clamp(
+                                        1,
+                                        columns,
+                                      ) -
+                                      1),
+                          height:
+                              unitHeight *
+                              _monitorPlacements[index].heightUnits,
+                          tournament: t,
+                          activeIndex: activeIndex,
+                          activeStage: activeStage,
+                          playedMatches: playedMatches,
+                        ),
                       ),
                   ],
                 ),
@@ -676,6 +695,62 @@ class _TournamentSecondScreenViewState
       },
     );
   }
+
+  Widget _buildMonitorWidgetDropTarget(
+    BuildContext context,
+    int targetIndex, {
+    required double width,
+    required double height,
+    required Widget child,
+  }) => LayoutBuilder(
+    builder: (targetContext, constraints) => DragTarget<int>(
+      key: ValueKey('monitor-widget-drop-target-$targetIndex'),
+      onWillAcceptWithDetails: (details) => details.data != targetIndex,
+      onAcceptWithDetails: (details) {
+        final box = targetContext.findRenderObject();
+        if (box is! RenderBox || details.data >= _monitorPlacements.length) {
+          return;
+        }
+        final localPosition = box.globalToLocal(details.offset);
+        final size = box.size;
+        final edgeDistances = [
+          localPosition.dx,
+          size.width - localPosition.dx,
+          localPosition.dy,
+          size.height - localPosition.dy,
+        ];
+        final nearestEdge = edgeDistances.indexOf(edgeDistances.reduce(min));
+        final insertAfter = nearestEdge == 1 || nearestEdge == 3;
+        _moveMonitorWidget(details.data, targetIndex + (insertAfter ? 1 : 0));
+      },
+      builder: (context, candidates, rejected) => Draggable<int>(
+        data: targetIndex,
+        dragAnchorStrategy: pointerDragAnchorStrategy,
+        feedback: SizedBox(
+          width: width,
+          height: height,
+          child: Material(
+            color: Colors.transparent,
+            child: Opacity(opacity: 0.85, child: child),
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.25, child: child),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: candidates.isEmpty
+              ? null
+              : BoxDecoration(
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 3,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+          child: child,
+        ),
+      ),
+    ),
+  );
 
   Widget _buildMonitorWidgetCard(
     BuildContext context,
@@ -712,6 +787,10 @@ class _TournamentSecondScreenViewState
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                  ),
+                  const Tooltip(
+                    message: 'Ziehen, um das Widget anders anzuordnen',
+                    child: Icon(Icons.drag_indicator, size: 20),
                   ),
                   IconButton(
                     tooltip: 'Breite verkleinern',
@@ -784,15 +863,13 @@ class _TournamentSecondScreenViewState
               const SizedBox(height: 6),
               Expanded(
                 child: ClipRect(
-                  child: SingleChildScrollView(
-                    child: _buildMonitorWidgetContent(
-                      context,
-                      placement.widgetId,
-                      tournament,
-                      activeIndex,
-                      activeStage,
-                      playedMatches,
-                    ),
+                  child: _buildMonitorWidgetContent(
+                    context,
+                    placement.widgetId,
+                    tournament,
+                    activeIndex,
+                    activeStage,
+                    playedMatches,
                   ),
                 ),
               ),
@@ -818,7 +895,7 @@ class _TournamentSecondScreenViewState
           tournament,
           activeIndex,
           activeStage,
-          expand: false,
+          expand: true,
         );
       case 'standings':
         return _buildStandingsPanel(
@@ -826,7 +903,7 @@ class _TournamentSecondScreenViewState
           tournament,
           activeStage,
           full: true,
-          expand: false,
+          expand: true,
         );
       case 'forecast':
         return _buildKoPrognosisPanel(
@@ -834,7 +911,7 @@ class _TournamentSecondScreenViewState
           tournament,
           activeIndex,
           activeStage,
-          expand: false,
+          expand: true,
         );
       case 'recent':
         return _buildRecentMatchesAndEloPanel(
@@ -854,6 +931,22 @@ class _TournamentSecondScreenViewState
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  void _moveMonitorWidget(int fromIndex, int insertionIndex) {
+    if (fromIndex < 0 ||
+        fromIndex >= _monitorPlacements.length ||
+        insertionIndex < 0 ||
+        insertionIndex > _monitorPlacements.length) {
+      return;
+    }
+    setState(() {
+      final placement = _monitorPlacements.removeAt(fromIndex);
+      final destination = insertionIndex > fromIndex
+          ? insertionIndex - 1
+          : insertionIndex;
+      _monitorPlacements.insert(destination, placement);
+    });
   }
 
   void _resizeMonitorWidget(int index, {int? widthUnits, int? heightUnits}) {
@@ -2745,66 +2838,62 @@ class _TournamentSecondScreenViewState
                     const visibleItemCount = 2;
                     final itemExtent =
                         66 * MediaQuery.textScalerOf(context).scale(1);
-                    return SizedBox(
-                      key: const ValueKey('recent-results-scroll'),
-                      height: recent.isEmpty
-                          ? itemExtent
-                          : itemExtent *
-                                recent.length.clamp(1, visibleItemCount),
-                      child: snapshot.hasError
-                          ? const Center(
-                              child: Text(
-                                'Ranglistenänderungen konnten nicht geladen werden.',
-                                style: TextStyle(color: Colors.amber),
-                              ),
-                            )
-                          : recent.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Noch keine beendeten Partien vorhanden.',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                            )
-                          : Scrollbar(
+                    final recentContent = snapshot.hasError
+                        ? const Center(
+                            child: Text(
+                              'Ranglistenänderungen konnten nicht geladen werden.',
+                              style: TextStyle(color: Colors.amber),
+                            ),
+                          )
+                        : recent.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Noch keine beendeten Partien vorhanden.',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          )
+                        : Scrollbar(
+                            controller: _recentResultsController,
+                            thumbVisibility: recent.length > visibleItemCount,
+                            child: ListView.separated(
                               controller: _recentResultsController,
-                              thumbVisibility: recent.length > visibleItemCount,
-                              child: ListView.separated(
-                                controller: _recentResultsController,
-                                padding: EdgeInsets.zero,
-                                itemCount: recent.length,
-                                separatorBuilder: (context, index) =>
-                                    const Divider(
-                                      height: 1,
-                                      color: TournamentDisplayPalette.border,
-                                    ),
-                                itemBuilder: (context, index) => ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: itemExtent,
+                              padding: EdgeInsets.zero,
+                              itemCount: recent.length,
+                              separatorBuilder: (context, index) =>
+                                  const Divider(
+                                    height: 1,
+                                    color: TournamentDisplayPalette.border,
                                   ),
-                                  child: _buildRecentMatchRow(
-                                    context,
+                              itemBuilder: (context, index) => ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: itemExtent,
+                                ),
+                                child: _buildRecentMatchRow(
+                                  context,
+                                  t,
+                                  recent[index],
+                                  _changesForMatch(
                                     t,
                                     recent[index],
-                                    _changesForMatch(
-                                      t,
-                                      recent[index],
-                                      snapshot.data,
-                                    ),
+                                    snapshot.data,
                                   ),
                                 ),
                               ),
                             ),
-                    );
+                          );
+                    return expand
+                        ? recentContent
+                        : SizedBox(
+                            key: const ValueKey('recent-results-scroll'),
+                            height: recent.isEmpty
+                                ? itemExtent
+                                : itemExtent *
+                                      recent.length.clamp(1, visibleItemCount),
+                            child: recentContent,
+                          );
                   },
                 );
-            return expand
-                ? Expanded(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: recentList,
-                    ),
-                  )
-                : recentList;
+            return expand ? Expanded(child: recentList) : recentList;
           },
         ),
       ],

@@ -103,41 +103,8 @@ class _AdministrationPanel extends StatefulWidget {
 }
 
 class _AdministrationPanelState extends State<_AdministrationPanel> {
-  int _selected = 0;
-
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (var index = 0; index < 3; index++)
-              ChoiceChip(
-                label: Text(
-                  [
-                    'Werkzeuge',
-                    'Tie Breaker Standardwerte',
-                    'Hinweiseinstellungen',
-                  ][index],
-                ),
-                selected: _selected == index,
-                onSelected: (_) => setState(() => _selected = index),
-              ),
-          ],
-        ),
-      ),
-      Expanded(
-        child: switch (_selected) {
-          1 => const TieBreakerDefaultsPanel(),
-          2 => const PriorityNoticeSettingsPanel(),
-          _ => _toolsPanel(context),
-        },
-      ),
-    ],
-  );
+  Widget build(BuildContext context) => _toolsPanel(context);
 
   Widget _toolsPanel(BuildContext context) => AdaptiveContentList(
     padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -191,6 +158,22 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
               builder: (_) => const PlanningParametersPage(),
             ),
           ),
+        ),
+      ),
+      Card(
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+          leading: const Icon(Icons.rule_folder_outlined),
+          title: const Text('Tie Breaker Standardwerte'),
+          children: [const TieBreakerDefaultsPanel()],
+        ),
+      ),
+      Card(
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+          leading: const Icon(Icons.tips_and_updates_outlined),
+          title: const Text('Hinweiseinstellungen'),
+          children: [const PriorityNoticeSettingsPanel()],
         ),
       ),
     ],

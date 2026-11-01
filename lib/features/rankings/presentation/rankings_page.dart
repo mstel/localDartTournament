@@ -21,6 +21,8 @@ import '../../statistics/domain/best_performance.dart';
 import '../../statistics/domain/local_statistics.dart';
 import '../../statistics/presentation/local_player_statistics_page.dart';
 import '../../statistics/presentation/widgets/structured_best_performances_view.dart';
+import '../../statistics/domain/player_monthly_performance.dart';
+import '../../statistics/presentation/widgets/player_performance_trend_chart.dart';
 
 class RankingsPage extends StatefulWidget {
   const RankingsPage({super.key, LocalAppDatabase? database})
@@ -64,6 +66,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
   int? _year = DateTime.now().year;
   Future<RankingYearReview>? _rankingReview;
   Future<LocalPlayerStatistics>? _playerReview;
+  Future<List<PlayerMonthlyPerformance>>? _playerPerformance;
   bool _exporting = false;
 
   void _selectRanking(LocalRanking? ranking) {
@@ -94,6 +97,9 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
               database: _database,
               storage: _tournamentStorage,
             ).forPlayers({player.id}, year: _year);
+      _playerPerformance = player == null
+          ? null
+          : _database.loadPlayerMonthlyPerformance(player.id, year: _year);
     });
   }
 
@@ -107,9 +113,14 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
         );
       }
       if (_selectedPlayer != null) {
-        _playerReview = const LocalStatisticsService().forPlayers({
+        _playerReview = LocalStatisticsService(
+          database: _database,
+          storage: _tournamentStorage,
+        ).forPlayers({_selectedPlayer!.id}, year: year);
+        _playerPerformance = _database.loadPlayerMonthlyPerformance(
           _selectedPlayer!.id,
-        }, year: year);
+          year: year,
+        );
       }
     });
   }
@@ -544,6 +555,11 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                     '${performanceCounts[BestPerformanceType.score180]}',
                               ),
                               _StatMiniCard(
+                                label: '170+ Aufnahmen',
+                                value:
+                                    '${performanceCounts[BestPerformanceType.score170]}',
+                              ),
+                              _StatMiniCard(
                                 label: 'High Finishes (100+)',
                                 value:
                                     '${performanceCounts[BestPerformanceType.highFinish]}',
@@ -558,6 +574,28 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                           StructuredBestPerformancesView(
                             bestPerformances: stats.bestPerformances,
                           ),
+                          if (_playerPerformance case final performance?)
+                            FutureBuilder<List<PlayerMonthlyPerformance>>(
+                              future: performance,
+                              builder: (context, performanceSnapshot) {
+                                if (performanceSnapshot.hasError) {
+                                  return const Text(
+                                    'Performance-Entwicklung konnte nicht geladen werden.',
+                                  );
+                                }
+                                if (!performanceSnapshot.hasData ||
+                                    performanceSnapshot.data!.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 20),
+                                  child: PlayerPerformanceTrendChart(
+                                    entries: performanceSnapshot.data!,
+                                    year: _year,
+                                  ),
+                                );
+                              },
+                            ),
                           if (stats.tournaments == 0 && stats.matches == 0) ...[
                             const SizedBox(height: 16),
                             Card(
@@ -2762,10 +2800,8 @@ class _TournamentEloGroup {
   final List<LocalEloHistoryItem> matches = [];
 
   int get totalDelta => matches.fold<int>(0, (sum, m) => sum + m.delta);
-  int get ratingBefore =>
-      matches.isNotEmpty ? matches.first.ratingBefore : 0;
-  int get ratingAfter =>
-      matches.isNotEmpty ? matches.last.ratingAfter : 0;
+  int get ratingBefore => matches.isNotEmpty ? matches.first.ratingBefore : 0;
+  int get ratingAfter => matches.isNotEmpty ? matches.last.ratingAfter : 0;
   int get wins => matches.where((m) => m.matchIndex >= 0 && m.delta > 0).length;
   int get losses =>
       matches.where((m) => m.matchIndex >= 0 && m.delta < 0).length;

@@ -205,7 +205,7 @@ void main() {
     },
   );
 
-  test('v9 to v11 migration keeps players, rankings and assignments', () async {
+  test('v9 to v12 migration keeps players, rankings and assignments', () async {
     final path = '${directory.path}/app_database.sqlite';
     final old = sqlite3.open(path);
     old.execute('''
@@ -273,7 +273,7 @@ void main() {
     expect(await storage.loadRankingPlayerIds('ranking-1'), ['player-1']);
 
     final migrated = sqlite3.open(path, mode: OpenMode.readOnly);
-    expect(migrated.select('PRAGMA user_version').single.values.single, 11);
+    expect(migrated.select('PRAGMA user_version').single.values.single, 12);
     expect(
       migrated
           .select('SELECT custom_order FROM local_rankings')

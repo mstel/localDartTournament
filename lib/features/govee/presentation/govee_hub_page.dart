@@ -77,6 +77,46 @@ class _GoveeHubPageState extends State<GoveeHubPage> {
     }
   }
 
+  Future<void> _delete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Govee API-Key löschen?'),
+        content: const Text(
+          'Der gespeicherte API-Key wird von diesem Gerät entfernt.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await _storage.delete();
+      if (!mounted) return;
+      _keyController.clear();
+      setState(() => _hasSavedKey = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Govee API-Key wurde gelöscht.')),
+      );
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Löschen fehlgeschlagen: $error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Govee API-Key')),
@@ -115,15 +155,29 @@ class _GoveeHubPageState extends State<GoveeHubPage> {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
-                child: FilledButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: _saving
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(_saving ? 'Speichert …' : 'API-Key speichern'),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: _saving
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(
+                        _saving ? 'Speichert …' : 'API-Key speichern',
+                      ),
+                    ),
+                    if (_hasSavedKey)
+                      OutlinedButton.icon(
+                        onPressed: _saving ? null : _delete,
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('API-Key löschen'),
+                      ),
+                  ],
                 ),
               ),
             ],

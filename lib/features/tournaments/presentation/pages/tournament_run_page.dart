@@ -3669,17 +3669,33 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          DirectorBoardSettingsEditor(
-                                            tournament: widget.tournament,
-                                            onSave: (board, name, liveUrl) =>
-                                                _handleDirectorSettings(
-                                                  () =>
-                                                      _saveDirectorBoardSettings(
-                                                        board,
-                                                        name,
-                                                        liveUrl,
-                                                      ),
-                                                ),
+                                          ExpansionTile(
+                                            key: const ValueKey(
+                                              'advanced-board-settings',
+                                            ),
+                                            leading: const Icon(
+                                              Icons.tune_outlined,
+                                            ),
+                                            title: const Text(
+                                              'Erweiterte Board Einstellungen',
+                                            ),
+                                            subtitle: const Text(
+                                              'Namen und optionale Live-Board-URLs',
+                                            ),
+                                            children: [
+                                              DirectorBoardSettingsEditor(
+                                                tournament: widget.tournament,
+                                                onSave: (board, name, liveUrl) =>
+                                                    _handleDirectorSettings(
+                                                      () =>
+                                                          _saveDirectorBoardSettings(
+                                                            board,
+                                                            name,
+                                                            liveUrl,
+                                                          ),
+                                                    ),
+                                              ),
+                                            ],
                                           ),
                                           if (widget
                                                   .tournament

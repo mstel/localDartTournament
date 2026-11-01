@@ -23,4 +23,11 @@ class GoveeApiKeyStorage {
       throw StateError('Govee API-Key konnte nicht gespeichert werden.');
     }
   }
+
+  Future<void> delete() async {
+    final deleted = await (await SharedPreferences.getInstance()).remove(_key);
+    if (!deleted) {
+      throw StateError('Govee API-Key konnte nicht gelöscht werden.');
+    }
+  }
 }
