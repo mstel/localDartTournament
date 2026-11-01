@@ -331,7 +331,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 30);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 31);
     },
   );
   test('director mode and strategy persist in tournament JSON', () {
@@ -1011,7 +1011,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final quickStart = find.textContaining('Schnellstart · Board').first;
+    final quickStart = find.byTooltip(RegExp('Partie auf .* starten')).first;
     expect(quickStart, findsOneWidget);
     await tester.ensureVisible(quickStart);
     await tester.tap(quickStart);

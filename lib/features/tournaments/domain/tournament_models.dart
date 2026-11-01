@@ -4,6 +4,7 @@ import 'player_withdrawal.dart';
 import 'imported_tournament_archive.dart';
 import '../../statistics/domain/best_performance.dart';
 import '../../league/domain/league_match.dart';
+import 'second_screen_widget_placement.dart';
 
 const List<String> defaultGroupTieBreakers = [
   'points',
@@ -561,9 +562,14 @@ class CreatedTournament {
     List<String> rankingIds = const [],
     this.activeStageIndex = 0,
     this.boardCount = 1,
+    Map<int, String> directorBoardNames = const {},
+    Map<int, String> directorBoardLiveUrls = const {},
     this.directorModeEnabled = false,
     this.directorSchedulingStrategy = 'group',
     Map<String, List<int>> directorGroupBoardAssignments = const {},
+    Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts =
+        const {},
+    this.secondScreenActiveLayout,
     this.syncRevision = 0,
     List<PlayerWithdrawal>? withdrawals,
     Set<int>? blockedBoards,
@@ -582,6 +588,12 @@ class CreatedTournament {
        updatedAt = updatedAt ?? DateTime.now(),
        completedStageIndexes = completedStageIndexes ?? <int>{},
        blockedBoards = blockedBoards ?? <int>{},
+       directorBoardNames = Map<int, String>.from(directorBoardNames),
+       directorBoardLiveUrls = Map<int, String>.from(directorBoardLiveUrls),
+       secondScreenLayouts = {
+         for (final entry in secondScreenLayouts.entries)
+           entry.key: List<SecondScreenWidgetPlacement>.from(entry.value),
+       },
        directorGroupBoardAssignments = {
          for (final entry in directorGroupBoardAssignments.entries)
            entry.key: List<int>.from(entry.value),
@@ -627,6 +639,19 @@ class CreatedTournament {
       ),
       activeStageIndex: json['activeStageIndex'] as int? ?? 0,
       boardCount: (json['boardCount'] as int? ?? 1).clamp(1, 64),
+      directorBoardNames: {
+        for (final entry in (json['directorBoardNames'] as Map? ?? {}).entries)
+          if (int.tryParse(entry.key.toString()) case final board?)
+            if (board >= 1 && board <= 64 && entry.value is String)
+              board: entry.value as String,
+      },
+      directorBoardLiveUrls: {
+        for (final entry
+            in (json['directorBoardLiveUrls'] as Map? ?? {}).entries)
+          if (int.tryParse(entry.key.toString()) case final board?)
+            if (board >= 1 && board <= 64 && entry.value is String)
+              board: entry.value as String,
+      },
       directorModeEnabled: json['directorModeEnabled'] as bool? ?? false,
       directorSchedulingStrategy: _directorSchedulingStrategyFromJson(
         json['directorSchedulingStrategy'],
@@ -643,6 +668,16 @@ class CreatedTournament {
                     .toList()
                   ..sort(),
       },
+      secondScreenLayouts: {
+        for (final entry in (json['secondScreenLayouts'] as Map? ?? {}).entries)
+          if (entry.key is String && entry.value is List)
+            entry.key as String: [
+              for (final item in entry.value as List)
+                if (item is Map<String, dynamic>)
+                  SecondScreenWidgetPlacement.fromJson(item),
+            ],
+      },
+      secondScreenActiveLayout: json['secondScreenActiveLayout'] as String?,
       syncRevision: json['syncRevision'] as int? ?? 0,
       withdrawals: _mapListFromJson(
         json['withdrawals'],
@@ -679,9 +714,13 @@ class CreatedTournament {
   List<String> rankingIds;
   int activeStageIndex;
   int boardCount;
+  final Map<int, String> directorBoardNames;
+  final Map<int, String> directorBoardLiveUrls;
   bool directorModeEnabled;
   String directorSchedulingStrategy;
   final Map<String, List<int>> directorGroupBoardAssignments;
+  final Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts;
+  String? secondScreenActiveLayout;
   int syncRevision;
   final List<PlayerWithdrawal> withdrawals;
   final Set<int> blockedBoards;
@@ -693,6 +732,11 @@ class CreatedTournament {
   int? plannedMinutes, plannedMatches;
   List<int> plannedMatchEndSeconds;
   final Set<int> completedStageIndexes;
+
+  String boardDisplayName(int board) {
+    final name = directorBoardNames[board]?.trim();
+    return name == null || name.isEmpty ? 'Board $board' : name;
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -711,6 +755,18 @@ class CreatedTournament {
       if (rankingIds.isNotEmpty) 'rankingIds': rankingIds,
       'activeStageIndex': activeStageIndex,
       'boardCount': boardCount,
+      if (directorBoardNames.isNotEmpty)
+        'directorBoardNames': {
+          for (final entry in directorBoardNames.entries)
+            if (entry.value.trim().isNotEmpty)
+              entry.key.toString(): entry.value.trim(),
+        },
+      if (directorBoardLiveUrls.isNotEmpty)
+        'directorBoardLiveUrls': {
+          for (final entry in directorBoardLiveUrls.entries)
+            if (entry.value.trim().isNotEmpty)
+              entry.key.toString(): entry.value.trim(),
+        },
       if (directorModeEnabled) 'directorModeEnabled': true,
       if (directorSchedulingStrategy != 'group')
         'directorSchedulingStrategy': directorSchedulingStrategy,
@@ -719,6 +775,15 @@ class CreatedTournament {
           for (final entry in directorGroupBoardAssignments.entries)
             entry.key: entry.value.toSet().toList()..sort(),
         },
+      if (secondScreenLayouts.isNotEmpty)
+        'secondScreenLayouts': {
+          for (final entry in secondScreenLayouts.entries)
+            entry.key: entry.value
+                .map((placement) => placement.toJson())
+                .toList(),
+        },
+      if (secondScreenActiveLayout != null)
+        'secondScreenActiveLayout': secondScreenActiveLayout,
       if (syncRevision != 0) 'syncRevision': syncRevision,
       if (blockedBoards.isNotEmpty)
         'blockedBoards': blockedBoards.toList()..sort(),

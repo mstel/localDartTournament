@@ -5,6 +5,74 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('director mode marks running matches on the results screen', (
+    tester,
+  ) async {
+    final stage = _groupStage();
+    final match = stage.groups.first.matches.single;
+    final tournament = _tournamentFor(stage)..directorModeEnabled = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: stage,
+              tournament: tournament,
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: true,
+              runningMatches: {match},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tile = tester.widget<MatchResultTile>(find.byType(MatchResultTile).first);
+    expect(tile.isRunning, isTrue);
+    expect(find.text('Läuft'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('recent result rows open their match for correction', (
+    tester,
+  ) async {
+    final stage = _groupStage();
+    final match = stage.groups.first.matches.single
+      ..homeLegs = 3
+      ..awayLegs = 1
+      ..finishedAt = DateTime(2026, 11, 1, 10);
+    final tournament = _tournamentFor(stage);
+    GroupMatch? openedMatch;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: stage,
+              tournament: tournament,
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: true,
+              initialFilter: MatchCategoryFilter.finished,
+              onOpenMatch: (selected) => openedMatch = selected,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final recentRow = find.textContaining('besiegte');
+    expect(recentRow, findsOneWidget);
+    await tester.ensureVisible(recentRow);
+    await tester.tap(recentRow);
+    await tester.pumpAndSettle();
+
+    expect(identical(openedMatch, match), isTrue);
+  });
+
   testWidgets('group results use two compact, round-free columns on desktop', (
     tester,
   ) async {
@@ -312,6 +380,14 @@ void main() {
     }
   });
 }
+
+CreatedTournament _tournamentFor(GroupTournamentRunStage stage) =>
+    CreatedTournament(
+      name: 'Ergebnis-Test',
+      players: stage.groups.expand((group) => group.players).toList(),
+      stages: const [],
+      runStages: [stage],
+    );
 
 GroupTournamentRunStage _groupStage() {
   final players = [

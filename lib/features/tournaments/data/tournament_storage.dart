@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../shared/persistence/app_data_directory.dart';
 import '../../../shared/persistence/storage_access.dart';
+import '../domain/second_screen_widget_placement.dart';
 import '../domain/tournament_models.dart';
 
 /// Local, account-scoped tournament archive. Supabase synchronization is
@@ -14,7 +15,7 @@ class TournamentStorage {
 
   final File? _file;
   // Schema 24 is accepted only after exact verification against its v22 backup.
-  static const _schemaVersion = 30;
+  static const _schemaVersion = 31;
   static const _maximumDocumentBytes = 128 * 1024 * 1024;
 
   Future<T> _locked<T>(Future<T> Function() action) =>
@@ -163,11 +164,37 @@ class TournamentStorage {
   Future<void> saveTournament(CreatedTournament tournament) async {
     await _locked(() async {
       final tournaments = await _loadTournamentsUnlocked();
+      final incomingUpdatedAt = tournament.updatedAt;
       tournament.updatedAt = DateTime.now();
       final index = tournaments.indexWhere((item) => item.id == tournament.id);
       if (index < 0) {
         tournaments.insert(0, tournament);
       } else {
+        final stored = tournaments[index];
+        if (stored.updatedAt.isAfter(incomingUpdatedAt)) {
+          final incomingLayouts =
+              Map<String, List<SecondScreenWidgetPlacement>>.from(
+                tournament.secondScreenLayouts,
+              );
+          tournament.secondScreenLayouts
+            ..clear()
+            ..addAll(stored.secondScreenLayouts)
+            ..addEntries(
+              incomingLayouts.entries.where(
+                (entry) => !stored.secondScreenLayouts.containsKey(entry.key),
+              ),
+            );
+          tournament.secondScreenActiveLayout =
+              stored.secondScreenActiveLayout ??
+              tournament.secondScreenActiveLayout;
+        } else {
+          for (final entry in stored.secondScreenLayouts.entries) {
+            tournament.secondScreenLayouts.putIfAbsent(
+              entry.key,
+              () => entry.value,
+            );
+          }
+        }
         tournaments[index] = tournament;
       }
       final document = await _readDocument();

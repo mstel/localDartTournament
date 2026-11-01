@@ -16,6 +16,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
     required this.eloChanges,
     this.eloError,
     this.showBoardNumber = true,
+    this.onTap,
   });
 
   final CreatedTournament tournament;
@@ -23,6 +24,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
   final List<TournamentMatchEloChange> eloChanges;
   final String? eloError;
   final bool showBoardNumber;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +82,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
       ],
     );
 
-    return Padding(
+    final content = Padding(
       key:
           key ??
           ValueKey(
@@ -107,7 +109,10 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                       ),
                       if (awayIsWinner) homeTextSpan else awayTextSpan,
                       if (showBoardNumber && match.boardNumber != null)
-                        TextSpan(text: ' an Board ${match.boardNumber}'),
+                        TextSpan(
+                          text:
+                              ' an ${tournament.boardDisplayName(match.boardNumber!)}',
+                        ),
                     ],
                   ),
                   maxLines: 1,
@@ -209,6 +214,15 @@ class RecentMatchResultLogEntry extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+    if (onTap == null) return content;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: content,
       ),
     );
   }

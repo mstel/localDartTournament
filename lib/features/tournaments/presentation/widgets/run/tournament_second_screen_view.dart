@@ -3,14 +3,17 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime;
 import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../domain/second_screen_widget_placement.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../domain/engines/group_standings_engine.dart';
 import '../../../domain/tournament_flow_priority_settings.dart';
@@ -25,7 +28,34 @@ import 'standings_table.dart';
 import 'recommended_matches_table.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
+import '../../../data/tournament_storage.dart';
 import 'recent_match_result_card.dart';
+
+const Map<String, String> _monitorWidgetTitles = {
+  'standings': 'Tabellen & Zwischenstände',
+  'forecast': 'Siegprognose & Weiterkommen',
+  'recent': 'Zuletzt beendete Matches',
+  'boards': 'Boards & nächste Begegnungen',
+  'liveBoard': 'Live Board Ansicht',
+  'stageProgress': 'Fortschritt nach Etappen',
+  'highlights': 'Bestleistungen & Highlights',
+  'ranking': 'Rangliste',
+};
+
+const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
+  SecondScreenWidgetPlacement(
+    widgetId: 'boards',
+    widthUnits: 2,
+    heightUnits: 2,
+  ),
+  SecondScreenWidgetPlacement(
+    widgetId: 'standings',
+    widthUnits: 2,
+    heightUnits: 2,
+  ),
+  SecondScreenWidgetPlacement(widgetId: 'recent', widthUnits: 2),
+  SecondScreenWidgetPlacement(widgetId: 'stageProgress'),
+];
 
 /// Feste, responsive Info-Tafel für den Vereinsheim-TV (2. Bildschirm).
 class TournamentSecondScreenView extends StatefulWidget {
@@ -65,11 +95,17 @@ class _TournamentSecondScreenViewState
   late String _eloInputFingerprint;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
   late String _forecastFingerprint;
+  late List<SecondScreenWidgetPlacement> _monitorPlacements;
+  String? _loadedLayoutName;
+  bool _useCustomLayout = false;
 
   @override
   void initState() {
     super.initState();
     _showNextStagePreview = widget.showNextStagePreviewInitially;
+    _loadedLayoutName = widget.tournament.secondScreenActiveLayout;
+    _useCustomLayout = _loadedLayoutName != null;
+    _monitorPlacements = _savedLayoutOrDefault();
     unawaited(_loadPrioritySettings());
     _refreshEloChanges();
     _refreshAdvancementForecast();
@@ -78,6 +114,14 @@ class _TournamentSecondScreenViewState
         setState(() {});
       }
     });
+  }
+
+  List<SecondScreenWidgetPlacement> _savedLayoutOrDefault() {
+    final activeName = widget.tournament.secondScreenActiveLayout;
+    final saved = activeName == null
+        ? null
+        : widget.tournament.secondScreenLayouts[activeName];
+    return saved == null ? List.of(_defaultMonitorLayout) : List.of(saved);
   }
 
   Future<void> _loadPrioritySettings() async {
@@ -310,6 +354,14 @@ class _TournamentSecondScreenViewState
           Expanded(
             child: _showNextStagePreview
                 ? _buildNextStagePreview(context, t, activeIndex, activeStage)
+                : widget.isStandaloneWindow && _useCustomLayout
+                ? _buildCustomOverview(
+                    context,
+                    t: t,
+                    activeIndex: activeIndex,
+                    activeStage: activeStage,
+                    playedMatches: playedMatches,
+                  )
                 : _buildOverview(
                     context,
                     t: t,
@@ -497,6 +549,19 @@ class _TournamentSecondScreenViewState
                       'Ende ca. ${_formatClockTime(timing.forecast!)}',
                       style: const TextStyle(color: Colors.white),
                     ),
+                  if (widget.isStandaloneWindow) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => setState(() => _useCustomLayout = true),
+                      icon: const Icon(Icons.dashboard_customize),
+                      label: const Text('Layout anpassen'),
+                    ),
+                    if (t.secondScreenLayouts.isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: _loadMonitorLayout,
+                        icon: const Icon(Icons.folder_open_outlined),
+                        label: const Text('Layout laden'),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -505,6 +570,705 @@ class _TournamentSecondScreenViewState
           ],
         );
       },
+    );
+  }
+
+  Widget _buildCustomOverview(
+    BuildContext context, {
+    required CreatedTournament t,
+    required int activeIndex,
+    required TournamentRunStage? activeStage,
+    required List<GroupMatch> playedMatches,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = (constraints.maxWidth / 360).floor().clamp(1, 4);
+        final spacing = 12.0;
+        final unitWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        final unitHeight = (constraints.maxHeight / 2.4).clamp(220.0, 360.0);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              alignment: WrapAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _addMonitorWidget,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Widget hinzufügen'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saveMonitorLayout,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Layout speichern'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: t.secondScreenLayouts.isEmpty
+                      ? null
+                      : _loadMonitorLayout,
+                  icon: const Icon(Icons.folder_open_outlined),
+                  label: const Text('Layout laden'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _resetMonitorLayout,
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('Layout zurücksetzen'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _useCustomLayout = false),
+                  icon: const Icon(Icons.tv),
+                  label: const Text('Standardansicht'),
+                ),
+              ],
+            ),
+            if (_loadedLayoutName != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Layout: $_loadedLayoutName',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (
+                      var index = 0;
+                      index < _monitorPlacements.length;
+                      index++
+                    )
+                      _buildMonitorWidgetCard(
+                        context,
+                        _monitorPlacements[index],
+                        index,
+                        width:
+                            unitWidth *
+                                _monitorPlacements[index].widthUnits.clamp(
+                                  1,
+                                  columns,
+                                ) +
+                            spacing *
+                                (_monitorPlacements[index].widthUnits.clamp(
+                                      1,
+                                      columns,
+                                    ) -
+                                    1),
+                        height:
+                            unitHeight * _monitorPlacements[index].heightUnits,
+                        tournament: t,
+                        activeIndex: activeIndex,
+                        activeStage: activeStage,
+                        playedMatches: playedMatches,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMonitorWidgetCard(
+    BuildContext context,
+    SecondScreenWidgetPlacement placement,
+    int index, {
+    required double width,
+    required double height,
+    required CreatedTournament tournament,
+    required int activeIndex,
+    required TournamentRunStage? activeStage,
+    required List<GroupMatch> playedMatches,
+  }) {
+    final title = _monitorWidgetTitles[placement.widgetId];
+    if (title == null) return const SizedBox.shrink();
+    return SizedBox(
+      key: ValueKey('monitor-widget-${placement.widgetId}'),
+      width: width,
+      height: height,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Breite verkleinern',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: placement.widthUnits <= 1
+                        ? null
+                        : () => _resizeMonitorWidget(
+                            index,
+                            widthUnits: placement.widthUnits - 1,
+                          ),
+                    icon: const Icon(Icons.remove),
+                  ),
+                  IconButton(
+                    tooltip: 'Breite vergrößern',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: placement.widthUnits >= 4
+                        ? null
+                        : () => _resizeMonitorWidget(
+                            index,
+                            widthUnits: placement.widthUnits + 1,
+                          ),
+                    icon: const Icon(Icons.add),
+                  ),
+                  IconButton(
+                    tooltip: 'Höhe verkleinern',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: placement.heightUnits <= 1
+                        ? null
+                        : () => _resizeMonitorWidget(
+                            index,
+                            heightUnits: placement.heightUnits - 1,
+                          ),
+                    icon: const Icon(Icons.height, size: 19),
+                  ),
+                  IconButton(
+                    tooltip: 'Höhe vergrößern',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: placement.heightUnits >= 3
+                        ? null
+                        : () => _resizeMonitorWidget(
+                            index,
+                            heightUnits: placement.heightUnits + 1,
+                          ),
+                    icon: const Icon(Icons.unfold_more),
+                  ),
+                  IconButton(
+                    tooltip: 'Widget entfernen',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: () => _removeMonitorWidget(index),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const Divider(height: 1),
+              const SizedBox(height: 6),
+              Expanded(
+                child: ClipRect(
+                  child: SingleChildScrollView(
+                    child: _buildMonitorWidgetContent(
+                      context,
+                      placement.widgetId,
+                      tournament,
+                      activeIndex,
+                      activeStage,
+                      playedMatches,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMonitorWidgetContent(
+    BuildContext context,
+    String widgetId,
+    CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? activeStage,
+    List<GroupMatch> playedMatches,
+  ) {
+    switch (widgetId) {
+      case 'boards':
+        return _buildBoardsAndPriorityPanel(
+          context,
+          tournament,
+          activeIndex,
+          activeStage,
+          expand: false,
+        );
+      case 'standings':
+        return _buildStandingsPanel(
+          context,
+          tournament,
+          activeStage,
+          full: true,
+          expand: false,
+        );
+      case 'forecast':
+        return _buildKoPrognosisPanel(
+          context,
+          tournament,
+          activeIndex,
+          activeStage,
+          expand: false,
+        );
+      case 'recent':
+        return _buildRecentMatchesAndEloPanel(
+          context,
+          tournament,
+          playedMatches,
+          expand: false,
+        );
+      case 'liveBoard':
+        return _buildLiveBoardsPanel(context, tournament);
+      case 'stageProgress':
+        return _buildStageProgressPanel(context, tournament);
+      case 'highlights':
+        return _buildHighlightsPanel(context, tournament);
+      case 'ranking':
+        return _buildRankingPanel(context, tournament);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  void _resizeMonitorWidget(int index, {int? widthUnits, int? heightUnits}) {
+    setState(() {
+      final current = _monitorPlacements[index];
+      _monitorPlacements[index] = SecondScreenWidgetPlacement(
+        widgetId: current.widgetId,
+        widthUnits: widthUnits ?? current.widthUnits,
+        heightUnits: heightUnits ?? current.heightUnits,
+      );
+    });
+  }
+
+  void _removeMonitorWidget(int index) {
+    setState(() => _monitorPlacements.removeAt(index));
+  }
+
+  Future<void> _addMonitorWidget() async {
+    final available = _monitorWidgetTitles.keys
+        .where(
+          (id) =>
+              !_monitorPlacements.any((placement) => placement.widgetId == id),
+        )
+        .toList();
+    if (available.isEmpty) return;
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Widget hinzufügen'),
+        children: [
+          for (final id in available)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, id),
+              child: Text(_monitorWidgetTitles[id]!),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(
+      () => _monitorPlacements.add(
+        SecondScreenWidgetPlacement(widgetId: selected),
+      ),
+    );
+  }
+
+  Future<void> _saveMonitorLayout() async {
+    final controller = TextEditingController(text: _loadedLayoutName ?? '');
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Layout speichern'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Layoutname',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.pop(context, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Speichern'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || !mounted) return;
+    final previous = widget.tournament.secondScreenLayouts[name];
+    final previousActiveLayout = widget.tournament.secondScreenActiveLayout;
+    widget.tournament.secondScreenLayouts[name] =
+        List<SecondScreenWidgetPlacement>.from(_monitorPlacements);
+    widget.tournament.secondScreenActiveLayout = name;
+    try {
+      await TournamentStorage().saveTournament(widget.tournament);
+      if (mounted) {
+        setState(() {
+          _loadedLayoutName = name;
+          _useCustomLayout = true;
+        });
+      }
+    } catch (error) {
+      if (previous == null) {
+        widget.tournament.secondScreenLayouts.remove(name);
+      } else {
+        widget.tournament.secondScreenLayouts[name] = previous;
+      }
+      widget.tournament.secondScreenActiveLayout = previousActiveLayout;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Layout konnte nicht gespeichert werden: $error'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadMonitorLayout() async {
+    final names = widget.tournament.secondScreenLayouts.keys.toList()..sort();
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Layout laden'),
+        children: [
+          for (final name in names)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, name),
+              child: Text(name),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final layout = widget.tournament.secondScreenLayouts[selected];
+    if (layout == null) return;
+    final previousActiveLayout = widget.tournament.secondScreenActiveLayout;
+    widget.tournament.secondScreenActiveLayout = selected;
+    try {
+      await TournamentStorage().saveTournament(widget.tournament);
+      if (!mounted) return;
+      setState(() {
+        _monitorPlacements = List.of(layout);
+        _loadedLayoutName = selected;
+        _useCustomLayout = true;
+      });
+    } catch (error) {
+      widget.tournament.secondScreenActiveLayout = previousActiveLayout;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Layout konnte nicht geladen werden: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _resetMonitorLayout() async {
+    final previousLayout = widget.tournament.secondScreenLayouts['Standard'];
+    final previousActiveLayout = widget.tournament.secondScreenActiveLayout;
+    widget.tournament.secondScreenLayouts['Standard'] =
+        List<SecondScreenWidgetPlacement>.from(_defaultMonitorLayout);
+    widget.tournament.secondScreenActiveLayout = 'Standard';
+    try {
+      await TournamentStorage().saveTournament(widget.tournament);
+      if (mounted) {
+        setState(() {
+          _monitorPlacements = List.of(_defaultMonitorLayout);
+          _loadedLayoutName = 'Standard';
+          _useCustomLayout = true;
+        });
+      }
+    } catch (error) {
+      if (previousLayout == null) {
+        widget.tournament.secondScreenLayouts.remove('Standard');
+      } else {
+        widget.tournament.secondScreenLayouts['Standard'] = previousLayout;
+      }
+      widget.tournament.secondScreenActiveLayout = previousActiveLayout;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Layout konnte nicht zurückgesetzt werden: $error'),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildStageProgressPanel(
+    BuildContext context,
+    CreatedTournament tournament,
+  ) {
+    final stages = tournament.runStages;
+    final matches = TournamentTiming.matches(tournament);
+    final allWithPlayers = matches.where((match) => match.hasPlayers).length;
+    final played = matches
+        .where((match) => match.hasPlayers && match.hasResult)
+        .length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('$played von $allWithPlayers Partien abgeschlossen'),
+        const SizedBox(height: 8),
+        LinearProgressIndicator(
+          value: allWithPlayers == 0 ? 0 : played / allWithPlayers,
+          color: const Color(0xFF70E0BA),
+          backgroundColor: Colors.white24,
+        ),
+        const SizedBox(height: 12),
+        for (var index = 0; index < stages.length; index++)
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(stages[index].name),
+            subtitle: Text(
+              '${_matchesOf(stages[index]).where((match) => match.hasResult).length} / '
+              '${_countMatchesForProgress(stages[index])} Partien',
+            ),
+            trailing: Icon(
+              tournament.completedStageIndexes.contains(index)
+                  ? Icons.check_circle
+                  : Icons.radio_button_unchecked,
+              color: tournament.completedStageIndexes.contains(index)
+                  ? const Color(0xFF70E0BA)
+                  : Colors.white54,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHighlightsPanel(
+    BuildContext context,
+    CreatedTournament tournament,
+  ) {
+    final highlights = [
+      for (final match in TournamentTiming.matches(tournament))
+        for (final performance in match.bestPerformances)
+          (match: match, performance: performance),
+    ];
+    if (highlights.isEmpty) {
+      return const Center(
+        child: Text(
+          'Noch keine Bestleistungen erfasst.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final item in highlights.reversed.take(20))
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.stars_outlined, color: Color(0xFF70E0BA)),
+            title: Text(item.performance.label),
+            subtitle: Text(item.performance.playerName),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRankingPanel(
+    BuildContext context,
+    CreatedTournament tournament,
+  ) {
+    final wins = <String, int>{};
+    for (final match in TournamentTiming.matches(tournament)) {
+      final winner = match.winner;
+      if (match.hasResult && winner != null) {
+        wins.update(winner.name, (value) => value + 1, ifAbsent: () => 1);
+      }
+    }
+    final ranking = wins.entries.toList()
+      ..sort((left, right) => right.value.compareTo(left.value));
+    if (ranking.isEmpty) {
+      return const Center(
+        child: Text(
+          'Die Rangliste erscheint nach den ersten Ergebnissen.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < ranking.length; index++)
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: CircleAvatar(radius: 16, child: Text('${index + 1}')),
+            title: Text(ranking[index].key),
+            trailing: Text('${ranking[index].value} Siege'),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildLiveBoardsPanel(
+    BuildContext context,
+    CreatedTournament tournament,
+  ) {
+    final boards = [
+      for (var board = 1; board <= tournament.boardCount; board++)
+        if (_validLiveBoardUri(tournament.directorBoardLiveUrls[board])
+            case final uri?)
+          (board: board, uri: uri),
+    ];
+    if (boards.isEmpty) {
+      return const Center(
+        child: Text(
+          'Für kein Board ist eine gültige Live Board URL hinterlegt.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final item in boards)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(tournament.boardDisplayName(item.board)),
+                    ),
+                    IconButton(
+                      tooltip: 'Live Board vergrößern',
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
+                      onPressed: () => _showExpandedLiveBoard(
+                        tournament.boardDisplayName(item.board),
+                        item.uri,
+                      ),
+                      icon: const Icon(Icons.open_in_full),
+                    ),
+                  ],
+                ),
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Tooltip(
+                      message: 'Tippen, um das Live Board zu vergrößern',
+                      child: GestureDetector(
+                        onTap: () => _showExpandedLiveBoard(
+                          tournament.boardDisplayName(item.board),
+                          item.uri,
+                        ),
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: _liveBoardBrowser(
+                            item.uri,
+                            key: ValueKey(
+                              'live-board-${item.board}-${item.uri}',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Uri? _validLiveBoardUri(String? rawUrl) {
+    if (rawUrl == null || rawUrl.trim().isEmpty) return null;
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null ||
+        !uri.hasAuthority ||
+        !['http', 'https'].contains(uri.scheme.toLowerCase())) {
+      return null;
+    }
+    return uri;
+  }
+
+  Future<void> _showExpandedLiveBoard(String title, Uri uri) =>
+      showDialog<void>(
+        context: context,
+        builder: (context) => Dialog.fullscreen(
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(title),
+              leading: IconButton(
+                tooltip: 'Live Board verkleinern',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_fullscreen),
+              ),
+            ),
+            body: SafeArea(child: _liveBoardBrowser(uri)),
+          ),
+        ),
+      );
+
+  Widget _liveBoardBrowser(Uri uri, {Key? key}) {
+    if (Theme.of(context).platform == TargetPlatform.linux) {
+      return Center(
+        child: FilledButton.icon(
+          onPressed: () async {
+            if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+                mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Live Board konnte nicht geöffnet werden.'),
+                ),
+              );
+            }
+          },
+          icon: const Icon(Icons.open_in_browser),
+          label: const Text('Live Board im Browser öffnen'),
+        ),
+      );
+    }
+    return InAppWebView(
+      key: key,
+      initialUrlRequest: URLRequest(url: WebUri(uri.toString())),
+      initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
     );
   }
 
@@ -1673,157 +2437,258 @@ class _TournamentSecondScreenViewState
         final width =
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
         return SingleChildScrollView(
-          child: Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (var board = 1; board <= tournament.boardCount; board++)
-                Builder(
-                  builder: (context) {
-                    final running = snapshot.runningOn(board);
-                    final blocked = tournament.blockedBoards.contains(board);
-                    final upcoming = snapshot.schedule.planned
-                        .where(
-                          (assignment) =>
-                              assignment.entry.stageIndex == activeIndex &&
-                              assignment.board == board &&
-                              assignment.entry.match.hasPlayers,
-                        )
-                        .take(3)
-                        .toList();
-                    final groupNames = <String>{
-                      ?running?.groupKey,
-                      for (final assignment in upcoming)
-                        ?assignment.entry.groupKey,
-                    };
-                    final status = running != null
-                        ? 'Läuft'
-                        : blocked
-                        ? 'Gesperrt'
-                        : upcoming.isNotEmpty
-                        ? 'Frei'
-                        : 'Reserve';
-                    final statusColor = running != null
-                        ? TournamentDisplayPalette.accent
-                        : blocked
-                        ? Colors.redAccent
-                        : upcoming.isNotEmpty
-                        ? const Color(0xFF4ED9A4)
-                        : TournamentDisplayPalette.mutedText;
-                    return Container(
-                      key: ValueKey('second-screen-director-board-$board'),
-                      width: width,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: TournamentDisplayPalette.card,
-                        border: Border.all(
-                          color: TournamentDisplayPalette.border.withAlpha(150),
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.dashboard_outlined,
-                                size: 18,
-                                color: TournamentDisplayPalette.accent,
+              Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (var board = 1; board <= tournament.boardCount; board++)
+                    Builder(
+                      builder: (context) {
+                        final running = snapshot.runningOn(board);
+                        final blocked = tournament.blockedBoards.contains(
+                          board,
+                        );
+                        final upcoming = snapshot.schedule.planned
+                            .where(
+                              (assignment) =>
+                                  assignment.entry.stageIndex == activeIndex &&
+                                  assignment.board == board &&
+                                  assignment.entry.match.hasPlayers,
+                            )
+                            .take(3)
+                            .toList();
+                        final groupNames = <String>{
+                          ?running?.groupKey,
+                          for (final assignment in upcoming)
+                            ?assignment.entry.groupKey,
+                        };
+                        final status = running != null
+                            ? 'Läuft'
+                            : blocked
+                            ? 'Gesperrt'
+                            : upcoming.isNotEmpty
+                            ? 'Frei'
+                            : 'Reserve';
+                        final statusColor = running != null
+                            ? TournamentDisplayPalette.accent
+                            : blocked
+                            ? Colors.redAccent
+                            : upcoming.isNotEmpty
+                            ? const Color(0xFF4ED9A4)
+                            : TournamentDisplayPalette.mutedText;
+                        return Container(
+                          key: ValueKey('second-screen-director-board-$board'),
+                          width: width,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: TournamentDisplayPalette.card,
+                            border: Border.all(
+                              color: TournamentDisplayPalette.border.withAlpha(
+                                150,
                               ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Board $board',
-                                  style: const TextStyle(
-                                    color: TournamentDisplayPalette.text,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                status,
-                                style: TextStyle(
-                                  color: statusColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          if (tournament.directorSchedulingStrategy ==
-                                  'group' &&
-                              groupNames.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                groupNames.join(' · '),
-                                style: const TextStyle(
-                                  color: TournamentDisplayPalette.mutedText,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          if (running != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                'Aktuell: ${running.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
-                                '${running.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: TournamentDisplayPalette.text,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          if (upcoming.isEmpty && running == null)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 8),
-                              child: Text(
-                                'Keine nächste Begegnung zugewiesen.',
-                                style: TextStyle(
-                                  color: TournamentDisplayPalette.mutedText,
-                                ),
-                              ),
-                            ),
-                          for (var index = 0; index < upcoming.length; index++)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
                                 children: [
-                                  SizedBox(
-                                    width: 22,
+                                  const Icon(
+                                    Icons.dashboard_outlined,
+                                    size: 18,
+                                    color: TournamentDisplayPalette.accent,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
                                     child: Text(
-                                      '${index + 1}.',
+                                      tournament.boardDisplayName(board),
                                       style: const TextStyle(
-                                        color: TournamentDisplayPalette.accent,
+                                        color: TournamentDisplayPalette.text,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
-                                  Expanded(
-                                    child: Text(
-                                      '${upcoming[index].entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
-                                      '${upcoming[index].entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: TournamentDisplayPalette.text,
-                                      ),
+                                  Text(
+                                    status,
+                                    style: TextStyle(
+                                      color: statusColor,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                              if (tournament.directorSchedulingStrategy ==
+                                      'group' &&
+                                  groupNames.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    groupNames.join(' · '),
+                                    style: const TextStyle(
+                                      color: TournamentDisplayPalette.mutedText,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              if (running != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    'Aktuell: ${running.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
+                                    '${running.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: TournamentDisplayPalette.text,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              if (upcoming.isEmpty && running == null)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    'Keine nächste Begegnung zugewiesen.',
+                                    style: TextStyle(
+                                      color: TournamentDisplayPalette.mutedText,
+                                    ),
+                                  ),
+                                ),
+                              for (
+                                var index = 0;
+                                index < upcoming.length;
+                                index++
+                              )
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 22,
+                                        child: Text(
+                                          '${index + 1}.',
+                                          style: const TextStyle(
+                                            color:
+                                                TournamentDisplayPalette.accent,
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          '${upcoming[index].entry.match.homePlayer?.shortDisplayName ?? 'Freilos'} – '
+                                          '${upcoming[index].entry.match.awayPlayer?.shortDisplayName ?? 'Freilos'}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color:
+                                                TournamentDisplayPalette.text,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+              _buildCompactLiveBoardFrames(context, tournament),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCompactLiveBoardFrames(
+    BuildContext context,
+    CreatedTournament tournament,
+  ) {
+    final boards = [
+      for (var board = 1; board <= tournament.boardCount; board++)
+        if (_validLiveBoardUri(tournament.directorBoardLiveUrls[board])
+            case final uri?)
+          (board: board, uri: uri),
+    ];
+    if (boards.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Live Board Ansicht',
+            style: TextStyle(
+              color: TournamentDisplayPalette.text,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final item in boards)
+            Card(
+              clipBehavior: Clip.antiAlias,
+              margin: const EdgeInsets.only(bottom: 10),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(tournament.boardDisplayName(item.board)),
+                        ),
+                        IconButton(
+                          tooltip: 'Live Board vergrößern',
+                          constraints: const BoxConstraints(
+                            minWidth: 48,
+                            minHeight: 48,
+                          ),
+                          onPressed: () => _showExpandedLiveBoard(
+                            tournament.boardDisplayName(item.board),
+                            item.uri,
+                          ),
+                          icon: const Icon(Icons.open_in_full),
+                        ),
+                      ],
+                    ),
+                    AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Tooltip(
+                          message: 'Tippen, um das Live Board zu vergrößern',
+                          child: GestureDetector(
+                            onTap: () => _showExpandedLiveBoard(
+                              tournament.boardDisplayName(item.board),
+                              item.uri,
+                            ),
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: _liveBoardBrowser(
+                                item.uri,
+                                key: ValueKey(
+                                  'board-queue-live-${item.board}-${item.uri}',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

@@ -22,6 +22,8 @@ class MatchResultTile extends StatelessWidget {
     this.showRoundLabel = true,
     this.compact = false,
     this.onPlayerTap,
+    this.isRunning = false,
+    this.isFocused = false,
   });
 
   final GroupMatch match;
@@ -33,6 +35,8 @@ class MatchResultTile extends StatelessWidget {
   final bool showRoundLabel;
   final bool compact;
   final ValueChanged<TournamentPlayer>? onPlayerTap;
+  final bool isRunning;
+  final bool isFocused;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +96,14 @@ class MatchResultTile extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: TournamentDisplayPalette.card,
-          border: Border.all(color: colorScheme.outlineVariant.withAlpha(150)),
+          border: Border.all(
+            color: isRunning
+                ? const Color(0xFF4ED9A4)
+                : isFocused
+                ? colorScheme.primary
+                : colorScheme.outlineVariant.withAlpha(150),
+            width: isRunning || isFocused ? 2 : 1,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Padding(
@@ -104,6 +115,29 @@ class MatchResultTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (isRunning)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF123D2D),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'Läuft',
+                      style: TextStyle(
+                        color: Color(0xFF4ED9A4),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
               if (leadingLabel != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 2, top: 2),

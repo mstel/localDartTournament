@@ -108,6 +108,36 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   int _viewStageIndex = 0;
   StageViewMode _stageViewMode = StageViewMode.dashboard;
   String? _directorSaveError;
+  GroupMatch? _requestedResultMatch;
+
+  int _stageIndexForMatch(GroupMatch match) {
+    for (var index = 0; index < widget.tournament.runStages.length; index++) {
+      final stage = widget.tournament.runStages[index];
+      if (stage is GroupTournamentRunStage &&
+          stage.groups.any(
+            (group) =>
+                group.matches.contains(match) ||
+                group.placementMatches.contains(match) ||
+                group.knockoutRounds.any((round) => round.contains(match)),
+          )) {
+        return index;
+      }
+      if (stage is KnockoutTournamentRunStage &&
+          (stage.rounds.any((round) => round.contains(match)) ||
+              stage.placementMatches.contains(match))) {
+        return index;
+      }
+    }
+    return _activeStageIndex;
+  }
+
+  void _openPlayedMatch(GroupMatch match) {
+    setState(() {
+      _requestedResultMatch = match;
+      _viewStageIndex = _stageIndexForMatch(match);
+      _stageViewMode = StageViewMode.results;
+    });
+  }
 
   Future<void> _renamePlayer(TournamentPlayer player) async {
     if (player.profileId != null) return;
@@ -432,6 +462,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     final previousCount = tournament.boardCount;
     final previousBlocked = Set<int>.from(tournament.blockedBoards);
+    final previousNames = Map<int, String>.from(tournament.directorBoardNames);
+    final previousUrls = Map<int, String>.from(
+      tournament.directorBoardLiveUrls,
+    );
     final previousAssignments = {
       for (final entry in tournament.directorGroupBoardAssignments.entries)
         entry.key: List<int>.from(entry.value),
@@ -441,6 +475,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       tournament.blockedBoards.removeWhere((board) => board > boardCount);
       tournament.directorGroupBoardAssignments.updateAll(
         (_, boards) => boards.where((board) => board <= boardCount).toList(),
+      );
+      tournament.directorBoardNames.removeWhere(
+        (board, _) => board > boardCount,
+      );
+      tournament.directorBoardLiveUrls.removeWhere(
+        (board, _) => board > boardCount,
       );
     });
     try {
@@ -453,6 +493,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       tournament.directorGroupBoardAssignments
         ..clear()
         ..addAll(previousAssignments);
+      tournament.directorBoardNames
+        ..clear()
+        ..addAll(previousNames);
+      tournament.directorBoardLiveUrls
+        ..clear()
+        ..addAll(previousUrls);
       if (mounted) setState(() {});
       rethrow;
     }
@@ -504,12 +550,51 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     try {
       await action();
     } catch (error) {
-      if (!mounted || error is! StateError) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Einstellung konnte nicht gespeichert werden: $error'),
         ),
       );
+    }
+  }
+
+  Future<void> _saveDirectorBoardSettings(
+    int board,
+    String name,
+    String liveUrl,
+  ) async {
+    final names = widget.tournament.directorBoardNames;
+    final urls = widget.tournament.directorBoardLiveUrls;
+    final previousName = names[board];
+    final previousUrl = urls[board];
+    setState(() {
+      if (name.isEmpty) {
+        names.remove(board);
+      } else {
+        names[board] = name;
+      }
+      if (liveUrl.isEmpty) {
+        urls.remove(board);
+      } else {
+        urls[board] = liveUrl;
+      }
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (previousName == null) {
+        names.remove(board);
+      } else {
+        names[board] = previousName;
+      }
+      if (previousUrl == null) {
+        urls.remove(board);
+      } else {
+        urls[board] = previousUrl;
+      }
+      if (mounted) setState(() {});
+      rethrow;
     }
   }
 
@@ -3327,6 +3412,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         showBoardNumber: widget.tournament.directorModeEnabled,
                         onStartOnBoard: _startRecommendedMatchOnBoard,
                         onResetMatch: _resetRunningMatch,
+                        onOpenMatch: _openPlayedMatch,
                         onStartClock: _startTournamentClock,
                         onPauseClock: _toggleClockPause,
                         onEditTimes: _editTournamentTimes,
@@ -3582,6 +3668,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               ),
                                             ],
                                           ),
+                                          const SizedBox(height: 8),
+                                          DirectorBoardSettingsEditor(
+                                            tournament: widget.tournament,
+                                            onSave: (board, name, liveUrl) =>
+                                                _handleDirectorSettings(
+                                                  () =>
+                                                      _saveDirectorBoardSettings(
+                                                        board,
+                                                        name,
+                                                        liveUrl,
+                                                      ),
+                                                ),
+                                          ),
                                           if (widget
                                                   .tournament
                                                   .directorSchedulingStrategy ==
@@ -3670,7 +3769,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                                                         MaterialTapTargetSize
                                                                             .padded,
                                                                     label: Text(
-                                                                      'Board $board',
+                                                                      widget
+                                                                          .tournament
+                                                                          .boardDisplayName(
+                                                                            board,
+                                                                          ),
                                                                     ),
                                                                     selected: selected
                                                                         .contains(
@@ -4146,8 +4249,23 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                     else ...[
                       // Modus "Ergebnisse"
                       StageResultsSplitView(
+                        key: ValueKey(
+                          'stage-results-${_requestedResultMatch?.hashCode ?? 'default'}',
+                        ),
                         stage: activeStage,
                         tournament: widget.tournament,
+                        focusMatch: _requestedResultMatch,
+                        initialFilter: _requestedResultMatch == null
+                            ? null
+                            : MatchCategoryFilter.finished,
+                        runningMatches: widget.tournament.directorModeEnabled
+                            ? const OrderOfPlayController()
+                                  .plan(widget.tournament, _activeStageIndex)
+                                  .running
+                                  .map((entry) => entry.match)
+                                  .toSet()
+                            : const <GroupMatch>{},
+                        onOpenMatch: _openPlayedMatch,
                         onPreviewBracket:
                             activeStage is KnockoutTournamentRunStage
                             ? null

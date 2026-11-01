@@ -74,6 +74,7 @@ import 'features/tournaments/presentation/widgets/creation/group_player_allocati
 import 'features/tournaments/presentation/widgets/run/result_entry.dart';
 import 'features/tournaments/presentation/widgets/run/stage_controls.dart';
 import 'features/tournaments/presentation/widgets/run/stage_results_split_view.dart';
+import 'features/tournaments/presentation/widgets/run/director_board_settings_editor.dart';
 
 part 'features/home/presentation/home_page.dart';
 part 'features/dev_tools/application/production_tournament_runtime.dart';

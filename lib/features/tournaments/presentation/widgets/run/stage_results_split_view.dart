@@ -8,6 +8,7 @@ import '../../../domain/tournament_models.dart';
 import 'best_of_comparison_table.dart';
 import 'knockout_run_section.dart';
 import 'result_entry.dart';
+import 'recent_match_result_card.dart';
 import 'standings_table.dart';
 
 enum MatchCategoryFilter { open, finished, all }
@@ -27,6 +28,10 @@ class StageResultsSplitView extends StatefulWidget {
     this.isBracketEditMode = false,
     this.canEditBracket = false,
     this.onSwapSlot,
+    this.onOpenMatch,
+    this.focusMatch,
+    this.runningMatches = const {},
+    this.initialFilter,
   });
 
   final TournamentRunStage stage;
@@ -46,6 +51,10 @@ class StageResultsSplitView extends StatefulWidget {
   final bool isBracketEditMode;
   final bool canEditBracket;
   final void Function(int fromSlotIndex, int toSlotIndex)? onSwapSlot;
+  final ValueChanged<GroupMatch>? onOpenMatch;
+  final GroupMatch? focusMatch;
+  final Set<GroupMatch> runningMatches;
+  final MatchCategoryFilter? initialFilter;
 
   @override
   State<StageResultsSplitView> createState() => _StageResultsSplitViewState();
@@ -53,8 +62,42 @@ class StageResultsSplitView extends StatefulWidget {
 
 class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   // Default is "Offene Spiele" (always visible on initial load, finished and all matches hidden by default)
-  MatchCategoryFilter _filter = MatchCategoryFilter.open;
+  late MatchCategoryFilter _filter =
+      widget.initialFilter ?? MatchCategoryFilter.open;
   TournamentPlayer? _filteredPlayer;
+  final Map<GroupMatch, GlobalKey> _matchTileKeys = {};
+  bool _focusScheduled = false;
+
+  @override
+  void didUpdateWidget(covariant StageResultsSplitView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialFilter != widget.initialFilter) {
+      _filter = widget.initialFilter ?? MatchCategoryFilter.open;
+    }
+    if (oldWidget.focusMatch != widget.focusMatch) {
+      _filter = MatchCategoryFilter.finished;
+      _focusScheduled = false;
+    }
+  }
+
+  GlobalKey _keyForMatch(GroupMatch match) =>
+      _matchTileKeys.putIfAbsent(match, GlobalKey.new);
+
+  void _scheduleFocusScroll() {
+    final match = widget.focusMatch;
+    if (match == null || _focusScheduled) return;
+    _focusScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _matchTileKeys[match]?.currentContext;
+      if (context != null) {
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 250),
+          alignment: 0.2,
+        );
+      }
+    });
+  }
 
   String _playerKey(TournamentPlayer player) => player.profileId ?? player.name;
 
@@ -80,6 +123,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
   @override
   Widget build(BuildContext context) {
+    _scheduleFocusScroll();
     final stage = widget.stage;
 
     if (stage is GroupTournamentRunStage) {
@@ -266,6 +310,52 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             );
           },
         ),
+        const SizedBox(height: 20),
+        _buildRecentResultsSection(
+          context,
+          stage.groups.expand((group) => group.matches).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentResultsSection(
+    BuildContext context,
+    List<GroupMatch> matches,
+  ) {
+    final tournament = widget.tournament;
+    if (tournament == null) return const SizedBox.shrink();
+    final recent = matches.where((match) => match.hasResult).toList()
+      ..sort((left, right) {
+        final leftTime = left.finishedAt ?? left.startedAt;
+        final rightTime = right.finishedAt ?? right.startedAt;
+        if (leftTime == null) return rightTime == null ? 0 : 1;
+        if (rightTime == null) return -1;
+        return rightTime.compareTo(leftTime);
+      });
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Letzte Ergebnisse',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        if (recent.isEmpty)
+          const Text('Noch keine beendeten Partien vorhanden.')
+        else
+          for (final match in recent.take(8))
+            RecentMatchResultLogEntry(
+              tournament: tournament,
+              match: match,
+              eloChanges: const [],
+              showBoardNumber: tournament.directorModeEnabled,
+              onTap: widget.onOpenMatch == null
+                  ? null
+                  : () => widget.onOpenMatch!(match),
+            ),
       ],
     );
   }
@@ -369,7 +459,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                     SizedBox(
                       width: width,
                       child: MatchResultTile(
-                        key: ValueKey(match),
+                        key: _keyForMatch(match),
                         match: match,
                         tournament: widget.tournament,
                         onEditResult: _editResult,
@@ -378,6 +468,8 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                         showRoundLabel: match.isDecider,
                         compact: compact,
                         onPlayerTap: _selectPlayer,
+                        isRunning: widget.runningMatches.contains(match),
+                        isFocused: identical(widget.focusMatch, match),
                       ),
                     ),
                 ],
@@ -522,6 +614,8 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             ),
             const SizedBox(height: 12),
             _buildKnockoutMatchList(stage),
+            const SizedBox(height: 20),
+            _buildRecentResultsSection(context, allMatches),
           ],
         );
 
@@ -713,12 +807,14 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           ),
           for (final match in entry.value)
             MatchResultTile(
-              key: ValueKey(match),
+              key: _keyForMatch(match),
               match: match,
               tournament: widget.tournament,
               onEditResult: widget.onEditResult,
               canEditResult: widget.canEditResults,
               leadingLabel: match.label,
+              isRunning: widget.runningMatches.contains(match),
+              isFocused: identical(widget.focusMatch, match),
             ),
           const SizedBox(height: 8),
         ],

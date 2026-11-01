@@ -30,6 +30,7 @@ class TournamentDirectorDashboard extends StatefulWidget {
     this.showBoardNumber,
     this.onStartOnBoard,
     this.onResetMatch,
+    this.onOpenMatch,
     this.onStartClock,
     this.onPauseClock,
     this.onEditTimes,
@@ -54,6 +55,7 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final bool? showBoardNumber;
   final Future<void> Function(int board, {GroupMatch? match})? onStartOnBoard;
   final Future<void> Function(GroupMatch match)? onResetMatch;
+  final ValueChanged<GroupMatch>? onOpenMatch;
   final Future<void> Function()? onStartClock;
   final Future<void> Function()? onPauseClock;
   final Future<void> Function(DateTime? startedAt, DateTime? finishedAt)?
@@ -252,7 +254,9 @@ class _TournamentDirectorDashboardState
     final match = await showDialog<GroupMatch>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Partie für Board $board auswählen'),
+        title: Text(
+          'Partie für ${widget.tournament.boardDisplayName(board)} auswählen',
+        ),
         content: SizedBox(
           width: 440,
           child: ConstrainedBox(
@@ -422,9 +426,9 @@ class _TournamentDirectorDashboardState
                     ) &&
                     !entry.players.any(busyPlayers.contains);
                 final status = running != null
-                    ? 'Läuft auf Board ${running.match.boardNumber ?? '—'}'
+                    ? 'Läuft auf ${running.match.boardNumber == null ? 'Board —' : widget.tournament.boardDisplayName(running.match.boardNumber!)}'
                     : canStart
-                    ? 'Startbar · Board ${assignment.board}'
+                    ? 'Startbar · ${widget.tournament.boardDisplayName(assignment.board)}'
                     : assignment != null
                     ? 'Wartet auf ein freies Board oder die Etappenfreigabe'
                     : 'Wartet auf vorherige Ergebnisse';
@@ -444,7 +448,9 @@ class _TournamentDirectorDashboardState
                               match: entry.match,
                             ),
                           ),
-                          child: Text('Board ${assignment.board} starten'),
+                          child: Text(
+                            '${widget.tournament.boardDisplayName(assignment.board)} starten',
+                          ),
                         )
                       : null,
                 );
@@ -475,6 +481,9 @@ class _TournamentDirectorDashboardState
           : changes?[matchKey] ?? const <TournamentMatchEloChange>[],
       eloError: eloError,
       showBoardNumber: _showBoardNumber,
+      onTap: widget.onOpenMatch == null
+          ? null
+          : () => widget.onOpenMatch!(match),
     );
   }
 
@@ -517,6 +526,9 @@ class _TournamentDirectorDashboardState
                   ? 'Ranglistenänderungen konnten nicht geladen werden.'
                   : null,
               showBoardNumber: _showBoardNumber,
+              onTap: widget.onOpenMatch == null
+                  ? null
+                  : () => widget.onOpenMatch!(match),
             ),
           );
         },
@@ -557,11 +569,15 @@ class _TournamentDirectorDashboardState
                 child: Text(
                   showResult
                       ? entry.origin
-                      : plannedBoard != null
-                      ? 'Board $plannedBoard'
-                      : match.boardNumber != null
-                      ? 'Board ${match.boardNumber}'
-                      : 'Wartet',
+                      : _showBoardNumber
+                      ? plannedBoard != null
+                            ? widget.tournament.boardDisplayName(plannedBoard)
+                            : match.boardNumber != null
+                            ? widget.tournament.boardDisplayName(
+                                match.boardNumber!,
+                              )
+                            : 'Wartet'
+                      : 'Nächste Partie',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: TournamentDisplayPalette.mutedText,
                   ),
@@ -596,11 +612,18 @@ class _TournamentDirectorDashboardState
           if (quickStartBoard != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: FilledButton.icon(
-                onPressed: () =>
-                    _act(() => startOnBoard!(quickStartBoard, match: match)),
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: const Text('Schnellstart'),
+              child: Tooltip(
+                message:
+                    'Partie auf ${widget.tournament.boardDisplayName(quickStartBoard)} starten',
+                child: FilledButton(
+                  onPressed: () =>
+                      _act(() => startOnBoard!(quickStartBoard, match: match)),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded),
+                ),
               ),
             ),
         ],
@@ -736,7 +759,7 @@ class _TournamentDirectorDashboardState
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                'Board $board',
+                                widget.tournament.boardDisplayName(board),
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
                             ),
@@ -780,25 +803,74 @@ class _TournamentDirectorDashboardState
                                 if (widget.canOperate)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 8),
-                                    child: OutlinedButton.icon(
-                                      onPressed: () => _act(
-                                        () => widget.onResult(running.match),
-                                      ),
-                                      icon: const Icon(Icons.edit_note_rounded),
-                                      label: const Text('Ergebnis erfassen'),
-                                    ),
-                                  ),
-                                if (widget.canOperate &&
-                                    widget.onResetMatch != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: OutlinedButton.icon(
-                                      onPressed: () => _act(
-                                        () =>
-                                            widget.onResetMatch!(running.match),
-                                      ),
-                                      icon: const Icon(Icons.refresh_rounded),
-                                      label: const Text('Partie zurücksetzen'),
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final resultButton =
+                                            OutlinedButton.icon(
+                                              style: OutlinedButton.styleFrom(
+                                                minimumSize: const Size(0, 48),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                    ),
+                                              ),
+                                              onPressed: () => _act(
+                                                () => widget.onResult(
+                                                  running.match,
+                                                ),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.edit_note_rounded,
+                                              ),
+                                              label: const Text(
+                                                'Ergebnis erfassen',
+                                              ),
+                                            );
+                                        final resetButton =
+                                            widget.onResetMatch == null
+                                            ? null
+                                            : OutlinedButton.icon(
+                                                style: OutlinedButton.styleFrom(
+                                                  minimumSize: const Size(
+                                                    0,
+                                                    48,
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                      ),
+                                                ),
+                                                onPressed: () => _act(
+                                                  () => widget.onResetMatch!(
+                                                    running.match,
+                                                  ),
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.refresh_rounded,
+                                                ),
+                                                label: const Text(
+                                                  'Partie zurücksetzen',
+                                                ),
+                                              );
+                                        if (resetButton != null &&
+                                            constraints.maxWidth >= 300) {
+                                          return Row(
+                                            children: [
+                                              Expanded(child: resultButton),
+                                              const SizedBox(width: 8),
+                                              Expanded(child: resetButton),
+                                            ],
+                                          );
+                                        }
+                                        return Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            resultButton,
+                                            ?resetButton,
+                                          ],
+                                        );
+                                      },
                                     ),
                                   ),
                               ],
@@ -828,23 +900,25 @@ class _TournamentDirectorDashboardState
                                     ).textTheme.bodySmall,
                                   ),
                                   if (widget.onStartOnBoard != null)
-                                    FilledButton.tonalIcon(
-                                      onPressed:
-                                          widget.canOperate &&
-                                              state.canStart(assignment.entry)
-                                          ? () => _act(
-                                              () => widget.onStartOnBoard!(
-                                                board,
-                                                match: assignment.entry.match,
-                                              ),
-                                            )
-                                          : null,
-                                      icon: const Icon(
-                                        Icons.play_arrow_rounded,
-                                        size: 18,
-                                      ),
-                                      label: Text(
-                                        'Schnellstart · Board $board',
+                                    Tooltip(
+                                      message:
+                                          'Partie auf ${t.boardDisplayName(board)} starten',
+                                      child: FilledButton.tonalIcon(
+                                        onPressed:
+                                            widget.canOperate &&
+                                                state.canStart(assignment.entry)
+                                            ? () => _act(
+                                                () => widget.onStartOnBoard!(
+                                                  board,
+                                                  match: assignment.entry.match,
+                                                ),
+                                              )
+                                            : null,
+                                        icon: const Icon(
+                                          Icons.play_arrow_rounded,
+                                          size: 18,
+                                        ),
+                                        label: Text(t.boardDisplayName(board)),
                                       ),
                                     ),
                                 ],
