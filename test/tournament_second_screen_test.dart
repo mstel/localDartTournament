@@ -1,6 +1,8 @@
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_advancement_forecast_engine.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/second_screen_widget_placement.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
@@ -148,7 +150,11 @@ void main() {
         await tester.pump();
 
         final clock = tester.getRect(find.textContaining('Turnieruhr:'));
-        final modeSwitch = tester.getRect(find.byType(SegmentedButton<bool>));
+        final modeSwitch = tester.getRect(
+          find.byWidgetPredicate(
+            (widget) => widget is SegmentedButton || widget is DropdownButton,
+          ),
+        );
         expect(clock.bottom, lessThanOrEqualTo(modeSwitch.top));
         expect(tester.takeException(), isNull);
       }
@@ -562,6 +568,10 @@ void main() {
     expect(find.textContaining('73.0 % Sieg'), findsAtLeastNWidgets(1));
     expect(find.textContaining('88.0 % weiter'), findsAtLeastNWidgets(1));
     expect(forecastService.calls, 1);
+    await tester.tap(find.text('Kombiniert'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tabellen & Zwischenstände'), findsAtLeastNWidgets(1));
+    expect(find.text('KO-Prognose & Weiterkommen'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -787,8 +797,127 @@ void main() {
     await tester.tap(prognosisTab);
     await tester.pump();
 
-    expect(find.byType(SegmentedButton<bool>), findsOneWidget);
+    expect(
+      find.byWidgetPredicate((widget) => widget is SegmentedButton),
+      findsOneWidget,
+    );
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('layout apply exits editing and saves intermediate height', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final storage = _MemoryTournamentStorage();
+    final tournament = _tournament();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: storage,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+
+    final boardsCard = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-boards')),
+    );
+    final standingsCard = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-standings')),
+    );
+    expect(boardsCard.width, closeTo(standingsCard.width, 1));
+    expect(boardsCard.height, closeTo(standingsCard.height, 1));
+    expect(boardsCard.top, closeTo(standingsCard.top, 1));
+
+    final reduceHeight = find.byTooltip('Höhe verkleinern').first;
+    await tester.tap(reduceHeight);
+    await tester.pump();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pump();
+
+    expect(find.text('Layout anwenden'), findsNothing);
+    expect(find.byTooltip('Höhe verkleinern'), findsNothing);
+    expect(tournament.secondScreenActiveLayout, 'Standard');
+    expect(tournament.secondScreenLayouts['Standard']!.first.heightUnits, 1.5);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'layout editor remains usable on a narrow screen with large text',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: MaterialApp(
+            home: Scaffold(
+              body: TournamentSecondScreenView(
+                tournament: _tournament(),
+                isStandaloneWindow: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Layout anpassen'));
+      await tester.pump();
+
+      expect(find.text('Layout anwenden'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('layout loading offers confirmed deletion', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final storage = _MemoryTournamentStorage();
+    final tournament = _tournament()
+      ..secondScreenLayouts['Vereins-TV'] = const [
+        SecondScreenWidgetPlacement(widgetId: 'boards', heightUnits: 1.5),
+      ]
+      ..secondScreenActiveLayout = 'Vereins-TV';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: storage,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout laden'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byTooltip('Layout "Vereins-TV" löschen'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Löschen'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tournament.secondScreenLayouts, isEmpty);
+    expect(tournament.secondScreenActiveLayout, isNull);
+    expect(find.byTooltip('Layout "Vereins-TV" löschen'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -1247,5 +1376,26 @@ class _FixedForecastService extends GroupAdvancementForecastService {
           advancementProbability: 88,
         ),
     };
+  }
+}
+
+class _MemoryTournamentStorage extends TournamentStorage {
+  @override
+  Future<void> saveSecondScreenLayout({
+    required CreatedTournament tournament,
+    required String name,
+    required List<SecondScreenWidgetPlacement>? placements,
+    required bool activate,
+  }) async {
+    if (placements == null) {
+      tournament.secondScreenLayouts.remove(name);
+      if (tournament.secondScreenActiveLayout == name) {
+        tournament.secondScreenActiveLayout = null;
+      }
+      return;
+    }
+    tournament.secondScreenLayouts[name] =
+        List<SecondScreenWidgetPlacement>.from(placements);
+    if (activate) tournament.secondScreenActiveLayout = name;
   }
 }

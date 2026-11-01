@@ -34,6 +34,7 @@ import 'recent_match_result_card.dart';
 const Map<String, String> _monitorWidgetTitles = {
   'standings': 'Tabellen & Zwischenstände',
   'forecast': 'Siegprognose & Weiterkommen',
+  'combined': 'Tabellen & Prognose kombiniert',
   'recent': 'Zuletzt beendete Matches',
   'boards': 'Boards & nächste Begegnungen',
   'liveBoard': 'Live Board Ansicht',
@@ -41,6 +42,10 @@ const Map<String, String> _monitorWidgetTitles = {
   'highlights': 'Bestleistungen & Highlights',
   'ranking': 'Rangliste',
 };
+
+enum _StandingsDisplayMode { standings, forecast, combined }
+
+enum _MonitorLayoutAction { add, save, load, reset, standard }
 
 const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
   SecondScreenWidgetPlacement(
@@ -66,6 +71,7 @@ class TournamentSecondScreenView extends StatefulWidget {
     this.onClose,
     this.showNextStagePreviewInitially = false,
     this.forecastService,
+    this.storage,
   });
 
   final CreatedTournament tournament;
@@ -73,6 +79,7 @@ class TournamentSecondScreenView extends StatefulWidget {
   final VoidCallback? onClose;
   final bool showNextStagePreviewInitially;
   final GroupAdvancementForecastService? forecastService;
+  final TournamentStorage? storage;
 
   @override
   State<TournamentSecondScreenView> createState() =>
@@ -83,7 +90,7 @@ class _TournamentSecondScreenViewState
     extends State<TournamentSecondScreenView> {
   bool _showNextStagePreview = false;
   bool _showInlineNextStagePreview = false;
-  bool _showPrognosis = false;
+  _StandingsDisplayMode _standingsDisplayMode = _StandingsDisplayMode.standings;
   Timer? _clockTimer;
   final _previewVerticalController = ScrollController();
   final _previewHorizontalController = ScrollController();
@@ -98,6 +105,11 @@ class _TournamentSecondScreenViewState
   late List<SecondScreenWidgetPlacement> _monitorPlacements;
   String? _loadedLayoutName;
   bool _useCustomLayout = false;
+  bool _isEditingLayout = false;
+  String? _dragTargetWidgetId;
+  int? _dragTargetEdge;
+
+  TournamentStorage get _storage => widget.storage ?? TournamentStorage();
 
   @override
   void initState() {
@@ -551,7 +563,10 @@ class _TournamentSecondScreenViewState
                     ),
                   if (widget.isStandaloneWindow) ...[
                     OutlinedButton.icon(
-                      onPressed: () => setState(() => _useCustomLayout = true),
+                      onPressed: () => setState(() {
+                        _useCustomLayout = true;
+                        _isEditingLayout = true;
+                      }),
                       icon: const Icon(Icons.dashboard_customize),
                       label: const Text('Layout anpassen'),
                     ),
@@ -582,47 +597,30 @@ class _TournamentSecondScreenViewState
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = (constraints.maxWidth / 360).floor().clamp(1, 4);
+        final columns = constraints.maxWidth >= 1120
+            ? 4
+            : constraints.maxWidth >= 680
+            ? 2
+            : 1;
         final spacing = 12.0;
         final unitWidth =
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        final unitHeight = (constraints.maxHeight / 2.4).clamp(220.0, 360.0);
+        final minimumUnitHeight =
+            220 * MediaQuery.textScalerOf(context).scale(1);
+        final unitHeight = (max(
+          constraints.maxHeight / 2.4,
+          minimumUnitHeight,
+        )).clamp(220.0, 360.0);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              alignment: WrapAlignment.end,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _addMonitorWidget,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Widget hinzufügen'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saveMonitorLayout,
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Layout speichern'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: t.secondScreenLayouts.isEmpty
-                      ? null
-                      : _loadMonitorLayout,
-                  icon: const Icon(Icons.folder_open_outlined),
-                  label: const Text('Layout laden'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _resetMonitorLayout,
-                  icon: const Icon(Icons.restart_alt),
-                  label: const Text('Layout zurücksetzen'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => setState(() => _useCustomLayout = false),
-                  icon: const Icon(Icons.tv),
-                  label: const Text('Standardansicht'),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, toolbarConstraints) =>
+                  _buildCustomLayoutToolbar(
+                    context,
+                    t,
+                    toolbarConstraints.maxWidth,
+                  ),
             ),
             if (_loadedLayoutName != null)
               Align(
@@ -646,7 +644,7 @@ class _TournamentSecondScreenViewState
                     )
                       _buildMonitorWidgetDropTarget(
                         context,
-                        index,
+                        _monitorPlacements[index].widgetId,
                         width:
                             unitWidth *
                                 _monitorPlacements[index].widthUnits.clamp(
@@ -684,6 +682,7 @@ class _TournamentSecondScreenViewState
                           activeIndex: activeIndex,
                           activeStage: activeStage,
                           playedMatches: playedMatches,
+                          isEditing: _isEditingLayout,
                         ),
                       ),
                   ],
@@ -696,61 +695,255 @@ class _TournamentSecondScreenViewState
     );
   }
 
+  Widget _buildCustomLayoutToolbar(
+    BuildContext context,
+    CreatedTournament tournament,
+    double width,
+  ) {
+    final compact =
+        width < 640 || MediaQuery.textScalerOf(context).scale(1) > 1.3;
+    if (compact) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        alignment: WrapAlignment.end,
+        children: [
+          if (_isEditingLayout)
+            FilledButton.icon(
+              onPressed: _applyMonitorLayout,
+              icon: const Icon(Icons.check),
+              label: const Text('Layout anwenden'),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: () => setState(() => _isEditingLayout = true),
+              icon: const Icon(Icons.dashboard_customize),
+              label: const Text('Layout anpassen'),
+            ),
+          PopupMenuButton<_MonitorLayoutAction>(
+            tooltip: 'Weitere Layout-Aktionen',
+            icon: const Icon(Icons.more_vert),
+            itemBuilder: (context) => [
+              if (_isEditingLayout) ...[
+                const PopupMenuItem(
+                  value: _MonitorLayoutAction.add,
+                  child: Text('Widget hinzufügen'),
+                ),
+                const PopupMenuItem(
+                  value: _MonitorLayoutAction.save,
+                  child: Text('Layout speichern'),
+                ),
+                const PopupMenuItem(
+                  value: _MonitorLayoutAction.reset,
+                  child: Text('Layout zurücksetzen'),
+                ),
+              ],
+              if (tournament.secondScreenLayouts.isNotEmpty)
+                const PopupMenuItem(
+                  value: _MonitorLayoutAction.load,
+                  child: Text('Layout laden'),
+                ),
+              const PopupMenuItem(
+                value: _MonitorLayoutAction.standard,
+                child: Text('Standardansicht'),
+              ),
+            ],
+            onSelected: _handleMonitorLayoutAction,
+          ),
+        ],
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      alignment: WrapAlignment.end,
+      children: [
+        if (_isEditingLayout) ...[
+          OutlinedButton.icon(
+            onPressed: _addMonitorWidget,
+            icon: const Icon(Icons.add),
+            label: const Text('Widget hinzufügen'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _saveMonitorLayout,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Layout speichern'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _resetMonitorLayout,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Layout zurücksetzen'),
+          ),
+          FilledButton.icon(
+            onPressed: _applyMonitorLayout,
+            icon: const Icon(Icons.check),
+            label: const Text('Layout anwenden'),
+          ),
+        ] else
+          OutlinedButton.icon(
+            onPressed: () => setState(() => _isEditingLayout = true),
+            icon: const Icon(Icons.dashboard_customize),
+            label: const Text('Layout anpassen'),
+          ),
+        if (tournament.secondScreenLayouts.isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: _loadMonitorLayout,
+            icon: const Icon(Icons.folder_open_outlined),
+            label: const Text('Layout laden'),
+          ),
+        OutlinedButton.icon(
+          onPressed: () => setState(() {
+            _useCustomLayout = false;
+            _isEditingLayout = false;
+          }),
+          icon: const Icon(Icons.tv),
+          label: const Text('Standardansicht'),
+        ),
+      ],
+    );
+  }
+
+  void _handleMonitorLayoutAction(_MonitorLayoutAction action) {
+    switch (action) {
+      case _MonitorLayoutAction.add:
+        _addMonitorWidget();
+      case _MonitorLayoutAction.save:
+        _saveMonitorLayout();
+      case _MonitorLayoutAction.load:
+        _loadMonitorLayout();
+      case _MonitorLayoutAction.reset:
+        _resetMonitorLayout();
+      case _MonitorLayoutAction.standard:
+        setState(() {
+          _useCustomLayout = false;
+          _isEditingLayout = false;
+        });
+    }
+  }
+
   Widget _buildMonitorWidgetDropTarget(
     BuildContext context,
-    int targetIndex, {
+    String targetWidgetId, {
     required double width,
     required double height,
     required Widget child,
-  }) => LayoutBuilder(
-    builder: (targetContext, constraints) => DragTarget<int>(
-      key: ValueKey('monitor-widget-drop-target-$targetIndex'),
-      onWillAcceptWithDetails: (details) => details.data != targetIndex,
-      onAcceptWithDetails: (details) {
-        final box = targetContext.findRenderObject();
-        if (box is! RenderBox || details.data >= _monitorPlacements.length) {
-          return;
-        }
-        final localPosition = box.globalToLocal(details.offset);
-        final size = box.size;
-        final edgeDistances = [
-          localPosition.dx,
-          size.width - localPosition.dx,
-          localPosition.dy,
-          size.height - localPosition.dy,
-        ];
-        final nearestEdge = edgeDistances.indexOf(edgeDistances.reduce(min));
-        final insertAfter = nearestEdge == 1 || nearestEdge == 3;
-        _moveMonitorWidget(details.data, targetIndex + (insertAfter ? 1 : 0));
-      },
-      builder: (context, candidates, rejected) => Draggable<int>(
-        data: targetIndex,
-        dragAnchorStrategy: pointerDragAnchorStrategy,
-        feedback: SizedBox(
-          width: width,
-          height: height,
-          child: Material(
-            color: Colors.transparent,
-            child: Opacity(opacity: 0.85, child: child),
+  }) {
+    if (!_isEditingLayout) return child;
+    return LayoutBuilder(
+      builder: (targetContext, constraints) => DragTarget<String>(
+        key: ValueKey('monitor-widget-drop-target-$targetWidgetId'),
+        onWillAcceptWithDetails: (details) =>
+            details.data != targetWidgetId &&
+            _monitorPlacements.any(
+              (placement) => placement.widgetId == details.data,
+            ),
+        onMove: (details) {
+          final box = targetContext.findRenderObject();
+          if (box is! RenderBox) return;
+          final edge = _nearestDropEdge(box, details.offset);
+          if (_dragTargetWidgetId == targetWidgetId &&
+              _dragTargetEdge == edge) {
+            return;
+          }
+          setState(() {
+            _dragTargetWidgetId = targetWidgetId;
+            _dragTargetEdge = edge;
+          });
+        },
+        onLeave: (_) {
+          if (_dragTargetWidgetId == targetWidgetId) {
+            setState(() {
+              _dragTargetWidgetId = null;
+              _dragTargetEdge = null;
+            });
+          }
+        },
+        onAcceptWithDetails: (details) {
+          final box = targetContext.findRenderObject();
+          if (box is! RenderBox) {
+            return;
+          }
+          final targetIndex = _monitorPlacements.indexWhere(
+            (placement) => placement.widgetId == targetWidgetId,
+          );
+          final fromIndex = _monitorPlacements.indexWhere(
+            (placement) => placement.widgetId == details.data,
+          );
+          if (targetIndex < 0 || fromIndex < 0) return;
+          final edge = _nearestDropEdge(box, details.offset);
+          setState(() {
+            _dragTargetWidgetId = null;
+            _dragTargetEdge = null;
+          });
+          final insertAfter = edge == 1 || edge == 3;
+          _moveMonitorWidget(fromIndex, targetIndex + (insertAfter ? 1 : 0));
+        },
+        builder: (context, candidates, rejected) => Draggable<String>(
+          key: ValueKey('monitor-widget-drag-$targetWidgetId'),
+          data: targetWidgetId,
+          dragAnchorStrategy: pointerDragAnchorStrategy,
+          feedback: SizedBox(
+            width: width,
+            height: height,
+            child: Material(
+              color: Colors.transparent,
+              child: Opacity(opacity: 0.85, child: child),
+            ),
+          ),
+          childWhenDragging: Opacity(opacity: 0.25, child: child),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            decoration: candidates.isEmpty
+                ? null
+                : BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                        color: _dragTargetEdge == 0
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
+                        width: 5,
+                      ),
+                      right: BorderSide(
+                        color: _dragTargetEdge == 1
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
+                        width: 5,
+                      ),
+                      top: BorderSide(
+                        color: _dragTargetEdge == 2
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
+                        width: 5,
+                      ),
+                      bottom: BorderSide(
+                        color: _dragTargetEdge == 3
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
+                        width: 5,
+                      ),
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+            child: child,
           ),
         ),
-        childWhenDragging: Opacity(opacity: 0.25, child: child),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          decoration: candidates.isEmpty
-              ? null
-              : BoxDecoration(
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 3,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-          child: child,
-        ),
       ),
-    ),
-  );
+    );
+  }
+
+  int _nearestDropEdge(RenderBox box, Offset globalOffset) {
+    final localPosition = box.globalToLocal(globalOffset);
+    final size = box.size;
+    final edgeDistances = [
+      localPosition.dx,
+      size.width - localPosition.dx,
+      localPosition.dy,
+      size.height - localPosition.dy,
+    ];
+    final nearestEdge = edgeDistances.indexOf(edgeDistances.reduce(min));
+    return nearestEdge;
+  }
 
   Widget _buildMonitorWidgetCard(
     BuildContext context,
@@ -762,12 +955,77 @@ class _TournamentSecondScreenViewState
     required int activeIndex,
     required TournamentRunStage? activeStage,
     required List<GroupMatch> playedMatches,
+    required bool isEditing,
   }) {
-    final title = placement.widgetId == 'ranking' &&
-            tournament.isKratzerTournament
+    final title =
+        placement.widgetId == 'ranking' && tournament.isKratzerTournament
         ? 'Lebenstand'
         : _monitorWidgetTitles[placement.widgetId];
     if (title == null) return const SizedBox.shrink();
+    final titleWidget = Text(
+      title,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(
+        context,
+      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+    );
+    final dragHandle = const Tooltip(
+      message: 'Ziehen, um das Widget anders anzuordnen',
+      child: Icon(Icons.drag_indicator, size: 20),
+    );
+    final editControls = [
+      IconButton(
+        tooltip: 'Breite verkleinern',
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onPressed: placement.widthUnits <= 1
+            ? null
+            : () => _resizeMonitorWidget(
+                index,
+                widthUnits: placement.widthUnits - 1,
+              ),
+        icon: const Icon(Icons.remove),
+      ),
+      IconButton(
+        tooltip: 'Breite vergrößern',
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onPressed: placement.widthUnits >= 4
+            ? null
+            : () => _resizeMonitorWidget(
+                index,
+                widthUnits: placement.widthUnits + 1,
+              ),
+        icon: const Icon(Icons.add),
+      ),
+      IconButton(
+        tooltip: 'Höhe verkleinern',
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onPressed: placement.heightUnits <= 0.5
+            ? null
+            : () => _resizeMonitorWidget(
+                index,
+                heightUnits: placement.heightUnits - 0.5,
+              ),
+        icon: const Icon(Icons.height, size: 19),
+      ),
+      IconButton(
+        tooltip: 'Höhe vergrößern',
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onPressed: placement.heightUnits >= 3
+            ? null
+            : () => _resizeMonitorWidget(
+                index,
+                heightUnits: placement.heightUnits + 0.5,
+              ),
+        icon: const Icon(Icons.unfold_more),
+      ),
+      IconButton(
+        tooltip: 'Widget entfernen',
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onPressed: () => _removeMonitorWidget(index),
+        icon: const Icon(Icons.close),
+      ),
+    ];
     return SizedBox(
       key: ValueKey('monitor-widget-${placement.widgetId}'),
       width: width,
@@ -779,88 +1037,59 @@ class _TournamentSecondScreenViewState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const Tooltip(
-                    message: 'Ziehen, um das Widget anders anzuordnen',
-                    child: Icon(Icons.drag_indicator, size: 20),
-                  ),
-                  IconButton(
-                    tooltip: 'Breite verkleinern',
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    onPressed: placement.widthUnits <= 1
-                        ? null
-                        : () => _resizeMonitorWidget(
-                            index,
-                            widthUnits: placement.widthUnits - 1,
-                          ),
-                    icon: const Icon(Icons.remove),
-                  ),
-                  IconButton(
-                    tooltip: 'Breite vergrößern',
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    onPressed: placement.widthUnits >= 4
-                        ? null
-                        : () => _resizeMonitorWidget(
-                            index,
-                            widthUnits: placement.widthUnits + 1,
-                          ),
-                    icon: const Icon(Icons.add),
-                  ),
-                  IconButton(
-                    tooltip: 'Höhe verkleinern',
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    onPressed: placement.heightUnits <= 1
-                        ? null
-                        : () => _resizeMonitorWidget(
-                            index,
-                            heightUnits: placement.heightUnits - 1,
-                          ),
-                    icon: const Icon(Icons.height, size: 19),
-                  ),
-                  IconButton(
-                    tooltip: 'Höhe vergrößern',
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    onPressed: placement.heightUnits >= 3
-                        ? null
-                        : () => _resizeMonitorWidget(
-                            index,
-                            heightUnits: placement.heightUnits + 1,
-                          ),
-                    icon: const Icon(Icons.unfold_more),
-                  ),
-                  IconButton(
-                    tooltip: 'Widget entfernen',
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    onPressed: () => _removeMonitorWidget(index),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  if (!isEditing) {
+                    return Row(children: [Expanded(child: titleWidget)]);
+                  }
+                  if (constraints.maxWidth < 560 ||
+                      MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+                    return Row(
+                      children: [
+                        Expanded(child: titleWidget),
+                        dragHandle,
+                        PopupMenuButton<String>(
+                          tooltip: 'Widgetgröße und Position ändern',
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: 'width-smaller',
+                              enabled: placement.widthUnits > 1,
+                              child: const Text('Breite verkleinern'),
+                            ),
+                            PopupMenuItem(
+                              value: 'width-larger',
+                              enabled: placement.widthUnits < 4,
+                              child: const Text('Breite vergrößern'),
+                            ),
+                            PopupMenuItem(
+                              value: 'height-smaller',
+                              enabled: placement.heightUnits > 0.5,
+                              child: const Text('Höhe verkleinern'),
+                            ),
+                            PopupMenuItem(
+                              value: 'height-larger',
+                              enabled: placement.heightUnits < 3,
+                              child: const Text('Höhe vergrößern'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'remove',
+                              child: Text('Widget entfernen'),
+                            ),
+                          ],
+                          onSelected: (action) =>
+                              _handleMonitorWidgetAction(index, action),
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: titleWidget),
+                      dragHandle,
+                      ...editControls,
+                    ],
+                  );
+                },
               ),
               const Divider(height: 1),
               const SizedBox(height: 6),
@@ -881,6 +1110,22 @@ class _TournamentSecondScreenViewState
         ),
       ),
     );
+  }
+
+  void _handleMonitorWidgetAction(int index, String action) {
+    final placement = _monitorPlacements[index];
+    switch (action) {
+      case 'width-smaller':
+        _resizeMonitorWidget(index, widthUnits: placement.widthUnits - 1);
+      case 'width-larger':
+        _resizeMonitorWidget(index, widthUnits: placement.widthUnits + 1);
+      case 'height-smaller':
+        _resizeMonitorWidget(index, heightUnits: placement.heightUnits - 0.5);
+      case 'height-larger':
+        _resizeMonitorWidget(index, heightUnits: placement.heightUnits + 0.5);
+      case 'remove':
+        _removeMonitorWidget(index);
+    }
   }
 
   Widget _buildMonitorWidgetContent(
@@ -916,21 +1161,37 @@ class _TournamentSecondScreenViewState
           activeStage,
           expand: true,
         );
+      case 'combined':
+        return _buildCombinedStandingsAndForecast(
+          context,
+          tournament,
+          activeIndex,
+          activeStage,
+          bounded: true,
+        );
       case 'recent':
         return _buildRecentMatchesAndEloPanel(
           context,
           tournament,
           playedMatches,
-          expand: false,
+          expand: true,
         );
       case 'liveBoard':
-        return _buildLiveBoardsPanel(context, tournament);
+        return SingleChildScrollView(
+          child: _buildLiveBoardsPanel(context, tournament),
+        );
       case 'stageProgress':
-        return _buildStageProgressPanel(context, tournament);
+        return SingleChildScrollView(
+          child: _buildStageProgressPanel(context, tournament),
+        );
       case 'highlights':
-        return _buildHighlightsPanel(context, tournament);
+        return SingleChildScrollView(
+          child: _buildHighlightsPanel(context, tournament),
+        );
       case 'ranking':
-        return _buildRankingPanel(context, tournament);
+        return SingleChildScrollView(
+          child: _buildRankingPanel(context, tournament),
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -943,16 +1204,17 @@ class _TournamentSecondScreenViewState
         insertionIndex > _monitorPlacements.length) {
       return;
     }
+    final destination = insertionIndex > fromIndex
+        ? insertionIndex - 1
+        : insertionIndex;
+    if (destination == fromIndex) return;
     setState(() {
       final placement = _monitorPlacements.removeAt(fromIndex);
-      final destination = insertionIndex > fromIndex
-          ? insertionIndex - 1
-          : insertionIndex;
       _monitorPlacements.insert(destination, placement);
     });
   }
 
-  void _resizeMonitorWidget(int index, {int? widthUnits, int? heightUnits}) {
+  void _resizeMonitorWidget(int index, {int? widthUnits, double? heightUnits}) {
     setState(() {
       final current = _monitorPlacements[index];
       _monitorPlacements[index] = SecondScreenWidgetPlacement(
@@ -1025,26 +1287,37 @@ class _TournamentSecondScreenViewState
     );
     controller.dispose();
     if (name == null || name.isEmpty || !mounted) return;
-    final previous = widget.tournament.secondScreenLayouts[name];
-    final previousActiveLayout = widget.tournament.secondScreenActiveLayout;
-    widget.tournament.secondScreenLayouts[name] =
-        List<SecondScreenWidgetPlacement>.from(_monitorPlacements);
-    widget.tournament.secondScreenActiveLayout = name;
+    await _persistMonitorLayout(name);
+  }
+
+  Future<void> _applyMonitorLayout() async {
+    final applied = await _persistMonitorLayout(
+      _loadedLayoutName ?? 'Standard',
+    );
+    if (applied && mounted) {
+      setState(() {
+        _isEditingLayout = false;
+        _useCustomLayout = true;
+      });
+    }
+  }
+
+  Future<bool> _persistMonitorLayout(String name) async {
     try {
-      await TournamentStorage().saveTournament(widget.tournament);
+      await _storage.saveSecondScreenLayout(
+        tournament: widget.tournament,
+        name: name,
+        placements: _monitorPlacements,
+        activate: true,
+      );
       if (mounted) {
         setState(() {
           _loadedLayoutName = name;
           _useCustomLayout = true;
         });
       }
+      return true;
     } catch (error) {
-      if (previous == null) {
-        widget.tournament.secondScreenLayouts.remove(name);
-      } else {
-        widget.tournament.secondScreenLayouts[name] = previous;
-      }
-      widget.tournament.secondScreenActiveLayout = previousActiveLayout;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1052,6 +1325,7 @@ class _TournamentSecondScreenViewState
           ),
         );
       }
+      return false;
     }
   }
 
@@ -1059,32 +1333,75 @@ class _TournamentSecondScreenViewState
     final names = widget.tournament.secondScreenLayouts.keys.toList()..sort();
     final selected = await showDialog<String>(
       context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Layout laden'),
-        children: [
-          for (final name in names)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, name),
-              child: Text(name),
-            ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, updateDialog) => SimpleDialog(
+          title: const Text('Layout laden'),
+          children: [
+            for (final name in names.where(
+              widget.tournament.secondScreenLayouts.containsKey,
+            ))
+              Row(
+                children: [
+                  Expanded(
+                    child: SimpleDialogOption(
+                      onPressed: () => Navigator.pop(context, name),
+                      child: Text(name),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Layout "$name" löschen',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Layout löschen?'),
+                          content: Text('„$name“ wird dauerhaft gelöscht.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Abbrechen'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Löschen'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true || !mounted) return;
+                      final deleted = await _deleteMonitorLayout(name);
+                      if (deleted) updateDialog(() {});
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
     if (selected == null || !mounted) return;
     final layout = widget.tournament.secondScreenLayouts[selected];
     if (layout == null) return;
-    final previousActiveLayout = widget.tournament.secondScreenActiveLayout;
-    widget.tournament.secondScreenActiveLayout = selected;
     try {
-      await TournamentStorage().saveTournament(widget.tournament);
+      await _storage.saveSecondScreenLayout(
+        tournament: widget.tournament,
+        name: selected,
+        placements: layout,
+        activate: true,
+      );
       if (!mounted) return;
       setState(() {
         _monitorPlacements = List.of(layout);
         _loadedLayoutName = selected;
         _useCustomLayout = true;
+        _isEditingLayout = false;
       });
     } catch (error) {
-      widget.tournament.secondScreenActiveLayout = previousActiveLayout;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Layout konnte nicht geladen werden: $error')),
@@ -1093,28 +1410,55 @@ class _TournamentSecondScreenViewState
     }
   }
 
-  Future<void> _resetMonitorLayout() async {
-    final previousLayout = widget.tournament.secondScreenLayouts['Standard'];
+  Future<bool> _deleteMonitorLayout(String name) async {
+    if (!widget.tournament.secondScreenLayouts.containsKey(name)) return false;
     final previousActiveLayout = widget.tournament.secondScreenActiveLayout;
-    widget.tournament.secondScreenLayouts['Standard'] =
-        List<SecondScreenWidgetPlacement>.from(_defaultMonitorLayout);
-    widget.tournament.secondScreenActiveLayout = 'Standard';
     try {
-      await TournamentStorage().saveTournament(widget.tournament);
+      await _storage.saveSecondScreenLayout(
+        tournament: widget.tournament,
+        name: name,
+        placements: null,
+        activate: false,
+      );
+      if (mounted &&
+          (previousActiveLayout == name || _loadedLayoutName == name)) {
+        setState(() {
+          _monitorPlacements = List.of(_defaultMonitorLayout);
+          _loadedLayoutName = null;
+          _useCustomLayout = false;
+          _isEditingLayout = false;
+        });
+      }
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Layout konnte nicht gelöscht werden: $error'),
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _resetMonitorLayout() async {
+    try {
+      await _storage.saveSecondScreenLayout(
+        tournament: widget.tournament,
+        name: 'Standard',
+        placements: _defaultMonitorLayout,
+        activate: true,
+      );
       if (mounted) {
         setState(() {
           _monitorPlacements = List.of(_defaultMonitorLayout);
           _loadedLayoutName = 'Standard';
           _useCustomLayout = true;
+          _isEditingLayout = true;
         });
       }
     } catch (error) {
-      if (previousLayout == null) {
-        widget.tournament.secondScreenLayouts.remove('Standard');
-      } else {
-        widget.tournament.secondScreenLayouts['Standard'] = previousLayout;
-      }
-      widget.tournament.secondScreenActiveLayout = previousActiveLayout;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1414,49 +1758,29 @@ class _TournamentSecondScreenViewState
   }) {
     final hasNextKnockout = _nextKnockoutStage(t, activeIndex, stage) != null;
     final showInlinePreview = _showInlineNextStagePreview && hasNextKnockout;
-    final standings = _buildStandingsPanel(
-      context,
-      t,
-      stage,
-      full: true,
-      expand: false,
-    );
-    final panel = _showPrognosis
-        ? _buildKoPrognosisPanel(context, t, activeIndex, stage, expand: false)
-        : standings;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment<bool>(
-              value: false,
-              label: Text('Tabellen & Zwischenstände'),
-              icon: Icon(Icons.table_chart_outlined),
-            ),
-            ButtonSegment<bool>(
-              value: true,
-              label: Text('Siegprognose & Weiterkommen'),
-              icon: Icon(Icons.account_tree_outlined),
-            ),
-          ],
-          selected: {_showPrognosis},
-          onSelectionChanged: (selected) {
-            if (selected.isNotEmpty) {
-              setState(() => _showPrognosis = selected.first);
-            }
-          },
+        LayoutBuilder(
+          builder: (context, constraints) =>
+              _buildStandingsDisplaySelector(constraints.maxWidth),
         ),
         const SizedBox(height: 8),
         if (expand)
           Expanded(
             child: showInlinePreview
                 ? _buildInlineNextStagePreview(context, t, activeIndex, stage)
-                : SingleChildScrollView(child: panel),
+                : SingleChildScrollView(
+                    child: _buildStandingsDisplayPanel(
+                      context,
+                      t,
+                      activeIndex,
+                      stage,
+                    ),
+                  ),
           )
         else
-          panel,
+          _buildStandingsDisplayPanel(context, t, activeIndex, stage),
         if (hasNextKnockout && !showInlinePreview && showPreviewButton) ...[
           const SizedBox(height: 8),
           FilledButton.icon(
@@ -1471,6 +1795,146 @@ class _TournamentSecondScreenViewState
             child: _buildInlineNextStagePreview(context, t, activeIndex, stage),
           ),
       ],
+    );
+  }
+
+  Widget _buildStandingsDisplaySelector(double width) {
+    const labels = {
+      _StandingsDisplayMode.standings: 'Tabellen & Zwischenstände',
+      _StandingsDisplayMode.forecast: 'Siegprognose & Weiterkommen',
+      _StandingsDisplayMode.combined: 'Kombiniert',
+    };
+    if (width < 560) {
+      return DropdownButton<_StandingsDisplayMode>(
+        value: _standingsDisplayMode,
+        isExpanded: true,
+        items: [
+          for (final mode in _StandingsDisplayMode.values)
+            DropdownMenuItem(value: mode, child: Text(labels[mode]!)),
+        ],
+        onChanged: (mode) {
+          if (mode != null) {
+            setState(() => _standingsDisplayMode = mode);
+          }
+        },
+      );
+    }
+    return SegmentedButton<_StandingsDisplayMode>(
+      segments: const [
+        ButtonSegment(
+          value: _StandingsDisplayMode.standings,
+          label: Text('Tabellen & Zwischenstände'),
+          icon: Icon(Icons.table_chart_outlined),
+        ),
+        ButtonSegment(
+          value: _StandingsDisplayMode.forecast,
+          label: Text('Siegprognose & Weiterkommen'),
+          icon: Icon(Icons.account_tree_outlined),
+        ),
+        ButtonSegment(
+          value: _StandingsDisplayMode.combined,
+          label: Text('Kombiniert'),
+          icon: Icon(Icons.dashboard_outlined),
+        ),
+      ],
+      selected: {_standingsDisplayMode},
+      onSelectionChanged: (selected) {
+        if (selected.isNotEmpty) {
+          setState(() => _standingsDisplayMode = selected.first);
+        }
+      },
+    );
+  }
+
+  Widget _buildStandingsDisplayPanel(
+    BuildContext context,
+    CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? stage,
+  ) {
+    switch (_standingsDisplayMode) {
+      case _StandingsDisplayMode.standings:
+        return _buildStandingsPanel(
+          context,
+          tournament,
+          stage,
+          full: true,
+          expand: false,
+        );
+      case _StandingsDisplayMode.forecast:
+        return _buildKoPrognosisPanel(
+          context,
+          tournament,
+          activeIndex,
+          stage,
+          expand: false,
+        );
+      case _StandingsDisplayMode.combined:
+        return _buildCombinedStandingsAndForecast(
+          context,
+          tournament,
+          activeIndex,
+          stage,
+        );
+    }
+  }
+
+  Widget _buildCombinedStandingsAndForecast(
+    BuildContext context,
+    CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? stage, {
+    bool bounded = false,
+  }) {
+    final standings = _buildStandingsPanel(
+      context,
+      tournament,
+      stage,
+      full: true,
+      expand: false,
+    );
+    final forecast = _buildKoPrognosisPanel(
+      context,
+      tournament,
+      activeIndex,
+      stage,
+      expand: false,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final sideBySide = constraints.maxWidth >= 900;
+        if (bounded) {
+          return sideBySide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: SingleChildScrollView(child: standings)),
+                    const SizedBox(width: 12),
+                    Expanded(child: SingleChildScrollView(child: forecast)),
+                  ],
+                )
+              : Column(
+                  children: [
+                    Expanded(child: SingleChildScrollView(child: standings)),
+                    const Divider(height: 12),
+                    Expanded(child: SingleChildScrollView(child: forecast)),
+                  ],
+                );
+        }
+        return sideBySide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: standings),
+                  const SizedBox(width: 12),
+                  Expanded(child: forecast),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [standings, const SizedBox(height: 12), forecast],
+              );
+      },
     );
   }
 

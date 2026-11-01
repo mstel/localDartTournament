@@ -206,6 +206,54 @@ class TournamentStorage {
     StorageAccess.markLocalDataChanged();
   }
 
+  Future<void> saveSecondScreenLayout({
+    required CreatedTournament tournament,
+    required String name,
+    required List<SecondScreenWidgetPlacement>? placements,
+    required bool activate,
+  }) async {
+    await _locked(() async {
+      final tournaments = await _loadTournamentsUnlocked();
+      final index = tournaments.indexWhere((item) => item.id == tournament.id);
+      final latest = index < 0 ? tournament : tournaments[index];
+
+      if (placements == null) {
+        latest.secondScreenLayouts.remove(name);
+        if (latest.secondScreenActiveLayout == name) {
+          latest.secondScreenActiveLayout = null;
+        }
+      } else {
+        latest.secondScreenLayouts[name] =
+            List<SecondScreenWidgetPlacement>.from(placements);
+        if (activate) latest.secondScreenActiveLayout = name;
+      }
+      latest.updatedAt = DateTime.now();
+      if (index < 0) {
+        tournaments.insert(0, latest);
+      } else {
+        tournaments[index] = latest;
+      }
+
+      final document = await _readDocument();
+      document['tournaments'] = tournaments
+          .map((item) => item.toJson())
+          .toList();
+      await _writeDocument(document);
+
+      tournament.secondScreenLayouts
+        ..clear()
+        ..addAll(
+          latest.secondScreenLayouts.map(
+            (key, value) => MapEntry(key, List.of(value)),
+          ),
+        );
+      tournament
+        ..secondScreenActiveLayout = latest.secondScreenActiveLayout
+        ..updatedAt = latest.updatedAt;
+    });
+    StorageAccess.markLocalDataChanged();
+  }
+
   Future<void> deleteTournament(String id) async {
     await _locked(() async {
       final tournaments = await _loadTournamentsUnlocked();
