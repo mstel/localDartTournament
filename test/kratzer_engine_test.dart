@@ -45,6 +45,51 @@ void main() {
   });
 
   test(
+    'multi-group matches keep scratched but not eliminated players eligible',
+    () {
+      const engine = KratzerEngine();
+      final players = [for (var index = 1; index <= 12; index++) player(index)];
+      final firstRound = engine.assignRound(
+        players: players,
+        availableBoards: [1, 2],
+        round: 1,
+      );
+      expect(firstRound.map((assignment) => assignment.players.length), [6, 6]);
+
+      final priorScratches = [
+        for (final assignment in firstRound)
+          GroupMatch(
+            isKratzer: true,
+            players: assignment.players,
+            scratchEligiblePlayers: assignment.scratchEligiblePlayers,
+            scratchedPlayer: assignment.players.first,
+            round: 1,
+          ),
+      ];
+      final active = engine.activePlayers(
+        players: players,
+        completedMatches: priorScratches,
+        lives: 2,
+      );
+      final nextRound = engine.assignRound(
+        players: active,
+        eliminatedFillers: players.where((p) => !active.contains(p)).toList(),
+        availableBoards: [1, 2],
+        round: 2,
+      );
+
+      expect(
+        active,
+        containsAll([firstRound[0].players.first, firstRound[1].players.first]),
+      );
+      expect(
+        nextRound.expand((assignment) => assignment.scratchEligiblePlayers),
+        containsAll([firstRound[0].players.first, firstRound[1].players.first]),
+      );
+    },
+  );
+
+  test(
     'a two-player tail is completed with an eliminated non-eligible filler',
     () {
       final assignments = const KratzerEngine().assignRound(
@@ -138,7 +183,7 @@ void main() {
         }
       }
     }
-    expect(engine.estimatedGameCount(playerCount: 3, lives: 2, boards: 1), 5);
+    expect(engine.estimatedGameCount(playerCount: 3, lives: 2, boards: 1), 4);
   });
 
   test(

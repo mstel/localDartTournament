@@ -46,11 +46,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _savingTieBreakerSettings = false;
   int? _tieBreakerDraftStageIndex;
   List<String> _tieBreakerDraft = const [];
-  Future<void> _checkpoint() => _runController.saveProgress(
-    tournament: widget.tournament,
-    activeStageIndex: _activeStageIndex,
-    completedStageIndexes: _completedStageIndexes,
-  );
+  Future<void> _checkpoint() {
+    _leagueRuntime?.writeTo(widget.tournament);
+    return _runController.saveProgress(
+      tournament: widget.tournament,
+      activeStageIndex: _activeStageIndex,
+      completedStageIndexes: _completedStageIndexes,
+    );
+  }
 
   Future<void> _leaveTournament({bool home = false}) async {
     if (_leaving) return;
@@ -84,7 +87,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _backgrounded = state != AppLifecycleState.resumed;
-    if (widget.tournament.leagueMatch != null) return;
     if (_backgrounded) {
       unawaited(
         _checkpoint().catchError((Object error) {
@@ -611,6 +613,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _isBracketEditMode = false;
   bool _isApplyingStartDraw = false;
   final Set<int> _completedStageIndexes = {};
+  LeagueBoardRuntime? _leagueRuntime;
   TournamentRunController get _runController =>
       widget.runController ?? const TournamentRunController();
   final _tournamentNameController = TextEditingController();
@@ -634,7 +637,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         : StageViewMode.dashboard;
     _tournamentNameController.text = widget.tournament.name;
     WidgetsBinding.instance.addObserver(this);
-    if (widget.tournament.leagueMatch != null) return;
+    if (widget.tournament.leagueMatch != null) {
+      _leagueRuntime = LeagueBoardRuntime(widget.tournament)
+        ..installOn(widget.tournament);
+    }
     _activeStageIndex = widget.tournament.activeStageIndex.clamp(
       0,
       widget.tournament.runStages.isEmpty
@@ -734,6 +740,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _saveTournamentProgress({bool propagateError = false}) async {
     try {
+      _leagueRuntime?.writeTo(widget.tournament);
       await _runController.saveProgress(
         tournament: widget.tournament,
         activeStageIndex: _activeStageIndex,
@@ -925,12 +932,23 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (_savingRankingSelection) return;
     final previousCounts = widget.tournament.countsForRanking;
     final previousIds = List<String>.from(widget.tournament.rankingIds);
+    final previousLayouts = {
+      for (final entry in widget.tournament.secondScreenLayouts.entries)
+        entry.key: List<SecondScreenWidgetPlacement>.from(entry.value),
+    };
     setState(() {
       _savingRankingSelection = true;
       widget.tournament.countsForRanking = countsForRanking;
       widget.tournament.rankingIds
         ..clear()
         ..addAll(countsForRanking ? rankingIds : const []);
+      if (!countsForRanking || rankingIds.isEmpty) {
+        for (final placements in widget.tournament.secondScreenLayouts.values) {
+          placements.removeWhere(
+            (placement) => placement.widgetId == 'ranking',
+          );
+        }
+      }
     });
     try {
       await _saveTournamentProgress(propagateError: true);
@@ -941,6 +959,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         widget.tournament.rankingIds
           ..clear()
           ..addAll(previousIds);
+        widget.tournament.secondScreenLayouts
+          ..clear()
+          ..addAll(previousLayouts);
       });
     } finally {
       if (mounted) {
@@ -3446,9 +3467,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Widget _buildAuthorized(BuildContext context) {
-    if (widget.tournament.leagueMatch != null) {
-      return LeagueMatchPage(tournament: widget.tournament);
-    }
     final activeStage = _stageForView(_viewStageIndex);
     final isViewingActiveStage =
         _stageViewMode == StageViewMode.director ||
@@ -4108,7 +4126,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                           ),
                           const SizedBox(height: 12),
                           // 3. Gruppen verwalten
-                          if (activeStage is GroupTournamentRunStage)
+                          if (widget.tournament.leagueMatch == null &&
+                              activeStage is GroupTournamentRunStage)
                             Builder(
                               builder: (context) {
                                 final canEdit =
@@ -4149,7 +4168,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               },
                             ),
                           const SizedBox(height: 12),
-                          if (widget.tournament.leagueMatch == null)
+                          if (widget.tournament.leagueMatch == null &&
+                              !widget.tournament.isKratzerTournament)
                             Card(
                               child: ExpansionTile(
                                 initiallyExpanded: false,
@@ -4380,7 +4400,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ],
                             ),
                           ),
-                          const GoveeAmbiencePanel(),
+                          if (widget.tournament.leagueMatch == null &&
+                              !widget.tournament.isKratzerTournament)
+                            const GoveeAmbiencePanel(),
                         ],
                       )
                     else if (_stageViewMode == StageViewMode.players)

@@ -5,7 +5,9 @@ import '../../tournaments/application/tournament_flow_priority_preferences.dart'
 import '../../tournaments/domain/tournament_flow_priority_settings.dart';
 
 class PriorityNoticeSettingsPanel extends StatefulWidget {
-  const PriorityNoticeSettingsPanel({super.key});
+  const PriorityNoticeSettingsPanel({super.key, this.showTitle = true});
+
+  final bool showTitle;
 
   @override
   State<PriorityNoticeSettingsPanel> createState() =>
@@ -105,11 +107,13 @@ class _PriorityNoticeSettingsPanelState
       child: AdaptiveContentList(
         padding: const EdgeInsets.all(20),
         children: [
-          Text(
-            'Hinweiseinstellungen',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
+          if (widget.showTitle) ...[
+            Text(
+              'Hinweiseinstellungen',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+          ],
           const Text(
             'Die Werte gelten für Prioritätshinweise in allen Turnieren.',
           ),

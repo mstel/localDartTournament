@@ -28,8 +28,17 @@ void main() {
     await tester.tap(find.text('Angepasster Spielplan'));
     await tester.pumpAndSettle();
 
+    expect(
+      find.text('Name des angepassten Liga-/Freundschaftsspiels'),
+      findsOneWidget,
+    );
     expect(find.text('Einzel je Spieler'), findsOneWidget);
     expect(find.text('Doppel je Mannschaft'), findsOneWidget);
+    expect(find.text('X01-Punktzahl'), findsOneWidget);
+    expect(
+      find.text('Angepasstes Liga-/Freundschaftsspiel anlegen'),
+      findsOneWidget,
+    );
     expect(find.text('14 Begegnungen'), findsOneWidget);
     expect(find.textContaining('Voraussichtliche Dauer:'), findsOneWidget);
     expect(tester.takeException(), isNull);

@@ -279,6 +279,7 @@ class ExpandedFormatPlanner {
           request.maximumLives,
           prefix.isEmpty ? request.manualQualifiers : null,
         )) {
+          if (stage.type == 'kratzer' && prefix.isNotEmpty) continue;
           final mode = stage.type == 'groups'
               ? (stage.groupRoundRobinRepeats.isNotEmpty &&
                         stage.groupRoundRobinRepeats.first == 2)

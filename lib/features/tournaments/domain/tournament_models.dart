@@ -719,7 +719,8 @@ class CreatedTournament {
   bool _countsForRanking;
   bool get isKratzerTournament =>
       stages.any((stage) => stage.type == 'kratzer');
-  bool get countsForRanking => !isKratzerTournament && _countsForRanking;
+  bool get countsForRanking =>
+      leagueMatch == null && !isKratzerTournament && _countsForRanking;
   set countsForRanking(bool value) => _countsForRanking = value;
   List<String> rankingIds;
   int activeStageIndex;

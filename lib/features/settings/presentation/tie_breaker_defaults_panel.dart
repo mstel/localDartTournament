@@ -5,7 +5,9 @@ import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/presentation/widgets/creation/stage_setup_widgets.dart';
 
 class TieBreakerDefaultsPanel extends StatefulWidget {
-  const TieBreakerDefaultsPanel({super.key});
+  const TieBreakerDefaultsPanel({super.key, this.showTitle = true});
+
+  final bool showTitle;
 
   @override
   State<TieBreakerDefaultsPanel> createState() =>
@@ -77,11 +79,13 @@ class _TieBreakerDefaultsPanelState extends State<TieBreakerDefaultsPanel> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(
-          'Tie Breaker Standardwerte',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
+        if (widget.showTitle) ...[
+          Text(
+            'Tie Breaker Standardwerte',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+        ],
         const Text(
           'Diese Reihenfolge wird bei neuen Turnieren voreingestellt. Mit den Pfeilen lässt sie sich dauerhaft anpassen.',
         ),

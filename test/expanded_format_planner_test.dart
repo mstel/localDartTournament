@@ -102,6 +102,21 @@ void main() {
       }
     },
   );
+  test('Kratzer is never recommended as a follow-up stage', () async {
+    final results = await ExpandedFormatPlanner(
+      parameters: parameters,
+    ).suggest(request(stages: 3), allResults: true);
+
+    expect(results, isNotEmpty);
+    for (final suggestion in results) {
+      expect(
+        suggestion.configurations
+            .skip(1)
+            .any((stage) => stage.type == 'kratzer'),
+        isFalse,
+      );
+    }
+  });
   test('Swiss recommendations use the synchronous-round worst case', () async {
     final swissParameters = TournamentPlanningParameters.fromValues({
       PlanningParameter.maximumSuggestions: 64,

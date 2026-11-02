@@ -29,10 +29,12 @@ import 'recommended_matches_table.dart';
 import '../../../data/app_database.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../../rankings/application/local_ranking_elo_service.dart';
+import '../../../../rankings/application/tournament_ranking_changes_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
 import '../../../../rankings/domain/local_ranking.dart';
 import '../../../data/tournament_storage.dart';
 import 'recent_match_result_card.dart';
+import '../../../../league/presentation/league_overview.dart';
 
 const Map<String, String> _monitorWidgetTitles = {
   'standings': 'Tabellen & Zwischenstände',
@@ -44,6 +46,7 @@ const Map<String, String> _monitorWidgetTitles = {
   'stageProgress': 'Fortschritt nach Etappen',
   'highlights': 'Bestleistungen & Highlights',
   'ranking': 'Rangliste',
+  'teamComparison': 'Mannschaftsvergleich',
 };
 
 enum _StandingsDisplayMode { standings, forecast }
@@ -51,6 +54,13 @@ enum _StandingsDisplayMode { standings, forecast }
 enum _MonitorLayoutAction { add, save, load, reset, standard }
 
 const String _standardMonitorLayoutName = 'Standard';
+
+typedef _RankingStandings = ({
+  String rankingName,
+  List<LocalEloPlayer> entries,
+  Map<String, int> deltas,
+  Map<String, int?> previousPositions,
+});
 
 const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
   SecondScreenWidgetPlacement(
@@ -103,6 +113,7 @@ class _TournamentSecondScreenViewState
     extends State<TournamentSecondScreenView> {
   bool _showNextStagePreview = false;
   bool _showInlineNextStagePreview = false;
+  bool _showOnlyRankingParticipants = false;
   _StandingsDisplayMode _standingsDisplayMode = _StandingsDisplayMode.standings;
   Timer? _clockTimer;
   final _previewVerticalController = ScrollController();
@@ -113,8 +124,7 @@ class _TournamentSecondScreenViewState
   String? _prioritySettingsError;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
-  late Future<List<({String rankingName, List<LocalEloPlayer> entries})>>
-  _rankingStandings;
+  late Future<List<_RankingStandings>> _rankingStandings;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
   late String _forecastFingerprint;
   late List<SecondScreenWidgetPlacement> _monitorPlacements;
@@ -137,6 +147,7 @@ class _TournamentSecondScreenViewState
     _loadedLayoutName = widget.tournament.secondScreenActiveLayout;
     _useCustomLayout = _loadedLayoutName != null;
     _monitorPlacements = _savedLayoutOrDefault();
+    unawaited(_removeUnavailableRankingWidgets());
     unawaited(_loadPrioritySettings());
     _refreshEloChanges();
     _refreshRankingStandings();
@@ -153,7 +164,23 @@ class _TournamentSecondScreenViewState
     final saved = activeName == null
         ? null
         : widget.tournament.secondScreenLayouts[activeName];
-    return _withIndependentColumns(saved ?? _defaultMonitorLayout);
+    return _withIndependentColumns(
+      (saved ?? _defaultMonitorLayout)
+          .where(_isMonitorWidgetAvailable)
+          .toList(),
+    );
+  }
+
+  bool _isMonitorWidgetAvailable(SecondScreenWidgetPlacement placement) {
+    if (placement.widgetId == 'ranking') {
+      return widget.tournament.leagueMatch == null &&
+          widget.tournament.countsForRanking &&
+          widget.tournament.rankingIds.isNotEmpty;
+    }
+    if (placement.widgetId == 'teamComparison') {
+      return widget.tournament.leagueMatch != null;
+    }
+    return true;
   }
 
   List<SecondScreenWidgetPlacement> _withIndependentColumns(
@@ -196,6 +223,10 @@ class _TournamentSecondScreenViewState
   @override
   void didUpdateWidget(covariant TournamentSecondScreenView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _monitorPlacements = _monitorPlacements
+        .where(_isMonitorWidgetAvailable)
+        .toList();
+    unawaited(_removeUnavailableRankingWidgets());
     final fingerprint = jsonEncode(widget.tournament.toJson());
     if (fingerprint != _eloInputFingerprint) {
       _refreshEloChanges(fingerprint: fingerprint);
@@ -203,6 +234,51 @@ class _TournamentSecondScreenViewState
     }
     if (fingerprint != _forecastFingerprint) {
       _refreshAdvancementForecast(fingerprint: fingerprint);
+    }
+  }
+
+  Future<void> _removeUnavailableRankingWidgets() async {
+    if (widget.tournament.leagueMatch == null &&
+        widget.tournament.countsForRanking &&
+        widget.tournament.rankingIds.isNotEmpty) {
+      return;
+    }
+
+    final changedLayouts = <String, List<SecondScreenWidgetPlacement>>{};
+    for (final entry in widget.tournament.secondScreenLayouts.entries) {
+      final filtered = entry.value
+          .where((placement) => placement.widgetId != 'ranking')
+          .toList();
+      if (filtered.length != entry.value.length) {
+        changedLayouts[entry.key] = filtered;
+      }
+    }
+    final activeLayout = widget.tournament.secondScreenActiveLayout;
+    if (activeLayout != null &&
+        _monitorPlacements.any(
+          (placement) => placement.widgetId == 'ranking',
+        )) {
+      _monitorPlacements = _monitorPlacements
+          .where((placement) => placement.widgetId != 'ranking')
+          .toList();
+      changedLayouts[activeLayout] = List.of(_monitorPlacements);
+    }
+    try {
+      for (final entry in changedLayouts.entries) {
+        await _storage.saveSecondScreenLayout(
+          tournament: widget.tournament,
+          name: entry.key,
+          placements: entry.value,
+          activate: false,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _prioritySettingsError =
+              'Das inaktive Ranglisten-Widget konnte nicht aus dem Zweitmonitor-Layout entfernt werden: $error',
+        );
+      }
     }
   }
 
@@ -219,8 +295,9 @@ class _TournamentSecondScreenViewState
     _rankingStandings = _loadRankingStandings(widget.tournament);
   }
 
-  Future<List<({String rankingName, List<LocalEloPlayer> entries})>>
-  _loadRankingStandings(CreatedTournament tournament) async {
+  Future<List<_RankingStandings>> _loadRankingStandings(
+    CreatedTournament tournament,
+  ) async {
     if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) {
       return const [];
     }
@@ -231,22 +308,79 @@ class _TournamentSecondScreenViewState
               tournament.rankingIds.contains(ranking.id),
         )
         .toList();
-    final tournaments = await _storage.loadTournaments();
-    final rankingTournaments = [
-      ...tournaments.where((entry) => entry.id != tournament.id),
-      tournament,
+    final service = LocalRankingEloService(
+      database: _database,
+      tournamentStorage: _storage,
+    );
+    final profiles = await _database.loadPlayerProfiles();
+    final profileNames = {
+      for (final profile in profiles) profile.id: profile.displayName,
+    };
+    final changes = await TournamentRankingChangesService(
+      database: _database,
+      storage: _storage,
+    ).calculate(tournament);
+    final standings = <_RankingStandings>[];
+    for (final ranking in selectedRankings) {
+      final rankingPlayerIds = await _database.loadRankingPlayerIds(ranking.id);
+      final before = await service.calculateThroughTournament(
+        ranking,
+        tournament,
+        includeTournament: false,
+      );
+      final after = await service.calculateThroughTournament(
+        ranking,
+        tournament,
+        includeTournament: true,
+      );
+      final beforeEntries = _allRankingMembers(
+        rankingPlayerIds,
+        profileNames,
+        before.entries,
+        ranking.startRating,
+      );
+      final afterEntries = _allRankingMembers(
+        rankingPlayerIds,
+        profileNames,
+        after.entries,
+        ranking.startRating,
+      );
+      final beforePositions = {
+        for (var index = 0; index < beforeEntries.length; index++)
+          beforeEntries[index].id: index + 1,
+      };
+      standings.add((
+        rankingName: ranking.name,
+        entries: afterEntries,
+        deltas: {
+          for (final change in changes)
+            if (change.rankingId == ranking.id)
+              change.playerProfileId: change.delta,
+        },
+        previousPositions: {
+          for (final entry in after.entries)
+            entry.id: beforePositions[entry.id],
+        },
+      ));
+    }
+    return standings;
+  }
+
+  List<LocalEloPlayer> _allRankingMembers(
+    List<String> playerIds,
+    Map<String, String> profileNames,
+    List<LocalEloPlayer> rankedEntries,
+    int startRating,
+  ) {
+    final entriesById = {for (final entry in rankedEntries) entry.id: entry};
+    final entries = [
+      for (final id in playerIds)
+        if (profileNames[id] case final name?)
+          entriesById[id] ??
+              LocalEloPlayer(id: id, name: name, rating: startRating),
     ];
-    final service = LocalRankingEloService(database: _database);
-    return [
-      for (final ranking in selectedRankings)
-        (
-          rankingName: ranking.name,
-          entries: (await service.calculate(
-            ranking,
-            tournaments: rankingTournaments,
-          )).entries,
-        ),
-    ];
+    entries.sort((left, right) => right.rating.compareTo(left.rating));
+    return entries;
   }
 
   void _refreshAdvancementForecast({String? fingerprint}) {
@@ -802,6 +936,7 @@ class _TournamentSecondScreenViewState
     double spacing,
   ) {
     if (columns >= 4 &&
+        _monitorPlacements.any((placement) => placement.widthUnits > 1) &&
         _monitorPlacements.every(
           (placement) => placement.columnIndex != null,
         )) {
@@ -1475,6 +1610,11 @@ class _TournamentSecondScreenViewState
         return SingleChildScrollView(
           child: _buildRankingPanel(context, tournament),
         );
+      case 'teamComparison':
+        final league = tournament.leagueMatch;
+        return league == null
+            ? const SizedBox.shrink()
+            : SingleChildScrollView(child: LeagueOverview(league: league));
       default:
         return const SizedBox.shrink();
     }
@@ -1639,8 +1779,15 @@ class _TournamentSecondScreenViewState
                 (placement) => placement.widgetId == id,
               ) &&
               (id != 'ranking' ||
-                  (widget.tournament.countsForRanking &&
-                      widget.tournament.rankingIds.isNotEmpty)),
+                  _isMonitorWidgetAvailable(
+                    const SecondScreenWidgetPlacement(widgetId: 'ranking'),
+                  )) &&
+              (id != 'teamComparison' ||
+                  _isMonitorWidgetAvailable(
+                    const SecondScreenWidgetPlacement(
+                      widgetId: 'teamComparison',
+                    ),
+                  )),
         )
         .toList();
     if (available.isEmpty) return;
@@ -2034,9 +2181,7 @@ class _TournamentSecondScreenViewState
         ),
       );
     }
-    return FutureBuilder<
-      List<({String rankingName, List<LocalEloPlayer> entries})>
-    >(
+    return FutureBuilder<List<_RankingStandings>>(
       future: _rankingStandings,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -2060,29 +2205,121 @@ class _TournamentSecondScreenViewState
             ),
           );
         }
+        final participantIds = {
+          for (final player in tournament.players)
+            for (final individual in player.individuals)
+              if (individual.profileId != null) individual.profileId!,
+        };
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final ranking in standings) ...[
-              Text(
-                ranking.rankingName,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontWeight: FontWeight.bold,
-                ),
+            Material(
+              type: MaterialType.transparency,
+              child: SwitchListTile.adaptive(
+                key: const ValueKey('ranking-participants-toggle'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Nur Teilnehmer anzeigen'),
+                subtitle: const Text('Ausgeschaltet: alle Mitglieder'),
+                value: _showOnlyRankingParticipants,
+                onChanged: (value) =>
+                    setState(() => _showOnlyRankingParticipants = value),
               ),
-              for (final entry in ranking.entries)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    '${entry.name} – ${entry.rating} Elo',
-                    style: const TextStyle(color: Colors.white),
+            ),
+            for (final ranking in standings) ...[
+              Row(
+                children: [
+                  const Icon(
+                    Icons.leaderboard_outlined,
+                    color: Color(0xFF70E0BA),
+                    size: 20,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      ranking.rankingName,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 12, color: Colors.white24),
+              for (var index = 0; index < ranking.entries.length; index++)
+                if (!_showOnlyRankingParticipants ||
+                    participantIds.contains(ranking.entries[index].id))
+                  _buildRankingEntry(
+                    ranking,
+                    ranking.entries[index],
+                    index + 1,
+                  ),
             ],
           ],
         );
       },
+    );
+  }
+
+  Widget _buildRankingEntry(
+    _RankingStandings ranking,
+    LocalEloPlayer entry,
+    int currentPosition,
+  ) {
+    final delta = ranking.deltas[entry.id] ?? 0;
+    final previousPosition = ranking.previousPositions[entry.id];
+    final positionChange = previousPosition == null
+        ? null
+        : previousPosition - currentPosition;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            '$currentPosition. ${entry.name} – ${entry.rating} Elo',
+            style: const TextStyle(color: Colors.white),
+          ),
+          if (delta != 0)
+            Text(
+              delta > 0 ? '+$delta' : '$delta',
+              key: ValueKey('ranking-elo-delta-${entry.id}'),
+              style: TextStyle(
+                color: delta > 0
+                    ? const Color(0xFF65D58A)
+                    : const Color(0xFFFF7777),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          if (positionChange != null && positionChange != 0)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  positionChange > 0
+                      ? Icons.arrow_upward
+                      : Icons.arrow_downward,
+                  key: ValueKey('ranking-position-arrow-${entry.id}'),
+                  size: 16,
+                  color: positionChange > 0
+                      ? const Color(0xFF65D58A)
+                      : const Color(0xFFFF7777),
+                ),
+                Text(
+                  'Platz $currentPosition',
+                  key: ValueKey('ranking-position-${entry.id}'),
+                  style: TextStyle(
+                    color: positionChange > 0
+                        ? const Color(0xFF65D58A)
+                        : const Color(0xFFFF7777),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 

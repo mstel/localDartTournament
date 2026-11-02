@@ -1,35 +1,71 @@
+import '../../tournaments/domain/tournament_models.dart';
+
 class LeagueGame {
   LeagueGame({
     required this.home,
     required this.away,
     this.homeLegs,
     this.awayLegs,
+    this.homeSets,
+    this.awaySets,
     this.runtime,
   });
   List<int> home;
   List<int> away;
   int? homeLegs;
   int? awayLegs;
+  int? homeSets;
+  int? awaySets;
   Map<String, dynamic>? runtime;
   bool get isDouble => home.length == 2;
-  bool get complete => homeLegs != null && awayLegs != null;
+  bool get complete =>
+      homeLegs != null && awayLegs != null ||
+      homeSets != null && awaySets != null;
 
-  void score(int? home, int? away) {
+  int? homeScore(TournamentGameFormat format) =>
+      format.bestOfSets > 1 ? homeSets : homeLegs;
+
+  int? awayScore(TournamentGameFormat format) =>
+      format.bestOfSets > 1 ? awaySets : awayLegs;
+
+  void score(
+    int? home,
+    int? away, {
+    TournamentGameFormat format = const TournamentGameFormat(bestOfLegs: 5),
+    int? legsHome,
+    int? legsAway,
+  }) {
     if (home == null && away == null) {
-      homeLegs = awayLegs = null;
+      homeLegs = awayLegs = homeSets = awaySets = null;
       return;
     }
-    if (home == null ||
-        away == null ||
-        home < 0 ||
-        away < 0 ||
-        !((home == 3 && away < 3) || (away == 3 && home < 3))) {
+    final target = format.bestOfSets > 1
+        ? format.bestOfSets ~/ 2 + 1
+        : format.bestOfLegs ~/ 2 + 1;
+    final validScore =
+        home != null &&
+        away != null &&
+        home >= 0 &&
+        away >= 0 &&
+        (format.allowsDraws
+            ? home == format.bestOfLegs ~/ 2 && away == format.bestOfLegs ~/ 2
+            : (home == target && away < target) ||
+                  (away == target && home < target));
+    if (!validScore) {
       throw const FormatException(
-        'Ein gültiges Ergebnis ist 3:0, 3:1 oder 3:2 (oder umgekehrt).',
+        'Das Ergebnis passt nicht zum ausgewählten Spielformat.',
       );
     }
-    homeLegs = home;
-    awayLegs = away;
+    if (format.bestOfSets > 1) {
+      homeSets = home;
+      awaySets = away;
+      homeLegs = legsHome;
+      awayLegs = legsAway;
+    } else {
+      homeLegs = home;
+      awayLegs = away;
+      homeSets = awaySets = null;
+    }
   }
 
   Map<String, dynamic> toJson() => {
@@ -37,17 +73,36 @@ class LeagueGame {
     'away': away,
     'homeLegs': homeLegs,
     'awayLegs': awayLegs,
+    'homeSets': homeSets,
+    'awaySets': awaySets,
     if (runtime != null) 'runtime': runtime,
   };
-  factory LeagueGame.fromJson(Map<String, dynamic> json) {
+  factory LeagueGame.fromJson(
+    Map<String, dynamic> json, {
+    TournamentGameFormat format = const TournamentGameFormat(bestOfLegs: 5),
+  }) {
     final game = LeagueGame(
       home: List<int>.from(json['home'] as List),
       away: List<int>.from(json['away'] as List),
+      homeLegs: json['homeLegs'] as int?,
+      awayLegs: json['awayLegs'] as int?,
+      homeSets: json['homeSets'] as int?,
+      awaySets: json['awaySets'] as int?,
       runtime: json['runtime'] == null
           ? null
           : Map<String, dynamic>.from(json['runtime'] as Map),
     );
-    game.score(json['homeLegs'] as int?, json['awayLegs'] as int?);
+    if (game.complete) {
+      final home = game.homeScore(format);
+      final away = game.awayScore(format);
+      game.score(
+        home,
+        away,
+        format: format,
+        legsHome: game.homeLegs,
+        legsAway: game.awayLegs,
+      );
+    }
     return game;
   }
 }
@@ -63,6 +118,7 @@ class LeagueMatch {
     required this.homePlayers,
     required this.awayPlayers,
     required this.games,
+    this.gameFormat = const TournamentGameFormat(bestOfLegs: 5),
     this.variant = LeagueMatchVariant.traditional,
     this.singlesPerPlayer = 4,
     this.doublesCount = 2,
@@ -72,13 +128,22 @@ class LeagueMatch {
   final List<String> homePlayers;
   final List<String> awayPlayers;
   final List<LeagueGame> games;
+  final TournamentGameFormat gameFormat;
   final LeagueMatchVariant variant;
   final int singlesPerPlayer;
   final int doublesCount;
-  int get homePoints =>
-      games.where((g) => g.complete && g.homeLegs! > g.awayLegs!).length;
-  int get awayPoints =>
-      games.where((g) => g.complete && g.awayLegs! > g.homeLegs!).length;
+  int get homePoints => games
+      .where(
+        (g) =>
+            g.complete && g.homeScore(gameFormat)! > g.awayScore(gameFormat)!,
+      )
+      .length;
+  int get awayPoints => games
+      .where(
+        (g) =>
+            g.complete && g.awayScore(gameFormat)! > g.homeScore(gameFormat)!,
+      )
+      .length;
   bool get complete => games.every((g) => g.complete);
   String get outcome => !complete
       ? 'Noch nicht abgeschlossen'
@@ -91,6 +156,7 @@ class LeagueMatch {
     required String awayTeam,
     required List<String> homePlayers,
     required List<String> awayPlayers,
+    TournamentGameFormat gameFormat = const TournamentGameFormat(bestOfLegs: 5),
   }) {
     final match = LeagueMatch(
       homeTeam: homeTeam.trim(),
@@ -104,6 +170,7 @@ class LeagueMatch {
         LeagueGame(home: [0, 1], away: [0, 1]),
         LeagueGame(home: [2, 3], away: [2, 3]),
       ],
+      gameFormat: gameFormat,
       variant: LeagueMatchVariant.traditional,
       singlesPerPlayer: 4,
       doublesCount: 2,
@@ -119,6 +186,7 @@ class LeagueMatch {
     required List<String> awayPlayers,
     required int singlesPerPlayer,
     required int doublesCount,
+    TournamentGameFormat gameFormat = const TournamentGameFormat(bestOfLegs: 5),
   }) {
     if (homePlayers.length != awayPlayers.length || homePlayers.isEmpty) {
       throw const FormatException(
@@ -160,6 +228,7 @@ class LeagueMatch {
       homePlayers: homePlayers.map((p) => p.trim()).toList(),
       awayPlayers: awayPlayers.map((p) => p.trim()).toList(),
       games: games,
+      gameFormat: gameFormat,
       variant: LeagueMatchVariant.adjusted,
       singlesPerPlayer: singlesPerPlayer,
       doublesCount: doublesCount,
@@ -173,8 +242,7 @@ class LeagueMatch {
       throw const FormatException('Mannschaftsnamen fehlen.');
     }
     for (final roster in [homePlayers, awayPlayers]) {
-      if (roster.length <
-              (variant == LeagueMatchVariant.traditional ? 4 : 1) ||
+      if (roster.length < (variant == LeagueMatchVariant.traditional ? 4 : 1) ||
           roster.any((p) => p.trim().isEmpty)) {
         throw FormatException(
           variant == LeagueMatchVariant.traditional
@@ -194,17 +262,22 @@ class LeagueMatch {
           doublesCount < 0 ||
           doublesCount > homePlayers.length ~/ 2 ||
           homePlayers.length != awayPlayers.length ||
-          games.length != homePlayers.length * singlesPerPlayer + doublesCount ||
+          games.length !=
+              homePlayers.length * singlesPerPlayer + doublesCount ||
           games.where((g) => g.isDouble).length != doublesCount) {
         throw const FormatException('Ungültiger angepasster Spielplan.');
       }
       for (var player = 0; player < homePlayers.length; player++) {
         if (games
-                .where((game) => !game.isDouble && game.home.contains(player))
-                .length !=
-            singlesPerPlayer ||
+                    .where(
+                      (game) => !game.isDouble && game.home.contains(player),
+                    )
+                    .length !=
+                singlesPerPlayer ||
             games
-                    .where((game) => !game.isDouble && game.away.contains(player))
+                    .where(
+                      (game) => !game.isDouble && game.away.contains(player),
+                    )
                     .length !=
                 singlesPerPlayer) {
           throw const FormatException(
@@ -242,7 +315,7 @@ class LeagueMatch {
   }
 
   Map<String, dynamic> toJson() => {
-    'version': variant == LeagueMatchVariant.adjusted ? 3 : 2,
+    'version': 4,
     'preset': 'rhl',
     if (variant == LeagueMatchVariant.adjusted) ...{
       'variant': variant.name,
@@ -253,20 +326,32 @@ class LeagueMatch {
     'awayTeam': awayTeam,
     'homePlayers': homePlayers,
     'awayPlayers': awayPlayers,
+    'gameFormat': gameFormat.toJson(),
     'games': games.map((g) => g.toJson()).toList(),
   };
   factory LeagueMatch.fromJson(Map<String, dynamic> json) {
-    if (![1, 2, 3].contains(json['version']) || json['preset'] != 'rhl') {
+    if (![1, 2, 3, 4].contains(json['version']) || json['preset'] != 'rhl') {
       throw const FormatException('Nicht unterstützte Ligaspiel-Version.');
     }
+    final gameFormat = json['gameFormat'] is Map
+        ? TournamentGameFormat.fromJson(
+            Map<String, dynamic>.from(json['gameFormat'] as Map),
+          )
+        : const TournamentGameFormat(bestOfLegs: 5);
     final match = LeagueMatch(
       homeTeam: json['homeTeam'] as String,
       awayTeam: json['awayTeam'] as String,
       homePlayers: List<String>.from(json['homePlayers'] as List),
       awayPlayers: List<String>.from(json['awayPlayers'] as List),
       games: (json['games'] as List)
-          .map((g) => LeagueGame.fromJson(Map<String, dynamic>.from(g as Map)))
+          .map(
+            (g) => LeagueGame.fromJson(
+              Map<String, dynamic>.from(g as Map),
+              format: gameFormat,
+            ),
+          )
           .toList(),
+      gameFormat: gameFormat,
       variant: json['variant'] == LeagueMatchVariant.adjusted.name
           ? LeagueMatchVariant.adjusted
           : LeagueMatchVariant.traditional,

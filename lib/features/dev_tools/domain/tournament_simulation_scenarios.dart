@@ -249,6 +249,19 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
+    name: 'Kratzer mit zwei Sechsergruppen',
+    playerCount: 12,
+    boards: 2,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Kratzer',
+        qualifiers: 1,
+        lossLimit: 2,
+        isKratzer: true,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
     name: 'Kratzer mit 5 Leben und einem unbesetzten Sitz',
     playerCount: 7,
     boards: 1,

@@ -1,3 +1,19 @@
+# 2.3.5+55
+
+- Öffnet Tie-Breaker- und Hinweiseinstellungen zuverlässig als eigene Seiten
+  direkt aus „Werkzeuge & Verwaltung“.
+- Begrenzt den Spielervergleich bei ausgewähltem Monat auf Turniere aus genau
+  diesem Monat.
+- Ergänzt im Ranglisten-Widget die ELO-Veränderung und Rangplatzbewegung des
+  aktuellen Turniers sowie einen Umschalter für Teilnehmer oder alle Mitglieder.
+- Integriert angepasste Liga- und Freundschaftsspiele mit Spielformat,
+  Ergebniseingabe, Turnierleitung und Mannschaftsvergleich in die reguläre
+  Turnierlaufzeit.
+- Verbessert die Kratzer-Spielplanung für 3 bis 6 Personen je Board und
+  beschränkt Kratzer-Turniere auf eine Etappe.
+- Ermöglicht viertelbreite Zweitmonitor-Widgets nebeneinander und entfernt
+  Ranglisten-Widgets, wenn keine passende Rangliste mehr ausgewählt ist.
+
 # 2.3.4+54
 
 - Korrigiert die aufsummierten gewerteten Legs im Spielerprofil sowie den

@@ -148,7 +148,12 @@ class KratzerEngine {
             : baseMatchMinutes * playerMultiplier;
         final eligible = assignment.scratchEligiblePlayers;
         if (eligible.isNotEmpty) {
-          final scratched = eligible.first;
+          final scratched = eligible.reduce(
+            (current, candidate) =>
+                (scratches[candidate] ?? 0) > (scratches[current] ?? 0)
+                ? candidate
+                : current,
+          );
           scratches.update(scratched, (count) => count + 1, ifAbsent: () => 1);
         }
       }

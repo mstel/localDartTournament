@@ -7,8 +7,15 @@ class LeagueOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final played = league.games.where((g) => g.complete).length;
-    final homeLegs = league.games.fold<int>(0, (n, g) => n + (g.homeLegs ?? 0));
-    final awayLegs = league.games.fold<int>(0, (n, g) => n + (g.awayLegs ?? 0));
+    final homeScores = league.games.fold<int>(
+      0,
+      (n, game) => n + (game.homeScore(league.gameFormat) ?? 0),
+    );
+    final awayScores = league.games.fold<int>(
+      0,
+      (n, game) => n + (game.awayScore(league.gameFormat) ?? 0),
+    );
+    final scoreLabel = league.gameFormat.bestOfSets > 1 ? 'Sets' : 'Legs';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -39,12 +46,12 @@ class LeagueOverview extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minWidth: constraints.maxWidth),
                   child: DataTable(
-                    columns: const [
+                    columns: [
                       DataColumn(label: Text('Mannschaft')),
                       DataColumn(label: Text('Sp')),
                       DataColumn(label: Text('S')),
                       DataColumn(label: Text('N')),
-                      DataColumn(label: Text('Legs')),
+                      DataColumn(label: Text(scoreLabel)),
                       DataColumn(label: Text('Punkte')),
                     ],
                     rows: [
@@ -70,8 +77,8 @@ class LeagueOverview extends StatelessWidget {
                             DataCell(
                               Text(
                                 side == 0
-                                    ? '$homeLegs:$awayLegs'
-                                    : '$awayLegs:$homeLegs',
+                                    ? '$homeScores:$awayScores'
+                                    : '$awayScores:$homeScores',
                               ),
                             ),
                             DataCell(
@@ -146,7 +153,7 @@ class LeagueFixtureCard extends StatelessWidget {
                   ),
                   child: Text(
                     game.complete
-                        ? '${game.homeLegs}:${game.awayLegs}'
+                        ? '${game.homeScore(league.gameFormat)}:${game.awayScore(league.gameFormat)}'
                         : '– : –',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),

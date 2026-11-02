@@ -62,11 +62,12 @@ class TournamentTiming {
         .where((item) => identical(item.match, match))
         .firstOrNull;
     final format =
-        entry != null &&
-            entry.stageIndex >= 0 &&
-            entry.stageIndex < tournament.stages.length
-        ? tournament.stages[entry.stageIndex].gameFormat
-        : const TournamentGameFormat();
+        tournament.leagueMatch?.gameFormat ??
+        (entry != null &&
+                entry.stageIndex >= 0 &&
+                entry.stageIndex < tournament.stages.length
+            ? tournament.stages[entry.stageIndex].gameFormat
+            : const TournamentGameFormat());
     final matchMinutes = TournamentFormatPlanner(
       parameters: parameters,
     ).estimatedMatchMinutes(format);
@@ -105,15 +106,13 @@ class TournamentTiming {
               (slots *
                       TournamentFormatPlanner(
                         parameters: parameters,
-                      ).estimatedMatchMinutes(
-                        const TournamentGameFormat(bestOfLegs: 5),
-                      ))
+                      ).estimatedMatchMinutes(copy.leagueMatch!.gameFormat))
                   .ceil();
           tournament.plannedMinimumMinutes = tournament.plannedMinutes;
           tournament.plannedMatches = games.where((m) => m.hasPlayers).length;
           final matchMinutes = TournamentFormatPlanner(
             parameters: parameters,
-          ).estimatedMatchMinutes(const TournamentGameFormat(bestOfLegs: 5));
+          ).estimatedMatchMinutes(copy.leagueMatch!.gameFormat);
           tournament.plannedMatchEndSeconds = [
             for (final entry in schedule.planned)
               ((entry.block + 1) * matchMinutes * 60).round(),

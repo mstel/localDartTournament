@@ -1439,6 +1439,22 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _saveStage() {
+    final otherStages = [
+      for (var index = 0; index < _stages.length; index++)
+        if (index != _editingStageIndex) _stages[index],
+    ];
+    if ((_selectedStageType == 'kratzer' && otherStages.isNotEmpty) ||
+        (otherStages.any((stage) => stage.type == 'kratzer') &&
+            _editingStageIndex == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Der Kratzer-Modus muss die einzige Etappe des Turniers sein.',
+          ),
+        ),
+      );
+      return;
+    }
     if (_selectedStageType == 'kratzer' &&
         (_knockoutParticipantCount() ?? 0) < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1916,7 +1932,20 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       );
       return;
     }
-    if (_stages.isEmpty || _players.isEmpty) {
+    if (_stages.isEmpty ||
+        _players.isEmpty ||
+        (_stages.any((stage) => stage.type == 'kratzer') &&
+            _stages.length != 1)) {
+      if (_stages.any((stage) => stage.type == 'kratzer') &&
+          _stages.length != 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Der Kratzer-Modus muss die einzige Etappe des Turniers sein.',
+            ),
+          ),
+        );
+      }
       return;
     }
 
@@ -2461,9 +2490,23 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       return Scaffold(
         appBar: AppBar(title: const Text('Turnier erstellen')),
         body: CreationEntryChoices(
-          onLeague: () => Navigator.of(context).pushReplacement(
-            MaterialPageRoute<void>(builder: (_) => const LeagueMatchPage()),
-          ),
+          onLeague: () {
+            final navigator = Navigator.of(context);
+            navigator.pushReplacement(
+              MaterialPageRoute<void>(
+                builder: (_) => LeagueMatchPage(
+                  onCreated: (tournament) => navigator.pushReplacement(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TournamentRunPage(
+                        tournament: tournament,
+                        tournamentStorage: widget.tournamentStorage,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
           onFind: _openFormatPlanner,
           onExpert: () => setState(() => _showEntryChoices = false),
         ),
@@ -2574,67 +2617,70 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   },
                 ),
                 const SizedBox(height: 32),
-                SwitchListTile(
-                  title: const Text('Für Rangliste/n berücksichtigen'),
-                  subtitle: Text(
-                    _hasKratzerStage
-                        ? 'Kratzer-Turniere fließen grundsätzlich nicht in Ranglisten ein.'
-                        : 'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
+                if (!_hasKratzerStage) ...[
+                  SwitchListTile(
+                    title: const Text('Für Rangliste/n berücksichtigen'),
+                    subtitle: const Text(
+                      'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
+                    ),
+                    value: _countsForRanking,
+                    onChanged: (value) => setState(() {
+                      _rankingSetupTouched = true;
+                      _countsForRanking = value;
+                      if (!value) _localRankingIds.clear();
+                    }),
                   ),
-                  value: _hasKratzerStage ? false : _countsForRanking,
-                  onChanged: _hasKratzerStage
-                      ? null
-                      : (value) => setState(() {
-                          _rankingSetupTouched = true;
-                          _countsForRanking = value;
-                          if (!value) _localRankingIds.clear();
-                        }),
-                ),
-                if (!_hasKratzerStage && _countsForRanking)
-                  FutureBuilder<List<LocalRanking>>(
-                    future: _localRankings,
-                    builder: (context, snapshot) {
-                      final rankings = snapshot.data ?? const <LocalRanking>[];
-                      return Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Ranglisten auswählen',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting)
-                                const LinearProgressIndicator(),
-                              if (rankings.isEmpty)
-                                const Padding(
-                                  padding: EdgeInsets.all(8),
-                                  child: Text(
-                                    'Lege zuerst eine Rangliste im Hauptmenü an.',
+                  if (_countsForRanking)
+                    FutureBuilder<List<LocalRanking>>(
+                      future: _localRankings,
+                      builder: (context, snapshot) {
+                        final rankings =
+                            snapshot.data ?? const <LocalRanking>[];
+                        return Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Ranglisten auswählen',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting)
+                                  const LinearProgressIndicator(),
+                                if (rankings.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(8),
+                                    child: Text(
+                                      'Lege zuerst eine Rangliste im Hauptmenü an.',
+                                    ),
                                   ),
-                                ),
-                              for (final ranking in rankings)
-                                CheckboxListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(ranking.name),
-                                  value: _localRankingIds.contains(ranking.id),
-                                  onChanged: (selected) => setState(() {
-                                    _rankingSetupTouched = true;
-                                    if (selected == true) {
-                                      _localRankingIds.add(ranking.id);
-                                    } else {
-                                      _localRankingIds.remove(ranking.id);
-                                    }
-                                  }),
-                                ),
-                            ],
+                                for (final ranking in rankings)
+                                  CheckboxListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(ranking.name),
+                                    value: _localRankingIds.contains(
+                                      ranking.id,
+                                    ),
+                                    onChanged: (selected) => setState(() {
+                                      _rankingSetupTouched = true;
+                                      if (selected == true) {
+                                        _localRankingIds.add(ranking.id);
+                                      } else {
+                                        _localRankingIds.remove(ranking.id);
+                                      }
+                                    }),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
+                ],
                 Text(
                   'Spieler',
                   style: textTheme.titleLarge?.copyWith(
@@ -2720,6 +2766,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_stages.any((stage) => stage.type == 'kratzer') &&
+                    _editingStageIndex == null)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'Ein Kratzer-Turnier besteht nur aus dieser einen Etappe. Entferne oder bearbeite sie, um die Konfiguration zu ändern.',
+                    ),
+                  ),
                 _responsiveFormRow(
                   alignTrailingEndOnNarrow: true,
                   leading: TextField(
@@ -2736,7 +2790,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     onSubmitted: (_) => _saveStage(),
                   ),
                   trailing: IconButton.filled(
-                    onPressed: _saveStage,
+                    onPressed:
+                        _stages.any((stage) => stage.type == 'kratzer') &&
+                            _editingStageIndex == null
+                        ? null
+                        : _saveStage,
                     icon: Icon(
                       _editingStageIndex == null ? Icons.add : Icons.check,
                     ),
@@ -2757,46 +2815,53 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     labelText: 'Etappentyp',
                     prefixIcon: Icon(Icons.schema_outlined),
                   ),
-                  items: const [
-                    DropdownMenuItem(
+                  items: [
+                    const DropdownMenuItem(
                       value: 'groups',
                       child: Text('Gruppenphase'),
                     ),
-                    DropdownMenuItem(
-                      value: 'kratzer',
-                      child: Text('Kratzer-Modus'),
-                    ),
-                    DropdownMenuItem(
+                    if (_stages.isEmpty ||
+                        (_editingStageIndex != null &&
+                            _stages[_editingStageIndex!].type == 'kratzer'))
+                      const DropdownMenuItem(
+                        value: 'kratzer',
+                        child: Text('Kratzer-Modus'),
+                      ),
+                    const DropdownMenuItem(
                       value: 'single_knockout',
                       child: Text('K.-o.-Runde'),
                     ),
-                    DropdownMenuItem(
+                    const DropdownMenuItem(
                       value: 'double_knockout',
                       child: Text('Doppel-KO'),
                     ),
-                    DropdownMenuItem(
+                    const DropdownMenuItem(
                       value: 'triple_knockout',
                       child: Text('Triple-KO'),
                     ),
                   ],
-                  onChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
+                  onChanged:
+                      _stages.any((stage) => stage.type == 'kratzer') &&
+                          _editingStageIndex == null
+                      ? null
+                      : (value) {
+                          if (value == null) {
+                            return;
+                          }
 
-                    setState(() {
-                      _selectedStageType = value;
-                      if (value == 'kratzer') {
-                        _countsForRanking = false;
-                        _localRankingIds.clear();
-                      }
-                      _finalEndsTournament = value != 'kratzer';
-                      _kratzerLives = _lossLimitForStageType(
-                        value,
-                      ).clamp(2, 10);
-                      _setDefaultStageNameIfNeeded(value);
-                    });
-                  },
+                          setState(() {
+                            _selectedStageType = value;
+                            if (value == 'kratzer') {
+                              _countsForRanking = false;
+                              _localRankingIds.clear();
+                            }
+                            _finalEndsTournament = value != 'kratzer';
+                            _kratzerLives = _lossLimitForStageType(
+                              value,
+                            ).clamp(2, 10);
+                            _setDefaultStageNameIfNeeded(value);
+                          });
+                        },
                 ),
                 const SizedBox(height: 12),
                 if ((_isKnockoutStageType(_selectedStageType) &&
@@ -3109,7 +3174,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 ],
                 const SizedBox(height: 16),
                 FilledButton.icon(
-                  onPressed: _saveStage,
+                  onPressed:
+                      _stages.any((stage) => stage.type == 'kratzer') &&
+                          _editingStageIndex == null
+                      ? null
+                      : _saveStage,
                   icon: Icon(
                     _editingStageIndex == null ? Icons.add : Icons.check,
                   ),

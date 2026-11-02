@@ -1125,7 +1125,26 @@ void main() {
     expect(find.text('Vereinsrangliste'), findsOneWidget);
     expect(find.textContaining('Alexander Schinko –'), findsOneWidget);
     expect(find.textContaining('Robin Muster –'), findsOneWidget);
-    expect(find.textContaining(' Elo'), findsNWidgets(2));
+    expect(find.textContaining('Dora Mitglied – 1000 Elo'), findsOneWidget);
+    expect(find.textContaining(' Elo'), findsNWidgets(3));
+    expect(
+      find.byKey(const ValueKey('ranking-elo-delta-player-alex')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('ranking-elo-delta-player-robin')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('ranking-position-arrow-player-robin')),
+      findsOneWidget,
+    );
+    expect(find.text('Platz 3'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ranking-participants-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Dora Mitglied –'), findsNothing);
+    expect(find.textContaining('Alexander Schinko –'), findsOneWidget);
+    expect(find.textContaining('Robin Muster –'), findsOneWidget);
     expect(find.textContaining('Siege'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -1375,6 +1394,75 @@ void main() {
       ),
       findsNothing,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('quarter-width widgets fit side by side', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..secondScreenLayouts['Quarter'] = const [
+        SecondScreenWidgetPlacement(widgetId: 'boards', widthUnits: 1),
+        SecondScreenWidgetPlacement(widgetId: 'standings', widthUnits: 1),
+      ]
+      ..secondScreenActiveLayout = 'Quarter';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final boards = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-boards')),
+    );
+    final standings = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-standings')),
+    );
+    expect(boards.center.dy, closeTo(standings.center.dy, 1));
+    expect(boards.right, lessThanOrEqualTo(standings.left));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('inactive ranking widget is removed from saved monitor layouts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..countsForRanking = false
+      ..rankingIds = ['ranking-id']
+      ..secondScreenLayouts['Rangliste'] = const [
+        SecondScreenWidgetPlacement(widgetId: 'ranking'),
+      ]
+      ..secondScreenActiveLayout = 'Rangliste';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('monitor-widget-ranking')), findsNothing);
+    expect(tournament.secondScreenLayouts['Rangliste'], isEmpty);
     expect(tester.takeException(), isNull);
   });
 
@@ -1948,6 +2036,7 @@ class _RankingTestDatabase extends LocalAppDatabase {
   Future<List<String>> loadRankingPlayerIds(String rankingId) async => [
     'player-alex',
     'player-robin',
+    'player-other',
   ];
 
   @override
@@ -1964,6 +2053,15 @@ class _RankingTestDatabase extends LocalAppDatabase {
     PlayerProfile(
       id: 'player-robin',
       displayName: 'Robin Muster',
+      country: '',
+      city: '',
+      dartsSetupJson: '',
+      createdAt: DateTime(2026),
+      isActive: true,
+    ),
+    PlayerProfile(
+      id: 'player-other',
+      displayName: 'Dora Mitglied',
       country: '',
       city: '',
       dartsSetupJson: '',

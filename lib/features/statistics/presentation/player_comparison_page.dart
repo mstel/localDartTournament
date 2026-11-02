@@ -68,7 +68,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       }
       if (year != null) {
         final date = (t.finishedAt ?? t.createdAt).toLocal();
-        if (date.year != year) {
+        if (date.year != year || (month != null && date.month != month)) {
           return false;
         }
       }
@@ -308,6 +308,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                 );
 
                 final yearFilter = DropdownButtonFormField<int?>(
+                  key: const ValueKey('player-comparison-year'),
                   initialValue: _selectedYear,
                   isExpanded: true,
                   decoration: const InputDecoration(
@@ -353,6 +354,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
             const SizedBox(height: 20),
             if (_selectedYear != null)
               DropdownButtonFormField<int?>(
+                key: const ValueKey('player-comparison-month'),
                 initialValue: _selectedMonth,
                 isExpanded: true,
                 decoration: const InputDecoration(
@@ -454,7 +456,14 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                             for (final row in rows)
                               DataRow(
                                 cells: [
-                                  DataCell(Text(row.left)),
+                                  DataCell(
+                                    Text(
+                                      row.left,
+                                      key: ValueKey(
+                                        'player-comparison-left-${row.category}',
+                                      ),
+                                    ),
+                                  ),
                                   DataCell(
                                     SizedBox(
                                       width: 210,
@@ -466,7 +475,14 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                                       ),
                                     ),
                                   ),
-                                  DataCell(Text(row.right)),
+                                  DataCell(
+                                    Text(
+                                      row.right,
+                                      key: ValueKey(
+                                        'player-comparison-right-${row.category}',
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                           ],

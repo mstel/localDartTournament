@@ -161,22 +161,50 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
         ),
       ),
       Card(
-        clipBehavior: Clip.antiAlias,
-        child: ExpansionTile(
+        child: ListTile(
           leading: const Icon(Icons.rule_folder_outlined),
           title: const Text('Tie Breaker Standardwerte'),
-          children: [const TieBreakerDefaultsPanel()],
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const _TieBreakerDefaultsPage(),
+            ),
+          ),
         ),
       ),
       Card(
-        clipBehavior: Clip.antiAlias,
-        child: ExpansionTile(
+        child: ListTile(
           leading: const Icon(Icons.tips_and_updates_outlined),
           title: const Text('Hinweiseinstellungen'),
-          children: [const PriorityNoticeSettingsPanel()],
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const _PriorityNoticeSettingsPage(),
+            ),
+          ),
         ),
       ),
     ],
+  );
+}
+
+class _TieBreakerDefaultsPage extends StatelessWidget {
+  const _TieBreakerDefaultsPage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Tie Breaker Standardwerte')),
+    body: const TieBreakerDefaultsPanel(showTitle: false),
+  );
+}
+
+class _PriorityNoticeSettingsPage extends StatelessWidget {
+  const _PriorityNoticeSettingsPage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Hinweiseinstellungen')),
+    body: const PriorityNoticeSettingsPanel(showTitle: false),
   );
 }
 
