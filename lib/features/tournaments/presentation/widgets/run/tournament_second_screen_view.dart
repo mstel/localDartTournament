@@ -26,8 +26,11 @@ import '../../../application/group_advancement_forecast_service.dart';
 import '../../../domain/engines/group_advancement_forecast_engine.dart';
 import 'standings_table.dart';
 import 'recommended_matches_table.dart';
+import '../../../data/app_database.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
+import '../../../../rankings/application/local_ranking_elo_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
+import '../../../../rankings/domain/local_ranking.dart';
 import '../../../data/tournament_storage.dart';
 import 'recent_match_result_card.dart';
 
@@ -80,6 +83,7 @@ class TournamentSecondScreenView extends StatefulWidget {
     this.showNextStagePreviewInitially = false,
     this.forecastService,
     this.storage,
+    this.database,
   });
 
   final CreatedTournament tournament;
@@ -88,6 +92,7 @@ class TournamentSecondScreenView extends StatefulWidget {
   final bool showNextStagePreviewInitially;
   final GroupAdvancementForecastService? forecastService;
   final TournamentStorage? storage;
+  final LocalAppDatabase? database;
 
   @override
   State<TournamentSecondScreenView> createState() =>
@@ -108,6 +113,8 @@ class _TournamentSecondScreenViewState
   String? _prioritySettingsError;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
+  late Future<List<({String rankingName, List<LocalEloPlayer> entries})>>
+  _rankingStandings;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
   late String _forecastFingerprint;
   late List<SecondScreenWidgetPlacement> _monitorPlacements;
@@ -121,6 +128,7 @@ class _TournamentSecondScreenViewState
   final Map<String, GlobalKey> _monitorDropTargetKeys = {};
 
   TournamentStorage get _storage => widget.storage ?? TournamentStorage();
+  LocalAppDatabase get _database => widget.database ?? LocalAppDatabase();
 
   @override
   void initState() {
@@ -131,6 +139,7 @@ class _TournamentSecondScreenViewState
     _monitorPlacements = _savedLayoutOrDefault();
     unawaited(_loadPrioritySettings());
     _refreshEloChanges();
+    _refreshRankingStandings();
     _refreshAdvancementForecast();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
@@ -190,6 +199,7 @@ class _TournamentSecondScreenViewState
     final fingerprint = jsonEncode(widget.tournament.toJson());
     if (fingerprint != _eloInputFingerprint) {
       _refreshEloChanges(fingerprint: fingerprint);
+      _refreshRankingStandings();
     }
     if (fingerprint != _forecastFingerprint) {
       _refreshAdvancementForecast(fingerprint: fingerprint);
@@ -199,7 +209,44 @@ class _TournamentSecondScreenViewState
   void _refreshEloChanges({String? fingerprint}) {
     _eloInputFingerprint =
         fingerprint ?? jsonEncode(widget.tournament.toJson());
-    _eloChanges = TournamentMatchEloService().calculate(widget.tournament);
+    _eloChanges = TournamentMatchEloService(
+      database: _database,
+      tournamentStorage: _storage,
+    ).calculate(widget.tournament);
+  }
+
+  void _refreshRankingStandings() {
+    _rankingStandings = _loadRankingStandings(widget.tournament);
+  }
+
+  Future<List<({String rankingName, List<LocalEloPlayer> entries})>>
+  _loadRankingStandings(CreatedTournament tournament) async {
+    if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) {
+      return const [];
+    }
+    final selectedRankings = (await _database.loadLocalRankings())
+        .where(
+          (ranking) =>
+              ranking.type == RankingType.elo &&
+              tournament.rankingIds.contains(ranking.id),
+        )
+        .toList();
+    final tournaments = await _storage.loadTournaments();
+    final rankingTournaments = [
+      ...tournaments.where((entry) => entry.id != tournament.id),
+      tournament,
+    ];
+    final service = LocalRankingEloService(database: _database);
+    return [
+      for (final ranking in selectedRankings)
+        (
+          rankingName: ranking.name,
+          entries: (await service.calculate(
+            ranking,
+            tournaments: rankingTournaments,
+          )).entries,
+        ),
+    ];
   }
 
   void _refreshAdvancementForecast({String? fingerprint}) {
@@ -1074,9 +1121,7 @@ class _TournamentSecondScreenViewState
         onMove: (details) {
           final box = targetKey.currentContext?.findRenderObject();
           if (box is! RenderBox) return;
-          final edge = _dragTargetWidgetId == targetWidgetId
-              ? _dragTargetEdge ?? _nearestDropEdge(box, details.offset)
-              : _nearestDropEdge(box, details.offset);
+          final edge = _nearestDropEdge(box, details.offset);
           if (_dragTargetWidgetId == targetWidgetId &&
               _dragTargetEdge == edge) {
             return;
@@ -1106,9 +1151,7 @@ class _TournamentSecondScreenViewState
             (placement) => placement.widgetId == details.data,
           );
           if (targetIndex < 0 || fromIndex < 0) return;
-          final edge = _dragTargetWidgetId == targetWidgetId
-              ? _dragTargetEdge ?? _nearestDropEdge(box, details.offset)
-              : _nearestDropEdge(box, details.offset);
+          final edge = _nearestDropEdge(box, details.offset);
           setState(() {
             _dragTargetWidgetId = null;
             _dragTargetEdge = null;
@@ -1197,10 +1240,7 @@ class _TournamentSecondScreenViewState
     required List<GroupMatch> playedMatches,
     required bool isEditing,
   }) {
-    final title =
-        placement.widgetId == 'ranking' && tournament.isKratzerTournament
-        ? 'Lebenstand'
-        : _monitorWidgetTitles[placement.widgetId];
+    final title = _monitorWidgetTitles[placement.widgetId];
     if (title == null) return const SizedBox.shrink();
     final widgetContent = _buildMonitorWidgetContent(
       context,
@@ -1595,7 +1635,12 @@ class _TournamentSecondScreenViewState
     final available = _monitorWidgetTitles.keys
         .where(
           (id) =>
-              !_monitorPlacements.any((placement) => placement.widgetId == id),
+              !_monitorPlacements.any(
+                (placement) => placement.widgetId == id,
+              ) &&
+              (id != 'ranking' ||
+                  (widget.tournament.countsForRanking &&
+                      widget.tournament.rankingIds.isNotEmpty)),
         )
         .toList();
     if (available.isEmpty) return;
@@ -1898,10 +1943,20 @@ class _TournamentSecondScreenViewState
   ) {
     final stages = tournament.runStages;
     final matches = TournamentTiming.matches(tournament);
-    final allWithPlayers = matches.where((match) => match.hasPlayers).length;
-    final played = matches
-        .where((match) => match.hasPlayers && match.hasResult)
-        .length;
+    final allWithPlayers = stages.isEmpty
+        ? matches.where((match) => match.hasPlayers).length
+        : stages.fold<int>(
+            0,
+            (total, stage) => total + _countMatchesForProgress(stage),
+          );
+    final played = stages.isEmpty
+        ? matches.where((match) => match.hasPlayers && match.hasResult).length
+        : stages.fold<int>(
+            0,
+            (total, stage) =>
+                total +
+                _matchesOf(stage).where((match) => match.hasResult).length,
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1971,71 +2026,63 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     CreatedTournament tournament,
   ) {
-    if (tournament.isKratzerTournament) {
-      final stage = tournament.stages.lastWhere(
-        (stage) => stage.type == 'kratzer',
-      );
-      final scratches = <TournamentPlayer, int>{};
-      for (final match in TournamentTiming.matches(tournament)) {
-        final scratched = match.scratchedPlayer;
-        if (scratched != null) {
-          scratches.update(scratched, (count) => count + 1, ifAbsent: () => 1);
-        }
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Lebenstand · Kratzer-Turnier',
-            style: TextStyle(color: Colors.white70),
-          ),
-          for (final player in tournament.players)
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                (scratches[player] ?? 0) >= stage.lossLimit
-                    ? Icons.person_off_outlined
-                    : Icons.favorite_outline,
-                color: Colors.white,
-              ),
-              title: Text(player.name),
-              trailing: Text(
-                '${(stage.lossLimit - (scratches[player] ?? 0)).clamp(0, stage.lossLimit)} Leben',
-              ),
-            ),
-        ],
-      );
-    }
-    final wins = <String, int>{};
-    for (final match in TournamentTiming.matches(tournament)) {
-      final winner = match.winner;
-      if (match.hasResult && winner != null) {
-        wins.update(winner.name, (value) => value + 1, ifAbsent: () => 1);
-      }
-    }
-    final ranking = wins.entries.toList()
-      ..sort((left, right) => right.value.compareTo(left.value));
-    if (ranking.isEmpty) {
+    if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) {
       return const Center(
         child: Text(
-          'Die Rangliste erscheint nach den ersten Ergebnissen.',
+          'Für dieses Turnier ist keine Rangliste ausgewählt.',
           style: TextStyle(color: Colors.white70),
         ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var index = 0; index < ranking.length; index++)
-          ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: CircleAvatar(radius: 16, child: Text('${index + 1}')),
-            title: Text(ranking[index].key),
-            trailing: Text('${ranking[index].value} Siege'),
-          ),
-      ],
+    return FutureBuilder<
+      List<({String rankingName, List<LocalEloPlayer> entries})>
+    >(
+      future: _rankingStandings,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(
+            child: Text(
+              'Die ELO-Rangliste konnte nicht geladen werden.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final standings = snapshot.data!;
+        if (standings.isEmpty ||
+            standings.every((ranking) => ranking.entries.isEmpty)) {
+          return const Center(
+            child: Text(
+              'Für dieses Turnier ist keine ELO-Rangliste ausgewählt.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final ranking in standings) ...[
+              Text(
+                ranking.rankingName,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              for (final entry in ranking.entries)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    '${entry.name} – ${entry.rating} Elo',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+            ],
+          ],
+        );
+      },
     );
   }
 

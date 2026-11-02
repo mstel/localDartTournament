@@ -20,6 +20,18 @@ class ProductionTournamentRuntime {
     if (index >= 0 && index < _state.widget.tournament.runStages.length) {
       final stage = _state.widget.tournament.runStages[index];
       if (stage is KnockoutTournamentRunStage && stage.isKratzer) {
+        if (stage.rounds.isNotEmpty) {
+          for (final match in stage.rounds.last) {
+            if (match.scratchedPlayer == null &&
+                match.homeLegs != null &&
+                match.awayLegs != null &&
+                match.scratchEligiblePlayers.isNotEmpty) {
+              match
+                ..scratchedPlayer = match.scratchEligiblePlayers.first
+                ..finishedAt ??= DateTime.now();
+            }
+          }
+        }
         _state._advanceKratzerRound(stage);
       }
     }

@@ -3013,18 +3013,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   void _advanceKratzerRound(KnockoutTournamentRunStage stage) {
     if (!stage.isKratzer || stage.rounds.isEmpty) return;
     final lastRound = stage.rounds.last;
-    for (final match in lastRound) {
-      if (match.scratchedPlayer == null &&
-          match.homeLegs != null &&
-          match.awayLegs != null &&
-          match.scratchEligiblePlayers.isNotEmpty) {
-        match
-          ..scratchedPlayer = match.scratchEligiblePlayers.first
-          ..finishedAt ??= DateTime.now();
-      }
-    }
-    if (lastRound.isNotEmpty &&
-        !lastRound.every((match) => match.isResolved)) {
+    if (lastRound.isNotEmpty && !lastRound.every((match) => match.isResolved)) {
       return;
     }
     final engine = const KratzerEngine();

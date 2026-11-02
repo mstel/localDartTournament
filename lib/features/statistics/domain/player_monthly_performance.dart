@@ -30,3 +30,6 @@ class PlayerMonthlyPerformance {
 
   String get periodKey => '$year-${month.toString().padLeft(2, '0')}';
 }
+
+int totalWeightedLegs(Iterable<PlayerMonthlyPerformance> entries) =>
+    entries.fold(0, (total, entry) => total + entry.weightedLegs);

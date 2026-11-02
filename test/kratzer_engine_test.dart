@@ -90,7 +90,7 @@ void main() {
       ),
       [players.first, players.last],
     );
-    expect(engine.requiredScratches(8, 3), 17);
+    expect(engine.requiredScratches(8, 3), 21);
     expect(matches.first.winner, isNull);
     expect(matches.first.loser, players.first);
   });
@@ -119,6 +119,26 @@ void main() {
       engine.estimatedGameCount(playerCount: 4, lives: 1, boards: 1),
       oneBoard.games,
     );
+  });
+
+  test('duration estimates enough games to eliminate all but one player', () {
+    const engine = KratzerEngine();
+    for (final players in [3, 4, 6, 7, 12]) {
+      for (final lives in [1, 2, 5]) {
+        for (final boards in [1, 2, 4]) {
+          expect(
+            engine.estimatedGameCount(
+              playerCount: players,
+              lives: lives,
+              boards: boards,
+            ),
+            greaterThanOrEqualTo(engine.requiredScratches(players, lives)),
+            reason: '$players players, $lives lives, $boards boards',
+          );
+        }
+      }
+    }
+    expect(engine.estimatedGameCount(playerCount: 3, lives: 2, boards: 1), 5);
   });
 
   test(

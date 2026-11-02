@@ -91,7 +91,7 @@ class KratzerEngine {
 
   int requiredScratches(int playerCount, int lives) {
     if (playerCount < 1 || lives < 1) return 0;
-    return playerCount * lives - (playerCount - 1);
+    return (playerCount - 1) * lives;
   }
 
   int estimatedGameCount({

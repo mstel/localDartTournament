@@ -2,10 +2,12 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_advancement_forecast_engine.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/second_screen_widget_placement.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
 import 'package:flutter/material.dart';
@@ -909,6 +911,225 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('stage progress total includes unplayed future knockout slots', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final players = [
+      for (var index = 1; index <= 8; index++)
+        TournamentPlayer.generated(index),
+    ];
+    final tournament = _tournament()
+      ..secondScreenActiveLayout = 'Fortschritt'
+      ..secondScreenLayouts['Fortschritt'] = const [
+        SecondScreenWidgetPlacement(
+          widgetId: 'stageProgress',
+          widthUnits: 2,
+          columnIndex: 1,
+        ),
+      ];
+    tournament.runStages
+      ..clear()
+      ..addAll([
+        GroupTournamentRunStage(
+          name: 'Gruppenphase',
+          groupPlayType: 'round_robin',
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: players,
+              matches: [
+                for (var index = 0; index < 56; index++)
+                  GroupMatch(
+                    homePlayer: players[index % players.length],
+                    awayPlayer: players[(index + 1) % players.length],
+                    round: index + 1,
+                    homeLegs: index < 4 ? 2 : null,
+                    awayLegs: index < 4 ? 0 : null,
+                  ),
+              ],
+            ),
+          ],
+          qualificationPlan: null,
+          tieBreakers: const [],
+        ),
+        KnockoutTournamentRunStage(
+          name: 'K.-o.-Runde',
+          rounds: [
+            [
+              for (var index = 0; index < 4; index++)
+                GroupMatch(
+                  homePlayer: players[index * 2],
+                  awayPlayer: players[index * 2 + 1],
+                  round: 1,
+                ),
+            ],
+            [for (var index = 0; index < 2; index++) GroupMatch(round: 2)],
+            [GroupMatch(round: 3)],
+          ],
+        ),
+      ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('4 von 63 Partien abgeschlossen'), findsOneWidget);
+    expect(find.text('4 / 56 Partien'), findsOneWidget);
+    expect(find.text('0 / 7 Partien'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ranking widget can only be added for a ranked tournament', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+    await tester.tap(find.text('Widget hinzufügen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rangliste'), findsNothing);
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pumpAndSettle();
+
+    final rankedTournament = _tournament()
+      ..rankingIds = ['elo-ranking']
+      ..countsForRanking = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: rankedTournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+    await tester.tap(find.text('Widget hinzufügen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rangliste'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ranking widget shows selected ELO names and ratings', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final alex = TournamentPlayer(
+      profileId: 'player-alex',
+      name: 'Alexander Schinko',
+      isGenerated: false,
+    );
+    final robin = TournamentPlayer(
+      profileId: 'player-robin',
+      name: 'Robin Muster',
+      isGenerated: false,
+    );
+    final tournament = CreatedTournament(
+      name: 'ELO Test',
+      players: [alex, robin],
+      stages: const [
+        TournamentStage(name: 'Gruppenphase', type: 'groups', groupSizes: [2]),
+      ],
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppenphase',
+          groupPlayType: 'round_robin',
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: [alex, robin],
+              matches: [
+                GroupMatch(
+                  homePlayer: alex,
+                  awayPlayer: robin,
+                  round: 1,
+                  homeLegs: 3,
+                  awayLegs: 1,
+                ),
+              ],
+            ),
+          ],
+          qualificationPlan: null,
+          tieBreakers: const [],
+        ),
+      ],
+      countsForRanking: true,
+      rankingIds: const ['selected-ranking'],
+      secondScreenLayouts: const {
+        'ELO': [SecondScreenWidgetPlacement(widgetId: 'ranking')],
+      },
+      secondScreenActiveLayout: 'ELO',
+    );
+    const ranking = LocalRanking(
+      id: 'selected-ranking',
+      name: 'Vereinsrangliste',
+    );
+    final storage = _MemoryTournamentStorage([tournament]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: storage,
+            database: _RankingTestDatabase(ranking),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vereinsrangliste'), findsOneWidget);
+    expect(find.textContaining('Alexander Schinko –'), findsOneWidget);
+    expect(find.textContaining('Robin Muster –'), findsOneWidget);
+    expect(find.textContaining(' Elo'), findsNWidgets(2));
+    expect(find.textContaining('Siege'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('layout apply persists an edited intermediate height', (
     tester,
   ) async {
@@ -998,6 +1219,84 @@ void main() {
       'stageProgress',
     ]);
     expect(placements[1].startsNewRow, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dropping on the other half places a widget in that column', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..secondScreenActiveLayout = 'Standard'
+      ..secondScreenLayouts['Standard'] = const [
+        SecondScreenWidgetPlacement(
+          widgetId: 'boards',
+          widthUnits: 2,
+          columnIndex: 0,
+        ),
+        SecondScreenWidgetPlacement(
+          widgetId: 'standings',
+          widthUnits: 2,
+          columnIndex: 0,
+        ),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+
+    final source = find.byKey(const ValueKey('monitor-widget-drag-boards'));
+    final sourceRect = tester.getRect(source);
+    final target = find.byKey(
+      const ValueKey('monitor-widget-drop-target-standings'),
+    );
+    final targetRect = tester.getRect(target);
+    final start = sourceRect.topLeft + const Offset(80, 20);
+    final firstEdge = Offset(targetRect.left + 8, targetRect.center.dy);
+    final finalEdge = Offset(targetRect.right - 8, targetRect.center.dy);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: start);
+    await mouse.down(start);
+    await mouse.moveTo(firstEdge);
+    await tester.pump();
+    await mouse.moveTo(finalEdge);
+    await tester.pump();
+    await mouse.up();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pump();
+
+    final placements = tournament.secondScreenLayouts['Standard']!;
+    expect(
+      placements
+          .singleWhere((placement) => placement.widgetId == 'boards')
+          .columnIndex,
+      1,
+    );
+    expect(
+      placements
+          .singleWhere((placement) => placement.widgetId == 'standings')
+          .columnIndex,
+      0,
+      reason: [
+        for (final placement in placements)
+          '${placement.widgetId}:${placement.columnIndex}',
+      ].join(', '),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -1610,6 +1909,13 @@ class _FixedForecastService extends GroupAdvancementForecastService {
 }
 
 class _MemoryTournamentStorage extends TournamentStorage {
+  _MemoryTournamentStorage([this.tournaments = const []]);
+
+  final List<CreatedTournament> tournaments;
+
+  @override
+  Future<List<CreatedTournament>> loadTournaments() async => tournaments;
+
   @override
   Future<void> saveSecondScreenLayout({
     required CreatedTournament tournament,
@@ -1628,4 +1934,41 @@ class _MemoryTournamentStorage extends TournamentStorage {
         List<SecondScreenWidgetPlacement>.from(placements);
     if (activate) tournament.secondScreenActiveLayout = name;
   }
+}
+
+class _RankingTestDatabase extends LocalAppDatabase {
+  _RankingTestDatabase(this.ranking);
+
+  final LocalRanking ranking;
+
+  @override
+  Future<List<LocalRanking>> loadLocalRankings() async => [ranking];
+
+  @override
+  Future<List<String>> loadRankingPlayerIds(String rankingId) async => [
+    'player-alex',
+    'player-robin',
+  ];
+
+  @override
+  Future<List<PlayerProfile>> loadPlayerProfiles() async => [
+    PlayerProfile(
+      id: 'player-alex',
+      displayName: 'Alexander Schinko',
+      country: '',
+      city: '',
+      dartsSetupJson: '',
+      createdAt: DateTime(2026),
+      isActive: true,
+    ),
+    PlayerProfile(
+      id: 'player-robin',
+      displayName: 'Robin Muster',
+      country: '',
+      city: '',
+      dartsSetupJson: '',
+      createdAt: DateTime(2026),
+      isActive: true,
+    ),
+  ];
 }

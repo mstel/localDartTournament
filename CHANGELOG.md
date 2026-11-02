@@ -1,3 +1,12 @@
+# 2.3.4+54
+
+- Korrigiert die aufsummierten gewerteten Legs im Spielerprofil sowie den
+  Gesamtfortschritt über Gruppen- und KO-Etappen.
+- Zeigt im Zweitmonitor nur ausgewählte ELO-Ranglisten und deren Spielerwerte;
+  verbessert außerdem das Platzieren halbbreiter Widgets per Drag-and-drop.
+- Entfernt die automatische Verliererauswahl im Kratzer-Modus und verbessert
+  die Verlaufsschätzung bis zum Turnierende.
+
 # 2.3.3+53
 
 - Entfernt im geladenen Zweitmonitor-Layout doppelte Widget-Überschriften und

@@ -25,29 +25,6 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
       _LocalPlayerStatisticsPageState();
 }
 
-double _meanWeightedLegs(List<PlayerMonthlyPerformance> entries) {
-  if (entries.isEmpty) return 0;
-  final currentMonth = DateTime.now().year * 12 + DateTime.now().month - 1;
-  var weightedLegs = 0;
-  var monthCount = 0;
-  for (final playerId in entries.map((entry) => entry.playerId).toSet()) {
-    final playerEntries = entries
-        .where((entry) => entry.playerId == playerId)
-        .toList();
-    final firstMonth = playerEntries
-        .map((entry) => entry.year * 12 + entry.month - 1)
-        .reduce((left, right) => left < right ? left : right);
-    final months = currentMonth - firstMonth + 1;
-    if (months <= 0) continue;
-    weightedLegs += playerEntries.fold(
-      0,
-      (total, entry) => total + entry.weightedLegs,
-    );
-    monthCount += months;
-  }
-  return monthCount == 0 ? 0 : weightedLegs / monthCount;
-}
-
 class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
   bool _exporting = false;
   final _database = LocalAppDatabase();
@@ -318,7 +295,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   children: [
                     _StatCard(
                       label: 'Gewertete Legs',
-                      value: _meanWeightedLegs(performance).toStringAsFixed(1),
+                      value: '${totalWeightedLegs(performance)}',
                     ),
                     _StatCard(
                       label: 'Scoring',
