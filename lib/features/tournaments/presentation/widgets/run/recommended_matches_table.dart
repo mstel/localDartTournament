@@ -3,7 +3,9 @@ import 'dart:math' show max, min;
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/tournament_display_palette.dart';
+import '../../../domain/player_insight.dart';
 import '../../../domain/tournament_models.dart';
+import 'player_insight_badges.dart';
 
 class RecommendedMatchGroup {
   const RecommendedMatchGroup({
@@ -30,6 +32,7 @@ class RecommendedMatchesTable extends StatelessWidget {
     this.onEditResult,
     this.emptyMessage = 'Keine offenen Partien.',
     this.dense = false,
+    this.playerInsights = const {},
   });
 
   final List<RecommendedMatchGroup> groups;
@@ -38,6 +41,7 @@ class RecommendedMatchesTable extends StatelessWidget {
   final ValueChanged<GroupMatch>? onEditResult;
   final String emptyMessage;
   final bool dense;
+  final Map<String, List<PlayerInsight>> playerInsights;
 
   @override
   Widget build(BuildContext context) {
@@ -125,6 +129,7 @@ class RecommendedMatchesTable extends StatelessWidget {
                   prioritizedMatches: prioritizedMatches,
                   onEditResult: onEditResult,
                   dense: dense,
+                  playerInsights: playerInsights,
                 ),
               ),
           ],
@@ -168,6 +173,7 @@ class _GroupTable extends StatelessWidget {
     required this.prioritizedMatches,
     required this.onEditResult,
     required this.dense,
+    required this.playerInsights,
   });
 
   final RecommendedMatchGroup group;
@@ -176,6 +182,7 @@ class _GroupTable extends StatelessWidget {
   final Set<GroupMatch> prioritizedMatches;
   final ValueChanged<GroupMatch>? onEditResult;
   final bool dense;
+  final Map<String, List<PlayerInsight>> playerInsights;
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +244,7 @@ class _GroupTable extends StatelessWidget {
               isPrioritized: prioritizedMatches.contains(match),
               onEditResult: onEditResult,
               dense: dense,
+              playerInsights: playerInsights,
             ),
           ],
         ],
@@ -251,12 +259,14 @@ class _MatchRow extends StatelessWidget {
     required this.isPrioritized,
     required this.onEditResult,
     required this.dense,
+    required this.playerInsights,
   });
 
   final GroupMatch match;
   final bool isPrioritized;
   final ValueChanged<GroupMatch>? onEditResult;
   final bool dense;
+  final Map<String, List<PlayerInsight>> playerInsights;
 
   @override
   Widget build(BuildContext context) {
@@ -270,6 +280,12 @@ class _MatchRow extends StatelessWidget {
               .join('-')
         : '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
               '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}';
+    final homeInsights = match.isKratzer
+        ? const <PlayerInsight>[]
+        : _insightsFor(match.homePlayer!, match.awayPlayer!);
+    final awayInsights = match.isKratzer
+        ? const <PlayerInsight>[]
+        : _insightsFor(match.awayPlayer!, match.homePlayer!);
 
     return Padding(
       key: ValueKey('recommended-match-${match.round}-$matchIdentity'),
@@ -290,21 +306,25 @@ class _MatchRow extends StatelessWidget {
                 : null,
           ),
           Expanded(
-            child: Text(
-              match.isKratzer
-                  ? match.participantShortLabel
-                  : match.homePlayer!.shortDisplayName,
-              style: dense ? playerStyle?.copyWith(fontSize: 12) : playerStyle,
-              maxLines: match.isKratzer
-                  ? dense
-                        ? 2
-                        : 3
-                  : dense
-                  ? 1
-                  : 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: match.isKratzer ? TextAlign.center : TextAlign.start,
-            ),
+            child: match.isKratzer
+                ? Text(
+                    match.participantShortLabel,
+                    style: dense
+                        ? playerStyle?.copyWith(fontSize: 12)
+                        : playerStyle,
+                    maxLines: dense ? 2 : 3,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  )
+                : _PlayerNameWithInsights(
+                    name: match.homePlayer!.shortDisplayName,
+                    insights: homeInsights,
+                    style: dense
+                        ? playerStyle?.copyWith(fontSize: 12)
+                        : playerStyle,
+                    maxLines: dense ? 1 : 2,
+                    textAlign: TextAlign.start,
+                  ),
           ),
           if (!match.isKratzer && onEditResult != null)
             IconButton(
@@ -327,13 +347,13 @@ class _MatchRow extends StatelessWidget {
             ),
           if (!match.isKratzer)
             Expanded(
-              child: Text(
-                match.awayPlayer!.shortDisplayName,
+              child: _PlayerNameWithInsights(
+                name: match.awayPlayer!.shortDisplayName,
+                insights: awayInsights,
                 style: dense
                     ? playerStyle?.copyWith(fontSize: 12)
                     : playerStyle,
                 maxLines: dense ? 1 : 2,
-                overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.end,
               ),
             ),
@@ -341,4 +361,58 @@ class _MatchRow extends StatelessWidget {
       ),
     );
   }
+
+  List<PlayerInsight> _insightsFor(
+    TournamentPlayer player,
+    TournamentPlayer opponent,
+  ) {
+    final playerId = _playerInsightId(player);
+    final opponentId = _playerInsightId(opponent);
+    return [
+      for (final insight in playerInsights[playerId] ?? const [])
+        if (insight.rivalId == null || insight.rivalId == opponentId) insight,
+    ];
+  }
 }
+
+class _PlayerNameWithInsights extends StatelessWidget {
+  const _PlayerNameWithInsights({
+    required this.name,
+    required this.insights,
+    required this.style,
+    required this.maxLines,
+    required this.textAlign,
+  });
+
+  final String name;
+  final List<PlayerInsight> insights;
+  final TextStyle? style;
+  final int maxLines;
+  final TextAlign textAlign;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: textAlign == TextAlign.end
+        ? CrossAxisAlignment.end
+        : CrossAxisAlignment.start,
+    children: [
+      Text(
+        name,
+        style: style,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        textAlign: textAlign,
+      ),
+      if (insights.isNotEmpty)
+        Align(
+          alignment: textAlign == TextAlign.end
+              ? AlignmentDirectional.centerEnd
+              : AlignmentDirectional.centerStart,
+          child: PlayerInsightBadgeRow(insights: insights),
+        ),
+    ],
+  );
+}
+
+String _playerInsightId(TournamentPlayer player) =>
+    player.profileId ?? 'name:${player.name.trim().toLowerCase()}';

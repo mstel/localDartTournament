@@ -639,6 +639,8 @@ class CreatedTournament {
     this.directorModeEnabled = false,
     this.directorSchedulingStrategy = 'group',
     this.showAchievementNotifications = true,
+    this.showPlayerInsights = false,
+    this.soundModeEnabled = false,
     Map<String, List<int>> directorGroupBoardAssignments = const {},
     Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts =
         const {},
@@ -743,6 +745,8 @@ class CreatedTournament {
       ),
       showAchievementNotifications:
           json['showAchievementNotifications'] as bool? ?? true,
+      showPlayerInsights: json['showPlayerInsights'] as bool? ?? false,
+      soundModeEnabled: json['soundModeEnabled'] as bool? ?? false,
       directorGroupBoardAssignments: {
         for (final entry
             in (json['directorGroupBoardAssignments'] as Map? ?? {}).entries)
@@ -817,6 +821,8 @@ class CreatedTournament {
   bool directorModeEnabled;
   String directorSchedulingStrategy;
   bool showAchievementNotifications;
+  bool showPlayerInsights;
+  bool soundModeEnabled;
   final Map<String, List<int>> directorGroupBoardAssignments;
   final Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts;
   String? secondScreenActiveLayout;
@@ -891,6 +897,8 @@ class CreatedTournament {
       if (directorSchedulingStrategy != 'group')
         'directorSchedulingStrategy': directorSchedulingStrategy,
       if (!showAchievementNotifications) 'showAchievementNotifications': false,
+      if (showPlayerInsights) 'showPlayerInsights': true,
+      if (soundModeEnabled) 'soundModeEnabled': true,
       if (directorGroupBoardAssignments.isNotEmpty)
         'directorGroupBoardAssignments': {
           for (final entry in directorGroupBoardAssignments.entries)

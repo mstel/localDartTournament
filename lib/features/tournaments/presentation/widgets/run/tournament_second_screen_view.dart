@@ -13,6 +13,7 @@ import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../domain/player_insight.dart';
 import '../../../domain/second_screen_widget_placement.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../domain/engines/group_standings_engine.dart';
@@ -23,9 +24,11 @@ import '../../../application/tournament_flow_priority.dart';
 import '../../../application/tournament_flow_priority_preferences.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/group_advancement_forecast_service.dart';
+import '../../../application/player_insights_service.dart';
 import '../../../domain/engines/group_advancement_forecast_engine.dart';
 import 'standings_table.dart';
 import 'recommended_matches_table.dart';
+import 'player_insight_badges.dart';
 import '../../../data/app_database.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../../rankings/application/local_ranking_elo_service.dart';
@@ -125,6 +128,7 @@ class _TournamentSecondScreenViewState
       TournamentFlowPriority.defaultSettings;
   String? _prioritySettingsError;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
+  late Future<Map<String, List<PlayerInsight>>> _playerInsights;
   late String _eloInputFingerprint;
   late Future<List<_RankingStandings>> _rankingStandings;
   Future<Map<String, AdvancementChance>>? _advancementForecast;
@@ -152,6 +156,7 @@ class _TournamentSecondScreenViewState
     unawaited(_removeUnavailableRankingWidgets());
     unawaited(_loadPrioritySettings());
     _refreshEloChanges();
+    _refreshPlayerInsights();
     _refreshRankingStandings();
     _refreshAdvancementForecast();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -241,6 +246,7 @@ class _TournamentSecondScreenViewState
     if (fingerprint != _eloInputFingerprint) {
       _refreshEloChanges(fingerprint: fingerprint);
       _refreshRankingStandings();
+      _refreshPlayerInsights();
     }
     if (fingerprint != _forecastFingerprint) {
       _refreshAdvancementForecast(fingerprint: fingerprint);
@@ -299,6 +305,21 @@ class _TournamentSecondScreenViewState
       database: _database,
       tournamentStorage: _storage,
     ).calculate(widget.tournament);
+  }
+
+  void _refreshPlayerInsights() {
+    final tournament = widget.tournament;
+    if (!widget.isStandaloneWindow ||
+        widget.showNextStagePreviewInitially ||
+        !tournament.directorModeEnabled ||
+        !tournament.showPlayerInsights) {
+      _playerInsights = Future.value(const {});
+      return;
+    }
+    _playerInsights = PlayerInsightsService(
+      database: _database,
+      storage: _storage,
+    ).calculate(tournament: tournament);
   }
 
   void _refreshRankingStandings() {
@@ -3675,7 +3696,16 @@ class _TournamentSecondScreenViewState
           group.matches.any((match) => match.hasPlayers && !match.isResolved),
     );
     final recommendedContent = widget.tournament.directorModeEnabled
-        ? _buildDirectorBoardQueue(context, t, activeIndex)
+        ? FutureBuilder<Map<String, List<PlayerInsight>>>(
+            future: _playerInsights,
+            builder: (context, snapshot) => _buildDirectorBoardQueue(
+              context,
+              t,
+              activeIndex,
+              playerInsights: snapshot.data ?? const {},
+              playerInsightsError: snapshot.error,
+            ),
+          )
         : SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3722,12 +3752,34 @@ class _TournamentSecondScreenViewState
                       style: const TextStyle(color: Colors.amber),
                     ),
                   ),
-                RecommendedMatchesTable(
-                  groups: recommendedGroups,
-                  prioritizedMatches: flowPriority.prioritizedMatches,
-                  deprioritizedMatches: flowPriority.deprioritizedMatches,
-                  emptyMessage: 'Keine offenen Partien in dieser Etappe.',
-                  dense: true,
+                FutureBuilder<Map<String, List<PlayerInsight>>>(
+                  future: _playerInsights,
+                  builder: (context, snapshot) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (snapshot.hasError)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              'Player-Insights konnten nicht geladen werden: '
+                              '${snapshot.error}',
+                              style: const TextStyle(color: Colors.amber),
+                            ),
+                          ),
+                        RecommendedMatchesTable(
+                          groups: recommendedGroups,
+                          prioritizedMatches: flowPriority.prioritizedMatches,
+                          deprioritizedMatches:
+                              flowPriority.deprioritizedMatches,
+                          emptyMessage:
+                              'Keine offenen Partien in dieser Etappe.',
+                          dense: true,
+                          playerInsights: snapshot.data ?? const {},
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -3766,8 +3818,10 @@ class _TournamentSecondScreenViewState
   Widget _buildDirectorBoardQueue(
     BuildContext context,
     CreatedTournament tournament,
-    int activeIndex,
-  ) {
+    int activeIndex, {
+    Map<String, List<PlayerInsight>> playerInsights = const {},
+    Object? playerInsightsError,
+  }) {
     final snapshot = TournamentDirectorSnapshot(tournament, activeIndex);
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -3785,6 +3839,15 @@ class _TournamentSecondScreenViewState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (playerInsightsError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Player-Insights konnten nicht geladen werden: '
+                    '$playerInsightsError',
+                    style: const TextStyle(color: Colors.amber),
+                  ),
+                ),
               Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
@@ -3882,14 +3945,32 @@ class _TournamentSecondScreenViewState
                               if (running != null)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    'Aktuell: ${running.match.participantShortLabel}',
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: TournamentDisplayPalette.text,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Aktuell: ${running.match.participantShortLabel}',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: TournamentDisplayPalette.text,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (playerInsights.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 3,
+                                          ),
+                                          child: PlayerInsightBadgeRow(
+                                            insights: insightsForMatch(
+                                              running.match,
+                                              playerInsights,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
                               if (upcoming.isEmpty && running == null)
@@ -3922,17 +4003,30 @@ class _TournamentSecondScreenViewState
                                         ),
                                       ),
                                       Expanded(
-                                        child: Text(
-                                          upcoming[index]
-                                              .entry
-                                              .match
-                                              .participantShortLabel,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color:
-                                                TournamentDisplayPalette.text,
-                                          ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              upcoming[index]
+                                                  .entry
+                                                  .match
+                                                  .participantShortLabel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: TournamentDisplayPalette
+                                                    .text,
+                                              ),
+                                            ),
+                                            if (playerInsights.isNotEmpty)
+                                              PlayerInsightBadgeRow(
+                                                insights: insightsForMatch(
+                                                  upcoming[index].entry.match,
+                                                  playerInsights,
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                       ),
                                     ],

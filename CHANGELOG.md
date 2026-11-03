@@ -1,3 +1,11 @@
+# 2.3.9+59
+
+- Ergänzt Player Insights mit kompakten Badges, ausführlichen Tooltips und
+  optionaler Anzeige im Zweitmonitor.
+- Ergänzt den pro Turnier speicherbaren Ton-Modus: Nach erfolgreich erfassten
+  Leitungsergebnissen werden die nächste Board-Partie und eine verfügbare
+  Alternative lokal akustisch angekündigt.
+
 # 2.3.8+58
 
 - Ergänzt ranglistenspezifische Errungenschaften mit XP, Leveln,

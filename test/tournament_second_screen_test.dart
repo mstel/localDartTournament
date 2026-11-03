@@ -8,6 +8,7 @@ import 'package:dart_tournament_manager/features/tournaments/domain/engines/grou
 import 'package:dart_tournament_manager/features/tournaments/domain/second_screen_widget_placement.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
 import 'package:flutter/material.dart';
@@ -183,6 +184,69 @@ void main() {
     expect(boardTwo.dx, greaterThan(boardOne.dx));
     expect(boardThree.dy, greaterThan(boardOne.dy));
     expect(find.text('Spielplan'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('player insights only appear on the enabled standalone monitor', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = _tournamentWithPlayerInsights()
+      ..directorModeEnabled = true
+      ..showPlayerInsights = true;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+            database: _PlayerInsightTestDatabase(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hot Streak'), findsWidgets);
+    expect(
+      find.byTooltip('Marvin hat seine letzten 3 Matches in Folge gewonnen.'),
+      findsWidgets,
+    );
+
+    tournament.showPlayerInsights = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+            database: _PlayerInsightTestDatabase(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Hot Streak'), findsNothing);
+
+    tournament.showPlayerInsights = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            storage: _MemoryTournamentStorage([tournament]),
+            database: _PlayerInsightTestDatabase(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Hot Streak'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -2341,6 +2405,49 @@ CreatedTournament _tournament() {
   );
 }
 
+CreatedTournament _tournamentWithPlayerInsights() {
+  final marvin = TournamentPlayer.generated(1).copyWith(name: 'Marvin');
+  final opponent = TournamentPlayer.generated(2).copyWith(name: 'Daniel');
+  final nextOpponent = TournamentPlayer.generated(3).copyWith(name: 'Alex');
+  final matches = [
+    for (var index = 0; index < 3; index++)
+      GroupMatch(
+        homePlayer: marvin,
+        awayPlayer: opponent,
+        round: index + 1,
+        homeLegs: 2,
+        awayLegs: 0,
+        finishedAt: DateTime.utc(2026, 3, index + 1),
+      ),
+    GroupMatch(homePlayer: marvin, awayPlayer: nextOpponent, round: 4),
+  ];
+  final date = DateTime.utc(2026, 3, 10);
+  return CreatedTournament(
+    id: 'player-insight-test',
+    name: 'Player-Insights',
+    createdAt: date,
+    tournamentDate: date,
+    players: [marvin, opponent, nextOpponent],
+    stages: const [TournamentStage(name: 'Gruppe', type: 'groups')],
+    runStages: [
+      GroupTournamentRunStage(
+        name: 'Gruppenphase',
+        groupPlayType: 'round_robin',
+        groups: [
+          TournamentGroup(
+            name: 'Gruppe A',
+            playType: 'round_robin',
+            players: [marvin, opponent, nextOpponent],
+            matches: matches,
+          ),
+        ],
+        qualificationPlan: null,
+        tieBreakers: const [],
+      ),
+    ],
+  );
+}
+
 class _FixedForecastService extends GroupAdvancementForecastService {
   _FixedForecastService() : super(simulations: 1);
 
@@ -2388,6 +2495,17 @@ class _MemoryTournamentStorage extends TournamentStorage {
         List<SecondScreenWidgetPlacement>.from(placements);
     if (activate) tournament.secondScreenActiveLayout = name;
   }
+}
+
+class _PlayerInsightTestDatabase extends LocalAppDatabase {
+  @override
+  Future<List<LocalRanking>> loadLocalRankings() async => const [];
+
+  @override
+  Future<List<PlayerMonthlyPerformance>> loadPlayerMonthlyPerformanceForPlayers(
+    Set<String> playerIds, {
+    int? year,
+  }) async => const [];
 }
 
 class _RankingTestDatabase extends LocalAppDatabase {

@@ -20,6 +20,49 @@ class TournamentDirectorSnapshot {
   final int stage;
   final BoardSchedule schedule;
   late final List<PlayEntry> entries, ready;
+  List<BoardAssignment> upcomingForBoard(int board) => schedule.planned
+      .where(
+        (assignment) =>
+            assignment.entry.stageIndex == stage &&
+            assignment.board == board &&
+            assignment.entry.match.hasPlayers,
+      )
+      .take(3)
+      .toList();
+
+  List<BoardAssignment> selectableForBoard(int board) {
+    if (!freeBoards.contains(board)) return [];
+    final busyPlayers = {
+      for (final running in schedule.running) ...running.players,
+    };
+    return schedule.planned
+        .where(
+          (assignment) =>
+              assignment.entry.stageIndex == stage &&
+              assignment.entry.match.hasPlayers &&
+              !assignment.entry.match.isResolved &&
+              !assignment.entry.players.any(busyPlayers.contains),
+        )
+        .toList();
+  }
+
+  TournamentDirectorBoardRecommendation? recommendationForBoard(int board) {
+    if (!freeBoards.contains(board)) return null;
+    final next = upcomingForBoard(board).firstOrNull;
+    if (next == null) return null;
+    final alternative = selectableForBoard(board)
+        .where(
+          (assignment) =>
+              assignment.board != board &&
+              !identical(assignment.entry.match, next.entry.match),
+        )
+        .firstOrNull;
+    return TournamentDirectorBoardRecommendation(
+      next: next,
+      alternative: alternative,
+    );
+  }
+
   List<int> get freeBoards => [
     for (var b = 1; b <= tournament.boardCount; b++)
       if (!tournament.blockedBoards.contains(b) && runningOn(b) == null) b,
@@ -56,4 +99,14 @@ class TournamentDirectorSnapshot {
         return order(a).compareTo(order(b));
       });
   }
+}
+
+class TournamentDirectorBoardRecommendation {
+  const TournamentDirectorBoardRecommendation({
+    required this.next,
+    this.alternative,
+  });
+
+  final BoardAssignment next;
+  final BoardAssignment? alternative;
 }

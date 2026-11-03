@@ -10,6 +10,36 @@ void main() {
     showAchievementNotifications: showNotifications ?? true,
   );
 
+  test('player insights default to disabled for older tournament data', () {
+    final oldData = tournament().toJson()..remove('showPlayerInsights');
+
+    expect(CreatedTournament.fromJson(oldData).showPlayerInsights, isFalse);
+  });
+
+  test('player insight setting is persisted', () {
+    final original = tournament()..showPlayerInsights = true;
+
+    expect(
+      CreatedTournament.fromJson(original.toJson()).showPlayerInsights,
+      isTrue,
+    );
+  });
+
+  test('sound mode defaults to disabled for older tournament data', () {
+    final oldData = tournament().toJson()..remove('soundModeEnabled');
+
+    expect(CreatedTournament.fromJson(oldData).soundModeEnabled, isFalse);
+  });
+
+  test('sound mode setting is persisted', () {
+    final original = tournament()..soundModeEnabled = true;
+
+    expect(
+      CreatedTournament.fromJson(original.toJson()).soundModeEnabled,
+      isTrue,
+    );
+  });
+
   test(
     'achievement notifications default to enabled for old tournament data',
     () {

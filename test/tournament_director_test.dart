@@ -211,6 +211,34 @@ void main() {
     }
   }
   const c = OrderOfPlayController();
+  test(
+    'board recommendation reuses the visible queue and selectable alternatives',
+    () {
+      final t = fixture(boards: 3);
+      final snapshot = TournamentDirectorSnapshot(t, 0);
+
+      final recommendation = snapshot.recommendationForBoard(1);
+
+      expect(recommendation, isNotNull);
+      expect(recommendation!.next, same(snapshot.upcomingForBoard(1).first));
+      expect(recommendation.alternative, isNotNull);
+      expect(recommendation.alternative!.board, isNot(1));
+      expect(
+        snapshot
+            .selectableForBoard(1)
+            .any(
+              (assignment) => identical(assignment, recommendation.alternative),
+            ),
+        isTrue,
+      );
+
+      t.blockedBoards.add(1);
+      expect(
+        TournamentDirectorSnapshot(t, 0).recommendationForBoard(1),
+        isNull,
+      );
+    },
+  );
   test('blocked boards excluded in plan, starts and player suggestions', () {
     final t = fixture();
     t.directorModeEnabled = true;
@@ -887,6 +915,46 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+  testWidgets('director board shows its next and alternative recommendations', (
+    tester,
+  ) async {
+    final tournament = fixture(boards: 3);
+    final snapshot = TournamentDirectorSnapshot(tournament, 0);
+    final recommendation = snapshot.recommendationForBoard(1)!;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              directorModeEnabled: true,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Nächste Partie: ${recommendation.next.entry.match.participantShortLabel}',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Alternative: ${recommendation.alternative!.entry.match.participantShortLabel}',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('director disables match operations when the stage is locked', (
     tester,
   ) async {

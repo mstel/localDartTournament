@@ -703,6 +703,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _isApplyingStartDraw = false;
   final Set<int> _completedStageIndexes = {};
   LeagueBoardRuntime? _leagueRuntime;
+  TournamentAudioAnnouncementService? _audioAnnouncementService;
   TournamentRunController get _runController =>
       widget.runController ?? const TournamentRunController();
   final _tournamentNameController = TextEditingController();
@@ -716,6 +717,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tournamentNameController.dispose();
+    final audioAnnouncementService = _audioAnnouncementService;
+    if (audioAnnouncementService != null) {
+      unawaited(audioAnnouncementService.dispose());
+    }
     super.dispose();
   }
 
@@ -819,6 +824,106 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     }
   }
+
+  Future<void> _savePlayerInsightsSetting(bool enabled) async {
+    final previous = widget.tournament.showPlayerInsights;
+    widget.tournament.showPlayerInsights = enabled;
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (error) {
+      widget.tournament.showPlayerInsights = previous;
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Player-Insights konnten nicht gespeichert werden: $error',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveSoundModeSetting(bool enabled) async {
+    final previous = widget.tournament.soundModeEnabled;
+    widget.tournament.soundModeEnabled = enabled;
+    if (!enabled) _audioAnnouncementService?.cancel();
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (error) {
+      widget.tournament.soundModeEnabled = previous;
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ton-Modus konnte nicht gespeichert werden: $error'),
+        ),
+      );
+    }
+  }
+
+  void _announceRecommendationForBoard(int board) {
+    try {
+      if (!mounted ||
+          !widget.tournament.soundModeEnabled ||
+          !widget.tournament.directorModeEnabled ||
+          _stageViewMode != StageViewMode.director) {
+        return;
+      }
+      final stageIndex = _activeStageIndex;
+      final snapshot = TournamentDirectorSnapshot(
+        widget.tournament,
+        stageIndex,
+      );
+      final recommendation = snapshot.recommendationForBoard(board);
+      if (recommendation == null) return;
+      final announcedMatches = [
+        recommendation.next.entry.match,
+        if (recommendation.alternative != null)
+          recommendation.alternative!.entry.match,
+      ];
+      final boardName = widget.tournament.boardDisplayName(board);
+      final message = [
+        'Nächste Partie: ${_spokenMatchLabel(announcedMatches.first)} an $boardName.',
+        if (announcedMatches.length > 1)
+          'Alternativ: ${_spokenMatchLabel(announcedMatches[1])} an $boardName.',
+      ].join(' ');
+      final audioService = _audioAnnouncementService ??=
+          TournamentAudioAnnouncementService();
+      unawaited(
+        audioService.announce(
+          text: message,
+          isStillCurrent: () {
+            if (!mounted ||
+                !widget.tournament.soundModeEnabled ||
+                !widget.tournament.directorModeEnabled ||
+                _stageViewMode != StageViewMode.director ||
+                _activeStageIndex != stageIndex) {
+              return false;
+            }
+            final refreshed = TournamentDirectorSnapshot(
+              widget.tournament,
+              stageIndex,
+            ).recommendationForBoard(board);
+            return refreshed != null &&
+                widget.tournament.boardDisplayName(board) == boardName &&
+                identical(refreshed.next.entry.match, announcedMatches.first) &&
+                identical(
+                  refreshed.alternative?.entry.match,
+                  announcedMatches.length > 1 ? announcedMatches[1] : null,
+                );
+          },
+        ),
+      );
+    } catch (error) {
+      debugPrint('Turnierempfehlung konnte nicht angesagt werden: $error');
+    }
+  }
+
+  String _spokenMatchLabel(GroupMatch match) =>
+      match.participantShortLabel.replaceFirst(' – ', ' gegen ');
 
   Future<void> _startTournamentClock() async {
     if (widget.tournament.startedAt != null) return;
@@ -1481,6 +1586,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   Future<void> _editResult(
     GroupMatch match, {
     VoidCallback? onLocalUpdate,
+    VoidCallback? onSaved,
   }) async {
     if (match.withdrawalSignature != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1619,6 +1725,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     } catch (_) {
       return;
     }
+    onSaved?.call();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -4021,7 +4128,18 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             !_stageNeedsStartDraw(
                               widget.tournament.stages[_activeStageIndex],
                             ),
-                        onResult: _editResult,
+                        onResult: (match) {
+                          final board = match.boardNumber;
+                          final announce =
+                              _stageViewMode == StageViewMode.director &&
+                              board != null;
+                          return _editResult(
+                            match,
+                            onSaved: announce
+                                ? () => _announceRecommendationForBoard(board)
+                                : null,
+                          );
+                        },
                         onBlock: _toggleBoardBlock,
                         directorModeEnabled:
                             widget.tournament.directorModeEnabled &&
@@ -4250,6 +4368,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           }
                                         },
                                       ),
+                                    ),
+                                  if (widget.tournament.directorModeEnabled)
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text(
+                                        'Player Insights anzeigen',
+                                      ),
+                                      subtitle: const Text(
+                                        'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
+                                      ),
+                                      value:
+                                          widget.tournament.showPlayerInsights,
+                                      onChanged: _savePlayerInsightsSetting,
+                                    ),
+                                  if (widget.tournament.directorModeEnabled)
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Ton-Modus'),
+                                      subtitle: const Text(
+                                        'Spielt nach erfolgreich gespeicherten Leitungsergebnissen einen Signalton und liest die nächste Board-Empfehlung vor.',
+                                      ),
+                                      value: widget.tournament.soundModeEnabled,
+                                      onChanged: _saveSoundModeSetting,
                                     ),
                                   if (widget.tournament.directorModeEnabled)
                                     Padding(

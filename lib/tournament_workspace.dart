@@ -45,6 +45,8 @@ import 'features/tournaments/application/tournament_creation_controller.dart';
 import 'features/tournaments/application/group_player_rating_service.dart';
 import 'features/tournaments/application/group_tie_breaker_preferences.dart';
 import 'features/tournaments/application/tournament_run_controller.dart';
+import 'features/tournaments/application/tournament_audio_announcement_service.dart';
+import 'features/tournaments/application/tournament_director_snapshot.dart';
 import 'features/tournaments/application/group_stage_preview_service.dart';
 import 'features/tournaments/application/tournament_export.dart';
 import 'features/tournaments/modes/swiss/swiss_engine.dart';

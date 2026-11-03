@@ -237,18 +237,7 @@ class _TournamentDirectorDashboardState
         widget.tournament.completedStageIndexes.contains(widget.activeStage)) {
       return;
     }
-    final busyPlayers = {
-      for (final running in state.schedule.running) ...running.players,
-    };
-    final choices = state.schedule.planned
-        .where(
-          (assignment) =>
-              assignment.entry.stageIndex == widget.activeStage &&
-              assignment.entry.match.hasPlayers &&
-              !assignment.entry.match.isResolved &&
-              !assignment.entry.players.any(busyPlayers.contains),
-        )
-        .toList();
+    final choices = state.selectableForBoard(board);
     if (choices.isEmpty) return;
 
     final match = await showDialog<GroupMatch>(
@@ -688,15 +677,7 @@ class _TournamentDirectorDashboardState
         .toList();
     final boardAssignments = <int, List<BoardAssignment>>{
       for (var board = 1; board <= t.boardCount; board++)
-        board: state.schedule.planned
-            .where(
-              (assignment) =>
-                  assignment.entry.stageIndex == widget.activeStage &&
-                  assignment.board == board &&
-                  assignment.entry.match.hasPlayers,
-            )
-            .take(3)
-            .toList(),
+        board: state.upcomingForBoard(board),
     };
     final boardCards = !widget.directorModeEnabled
         ? <Widget>[]
@@ -707,7 +688,9 @@ class _TournamentDirectorDashboardState
                   final running = state.runningOn(board);
                   final blocked = t.blockedBoards.contains(board);
                   final upcomingForBoard = boardAssignments[board]!;
-                  final suggestion = upcomingForBoard.firstOrNull;
+                  final recommendation = state.recommendationForBoard(board);
+                  final suggestion = recommendation?.next;
+                  final alternative = recommendation?.alternative;
                   final label = running != null
                       ? 'Läuft'
                       : blocked
@@ -887,10 +870,7 @@ class _TournamentDirectorDashboardState
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Text(
-                                    assignment
-                                        .entry
-                                        .match
-                                        .participantShortLabel,
+                                    '${identical(assignment.entry.match, suggestion?.entry.match) ? 'Nächste Partie: ' : ''}${assignment.entry.match.participantShortLabel}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: Theme.of(
@@ -922,6 +902,45 @@ class _TournamentDirectorDashboardState
                                 ],
                               ),
                             ),
+                        if (!blocked && alternative != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Alternative: ${alternative.entry.match.participantShortLabel}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                if (widget.onStartOnBoard != null)
+                                  Tooltip(
+                                    message:
+                                        'Alternative auf ${t.boardDisplayName(board)} starten',
+                                    child: FilledButton.tonalIcon(
+                                      onPressed:
+                                          widget.canOperate &&
+                                              state.canStart(alternative.entry)
+                                          ? () => _act(
+                                              () => widget.onStartOnBoard!(
+                                                board,
+                                                match: alternative.entry.match,
+                                              ),
+                                            )
+                                          : null,
+                                      icon: const Icon(
+                                        Icons.play_arrow_rounded,
+                                        size: 18,
+                                      ),
+                                      label: Text(
+                                        '${t.boardDisplayName(board)} starten',
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         if (running == null)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
