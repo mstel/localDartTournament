@@ -14,6 +14,7 @@ import '../../tournaments/application/tournament_activity_logger.dart';
 import '../application/local_ranking_elo_service.dart';
 import '../application/local_ranking_series_service.dart';
 import '../application/ranking_year_review_service.dart';
+import '../../achievements/application/ranking_achievement_service.dart';
 import '../domain/local_ranking.dart';
 import '../domain/elo_tier.dart';
 import 'widgets/elo_trajectory_chart.dart';
@@ -1062,6 +1063,14 @@ class _RankingsPageState extends State<RankingsPage> {
     try {
       await _database.saveLocalRanking(updated);
       rankingSaved = true;
+      if (updated.achievementsEnabled &&
+          (!ranking.achievementsEnabled ||
+              updated.isCompleted != ranking.isCompleted)) {
+        await RankingAchievementService(
+          database: _database,
+          tournamentStorage: TournamentStorage(),
+        ).refreshRanking(updated);
+      }
       if (updated.name != ranking.name) {
         await const TournamentActivityLogger().recordRankingRename(
           rankingId: ranking.id,
@@ -1076,7 +1085,7 @@ class _RankingsPageState extends State<RankingsPage> {
           SnackBar(
             content: Text(
               rankingSaved
-                  ? 'Rangliste gespeichert, aber Turnierprotokolle konnten nicht aktualisiert werden: $error'
+                  ? 'Rangliste gespeichert, aber verbundene Daten konnten nicht aktualisiert werden: $error'
                   : 'Rangliste konnte nicht gespeichert werden: $error',
             ),
           ),
@@ -1354,6 +1363,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   bool _absenceDecayEnabled = false;
   bool _inactivityDecayEnabled = false;
   bool _isDefaultForStatistics = false;
+  bool _achievementsEnabled = false;
+  bool _isCompleted = false;
   List<TextEditingController> _tierNames = [];
   List<TextEditingController> _tierMinimums = [];
 
@@ -1382,6 +1393,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     _inactivityGraceTournaments.text = '${initial.inactivityGraceTournaments}';
     _inactivityDecayPoints.text = '${initial.inactivityDecayPoints}';
     _isDefaultForStatistics = initial.isDefaultForStatistics;
+    _achievementsEnabled = initial.achievementsEnabled;
+    _isCompleted = initial.isCompleted;
     _fromDate =
         initial.validFromDate ??
         (initial.validFromYear == null
@@ -1519,6 +1532,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
         inactivityDecayPoints:
             int.tryParse(_inactivityDecayPoints.text.trim()) ?? 0,
         isDefaultForStatistics: _isDefaultForStatistics,
+        achievementsEnabled: _achievementsEnabled,
+        isCompleted: _isCompleted,
       ),
     );
   }
@@ -1728,147 +1743,130 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
                   setState(() => _type = value ?? RankingType.elo),
             ),
             const SizedBox(height: 20),
-            Text(
-              _type == RankingType.elo ? 'Elo-Parameter' : 'Punkte-Parameter',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            for (final entry in _numbers.entries)
-              if (_type == RankingType.elo
-                  ? entry.key.startsWith('Start') ||
-                        entry.key.startsWith('K-Faktor') ||
-                        entry.key.startsWith('Spiele') ||
-                        entry.key.startsWith('Pro-Spieler')
-                  : entry.key.startsWith('Punkte'))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: entry.value,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: entry.key,
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: (value) =>
-                        int.tryParse((value ?? '').trim()) == null
-                        ? 'Bitte eine ganze Zahl eingeben.'
-                        : null,
-                  ),
-                ),
-            if (_type == RankingType.elo) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Automatischer Verfall',
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(left: 12, top: 8),
+              title: Text(
+                _type == RankingType.elo ? 'ELO-Parameter' : 'Punkte-Parameter',
                 style: Theme.of(
                   context,
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Verfall unter der Startwertung erlauben'),
-                subtitle: const Text(
-                  'Wenn deaktiviert, kann Inaktivitätsverfall die Wertung nicht unter den Startwert senken.',
-                ),
-                value: _allowDecayBelowStartRating,
-                onChanged: (value) =>
-                    setState(() => _allowDecayBelowStartRating = value),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Punkteverlust bei verpassten Turnieren'),
-                subtitle: const Text(
-                  'Der Verlust wird unter den teilnehmenden Mitgliedern dieser Rangliste verteilt.',
-                ),
-                value: _absenceDecayEnabled,
-                onChanged: (value) =>
-                    setState(() => _absenceDecayEnabled = value),
-              ),
-              if (_absenceDecayEnabled)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: _absenceDecayPoints,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Punkte je verpasstem Turnier',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+              children: [
+                for (final entry in _numbers.entries)
+                  if (_type == RankingType.elo
+                      ? entry.key.startsWith('Start') ||
+                            entry.key.startsWith('K-Faktor') ||
+                            entry.key.startsWith('Spiele') ||
+                            entry.key.startsWith('Pro-Spieler')
+                      : entry.key.startsWith('Punkte'))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: entry.value,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: entry.key,
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        validator: (value) =>
+                            int.tryParse((value ?? '').trim()) == null
+                            ? 'Bitte eine ganze Zahl eingeben.'
+                            : null,
+                      ),
                     ),
-                    validator: _nonNegativeIntegerValidator,
-                  ),
-                ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Zusätzlicher Verlust bei längerer Inaktivität',
-                ),
-                subtitle: const Text(
-                  'Nach der Schonfrist wird für jedes weitere verpasste Turnier ein zusätzlicher Verlust verteilt.',
-                ),
-                value: _inactivityDecayEnabled,
-                onChanged: (value) =>
-                    setState(() => _inactivityDecayEnabled = value),
-              ),
-              if (_inactivityDecayEnabled) ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: _inactivityGraceTournaments,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Schonfrist: verpasste Turniere',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: _nonNegativeIntegerValidator,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: _inactivityDecayPoints,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Zusätzliche Punkte je Turnier danach',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: _nonNegativeIntegerValidator,
-                  ),
-                ),
               ],
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Spieler erst ab X Turnierteilnahmen werten'),
-                subtitle: const Text(
-                  'Begegnungen eines Spielers werden erst berücksichtigt, wenn er die Mindestanzahl erreicht hat.',
+            ),
+            if (_type == RankingType.elo) ...[
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(left: 12, top: 8),
+                title: Text(
+                  'Automatischer Verfall',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
-                value: _requireMinimumParticipations,
-                onChanged: (value) =>
-                    setState(() => _requireMinimumParticipations = value),
-              ),
-              if (_requireMinimumParticipations)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: _minimumParticipations,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Mindestens teilgenommene Turniere',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Verfall unter der Startwertung erlauben',
                     ),
-                    validator: (value) {
-                      final count = int.tryParse((value ?? '').trim());
-                      return count == null || count < 1
-                          ? 'Bitte mindestens 1 Turnier eingeben.'
-                          : null;
-                    },
+                    subtitle: const Text(
+                      'Wenn deaktiviert, kann Inaktivitätsverfall die Wertung nicht unter den Startwert senken.',
+                    ),
+                    value: _allowDecayBelowStartRating,
+                    onChanged: (value) =>
+                        setState(() => _allowDecayBelowStartRating = value),
                   ),
-                ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Punkteverlust bei verpassten Turnieren'),
+                    subtitle: const Text(
+                      'Der Verlust wird unter den teilnehmenden Mitgliedern dieser Rangliste verteilt.',
+                    ),
+                    value: _absenceDecayEnabled,
+                    onChanged: (value) =>
+                        setState(() => _absenceDecayEnabled = value),
+                  ),
+                  if (_absenceDecayEnabled)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _absenceDecayPoints,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Punkte je verpasstem Turnier',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        validator: _nonNegativeIntegerValidator,
+                      ),
+                    ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Zusätzlicher Verlust bei längerer Inaktivität',
+                    ),
+                    subtitle: const Text(
+                      'Nach der Schonfrist wird für jedes weitere verpasste Turnier ein zusätzlicher Verlust verteilt.',
+                    ),
+                    value: _inactivityDecayEnabled,
+                    onChanged: (value) =>
+                        setState(() => _inactivityDecayEnabled = value),
+                  ),
+                  if (_inactivityDecayEnabled) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _inactivityGraceTournaments,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Schonfrist: verpasste Turniere',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        validator: _nonNegativeIntegerValidator,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _inactivityDecayPoints,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Zusätzliche Punkte je Turnier danach',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        validator: _nonNegativeIntegerValidator,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -1943,6 +1941,53 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
                 ),
               ],
             ],
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Errungenschaften für diese Rangliste aktivieren',
+              ),
+              value: _achievementsEnabled,
+              onChanged: (value) =>
+                  setState(() => _achievementsEnabled = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Rangliste als abgeschlossen markieren'),
+              subtitle: const Text(
+                'Erst dann werden finale Ranglisten-Auszeichnungen vergeben.',
+              ),
+              value: _isCompleted,
+              onChanged: (value) => setState(() => _isCompleted = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Spieler erst ab X Turnierteilnahmen werten'),
+              subtitle: const Text(
+                'Begegnungen eines Spielers werden erst berücksichtigt, wenn er die Mindestanzahl erreicht hat.',
+              ),
+              value: _requireMinimumParticipations,
+              onChanged: (value) =>
+                  setState(() => _requireMinimumParticipations = value),
+            ),
+            if (_requireMinimumParticipations)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: TextFormField(
+                  controller: _minimumParticipations,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Mindestens teilgenommene Turniere',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  validator: (value) {
+                    final count = int.tryParse((value ?? '').trim());
+                    return count == null || count < 1
+                        ? 'Bitte mindestens 1 Turnier eingeben.'
+                        : null;
+                  },
+                ),
+              ),
           ],
         ),
       ),

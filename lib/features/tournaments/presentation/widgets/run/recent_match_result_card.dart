@@ -173,6 +173,34 @@ class RecentMatchResultLogEntry extends StatelessWidget {
               ],
             ],
           ),
+          if (tournament.showAchievementNotifications)
+            for (final notice in match.achievementNotifications)
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Tooltip(
+                  message: notice.explanation,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.emoji_events_outlined,
+                        size: 16,
+                        color: Color(0xFFFFD166),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${notice.playerName} hat „${notice.achievementName}“ '
+                          'erzielt! · ${notice.rankingName}',
+                          style: const TextStyle(
+                            color: Color(0xFFFFD166),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           if (eloError != null)
             Padding(
               padding: const EdgeInsets.only(top: 3),

@@ -24,6 +24,8 @@ class LocalRanking {
     this.validFromDate,
     this.validToDate,
     this.enableTiers = false,
+    this.achievementsEnabled = false,
+    this.isCompleted = false,
     this.tierBands,
     this.requireMinimumParticipations = false,
     this.minimumParticipations = 1,
@@ -57,6 +59,8 @@ class LocalRanking {
   final DateTime? validFromDate;
   final DateTime? validToDate;
   final bool enableTiers;
+  final bool achievementsEnabled;
+  final bool isCompleted;
   final List<EloTier>? tierBands;
   List<EloTier> get effectiveTierBands =>
       tierBands == null || tierBands!.isEmpty ? EloTier.values : tierBands!;
@@ -108,6 +112,8 @@ class LocalRanking {
     'validFromDate': validFromDate?.toIso8601String(),
     'validToDate': validToDate?.toIso8601String(),
     'enableTiers': enableTiers,
+    'achievementsEnabled': achievementsEnabled,
+    'isCompleted': isCompleted,
     if (tierBands != null)
       'tierBands': [for (final tier in tierBands!) tier.toJson()],
     'requireMinimumParticipations': requireMinimumParticipations,
@@ -145,6 +151,8 @@ class LocalRanking {
     validFromDate: DateTime.tryParse(json['validFromDate'] as String? ?? ''),
     validToDate: DateTime.tryParse(json['validToDate'] as String? ?? ''),
     enableTiers: json['enableTiers'] as bool? ?? false,
+    achievementsEnabled: json['achievementsEnabled'] as bool? ?? false,
+    isCompleted: json['isCompleted'] as bool? ?? false,
     tierBands: (json['tierBands'] as List?)?.indexed
         .map(
           (entry) => EloTier.fromJson(
@@ -187,6 +195,8 @@ class LocalRanking {
     DateTime? validFromDate,
     DateTime? validToDate,
     bool? enableTiers,
+    bool? achievementsEnabled,
+    bool? isCompleted,
     List<EloTier>? tierBands,
     bool? requireMinimumParticipations,
     int? minimumParticipations,
@@ -219,6 +229,8 @@ class LocalRanking {
     validFromDate: validFromDate ?? this.validFromDate,
     validToDate: validToDate ?? this.validToDate,
     enableTiers: enableTiers ?? this.enableTiers,
+    achievementsEnabled: achievementsEnabled ?? this.achievementsEnabled,
+    isCompleted: isCompleted ?? this.isCompleted,
     tierBands: tierBands ?? this.tierBands,
     requireMinimumParticipations:
         requireMinimumParticipations ?? this.requireMinimumParticipations,

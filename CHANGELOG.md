@@ -1,3 +1,14 @@
+# 2.3.8+58
+
+- Ergänzt ranglistenspezifische Errungenschaften mit XP, Leveln,
+  Fortschrittsanzeige, Profil- und Spielervergleich sowie dauerhaften finalen
+  Ranglisten-Auszeichnungen.
+- Zeigt bei abgeschlossenen Turniermatches neu freigeschaltete Errungenschaften
+  mit dynamischen Erklärungen an; die Anzeige lässt sich je Turnier ausblenden.
+- Berücksichtigt Gruppen-KO-Runden und Platzierungsspiele in der Achievement-
+  Auswertung und erhält Gruppenspiele beim Wiederherstellen gespeicherter
+  Turniere.
+
 # 2.3.7+57
 
 - Korrigiert die Auswahl passender Spielpläne bei der Planung erweiterter

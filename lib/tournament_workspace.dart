@@ -39,6 +39,7 @@ import 'features/players/presentation/players_page.dart';
 import 'features/rankings/presentation/rankings_page.dart';
 import 'features/rankings/domain/local_ranking.dart';
 import 'features/rankings/application/local_ranking_elo_service.dart';
+import 'features/achievements/application/ranking_achievement_service.dart';
 import 'features/league/domain/league_match.dart';
 import 'features/tournaments/application/tournament_creation_controller.dart';
 import 'features/tournaments/application/group_player_rating_service.dart';

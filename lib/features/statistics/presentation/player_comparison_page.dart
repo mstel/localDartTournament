@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/adaptive_content.dart';
+import '../../achievements/application/ranking_achievement_service.dart';
+import '../../achievements/domain/achievement_engine.dart';
 import '../../rankings/application/local_ranking_elo_service.dart';
 import '../../rankings/domain/local_elo_calculator.dart';
 import '../../rankings/domain/local_ranking.dart';
@@ -17,6 +19,14 @@ typedef _PlayerComparisonData = ({
   DirectEncounterSummary directEncounters,
   List<PlayerMonthlyPerformance> leftPerformance,
   List<PlayerMonthlyPerformance> rightPerformance,
+  List<
+    ({
+      LocalRanking ranking,
+      AchievementEvaluation left,
+      AchievementEvaluation right,
+    })
+  >
+  achievements,
 });
 
 class PlayerComparisonPage extends StatefulWidget {
@@ -101,6 +111,38 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       rightId,
       year: year,
     )).where((entry) => month == null || entry.month == month).toList();
+    final achievementService = RankingAchievementService(
+      database: _database,
+      tournamentStorage: _tournamentStorage,
+    );
+    final achievements =
+        <
+          ({
+            LocalRanking ranking,
+            AchievementEvaluation left,
+            AchievementEvaluation right,
+          })
+        >[];
+    final achievementRankings = (await _database.loadLocalRankings()).where(
+      (ranking) => ranking.achievementsEnabled,
+    );
+    for (final achievementRanking in achievementRankings) {
+      final leftEvaluation = await achievementService.loadPlayerEvaluation(
+        ranking: achievementRanking,
+        playerProfileId: leftId,
+      );
+      final rightEvaluation = await achievementService.loadPlayerEvaluation(
+        ranking: achievementRanking,
+        playerProfileId: rightId,
+      );
+      if (leftEvaluation != null && rightEvaluation != null) {
+        achievements.add((
+          ranking: achievementRanking,
+          left: leftEvaluation,
+          right: rightEvaluation,
+        ));
+      }
+    }
     return (
       leftStats: leftStats,
       rightStats: rightStats,
@@ -108,6 +150,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       directEncounters: directEncounters,
       leftPerformance: leftPerformance,
       rightPerformance: rightPerformance,
+      achievements: achievements,
     );
   }
 
@@ -500,28 +543,41 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                     right: right,
                     summary: directEncounters,
                   );
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      if (constraints.maxWidth < 1000) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            statistics,
-                            const SizedBox(height: 20),
-                            encounters,
-                          ],
-                        );
-                      }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth < 1000) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                statistics,
+                                const SizedBox(height: 20),
+                                encounters,
+                              ],
+                            );
+                          }
 
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 3, child: statistics),
-                          const SizedBox(width: 20),
-                          Expanded(flex: 2, child: encounters),
-                        ],
-                      );
-                    },
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 3, child: statistics),
+                              const SizedBox(width: 20),
+                              Expanded(flex: 2, child: encounters),
+                            ],
+                          );
+                        },
+                      ),
+                      if (data.achievements.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        _achievementComparisonPanel(
+                          left: left,
+                          right: right,
+                          comparisons: data.achievements,
+                        ),
+                      ],
+                    ],
                   );
                 },
               ),
@@ -611,6 +667,83 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       ),
     ),
   );
+
+  Widget _achievementComparisonPanel({
+    required PlayerProfile left,
+    required PlayerProfile right,
+    required List<
+      ({
+        LocalRanking ranking,
+        AchievementEvaluation left,
+        AchievementEvaluation right,
+      })
+    >
+    comparisons,
+  }) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Errungenschaften-Vergleich',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          for (final comparison in comparisons) ...[
+            const Divider(height: 24),
+            Text(
+              comparison.ranking.name,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final leftSummary = _achievementPlayerSummary(
+                  playerName: left.displayName,
+                  evaluation: comparison.left,
+                );
+                final rightSummary = _achievementPlayerSummary(
+                  playerName: right.displayName,
+                  evaluation: comparison.right,
+                );
+                if (constraints.maxWidth < 560) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [leftSummary, rightSummary],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: leftSummary),
+                    const SizedBox(width: 12),
+                    Expanded(child: rightSummary),
+                  ],
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+
+  Widget _achievementPlayerSummary({
+    required String playerName,
+    required AchievementEvaluation evaluation,
+  }) {
+    final unlocked = evaluation.progress.values
+        .where((progress) => progress.isCompleted)
+        .length;
+    final available = evaluation.progress.length;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(playerName),
+      subtitle: Text(
+        'Level ${evaluation.level} · $unlocked/$available freigeschaltet · '
+        '${evaluation.totalExperiencePoints} XP',
+      ),
+    );
+  }
 
   List<({String category, String left, String right})> _comparisonRows({
     required LocalPlayerStatistics leftStats,

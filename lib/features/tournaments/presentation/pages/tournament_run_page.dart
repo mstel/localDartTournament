@@ -710,6 +710,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       widget.tournamentStorage ?? TournamentStorage();
   late final Future<List<LocalRanking>> _localRankings = LocalAppDatabase()
       .loadLocalRankings();
+  late String _lastAchievementResultSignature;
 
   @override
   void dispose() {
@@ -741,6 +742,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     _restoreCompletedGroupDrawForActiveStage();
     _advanceKnockoutWinners();
     _ensureGroupDeciders();
+    _lastAchievementResultSignature = _achievementResultSignature();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _applyPendingStartDrawForActiveStage();
       if (!mounted) return;
@@ -793,6 +795,27 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           ),
         );
         setState(() {});
+      }
+    }
+  }
+
+  Future<void> _saveAchievementNotificationSetting(bool enabled) async {
+    final previous = widget.tournament.showAchievementNotifications;
+    widget.tournament.showAchievementNotifications = enabled;
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (_) {
+      widget.tournament.showAchievementNotifications = previous;
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Achievement-Anzeigeeinstellung konnte nicht gespeichert werden.',
+            ),
+          ),
+        );
       }
     }
   }
@@ -866,6 +889,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _saveTournamentProgress({bool propagateError = false}) async {
+    var achievementInputsChanged = false;
     try {
       _leagueRuntime?.writeTo(widget.tournament);
       await _runController.saveProgress(
@@ -873,6 +897,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
       );
+      final signature = _achievementResultSignature();
+      achievementInputsChanged = signature != _lastAchievementResultSignature;
+      _lastAchievementResultSignature = signature;
       if (mounted && _directorSaveError != null) {
         setState(() => _directorSaveError = null);
       }
@@ -893,6 +920,240 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       );
       if (propagateError) rethrow;
     }
+    if (achievementInputsChanged) {
+      try {
+        await _refreshAchievementsForTournament();
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Achievement-Fortschritt konnte nicht aktualisiert werden: $error',
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  String _achievementResultSignature() {
+    final matches = <GroupMatch>{};
+    for (final stage in widget.tournament.runStages) {
+      matches.addAll(_achievementMatchesForStage(stage));
+    }
+    final source = jsonEncode({
+      'rankingIds': [...widget.tournament.rankingIds]..sort(),
+      'countsForRanking': widget.tournament.countsForRanking,
+      'effectiveDate': widget.tournament.effectiveDate.toIso8601String(),
+      'players': [
+        for (final player in widget.tournament.players)
+          for (final individual in player.individuals)
+            individual.profileId ?? individual.name,
+      ],
+      'stageSettings': [
+        for (final stage in widget.tournament.runStages)
+          if (stage is GroupTournamentRunStage)
+            {
+              'tieBreakers': stage.tieBreakers,
+              'groups': [
+                for (final group in stage.groups)
+                  {
+                    'name': group.name,
+                    'players': [
+                      for (final player in group.players)
+                        for (final individual in player.individuals)
+                          individual.profileId ?? individual.name,
+                    ],
+                  },
+              ],
+            }
+          else if (stage is KnockoutTournamentRunStage)
+            {
+              'participants': [
+                for (final player in stage.participants)
+                  for (final individual in player.individuals)
+                    individual.profileId ?? individual.name,
+              ],
+            },
+      ],
+      'finishedAt': widget.tournament.finishedAt?.toIso8601String(),
+      'completedStages': widget.tournament.completedStageIndexes.toList()
+        ..sort(),
+      'matches': [
+        for (final match in matches)
+          {
+            'participants': [
+              for (final player in [
+                if (match.homePlayer != null) match.homePlayer!,
+                if (match.awayPlayer != null) match.awayPlayer!,
+                ...match.players,
+              ])
+                for (final individual in player.individuals)
+                  individual.profileId ?? individual.name,
+            ],
+            'scratchedPlayer':
+                match.scratchedPlayer?.profileId ?? match.scratchedPlayer?.name,
+            'homeLegs': match.homeLegs,
+            'awayLegs': match.awayLegs,
+            'homeSets': match.homeSets,
+            'awaySets': match.awaySets,
+            'annulled': match.isAnnulled,
+            'withdrawalIgnored': match.withdrawalIgnored,
+            'bestPerformances': [
+              for (final performance in match.bestPerformances)
+                performance.toJson(),
+            ],
+          },
+      ],
+    });
+    var hash = 0x811c9dc5;
+    for (final codeUnit in source.codeUnits) {
+      hash = ((hash ^ codeUnit) * 0x01000193) & 0xffffffff;
+    }
+    return hash.toRadixString(16);
+  }
+
+  Future<void> _refreshAchievementsForTournament() async {
+    final tournament = widget.tournament;
+    if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) return;
+    final rankings = (await _localRankings).where(
+      (ranking) =>
+          ranking.achievementsEnabled &&
+          tournament.rankingIds.contains(ranking.id),
+    );
+    if (rankings.isEmpty) return;
+    final tournaments = await _tournamentStorage.loadTournaments();
+    final database = LocalAppDatabase();
+    final service = RankingAchievementService(
+      database: database,
+      tournamentStorage: _tournamentStorage,
+    );
+    final achievementNotices = <TournamentAchievementNotice>[];
+    for (final ranking in rankings) {
+      final previousProgress = <String, Map<String, Map<String, Object?>>>{};
+      for (final playerId in await database.loadRankingPlayerIds(ranking.id)) {
+        previousProgress[playerId] = await database
+            .loadRankingAchievementProgress(ranking.id, playerId);
+      }
+      final snapshots = await service.refreshRanking(
+        ranking,
+        tournaments: tournaments,
+      );
+      for (final entry in snapshots.entries) {
+        final previous = previousProgress[entry.key] ?? const {};
+        for (final progress in entry.value.evaluation.progress.values) {
+          if (progress.isCompleted &&
+              previous[progress.definition.id]?['status'] != 'completed') {
+            achievementNotices.add(
+              TournamentAchievementNotice(
+                playerProfileId: entry.key,
+                playerName: _tournamentPlayerName(tournament, entry.key),
+                achievementName: progress.definition.name,
+                explanation: service.notificationExplanation(progress),
+                rankingName: ranking.name,
+              ),
+            );
+          }
+        }
+      }
+    }
+    var matchNotices = <TournamentAchievementNotice>[];
+    if (achievementNotices.isNotEmpty) {
+      final recentMatches =
+          <GroupMatch>[
+            for (final stage in tournament.runStages)
+              ..._achievementMatchesForStage(stage),
+          ].where((match) => match.countsForStatistics).toList()..sort((
+            left,
+            right,
+          ) {
+            final leftDate =
+                left.finishedAt ?? left.startedAt ?? tournament.effectiveDate;
+            final rightDate =
+                right.finishedAt ?? right.startedAt ?? tournament.effectiveDate;
+            return rightDate.compareTo(leftDate);
+          });
+      if (recentMatches.isNotEmpty) {
+        final recentMatch = recentMatches.first;
+        final recentParticipantIds = {
+          for (final player in [
+            if (recentMatch.homePlayer != null) recentMatch.homePlayer!,
+            if (recentMatch.awayPlayer != null) recentMatch.awayPlayer!,
+            ...recentMatch.players,
+          ])
+            for (final individual in player.individuals)
+              individual.profileId ?? individual.name,
+        };
+        matchNotices = achievementNotices
+            .where(
+              (item) => recentParticipantIds.contains(item.playerProfileId),
+            )
+            .toList();
+        for (final notice in matchNotices) {
+          if (!recentMatch.achievementNotifications.any(
+            (existing) =>
+                existing.playerProfileId == notice.playerProfileId &&
+                existing.playerName == notice.playerName &&
+                existing.achievementName == notice.achievementName &&
+                existing.rankingName == notice.rankingName,
+          )) {
+            recentMatch.achievementNotifications.add(notice);
+          }
+        }
+        await _runController.saveProgress(
+          tournament: tournament,
+          activeStageIndex: _activeStageIndex,
+          completedStageIndexes: _completedStageIndexes,
+        );
+      }
+    }
+    if (!tournament.showAchievementNotifications ||
+        matchNotices.isEmpty ||
+        !mounted) {
+      return;
+    }
+    final achievementNames = matchNotices
+        .map((notice) => notice.achievementName)
+        .toSet()
+        .toList();
+    final names = achievementNames.take(3).join(', ');
+    final remainder =
+        achievementNames.length - achievementNames.length.clamp(0, 3);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Achievement freigeschaltet: $names'
+          '${remainder > 0 ? ' und $remainder weitere' : ''}',
+        ),
+      ),
+    );
+  }
+
+  String _tournamentPlayerName(CreatedTournament tournament, String profileId) {
+    for (final player in tournament.players) {
+      for (final individual in player.individuals) {
+        if ((individual.profileId ?? individual.name) == profileId) {
+          return individual.name;
+        }
+      }
+    }
+    return profileId;
+  }
+
+  List<GroupMatch> _achievementMatchesForStage(TournamentRunStage stage) {
+    final matches = <GroupMatch>{};
+    if (stage is GroupTournamentRunStage) {
+      for (final group in stage.groups) {
+        matches
+          ..addAll(group.matches)
+          ..addAll(group.knockoutRounds.expand((round) => round))
+          ..addAll(group.placementMatches);
+      }
+    } else if (stage is KnockoutTournamentRunStage) {
+      matches.addAll(stage.matches);
+    }
+    return matches.toList();
   }
 
   String _tournamentTypeLabel() {
@@ -3885,6 +4146,25 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               widget.tournament.effectiveDate.toLocal(),
                             ),
                             onChanged: _saveTournamentDate,
+                          ),
+                          const SizedBox(height: 12),
+                          Card(
+                            child: SwitchListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              title: const Text(
+                                'Errungenschaften-Infos ein-/ausblenden',
+                              ),
+                              subtitle: const Text(
+                                'Steuert nur die Hinweise während des Turniers. '
+                                'Fortschritte werden unabhängig davon gespeichert.',
+                              ),
+                              value: widget
+                                  .tournament
+                                  .showAchievementNotifications,
+                              onChanged: _saveAchievementNotificationSetting,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           Card(

@@ -42,6 +42,33 @@ class _FakeDatabase extends LocalAppDatabase {
   }) async => const [];
 }
 
+class _AchievementFakeDatabase extends _FakeDatabase {
+  @override
+  Future<List<LocalRanking>> loadLocalRankings() async => const [
+    LocalRanking(
+      id: 'elo-achievements',
+      name: 'Saisonwertung',
+      achievementsEnabled: true,
+    ),
+  ];
+
+  @override
+  Future<Map<String, Map<String, Object?>>> loadRankingAchievementProgress(
+    String rankingId,
+    String playerProfileId,
+  ) async => {
+    'first_tournament_win': {
+      'achievement_id': 'first_tournament_win',
+      'current_value': playerProfileId == 'left' ? 1 : 0,
+      'target_value': 1,
+      'status': playerProfileId == 'left' ? 'completed' : 'locked',
+      'unlocked_at': playerProfileId == 'left'
+          ? '2026-01-01T00:00:00.000Z'
+          : null,
+    },
+  };
+}
+
 class _FakeTournamentStorage extends TournamentStorage {
   _FakeTournamentStorage([this.tournaments = const []]);
 
@@ -172,6 +199,32 @@ void main() {
       expect(left.initialValue, isNot(right.initialValue));
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('achievement comparison is grouped by enabled ranking', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerComparisonPage(
+          database: _AchievementFakeDatabase(),
+          tournamentStorage: _FakeTournamentStorage(),
+        ),
+      ),
+    );
+    for (var frame = 0; frame < 20; frame++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.text('Errungenschaften-Vergleich').evaluate().isNotEmpty) {
+        break;
+      }
+    }
+
+    expect(find.text('Errungenschaften-Vergleich'), findsOneWidget);
+    expect(find.text('Saisonwertung'), findsOneWidget);
+    expect(find.text('Anna Lang'), findsAtLeastNWidgets(2));
+    expect(find.text('Ben Kurz'), findsAtLeastNWidgets(2));
+    expect(find.textContaining('freigeschaltet'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
   });
 }
 

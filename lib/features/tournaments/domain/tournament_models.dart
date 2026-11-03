@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'player_withdrawal.dart';
@@ -637,6 +638,7 @@ class CreatedTournament {
     Map<int, String> directorBoardLiveUrls = const {},
     this.directorModeEnabled = false,
     this.directorSchedulingStrategy = 'group',
+    this.showAchievementNotifications = true,
     Map<String, List<int>> directorGroupBoardAssignments = const {},
     Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts =
         const {},
@@ -739,6 +741,8 @@ class CreatedTournament {
       directorSchedulingStrategy: _directorSchedulingStrategyFromJson(
         json['directorSchedulingStrategy'],
       ),
+      showAchievementNotifications:
+          json['showAchievementNotifications'] as bool? ?? true,
       directorGroupBoardAssignments: {
         for (final entry
             in (json['directorGroupBoardAssignments'] as Map? ?? {}).entries)
@@ -812,6 +816,7 @@ class CreatedTournament {
   final Map<int, String> directorBoardLiveUrls;
   bool directorModeEnabled;
   String directorSchedulingStrategy;
+  bool showAchievementNotifications;
   final Map<String, List<int>> directorGroupBoardAssignments;
   final Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts;
   String? secondScreenActiveLayout;
@@ -885,6 +890,7 @@ class CreatedTournament {
       if (directorModeEnabled) 'directorModeEnabled': true,
       if (directorSchedulingStrategy != 'group')
         'directorSchedulingStrategy': directorSchedulingStrategy,
+      if (!showAchievementNotifications) 'showAchievementNotifications': false,
       if (directorGroupBoardAssignments.isNotEmpty)
         'directorGroupBoardAssignments': {
           for (final entry in directorGroupBoardAssignments.entries)
@@ -1050,19 +1056,34 @@ class TournamentGroup {
       json['matches'],
       GroupMatch.fromJson,
     );
-    final rounds = _matchRoundsFromJson(json['knockoutRounds']);
+    final storedMatchesByKey = <String, GroupMatch>{};
+    for (final match in storedMatches) {
+      storedMatchesByKey.putIfAbsent(jsonEncode(match.toJson()), () => match);
+    }
+    GroupMatch restoreMatchReference(GroupMatch match) =>
+        storedMatchesByKey[jsonEncode(match.toJson())] ?? match;
+    final rounds = _matchRoundsFromJson(
+      json['knockoutRounds'],
+    ).map((round) => round.map(restoreMatchReference).toList()).toList();
     final placements = _mapListFromJson(
       json['placementMatches'],
       GroupMatch.fromJson,
-    );
-    // Both views must edit the same objects after restoring a saved tournament.
-    final matches = rounds.isEmpty
-        ? storedMatches
-        : <GroupMatch>[
-            ...rounds.expand((round) => round),
-            ...placements,
-            ...storedMatches.where((match) => match.isDecider),
-          ];
+    ).map(restoreMatchReference).toList();
+    final matches = <GroupMatch>[];
+    final seenMatches = <GroupMatch>{};
+    void addMatch(GroupMatch match) {
+      if (seenMatches.add(match)) matches.add(match);
+    }
+
+    for (final match in storedMatches) {
+      addMatch(match);
+    }
+    for (final match in rounds.expand((round) => round)) {
+      addMatch(match);
+    }
+    for (final match in placements) {
+      addMatch(match);
+    }
     return TournamentGroup(
       name: json['name'] as String? ?? '',
       playType: json['playType'] as String? ?? 'round_robin',
@@ -1147,8 +1168,11 @@ class GroupMatch {
     this.withdrawalIgnored = false,
     this.withdrawalHadResult = false,
     this.bestPerformances = const [],
+    List<TournamentAchievementNotice>? achievementNotifications,
     this.kratzerBonusLives = const [],
-  });
+  }) : achievementNotifications = List<TournamentAchievementNotice>.of(
+         achievementNotifications ?? const [],
+       );
 
   factory GroupMatch.fromJson(Map<String, dynamic> json) {
     return GroupMatch(
@@ -1185,6 +1209,15 @@ class GroupMatch {
             (item) => BestPerformance.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList(),
+      achievementNotifications:
+          (json['achievementNotifications'] as List? ?? const [])
+              .whereType<Map>()
+              .map(
+                (item) => TournamentAchievementNotice.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList(),
       kratzerBonusLives: _mapListFromJson(
         json['kratzerBonusLives'],
         KratzerBonusLife.fromJson,
@@ -1227,6 +1260,7 @@ class GroupMatch {
   bool withdrawalIgnored;
   bool withdrawalHadResult;
   List<BestPerformance> bestPerformances;
+  List<TournamentAchievementNotice> achievementNotifications;
   List<KratzerBonusLife> kratzerBonusLives;
   bool get countsForStatistics => hasResult && !withdrawalIgnored;
 
@@ -1308,12 +1342,49 @@ class GroupMatch {
       'bestPerformances': bestPerformances
           .map((item) => item.toJson())
           .toList(),
+      if (achievementNotifications.isNotEmpty)
+        'achievementNotifications': achievementNotifications
+            .map((item) => item.toJson())
+            .toList(),
       if (kratzerBonusLives.isNotEmpty)
         'kratzerBonusLives': kratzerBonusLives
             .map((bonus) => bonus.toJson())
             .toList(),
     };
   }
+}
+
+class TournamentAchievementNotice {
+  const TournamentAchievementNotice({
+    required this.playerProfileId,
+    required this.playerName,
+    required this.achievementName,
+    required this.explanation,
+    required this.rankingName,
+  });
+
+  factory TournamentAchievementNotice.fromJson(Map<String, dynamic> json) =>
+      TournamentAchievementNotice(
+        playerProfileId: json['playerProfileId'] as String? ?? '',
+        playerName: json['playerName'] as String? ?? '',
+        achievementName: json['achievementName'] as String? ?? '',
+        explanation: json['explanation'] as String? ?? '',
+        rankingName: json['rankingName'] as String? ?? '',
+      );
+
+  final String playerProfileId;
+  final String playerName;
+  final String achievementName;
+  final String explanation;
+  final String rankingName;
+
+  Map<String, dynamic> toJson() => {
+    'playerProfileId': playerProfileId,
+    'playerName': playerName,
+    'achievementName': achievementName,
+    'explanation': explanation,
+    'rankingName': rankingName,
+  };
 }
 
 class PlayerStanding {

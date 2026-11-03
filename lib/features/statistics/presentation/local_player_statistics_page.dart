@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/adaptive_content.dart';
 import '../../../shared/utils/png_image_export.dart';
+import '../../achievements/application/ranking_achievement_service.dart';
+import '../../achievements/presentation/ranking_achievement_section.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
@@ -43,6 +45,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       List<LocalRanking>,
       List<RankingPosition>,
       List<PlayerMonthlyPerformance>,
+      List<RankingAchievementView>,
     )
   >
   _future = _load();
@@ -53,6 +56,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       List<LocalRanking>,
       List<RankingPosition>,
       List<PlayerMonthlyPerformance>,
+      List<RankingAchievementView>,
     )
   >
   _load() async {
@@ -73,7 +77,32 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       for (final profileId in widget.profileIds)
         ...await _database.loadPlayerMonthlyPerformance(profileId),
     ];
-    return (stats, rankings, positions, performance);
+    final achievementViews = <RankingAchievementView>[];
+    final achievementRankings = rankings
+        .where((ranking) => ranking.achievementsEnabled)
+        .toList();
+    final achievementService = RankingAchievementService(
+      database: _database,
+      tournamentStorage: _tournamentStorage,
+    );
+    for (final ranking in achievementRankings) {
+      final assignedIds = await _database.loadRankingPlayerIds(ranking.id);
+      for (final profileId in widget.profileIds.where(assignedIds.contains)) {
+        final evaluation = await achievementService.loadPlayerEvaluation(
+          ranking: ranking,
+          playerProfileId: profileId,
+        );
+        if (evaluation == null) continue;
+        achievementViews.add(
+          RankingAchievementView(
+            ranking: ranking,
+            playerProfileId: profileId,
+            evaluation: evaluation,
+          ),
+        );
+      }
+    }
+    return (stats, rankings, positions, performance, achievementViews);
   }
 
   Future<void> _export(PlayerStatisticsImageOrientation orientation) async {
@@ -150,6 +179,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
             List<LocalRanking>,
             List<RankingPosition>,
             List<PlayerMonthlyPerformance>,
+            List<RankingAchievementView>,
           )
         >(
           future: _future,
@@ -173,6 +203,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
             final rankings = data.$2;
             final positions = data.$3;
             final performance = data.$4;
+            final achievements = data.$5;
             final performanceCounts = {
               for (final type in BestPerformanceType.values.where(
                 (type) => type != BestPerformanceType.score170,
@@ -328,6 +359,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                 StructuredBestPerformancesView(
                   bestPerformances: stats.bestPerformances,
                 ),
+                RankingAchievementSection(achievements: achievements),
               ],
             );
           },

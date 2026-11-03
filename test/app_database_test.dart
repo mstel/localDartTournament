@@ -354,7 +354,10 @@ void main() {
       isTrue,
     );
     final migrated = sqlite3.open(file.path, mode: OpenMode.readOnly);
-    expect(migrated.select('PRAGMA user_version').single.values.single, 12);
+    expect(
+      migrated.select('PRAGMA user_version').single.values.single,
+      LocalAppDatabase.schemaVersion,
+    );
     expect(
       migrated.select(
         "SELECT name FROM sqlite_master WHERE name = 'player_monthly_performance'",

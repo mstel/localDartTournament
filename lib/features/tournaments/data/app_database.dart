@@ -17,7 +17,7 @@ import '../../statistics/domain/player_monthly_performance.dart';
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 12;
+  static const schemaVersion = 13;
 
   final Directory? _baseDirectory;
 
@@ -64,6 +64,79 @@ class LocalAppDatabase {
             ),
           ).copyWith(customOrder: row['custom_order'] as int? ?? 0),
       ];
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<Map<String, Map<String, Object?>>> loadRankingAchievementProgress(
+    String rankingId,
+    String playerProfileId,
+  ) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      final rows = database.select(
+        '''SELECT achievement_id, current_value, target_value, status,
+                  unlocked_at, explanation, is_final, source_hash
+           FROM ranking_achievement_progress
+           WHERE ranking_id = ? AND player_profile_id = ?''',
+        [rankingId, playerProfileId],
+      );
+      return {
+        for (final row in rows)
+          row['achievement_id'] as String: Map<String, Object?>.from(row),
+      };
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<void> saveRankingAchievementProgress({
+    required String rankingId,
+    required String playerProfileId,
+    required Iterable<Map<String, Object?>> progress,
+  }) => StorageAccess.run(() async {
+    final entries = progress.toList();
+    final database = await _openDatabase();
+    try {
+      database.execute('BEGIN');
+      try {
+        for (final item in entries) {
+          database.execute(
+            '''INSERT INTO ranking_achievement_progress(
+                 ranking_id, player_profile_id, achievement_id,
+                 current_value, target_value, status, unlocked_at,
+                 explanation, is_final, source_hash
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(ranking_id, player_profile_id, achievement_id)
+               DO UPDATE SET
+                 current_value = excluded.current_value,
+                 target_value = excluded.target_value,
+                 status = excluded.status,
+                 unlocked_at = excluded.unlocked_at,
+                 explanation = excluded.explanation,
+                 is_final = excluded.is_final,
+                 source_hash = excluded.source_hash''',
+            [
+              rankingId,
+              playerProfileId,
+              item['achievement_id'],
+              item['current_value'],
+              item['target_value'],
+              item['status'],
+              item['unlocked_at'],
+              item['explanation'],
+              item['is_final'],
+              item['source_hash'],
+            ],
+          );
+        }
+        database.execute('COMMIT');
+        if (entries.isNotEmpty) StorageAccess.markLocalDataChanged();
+      } catch (_) {
+        database.execute('ROLLBACK');
+        rethrow;
+      }
     } finally {
       database.close();
     }
@@ -537,7 +610,7 @@ class LocalAppDatabase {
           'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
         );
       }
-      if (version > 0 && version < schemaVersion - 3) {
+      if (version > 0 && version < 9) {
         throw StateError(
           'Lokale Datenbank-Version $version kann nicht sicher migriert werden. '
           'Die Datei wurde nicht verändert. Bitte erstelle eine Kopie der '
@@ -566,13 +639,17 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion == 11) {
+      if (currentVersion == 12) {
+        _createRankingAchievementProgressTable(database);
+      } else if (currentVersion == 11) {
         _createPlayerMonthlyPerformanceTable(database);
+        _createRankingAchievementProgressTable(database);
       } else if (currentVersion == 10) {
         database.execute(
           "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
         );
         _createPlayerMonthlyPerformanceTable(database);
+        _createRankingAchievementProgressTable(database);
       } else if (currentVersion == 9) {
         database.execute(
           'ALTER TABLE local_rankings ADD COLUMN custom_order INTEGER NOT NULL DEFAULT 0',
@@ -590,6 +667,7 @@ class LocalAppDatabase {
           "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
         );
         _createPlayerMonthlyPerformanceTable(database);
+        _createRankingAchievementProgressTable(database);
       } else {
         if (currentVersion > 0) {
           final oldTables = database.select(
@@ -659,6 +737,7 @@ class LocalAppDatabase {
         ON player_profiles(display_name);
     ''');
     _createPlayerMonthlyPerformanceTable(database);
+    _createRankingAchievementProgressTable(database);
   }
 
   void _createPlayerMonthlyPerformanceTable(Database database) {
@@ -690,6 +769,30 @@ class LocalAppDatabase {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     final randomPart = Random().nextInt(1 << 32).toRadixString(16);
     return '$timestamp-$randomPart';
+  }
+
+  void _createRankingAchievementProgressTable(Database database) {
+    database.execute('''
+      CREATE TABLE IF NOT EXISTS ranking_achievement_progress (
+        ranking_id TEXT NOT NULL
+          REFERENCES local_rankings(id) ON DELETE CASCADE,
+        player_profile_id TEXT NOT NULL
+          REFERENCES player_profiles(id) ON DELETE CASCADE,
+        achievement_id TEXT NOT NULL,
+        current_value REAL NOT NULL CHECK (current_value >= 0),
+        target_value REAL NOT NULL CHECK (target_value >= 0),
+        status TEXT NOT NULL
+          CHECK (status IN ('locked', 'inProgress', 'completed')),
+        unlocked_at TEXT,
+        explanation TEXT NOT NULL DEFAULT '',
+        is_final INTEGER NOT NULL DEFAULT 0 CHECK (is_final IN (0, 1)),
+        source_hash TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (ranking_id, player_profile_id, achievement_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ranking_achievement_player
+        ON ranking_achievement_progress(player_profile_id, ranking_id);
+    ''');
   }
 }
 
