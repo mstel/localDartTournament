@@ -230,10 +230,6 @@ class _AchievementDetailsDialogState extends State<_AchievementDetailsDialog> {
                       ' / ${grouped[category]!.length} abgeschlossen',
                     ),
                     children: [
-                      for (final series in _achievementSeries(
-                        grouped[category]!,
-                      ))
-                        _AchievementSeriesSummary(progresses: series),
                       for (final progress in grouped[category]!)
                         _AchievementProgressTile(progress: progress),
                     ],
@@ -270,62 +266,6 @@ class _AchievementDetailsDialogState extends State<_AchievementDetailsDialog> {
           child: const Text('Schließen'),
         ),
       ],
-    );
-  }
-}
-
-List<List<AchievementProgress>> _achievementSeries(
-  List<AchievementProgress> progresses,
-) {
-  final byMetric = <AchievementMetric, List<AchievementProgress>>{};
-  for (final progress in progresses) {
-    final metric = progress.definition.metric;
-    if (metric == null) continue;
-    byMetric.putIfAbsent(metric, () => []).add(progress);
-  }
-  return byMetric.values.where((series) => series.length > 1).map((series) {
-    series.sort(
-      (left, right) =>
-          left.definition.target.compareTo(right.definition.target),
-    );
-    return series;
-  }).toList();
-}
-
-class _AchievementSeriesSummary extends StatelessWidget {
-  const _AchievementSeriesSummary({required this.progresses});
-
-  final List<AchievementProgress> progresses;
-
-  @override
-  Widget build(BuildContext context) {
-    final earnedExperiencePoints = progresses
-        .where((progress) => progress.isCompleted)
-        .fold<int>(
-          0,
-          (total, progress) => total + progress.definition.experiencePoints,
-        );
-    final nextStage = progresses
-        .where((progress) => !progress.isCompleted)
-        .firstOrNull;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (nextStage == null)
-              const Text('Serie abgeschlossen')
-            else
-              Text(
-                'Nächste Stufe: ${nextStage.definition.name} '
-                '(${nextStage.definition.experiencePoints} XP)',
-              ),
-            Text('Bereits erhalten: $earnedExperiencePoints XP'),
-          ],
-        ),
-      ),
     );
   }
 }

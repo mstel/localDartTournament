@@ -35,5 +35,26 @@ void main() {
         isFalse,
       );
     });
+
+    test('persists ranking-specific achievement thresholds', () {
+      final ranking = const LocalRanking(id: 'ranking-1', name: '2026')
+          .copyWith(
+            achievementsEnabled: true,
+            achievementTargets: const {
+              'tournament_participation_5': 20,
+              'monthly_average_60': 45.5,
+            },
+          );
+      final restored = LocalRanking.fromJson(ranking.toJson());
+
+      expect(restored.achievementTargets, {
+        'tournament_participation_5': 20,
+        'monthly_average_60': 45.5,
+      });
+      expect(
+        restored.copyWith(achievementTargets: const {}).achievementTargets,
+        isEmpty,
+      );
+    });
   });
 }

@@ -231,7 +231,9 @@ class ConfigurationDurationEstimator {
             : 0;
         minutes += boardWait;
         waitMinutes += boardWait;
-        final matchMinutes = planner.estimatedMatchMinutes(config.gameFormat);
+        final matchMinutes = planner.estimatedWorstCaseMatchMinutes(
+          config.gameFormat,
+        );
         minutes += matchMinutes;
         for (final assignment in batch) {
           matchEndSeconds.add((minutes * 60).round());

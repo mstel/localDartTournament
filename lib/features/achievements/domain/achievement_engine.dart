@@ -38,16 +38,20 @@ class AchievementEngine {
   AchievementEvaluation evaluate({
     required Map<AchievementMetric, double> values,
     required bool rankingCompleted,
+    List<AchievementDefinition> definitions = AchievementCatalog.definitions,
     Set<String> permanentlyUnlocked = const {},
     Map<String, DateTime> unlockedAt = const {},
   }) {
     final progress = <String, AchievementProgress>{};
-    for (final definition in AchievementCatalog.definitions) {
+    for (final definition in definitions) {
       if (definition.isCategoryCompletion) continue;
-      final current = (values[definition.metric] ?? 0)
+      final metricValue = (values[definition.metric] ?? 0)
           .clamp(0, double.infinity)
           .toDouble();
       final isPreserved = permanentlyUnlocked.contains(definition.id);
+      final current = isPreserved && metricValue < definition.target
+          ? definition.target
+          : metricValue;
       final eligible = !definition.requiresCompletedRanking || rankingCompleted;
       final reached = definition.strictTarget
           ? current > definition.target
@@ -66,7 +70,7 @@ class AchievementEngine {
       );
     }
 
-    for (final definition in AchievementCatalog.definitions.where(
+    for (final definition in definitions.where(
       (item) => item.isCategoryCompletion,
     )) {
       final categoryProgress = progress.values

@@ -50,6 +50,13 @@ class KratzerEngine {
     if (groupCount == 0) return const [];
 
     final orderedPlayers = _rotate(players, round % players.length);
+    final matchPlayers = orderedPlayers;
+    final groupSizes = <int>[];
+    final maxPlayersPerBoard = playersPerBoard ?? 6;
+    final playingPlayerCount = matchPlayers.length.clamp(
+      0,
+      groupCount * maxPlayersPerBoard,
+    );
     if (preferSameScratchCount) {
       final scratches = scratchCounts(completedMatches);
       for (final player in orderedPlayers) {
@@ -59,34 +66,120 @@ class KratzerEngine {
         for (var index = 0; index < orderedPlayers.length; index++)
           orderedPlayers[index]: index,
       };
-      orderedPlayers.sort((a, b) {
+      final gamesPlayed = {for (final player in orderedPlayers) player: 0};
+      final pairCounts = <TournamentPlayer, Map<TournamentPlayer, int>>{};
+      for (final match in completedMatches) {
+        final participants = match.scratchEligiblePlayers
+            .where(gamesPlayed.containsKey)
+            .toList();
+        for (final player in participants) {
+          gamesPlayed.update(player, (count) => count + 1);
+        }
+        for (var left = 0; left < participants.length; left++) {
+          for (var right = left + 1; right < participants.length; right++) {
+            pairCounts
+                .putIfAbsent(participants[left], () => {})
+                .update(
+                  participants[right],
+                  (count) => count + 1,
+                  ifAbsent: () => 1,
+                );
+            pairCounts
+                .putIfAbsent(participants[right], () => {})
+                .update(
+                  participants[left],
+                  (count) => count + 1,
+                  ifAbsent: () => 1,
+                );
+          }
+        }
+      }
+      matchPlayers.sort((a, b) {
+        final gamesCompare = gamesPlayed[a]!.compareTo(gamesPlayed[b]!);
+        if (gamesCompare != 0) return gamesCompare;
         final scratchCompare = (scratches[a] ?? 0).compareTo(scratches[b] ?? 0);
         return scratchCompare != 0
             ? scratchCompare
             : rotationOrder[a]!.compareTo(rotationOrder[b]!);
       });
+      final remaining = matchPlayers.take(playingPlayerCount).toList();
+      final targetGroupSizes = [
+        for (var index = 0; index < groupCount; index++)
+          playersPerBoard == null
+              ? remaining.length ~/ groupCount +
+                    (index < remaining.length % groupCount ? 1 : 0)
+              : (remaining.length - index * playersPerBoard).clamp(
+                  0,
+                  playersPerBoard,
+                ),
+      ];
+      final arranged = <TournamentPlayer>[];
+      for (final size in targetGroupSizes) {
+        if (size == 0 || remaining.isEmpty) continue;
+        final group = <TournamentPlayer>[remaining.removeAt(0)];
+        while (group.length < size) {
+          var bestIndex = 0;
+          var bestRepeatCount = 1 << 30;
+          var bestScratchDistance = 1 << 30;
+          for (var index = 0; index < remaining.length; index++) {
+            final candidate = remaining[index];
+            final repeats = group.fold<int>(
+              0,
+              (total, member) => total + (pairCounts[member]?[candidate] ?? 0),
+            );
+            final scratchDistance = group.fold<int>(
+              0,
+              (total, member) =>
+                  total +
+                  ((scratches[member] ?? 0) - (scratches[candidate] ?? 0))
+                      .abs(),
+            );
+            if (repeats < bestRepeatCount ||
+                (repeats == bestRepeatCount &&
+                    scratchDistance < bestScratchDistance)) {
+              bestIndex = index;
+              bestRepeatCount = repeats;
+              bestScratchDistance = scratchDistance;
+            }
+          }
+          final candidate = remaining.removeAt(bestIndex);
+          group.add(candidate);
+        }
+        arranged.addAll(group);
+      }
+      matchPlayers
+        ..clear()
+        ..addAll(arranged);
+      groupSizes.addAll(targetGroupSizes.where((size) => size > 0));
+    } else {
+      final baseSize = playersPerBoard ?? playingPlayerCount ~/ groupCount;
+      final largerGroupCount = playersPerBoard == null
+          ? playingPlayerCount % groupCount
+          : 0;
+      for (var index = 0; index < groupCount; index++) {
+        groupSizes.add(
+          playersPerBoard == null
+              ? baseSize + (index < largerGroupCount ? 1 : 0)
+              : (playingPlayerCount - index * playersPerBoard).clamp(
+                  0,
+                  playersPerBoard,
+                ),
+        );
+      }
     }
-    final maxPlayersPerBoard = playersPerBoard ?? 6;
-    final playingPlayerCount = orderedPlayers.length.clamp(
-      0,
-      groupCount * maxPlayersPerBoard,
-    );
-    final eligibleCount = playingPlayerCount;
-    final matchPlayers = orderedPlayers.take(playingPlayerCount).toList();
     if (matchPlayers.length < 3) {
+      final previousLength = matchPlayers.length;
       matchPlayers.addAll(eliminatedFillers.take(3 - matchPlayers.length));
+      if (groupSizes.isNotEmpty) {
+        groupSizes[groupSizes.length - 1] +=
+            matchPlayers.length - previousLength;
+      }
     }
     if (matchPlayers.length < 3) return const [];
     final groups = <KratzerRoundAssignment>[];
     var playerIndex = 0;
-    final baseSize = playersPerBoard ?? matchPlayers.length ~/ groupCount;
-    final largerGroupCount = playersPerBoard == null
-        ? matchPlayers.length % groupCount
-        : 0;
-    for (var index = 0; index < groupCount; index++) {
-      final size = playersPerBoard == null
-          ? baseSize + (index < largerGroupCount ? 1 : 0)
-          : (matchPlayers.length - playerIndex).clamp(0, playersPerBoard);
+    for (var index = 0; index < groupSizes.length; index++) {
+      final size = groupSizes[index];
       final groupPlayers = matchPlayers.skip(playerIndex).take(size).toList();
       groups.add(
         KratzerRoundAssignment(
@@ -99,7 +192,6 @@ class KratzerEngine {
       );
       playerIndex += size;
     }
-    if (eligibleCount == 0) return const [];
     return List.unmodifiable(groups);
   }
 
@@ -227,7 +319,7 @@ class KratzerEngine {
     bool preferSameScratchCount = false,
     bool playUntilElimination = false,
     required double baseMatchMinutes,
-    required double boardIdleMinutes,
+    double boardIdleMinutes = 0,
   }) {
     if (playerCount <= 1 || lives < 1 || boards < 1) {
       return const KratzerDurationEstimate(games: 0, rounds: 0, minutes: 0);
@@ -269,6 +361,7 @@ class KratzerEngine {
               completedMatches: completedMatches,
             );
       if (assignments.isEmpty) break;
+      if (round > 0) minutes += boardIdleMinutes;
       round++;
       var longestMatchMinutes = 0.0;
       final currentRound = <GroupMatch>[];
@@ -303,8 +396,6 @@ class KratzerEngine {
       completedMatches.addAll(currentRound);
       previousRoundAssignments = assignments;
       minutes += longestMatchMinutes;
-      minutes +=
-          (boards - assignments.length).clamp(0, boards) * boardIdleMinutes;
       active = [
         for (final player in players)
           if ((scratches[player] ?? 0) < lives) player,

@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/player_insights_service.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/player_insight.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -126,6 +130,7 @@ void main() {
         date: _date,
         format: const TournamentGameFormat(bestOfLegs: 5),
       );
+
       final results = _calculate(
         current: current,
         history: history,
@@ -163,6 +168,72 @@ void main() {
       );
       expect(awayTypes, contains(PlayerInsightType.coldStreak));
       expect(awayTypes, contains(PlayerInsightType.lastLegStanding));
+    },
+  );
+
+  test(
+    'ranking-dependent insights require a catalog player assigned to the tournament ranking',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'player_insights_ranking_eligibility_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final rankedProfile = await database.createPlayerProfile(
+        displayName: 'Ranglistenspieler',
+      );
+      final unrankedProfile = await database.createPlayerProfile(
+        displayName: 'Nicht zugewiesen',
+      );
+      const ranking = LocalRanking(id: 'insights-ranking', name: 'Rangliste');
+      await database.saveLocalRanking(ranking);
+      await database.setRankingPlayers(ranking.id, [rankedProfile.id]);
+
+      final ranked = TournamentPlayer(
+        profileId: rankedProfile.id,
+        name: rankedProfile.displayName,
+        isGenerated: false,
+      );
+      final unranked = TournamentPlayer(
+        profileId: unrankedProfile.id,
+        name: unrankedProfile.displayName,
+        isGenerated: false,
+      );
+      final historyMatches = [
+        for (var index = 0; index < 10; index++)
+          _match(
+            ranked,
+            unranked,
+            homeLegs: 1,
+            awayLegs: 3,
+            date: DateTime.utc(2026, 3, index + 1),
+            round: index + 1,
+          ),
+      ];
+      final current = _tournament(
+        id: 'ranked-current',
+        players: [ranked, unranked],
+        matches: historyMatches,
+        rankingIds: [ranking.id],
+      );
+      final service = PlayerInsightsService(
+        database: database,
+        storage: TournamentStorage(
+          file: File('${directory.path}\\tournaments.json'),
+        ),
+      );
+
+      final insights = await service.calculate(tournament: current, now: _date);
+
+      expect(
+        insights[rankedProfile.id]!.map((insight) => insight.type),
+        contains(PlayerInsightType.bogeyOpponent),
+      );
+      expect(
+        insights[unrankedProfile.id]!.map((insight) => insight.type),
+        isNot(contains(PlayerInsightType.bogeyOpponent)),
+      );
     },
   );
 
@@ -310,12 +381,8 @@ void main() {
         }),
       );
       expect(
-        results['away']!
-            .singleWhere(
-              (insight) => insight.type == PlayerInsightType.favoriteOpponent,
-            )
-            .explanation,
-        contains('9 seiner letzten 10'),
+        results['away']!.map((insight) => insight.type),
+        isNot(contains(PlayerInsightType.bogeyOpponent)),
       );
       expect(
         homeInsights
@@ -484,10 +551,7 @@ void main() {
 
     expect(
       results['home']!.map((insight) => insight.type),
-      containsAll({
-        PlayerInsightType.favoriteOpponent,
-        PlayerInsightType.rival,
-      }),
+      containsAll({PlayerInsightType.rival}),
     );
     expect(
       results['favorite']!.map((insight) => insight.type),
@@ -549,19 +613,21 @@ void main() {
     );
   });
 
-  test('date-only matches do not create an assumed chronological streak', () {
+  test('same-date matches remain ordered within a tournament for streaks', () {
     final home = _player('home');
     final away = _player('away');
+    final third = _player('third');
+    final fourth = _player('fourth');
     final current = _tournament(
       id: 'date-only-results',
-      players: [home, away],
+      players: [home, away, third, fourth],
       date: _date,
       matches: [
-        for (var index = 0; index < 3; index++)
+        for (final (round, opponent) in [(1, away), (2, third), (3, fourth)])
           GroupMatch(
             homePlayer: home,
-            awayPlayer: away,
-            round: index + 1,
+            awayPlayer: opponent,
+            round: round,
             homeLegs: 2,
             awayLegs: 0,
           ),
@@ -572,7 +638,7 @@ void main() {
 
     expect(
       results['home']!.map((insight) => insight.type),
-      isNot(contains(PlayerInsightType.hotStreak)),
+      contains(PlayerInsightType.hotStreak),
     );
   });
 

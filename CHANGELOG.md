@@ -1,3 +1,18 @@
+# 2.4.0+60
+
+- Verbessert die Zeitvorschau für KO-Runden mit voller Spieldistanz und
+  berücksichtigt Boardwechsel konsistent bei Liga-, Freundschafts- und
+  Kratzer-Turnieren.
+- Beschränkt Achievements auf aktive Spielerkatalog-Profile, die der
+  jeweiligen Rangliste zugewiesen sind, und ranglistenabhängige Player Insights
+  auf Mitglieder der dem Turnier zugeordneten Ranglisten.
+- Ermöglicht ranglistenspezifische Achievement-Schwellwerte mit Formular zum
+  Anpassen und Wiederherstellen der Standardwerte.
+- Verbessert die Audioansage im Ton-Modus, inklusive flüssigerer
+  Boardnummern-Aussprache und Pause vor Alternativpartien.
+- Benennt den Achievement-Dialog für individuelle Zielwerte klarer und ergänzt
+  responsive Tests für die Oberfläche.
+
 # 2.3.9+59
 
 - Ergänzt Player Insights mit kompakten Badges, ausführlichen Tooltips und

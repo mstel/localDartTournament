@@ -97,7 +97,7 @@ void main() {
     tester.view.resetDevicePixelRatio();
   });
 
-  testWidgets('achievement menu filters categories and summarizes series XP', (
+  testWidgets('achievement menu filters categories and shows progress tiles', (
     tester,
   ) async {
     final evaluation = const AchievementEngine().evaluate(
@@ -136,7 +136,8 @@ void main() {
     expect(find.text('Turniererfolge'), findsNothing);
     await tester.tap(find.text('Scoring & Specials').last);
     await tester.pumpAndSettle();
-    expect(find.text('Nächste Stufe: Maximum II (40 XP)'), findsOneWidget);
-    expect(find.text('Bereits erhalten: 25 XP'), findsOneWidget);
+    expect(find.text('Maximum I'), findsOneWidget);
+    expect(find.textContaining('3 / 3'), findsOneWidget);
+    expect(find.textContaining('Nächste Stufe:'), findsNothing);
   });
 }

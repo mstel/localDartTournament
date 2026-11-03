@@ -4,6 +4,7 @@ import 'package:dart_tournament_manager/features/achievements/application/rankin
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/imported_tournament_archive.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -69,6 +70,11 @@ void main() {
                     finishedAt: DateTime(2026, 4, 10, 21),
                     bestPerformances: [
                       BestPerformance(
+                        type: BestPerformanceType.highFinish,
+                        playerName: opponent.name,
+                        value: 170,
+                      ),
+                      BestPerformance(
                         type: BestPerformanceType.score180,
                         playerName: winner.name,
                         playerProfileId: winner.profileId,
@@ -90,7 +96,6 @@ void main() {
                     BestPerformance(
                       type: BestPerformanceType.bigFish170,
                       playerName: winner.name,
-                      playerProfileId: winner.profileId,
                       value: 170,
                     ),
                   ],
@@ -119,6 +124,11 @@ void main() {
       playerProfileId: winnerProfile.id,
       tournaments: [tournament],
     );
+    final opponentAchievements = await service.refreshPlayer(
+      ranking: ranking,
+      playerProfileId: opponentProfile.id,
+      tournaments: [tournament],
+    );
 
     expect(
       first.evaluation.progress['tournament_participation_1']!.isCompleted,
@@ -133,11 +143,19 @@ void main() {
     expect(first.evaluation.progress['ranking_mvp']!.isCompleted, isFalse);
     expect(first.evaluation.progress['ranking_gold']!.isCompleted, isFalse);
     expect(first.evaluation.progress['legs_won_10']!.currentValue, 6);
+    expect(first.evaluation.progress['training_sessions_10']!.currentValue, 1);
     expect(
-      first.evaluation.progress['training_sessions_10']!.currentValue,
+      opponentAchievements
+          .evaluation
+          .progress['score170_checkout']!
+          .currentValue,
+      0,
+    );
+    expect(
+      opponentAchievements.evaluation.progress['high_finish_1']!.currentValue,
       1,
     );
-    expect(second.evaluation.totalExperiencePoints, 165);
+    expect(second.evaluation.totalExperiencePoints, 202);
     final completedRanking = ranking.copyWith(isCompleted: true);
     final finalized = await service.refreshPlayer(
       ranking: completedRanking,
@@ -146,7 +164,7 @@ void main() {
     );
     expect(finalized.evaluation.progress['ranking_gold']!.isCompleted, isTrue);
     expect(finalized.evaluation.progress['ranking_mvp']!.isCompleted, isTrue);
-    expect(finalized.evaluation.totalExperiencePoints, 290);
+    expect(finalized.evaluation.totalExperiencePoints, 327);
     final restoredTournament = CreatedTournament.fromJson(tournament.toJson());
     final restoredGroup =
         (restoredTournament.runStages.single as GroupTournamentRunStage)
@@ -170,12 +188,31 @@ void main() {
       6,
     );
     expect(
-      restoredProgress.evaluation.progress['training_sessions_10']!.currentValue,
+      restoredProgress
+          .evaluation
+          .progress['training_sessions_10']!
+          .currentValue,
       1,
     );
     expect(
       restoredProgress.evaluation.progress['score170_checkout']!.currentValue,
       1,
+    );
+    final adjustedRanking = ranking.copyWith(
+      achievementTargets: const {'legs_won_10': 5},
+    );
+    final adjustedProgress = await service.refreshPlayer(
+      ranking: adjustedRanking,
+      playerProfileId: winnerProfile.id,
+      tournaments: [restoredTournament],
+    );
+    expect(
+      adjustedProgress.evaluation.progress['legs_won_10']!.definition.target,
+      5,
+    );
+    expect(
+      adjustedProgress.evaluation.progress['legs_won_10']!.isCompleted,
+      isTrue,
     );
     final stored = await database.loadRankingAchievementProgress(
       ranking.id,
@@ -208,6 +245,62 @@ void main() {
     );
   });
 
+  test(
+    'refresh ignores generated participants and unassigned catalog players',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'ranking_achievement_eligibility_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final assigned = await database.createPlayerProfile(
+        displayName: 'Zugewiesen',
+      );
+      final unassigned = await database.createPlayerProfile(
+        displayName: 'Nicht zugewiesen',
+      );
+      final ranking = const LocalRanking(
+        id: 'eligibility-ranking',
+        name: 'Rangliste',
+        achievementsEnabled: true,
+      );
+      await database.saveLocalRanking(ranking);
+      await database.setRankingPlayers(ranking.id, [assigned.id]);
+      final tournament = CreatedTournament(
+        name: 'Doppeltest',
+        players: [
+          TournamentPlayer.team([
+            TournamentPlayer.generated(1),
+            TournamentPlayer.generated(2),
+          ]),
+          TournamentPlayer.team([
+            TournamentPlayer.generated(3),
+            TournamentPlayer.generated(4),
+          ]),
+        ],
+        stages: const [],
+        runStages: const [],
+        rankingIds: [ranking.id],
+      );
+      final service = RankingAchievementService(database: database);
+
+      final refreshed = await service.refreshRanking(
+        ranking,
+        tournaments: [tournament],
+      );
+
+      expect(refreshed.keys, [assigned.id]);
+      expect(
+        await service.loadPlayerEvaluation(
+          ranking: ranking,
+          playerProfileId: unassigned.id,
+        ),
+        isNull,
+      );
+    },
+  );
+
   test('refresh refuses to calculate a disabled ranking', () async {
     final directory = await Directory.systemTemp.createTemp(
       'ranking_achievement_disabled_test_',
@@ -230,6 +323,154 @@ void main() {
       throwsStateError,
     );
   });
+
+  test(
+    'activity achievements use ranked match months and preserve past performance milestones',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'ranking_achievement_activity_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final playerProfile = await database.createPlayerProfile(
+        displayName: 'Spieler',
+      );
+      final opponentProfile = await database.createPlayerProfile(
+        displayName: 'Gegner',
+      );
+      const ranking = LocalRanking(
+        id: 'activity-ranking',
+        name: 'Rangliste 2026',
+        achievementsEnabled: true,
+        validFromYear: 2026,
+        validToYear: 2026,
+      );
+      await database.saveLocalRanking(ranking);
+      await database.setRankingPlayers(ranking.id, [
+        playerProfile.id,
+        opponentProfile.id,
+      ]);
+      final player = TournamentPlayer(
+        profileId: playerProfile.id,
+        name: playerProfile.displayName,
+        isGenerated: false,
+      );
+      final opponent = TournamentPlayer(
+        profileId: opponentProfile.id,
+        name: opponentProfile.displayName,
+        isGenerated: false,
+      );
+      final tournaments = [
+        for (var month = 1; month <= 10; month++)
+          () {
+            final date = DateTime(2026, month, 10, 20);
+            return CreatedTournament(
+              id: 'event-$month',
+              name: 'Event $month',
+              tournamentDate: date,
+              players: [player, opponent],
+              stages: const [],
+              runStages: [
+                KnockoutTournamentRunStage(
+                  name: 'KO',
+                  rounds: [
+                    [
+                      GroupMatch(
+                        homePlayer: player,
+                        awayPlayer: opponent,
+                        round: 1,
+                        homeLegs: 2,
+                        awayLegs: 1,
+                        finishedAt: date,
+                      ),
+                    ],
+                  ],
+                  participants: [player, opponent],
+                ),
+              ],
+              rankingIds: [ranking.id],
+              finishedAt: date,
+              completedStageIndexes: {0},
+            );
+          }(),
+      ];
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: playerProfile.id,
+          year: 2026,
+          month: 10,
+          weightedLegs: 10,
+          average: 65,
+          scoring: 65,
+          checkoutRate: 31,
+        ),
+      );
+      final service = RankingAchievementService(database: database);
+      final first = await service.refreshPlayer(
+        ranking: ranking,
+        playerProfileId: playerProfile.id,
+        tournaments: tournaments,
+      );
+
+      expect(
+        first.evaluation.progress['consecutive_active_months_6']!.isCompleted,
+        isTrue,
+      );
+      expect(first.evaluation.progress['active_months_12']!.currentValue, 10);
+      expect(
+        first.evaluation.progress['training_sessions_10']!.currentValue,
+        10,
+      );
+      expect(first.evaluation.progress['title_defense']!.isCompleted, isTrue);
+      expect(
+        first.evaluation.progress['monthly_average_60']!.isCompleted,
+        isTrue,
+      );
+      expect(
+        first.evaluation.progress['monthly_scoring_60']!.isCompleted,
+        isTrue,
+      );
+      expect(
+        first.evaluation.progress['checkout_rate_30']!.isCompleted,
+        isTrue,
+      );
+
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: playerProfile.id,
+          year: 2026,
+          month: 10,
+          weightedLegs: 10,
+          average: 45,
+          scoring: 45,
+          checkoutRate: 20,
+        ),
+      );
+      final corrected = await service.refreshPlayer(
+        ranking: ranking,
+        playerProfileId: playerProfile.id,
+        tournaments: tournaments,
+      );
+
+      expect(
+        corrected.evaluation.progress['monthly_average_60']!.isCompleted,
+        isTrue,
+      );
+      expect(
+        corrected.evaluation.progress['monthly_average_60']!.currentValue,
+        60,
+      );
+      expect(
+        corrected.evaluation.progress['monthly_scoring_60']!.isCompleted,
+        isTrue,
+      );
+      expect(
+        corrected.evaluation.progress['checkout_rate_30']!.isCompleted,
+        isTrue,
+      );
+    },
+  );
 
   test(
     'placement matches contribute third and fourth place achievements',

@@ -55,8 +55,8 @@ class RankingAchievementService {
         'Du hast $value Aufnahmen mit mindestens 171 Punkten erzielt.',
       AchievementMetric.bullseyeFinishCount =>
         'Du hast $value Bullseye-Finishes erzielt.',
-      AchievementMetric.score170CheckoutCount =>
-        'Du hast $value 170er-Finishes erzielt.',
+      AchievementMetric.bigFish170Count =>
+        'Du hast $value 170-Aufnahmen erzielt.',
       AchievementMetric.highFinishCount =>
         'Du hast $value High Finishes erzielt.',
       AchievementMetric.shortLegCount =>
@@ -79,12 +79,18 @@ class RankingAchievementService {
     required String playerProfileId,
   }) async {
     if (!ranking.achievementsEnabled) return null;
+    if (!(await _eligibleRankingPlayerIds(ranking)).contains(playerProfileId)) {
+      return null;
+    }
     final stored = await _database.loadRankingAchievementProgress(
       ranking.id,
       playerProfileId,
     );
+    final definitions = AchievementCatalog.withTargets(
+      ranking.achievementTargets,
+    );
     final progress = <String, AchievementProgress>{
-      for (final definition in AchievementCatalog.definitions)
+      for (final definition in definitions)
         definition.id: _storedAchievementProgress(
           definition,
           stored[definition.id],
@@ -121,7 +127,8 @@ class RankingAchievementService {
     LocalRanking ranking, {
     Iterable<CreatedTournament>? tournaments,
   }) async {
-    final playerIds = await _database.loadRankingPlayerIds(ranking.id);
+    if (!ranking.achievementsEnabled) return const {};
+    final playerIds = await _eligibleRankingPlayerIds(ranking);
     final source =
         tournaments?.toList() ??
         await (_tournamentStorage ?? TournamentStorage()).loadTournaments();
@@ -134,16 +141,17 @@ class RankingAchievementService {
     final mvpPlayerIds = ranking.isCompleted
         ? await _rankingMvpPlayerIds(ranking, playerIds, source)
         : const <String>{};
-    return {
-      for (final playerId in playerIds)
-        playerId: await refreshPlayer(
-          ranking: ranking,
-          playerProfileId: playerId,
-          tournaments: source,
-          eloSnapshot: eloSnapshot,
-          mvpPlayerIds: mvpPlayerIds,
-        ),
-    };
+    final result = <String, RankingAchievementSnapshot>{};
+    for (final playerId in playerIds) {
+      result[playerId] = await refreshPlayer(
+        ranking: ranking,
+        playerProfileId: playerId,
+        tournaments: source,
+        eloSnapshot: eloSnapshot,
+        mvpPlayerIds: mvpPlayerIds,
+      );
+    }
+    return result;
   }
 
   Future<RankingAchievementSnapshot> refreshPlayer({
@@ -155,6 +163,11 @@ class RankingAchievementService {
   }) async {
     if (!ranking.achievementsEnabled) {
       throw StateError('Achievements sind für diese Rangliste deaktiviert.');
+    }
+    if (!(await _eligibleRankingPlayerIds(ranking)).contains(playerProfileId)) {
+      throw StateError(
+        'Spieler muss im Katalog und der Rangliste zugewiesen sein.',
+      );
     }
 
     final allTournaments =
@@ -178,6 +191,21 @@ class RankingAchievementService {
       ranking.id,
       playerProfileId,
     );
+    final definitions = AchievementCatalog.withTargets(
+      ranking.achievementTargets,
+    );
+    final changedTargetIds = <String>{};
+    for (final definition in definitions) {
+      final defaultTarget = AchievementCatalog.definitions
+          .singleWhere((item) => item.id == definition.id)
+          .target;
+      final storedTarget = (stored[definition.id]?['target_value'] as num?)
+          ?.toDouble();
+      if (definition.target != defaultTarget ||
+          (storedTarget != null && storedTarget != definition.target)) {
+        changedTargetIds.add(definition.id);
+      }
+    }
 
     final permanentlyUnlocked = <String>{};
     final unlockedAt = <String, DateTime>{};
@@ -187,7 +215,29 @@ class RankingAchievementService {
         final timestamp = DateTime.tryParse(row['unlocked_at']! as String);
         if (timestamp != null) unlockedAt[entry.key] = timestamp;
       }
-      if (row['is_final'] == 1) permanentlyUnlocked.add(entry.key);
+      final definition = definitions
+          .where((definition) => definition.id == entry.key)
+          .firstOrNull;
+      final storedTarget = (row['target_value'] as num?)?.toDouble();
+      final targetUnchanged =
+          definition != null && storedTarget == definition.target;
+      final categoryTargetChanged =
+          definition?.isCategoryCompletion == true &&
+          changedTargetIds.any(
+            (id) => definitions.any(
+              (candidate) =>
+                  candidate.id == id &&
+                  candidate.category == definition!.completionCategory,
+            ),
+          );
+      if (row['is_final'] == 1 && targetUnchanged && !categoryTargetChanged) {
+        permanentlyUnlocked.add(entry.key);
+      }
+      if (targetUnchanged &&
+          row['status'] == AchievementStatus.completed.name &&
+          _isPerformanceMilestone(definition)) {
+        permanentlyUnlocked.add(entry.key);
+      }
     }
 
     final values = _calculateMetrics(
@@ -217,7 +267,7 @@ class RankingAchievementService {
           mvpPlayerIds ??
           await _rankingMvpPlayerIds(
             ranking,
-            await _database.loadRankingPlayerIds(ranking.id),
+            await _eligibleRankingPlayerIds(ranking),
             relevant,
           );
       values[AchievementMetric.rankingMvp] =
@@ -226,6 +276,7 @@ class RankingAchievementService {
     final evaluation = const AchievementEngine().evaluate(
       values: values,
       rankingCompleted: ranking.isCompleted,
+      definitions: definitions,
       permanentlyUnlocked: permanentlyUnlocked,
       unlockedAt: unlockedAt,
     );
@@ -250,6 +301,16 @@ class RankingAchievementService {
     );
   }
 
+  Future<List<String>> _eligibleRankingPlayerIds(LocalRanking ranking) async {
+    final catalogIds = (await _database.loadPlayerProfiles())
+        .map((profile) => profile.id)
+        .toSet();
+    return [
+      for (final playerId in await _database.loadRankingPlayerIds(ranking.id))
+        if (catalogIds.contains(playerId)) playerId,
+    ];
+  }
+
   Map<AchievementMetric, double> _calculateMetrics(
     LocalRanking ranking,
     String profileId,
@@ -272,7 +333,7 @@ class RankingAchievementService {
     var score180s = 0;
     var score171s = 0;
     var nineDarters = 0;
-    var checkouts170 = 0;
+    var bigFish170s = 0;
     var bullseyeFinishes = 0;
     var highFinishes = 0;
     var shortLegs = 0;
@@ -338,7 +399,7 @@ class RankingAchievementService {
         }
 
         for (final performance in match.bestPerformances) {
-          if (!_performanceBelongsTo(performance, profileId)) continue;
+          if (!_performanceBelongsTo(match, performance, profileId)) continue;
           switch (performance.normalizedType) {
             case BestPerformanceType.score180:
               score180s++;
@@ -346,14 +407,13 @@ class RankingAchievementService {
               score171s++;
             case BestPerformanceType.highFinish:
               highFinishes++;
-              if (performance.value == 170) checkouts170++;
             case BestPerformanceType.bullseyeFinish:
               bullseyeFinishes++;
             case BestPerformanceType.shortLeg:
               shortLegs++;
               if (performance.value == 9) nineDarters++;
             case BestPerformanceType.bigFish170:
-              checkouts170++;
+              bigFish170s++;
             case BestPerformanceType.score170:
               break;
           }
@@ -374,7 +434,7 @@ class RankingAchievementService {
     values[AchievementMetric.score171Count] = score171s.toDouble();
     values[AchievementMetric.firstScore171] = score171s > 0 ? 1 : 0;
     values[AchievementMetric.nineDarterCount] = nineDarters.toDouble();
-    values[AchievementMetric.score170CheckoutCount] = checkouts170.toDouble();
+    values[AchievementMetric.bigFish170Count] = bigFish170s.toDouble();
     values[AchievementMetric.bullseyeFinishCount] = bullseyeFinishes.toDouble();
     values[AchievementMetric.highFinishCount] = highFinishes.toDouble();
     values[AchievementMetric.shortLegCount] = shortLegs.toDouble();
@@ -410,8 +470,6 @@ class RankingAchievementService {
       tournamentWinsList,
       tournaments,
     ).toDouble();
-    values[AchievementMetric.titleDefenses] =
-        _hasConsecutiveSameNameWins(profileId, tournaments) ? 1 : 0;
 
     final eligibleMonths = monthlyPerformance.where(
       (entry) =>
@@ -429,13 +487,12 @@ class RankingAchievementService {
       months.map((entry) => entry.checkoutRate),
     );
     final activePeriods =
-        monthlyPerformance
+        matchRecords
+            .map((record) => DateTime(record.date.year, record.date.month))
             .where(
-              (entry) =>
-                  entry.weightedLegs > 0 &&
-                  _rankingIncludesMonth(entry.year, entry.month, ranking),
+              (month) =>
+                  _rankingIncludesMonth(month.year, month.month, ranking),
             )
-            .map((entry) => DateTime(entry.year, entry.month))
             .toSet()
             .toList()
           ..sort();
@@ -531,11 +588,11 @@ class RankingAchievementService {
       'legs_won': metrics[AchievementMetric.legsWon]!,
       'legs_lost': metrics[AchievementMetric.legsLost]!,
       '180s': metrics[AchievementMetric.score180Count]!,
-      '170s': metrics[AchievementMetric.score170CheckoutCount]!,
+      '170s': metrics[AchievementMetric.bigFish170Count]!,
       '171_plus': metrics[AchievementMetric.score171Count]!,
       'best_performances':
           metrics[AchievementMetric.score180Count]! +
-          metrics[AchievementMetric.score170CheckoutCount]! +
+          metrics[AchievementMetric.bigFish170Count]! +
           metrics[AchievementMetric.score171Count]! +
           metrics[AchievementMetric.highFinishCount]! +
           metrics[AchievementMetric.bullseyeFinishCount]! +
@@ -781,24 +838,6 @@ class RankingAchievementService {
     return maximum.toDouble();
   }
 
-  bool _hasConsecutiveSameNameWins(
-    String profileId,
-    List<CreatedTournament> tournaments,
-  ) {
-    for (var index = 1; index < tournaments.length; index++) {
-      final previous = tournaments[index - 1];
-      final current = tournaments[index];
-      if (previous.name == current.name &&
-          previous.finishedAt != null &&
-          current.finishedAt != null &&
-          TournamentWinner.profileId(previous) == profileId &&
-          TournamentWinner.profileId(current) == profileId) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   bool _containsPlayer(List<TournamentPlayer> players, String profileId) =>
       players.any(
         (player) => _individualProfileIds(player).contains(profileId),
@@ -809,8 +848,27 @@ class RankingAchievementService {
       if (individual.profileId != null) individual.profileId!,
   };
 
-  bool _performanceBelongsTo(BestPerformance performance, String profileId) =>
-      performance.playerProfileId == profileId;
+  bool _performanceBelongsTo(
+    GroupMatch match,
+    BestPerformance performance,
+    String profileId,
+  ) {
+    if (performance.playerProfileId != null) {
+      return performance.playerProfileId == profileId;
+    }
+    final name = performance.playerName.trim().toLowerCase();
+    if (name.isEmpty) return false;
+    return [
+      match.homePlayer,
+      match.awayPlayer,
+    ].whereType<TournamentPlayer>().any(
+      (side) => side.individuals.any(
+        (player) =>
+            player.profileId == profileId &&
+            player.name.trim().toLowerCase() == name,
+      ),
+    );
+  }
 
   (List<TournamentPlayer>, List<TournamentPlayer>) _matchSides(
     GroupMatch match,
@@ -960,6 +1018,8 @@ class RankingAchievementService {
     final completed = progress.isCompleted;
     final finalAward = completed && definition.requiresCompletedRanking;
     final wasFinal = previous?['is_final'] == 1;
+    final isPermanentMilestone =
+        completed && _isPerformanceMilestone(definition);
     final previousUnlockedAt = previous?['unlocked_at'] as String?;
     final unlockedAt = wasFinal
         ? previousUnlockedAt
@@ -973,7 +1033,7 @@ class RankingAchievementService {
       'status': progress.status.name,
       'unlocked_at': unlockedAt,
       'explanation': definition.description,
-      'is_final': (finalAward || wasFinal) ? 1 : 0,
+      'is_final': (finalAward || wasFinal || isPermanentMilestone) ? 1 : 0,
       'source_hash': sourceHash,
     };
   }
@@ -997,6 +1057,11 @@ class RankingAchievementService {
       unlockedAt: unlockedAt,
     );
   }
+
+  bool _isPerformanceMilestone(AchievementDefinition definition) =>
+      definition.metric == AchievementMetric.monthlyAverage ||
+      definition.metric == AchievementMetric.monthlyScoring ||
+      definition.metric == AchievementMetric.monthlyCheckoutRate;
 
   String _formatMetric(double value) => value == value.roundToDouble()
       ? value.toInt().toString()

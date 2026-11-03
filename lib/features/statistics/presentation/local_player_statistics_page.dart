@@ -87,11 +87,9 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
     );
     for (final ranking in achievementRankings) {
       final assignedIds = await _database.loadRankingPlayerIds(ranking.id);
+      final refreshed = await achievementService.refreshRanking(ranking);
       for (final profileId in widget.profileIds.where(assignedIds.contains)) {
-        final evaluation = await achievementService.loadPlayerEvaluation(
-          ranking: ranking,
-          playerProfileId: profileId,
-        );
+        final evaluation = refreshed[profileId]?.evaluation;
         if (evaluation == null) continue;
         achievementViews.add(
           RankingAchievementView(

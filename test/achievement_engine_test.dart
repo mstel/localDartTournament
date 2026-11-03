@@ -39,8 +39,12 @@ void main() {
       2250,
       2700,
     ]);
-    expect(AchievementCatalog.levelEligibleExperiencePoints, 2700);
-    expect(AchievementCatalog.allExperiencePoints, 3375);
+    expect(AchievementCatalog.levelEligibleExperiencePoints, greaterThan(2700));
+    expect(
+      AchievementCatalog.allExperiencePoints -
+          AchievementCatalog.levelEligibleExperiencePoints,
+      675,
+    );
   });
 
   test('one metric can unlock multiple stages with their own XP', () {
@@ -53,7 +57,24 @@ void main() {
     expect(result.progress['legs_won_25']!.isCompleted, isTrue);
     expect(result.progress['legs_won_50']!.isCompleted, isTrue);
     expect(result.progress['legs_won_100']!.isCompleted, isFalse);
-    expect(result.totalExperiencePoints, 30);
+    expect(result.totalExperiencePoints, 39);
+  });
+
+  test('ranking-specific thresholds drive evaluation dynamically', () {
+    final definitions = AchievementCatalog.withTargets({
+      'legs_won_10': 3,
+      'legs_won_25': 7,
+    });
+    final result = engine.evaluate(
+      values: {AchievementMetric.legsWon: 5},
+      rankingCompleted: false,
+      definitions: definitions,
+    );
+
+    expect(result.progress['legs_won_10']!.definition.target, 3);
+    expect(result.progress['legs_won_10']!.isCompleted, isTrue);
+    expect(result.progress['legs_won_25']!.definition.target, 7);
+    expect(result.progress['legs_won_25']!.isCompleted, isFalse);
   });
 
   test(
@@ -101,7 +122,10 @@ void main() {
       values: _valuesForAllAchievements(includeRankingAwards: false),
       rankingCompleted: false,
     );
-    expect(regularResult.levelEligibleExperiencePoints, 2700);
+    expect(
+      regularResult.levelEligibleExperiencePoints,
+      AchievementCatalog.levelEligibleExperiencePoints,
+    );
     expect(regularResult.level, 10);
     expect(regularResult.nextLevelExperiencePoints, isNull);
 
@@ -109,8 +133,54 @@ void main() {
       values: _valuesForAllAchievements(),
       rankingCompleted: true,
     );
-    expect(allResult.levelEligibleExperiencePoints, 2700);
-    expect(allResult.totalExperiencePoints, 3375);
+    expect(
+      allResult.levelEligibleExperiencePoints,
+      AchievementCatalog.levelEligibleExperiencePoints,
+    );
+    expect(
+      allResult.totalExperiencePoints,
+      AchievementCatalog.allExperiencePoints,
+    );
     expect(allResult.level, 10);
+  });
+
+  test('level 10 is reachable without placement-series achievements', () {
+    final values = _valuesForAllAchievements(includeRankingAwards: false)
+      ..[AchievementMetric.tournamentWins] = 1
+      ..[AchievementMetric.secondPlaces] = 0
+      ..[AchievementMetric.thirdPlaces] = 0
+      ..[AchievementMetric.fourthPlaces] = 0;
+    final result = engine.evaluate(values: values, rankingCompleted: false);
+
+    expect(result.progress['tournament_wins_3']!.isCompleted, isFalse);
+    expect(result.progress['second_places_3']!.isCompleted, isFalse);
+    expect(result.progress['third_places_3']!.isCompleted, isFalse);
+    expect(result.progress['fourth_places_5']!.isCompleted, isFalse);
+    expect(result.level, 10);
+  });
+
+  test('placement series use shared 2, 3 and 5 stage rewards', () {
+    const seriesIds = [
+      ['tournament_wins_3', 'tournament_wins_5', 'tournament_wins_7'],
+      ['second_places_3', 'second_places_5', 'second_places_7'],
+      ['third_places_3', 'third_places_5', 'third_places_7'],
+      ['fourth_places_5', 'fourth_places_10', 'fourth_places_25'],
+    ];
+    for (var stage = 0; stage < 3; stage++) {
+      final definitions = [
+        for (final ids in seriesIds)
+          AchievementCatalog.definitions.singleWhere(
+            (definition) => definition.id == ids[stage],
+          ),
+      ];
+      expect(
+        definitions.map((definition) => definition.target),
+        everyElement([2.0, 3.0, 5.0][stage]),
+      );
+      expect(
+        definitions.map((definition) => definition.experiencePoints),
+        everyElement([20, 30, 50][stage]),
+      );
+    }
   });
 }

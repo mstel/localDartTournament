@@ -38,7 +38,7 @@ enum AchievementMetric {
   firstScore171,
   score171Count,
   nineDarterCount,
-  score170CheckoutCount,
+  bigFish170Count,
   bullseyeFinishCount,
   highFinishCount,
   monthlyCheckoutRate,
@@ -52,7 +52,6 @@ enum AchievementMetric {
   eloUpsetWins,
   distinctOpponentsBeaten,
   lossesToSameOpponent,
-  titleDefenses,
   rankingGold,
   rankingSilver,
   rankingBronze,
@@ -87,6 +86,20 @@ class AchievementDefinition {
   final AchievementCategory? completionCategory;
 
   bool get isCategoryCompletion => completionCategory != null;
+
+  AchievementDefinition copyWith({double? target}) => AchievementDefinition(
+    id: id,
+    name: name,
+    description: description,
+    category: category,
+    experiencePoints: experiencePoints,
+    metric: metric,
+    target: target ?? this.target,
+    strictTarget: strictTarget,
+    requiresCompletedRanking: requiresCompletedRanking,
+    contributesToLevel: contributesToLevel,
+    completionCategory: completionCategory,
+  );
 }
 
 enum AchievementStatus { locked, inProgress, completed }

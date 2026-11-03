@@ -879,22 +879,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       );
       final recommendation = snapshot.recommendationForBoard(board);
       if (recommendation == null) return;
-      final announcedMatches = [
-        recommendation.next.entry.match,
-        if (recommendation.alternative != null)
-          recommendation.alternative!.entry.match,
-      ];
+      final nextMatch = recommendation.next.entry.match;
+      final alternativeMatch = recommendation.alternative?.entry.match;
       final boardName = widget.tournament.boardDisplayName(board);
-      final message = [
-        'Nächste Partie: ${_spokenMatchLabel(announcedMatches.first)} an $boardName.',
-        if (announcedMatches.length > 1)
-          'Alternativ: ${_spokenMatchLabel(announcedMatches[1])} an $boardName.',
-      ].join(' ');
       final audioService = _audioAnnouncementService ??=
           TournamentAudioAnnouncementService();
       unawaited(
         audioService.announce(
-          text: message,
+          text:
+              'Nächste Partie: ${_spokenMatchLabel(nextMatch)} an '
+              '${_spokenBoardName(boardName)}.',
+          alternativeText: alternativeMatch == null
+              ? null
+              : 'Alternativ: ${_spokenMatchLabel(alternativeMatch)} an '
+                    '${_spokenBoardName(boardName)}.',
           isStillCurrent: () {
             if (!mounted ||
                 !widget.tournament.soundModeEnabled ||
@@ -909,11 +907,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             ).recommendationForBoard(board);
             return refreshed != null &&
                 widget.tournament.boardDisplayName(board) == boardName &&
-                identical(refreshed.next.entry.match, announcedMatches.first) &&
-                identical(
-                  refreshed.alternative?.entry.match,
-                  announcedMatches.length > 1 ? announcedMatches[1] : null,
-                );
+                identical(refreshed.next.entry.match, nextMatch) &&
+                identical(refreshed.alternative?.entry.match, alternativeMatch);
           },
         ),
       );
@@ -924,6 +919,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   String _spokenMatchLabel(GroupMatch match) =>
       match.participantShortLabel.replaceFirst(' – ', ' gegen ');
+
+  String _spokenBoardName(String boardName) {
+    final match = RegExp(r'^Board\s+(\d+)$').firstMatch(boardName);
+    return match == null ? boardName : 'Board Nummer ${match.group(1)}';
+  }
 
   Future<void> _startTournamentClock() async {
     if (widget.tournament.startedAt != null) return;

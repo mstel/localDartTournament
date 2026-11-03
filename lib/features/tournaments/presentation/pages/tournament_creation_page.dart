@@ -3086,7 +3086,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       'Spieler mit gleichem Lebensstand bevorzugen',
                     ),
                     subtitle: const Text(
-                      'Spieler mit gleich vielen bisherigen Kratzern werden möglichst auf dasselbe Board eingeteilt.',
+                      'Gleicht zuerst absolvierte Partien aus, vermeidet frühere Begegnungen wenn möglich und bevorzugt danach gleiche Kratzerstände.',
                     ),
                     value: _kratzerPreferSameScratchCount,
                     onChanged: (value) =>
@@ -3105,98 +3105,107 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     onChanged: (value) =>
                         setState(() => _kratzerPlayUntilElimination = value),
                   ),
-                  SwitchListTile(
-                    key: const ValueKey('kratzer-bonus-life-180'),
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Bonusleben bei 180'),
-                    subtitle: const Text(
-                      'Die Turnierleitung kann im Ergebnisdialog für eine 180 ein zusätzliches Leben vergeben.',
-                    ),
-                    value: _kratzerBonusLifeFor180,
-                    onChanged: (value) =>
-                        setState(() => _kratzerBonusLifeFor180 = value),
-                  ),
-                  SwitchListTile(
-                    key: const ValueKey('kratzer-bonus-life-high-finish'),
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Bonusleben bei High Finish'),
-                    subtitle: const Text(
-                      'Die Turnierleitung kann im Ergebnisdialog für ein High Finish ein zusätzliches Leben vergeben.',
-                    ),
-                    value: _kratzerBonusLifeForHighFinish,
-                    onChanged: (value) =>
-                        setState(() => _kratzerBonusLifeForHighFinish = value),
-                  ),
                   ExpansionTile(
-                    key: const ValueKey('kratzer-starting-scratches'),
+                    key: const ValueKey('kratzer-special-rules'),
                     tilePadding: EdgeInsets.zero,
-                    title: const Text('Startkratzer je Teilnehmer'),
-                    subtitle: Text(
-                      _canEditKratzerStartingScratches
-                          ? 'Vor Turnierstart bis zu $_kratzerLives Kratzer vergeben.'
-                          : 'Startkratzer lassen sich nur vor Turnierbeginn ändern.',
-                    ),
+                    title: const Text('Sonderregeln'),
                     children: [
-                      for (var index = 0; index < _players.length; index++)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                _players[index].name,
-                                style: textTheme.titleSmall,
-                              ),
-                              const SizedBox(height: 4),
-                              KeyedSubtree(
-                                key: ValueKey(
-                                  'kratzer-start-scratches-field-$index-$_kratzerLives-${_players[index].kratzerStartingScratches}',
-                                ),
-                                child: DropdownButtonFormField<int>(
-                                  key: ValueKey(
-                                    'kratzer-start-scratches-$index',
-                                  ),
-                                  initialValue: _players[index]
-                                      .kratzerStartingScratches
-                                      .clamp(0, _kratzerLives)
-                                      .toInt(),
-                                  isExpanded: true,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Startkratzer',
-                                    helperText:
-                                        '0 bedeutet: mit allen Leben starten.',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: [
-                                    for (
-                                      var scratches = 0;
-                                      scratches <= _kratzerLives;
-                                      scratches++
-                                    )
-                                      DropdownMenuItem(
-                                        value: scratches,
-                                        child: Text(
-                                          scratches == 0
-                                              ? '0 Kratzer'
-                                              : '$scratches Kratzer',
-                                        ),
-                                      ),
-                                  ],
-                                  onChanged: _canEditKratzerStartingScratches
-                                      ? (value) {
-                                          if (value != null) {
-                                            _setKratzerStartingScratches(
-                                              index,
-                                              value,
-                                            );
-                                          }
-                                        }
-                                      : null,
-                                ),
-                              ),
-                            ],
-                          ),
+                      SwitchListTile(
+                        key: const ValueKey('kratzer-bonus-life-180'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Bonusleben bei 180'),
+                        subtitle: const Text(
+                          'Die Turnierleitung kann im Ergebnisdialog für eine 180 ein zusätzliches Leben vergeben.',
                         ),
+                        value: _kratzerBonusLifeFor180,
+                        onChanged: (value) =>
+                            setState(() => _kratzerBonusLifeFor180 = value),
+                      ),
+                      SwitchListTile(
+                        key: const ValueKey('kratzer-bonus-life-high-finish'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Bonusleben bei High Finish'),
+                        subtitle: const Text(
+                          'Die Turnierleitung kann im Ergebnisdialog für ein High Finish ein zusätzliches Leben vergeben.',
+                        ),
+                        value: _kratzerBonusLifeForHighFinish,
+                        onChanged: (value) => setState(
+                          () => _kratzerBonusLifeForHighFinish = value,
+                        ),
+                      ),
+                      ExpansionTile(
+                        key: const ValueKey('kratzer-starting-scratches'),
+                        tilePadding: EdgeInsets.zero,
+                        title: const Text('Startkratzer je Teilnehmer'),
+                        subtitle: Text(
+                          _canEditKratzerStartingScratches
+                              ? 'Vor Turnierstart bis zu $_kratzerLives Kratzer vergeben.'
+                              : 'Startkratzer lassen sich nur vor Turnierbeginn ändern.',
+                        ),
+                        children: [
+                          for (var index = 0; index < _players.length; index++)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    _players[index].name,
+                                    style: textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  KeyedSubtree(
+                                    key: ValueKey(
+                                      'kratzer-start-scratches-field-$index-$_kratzerLives-${_players[index].kratzerStartingScratches}',
+                                    ),
+                                    child: DropdownButtonFormField<int>(
+                                      key: ValueKey(
+                                        'kratzer-start-scratches-$index',
+                                      ),
+                                      initialValue: _players[index]
+                                          .kratzerStartingScratches
+                                          .clamp(0, _kratzerLives)
+                                          .toInt(),
+                                      isExpanded: true,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Startkratzer',
+                                        helperText:
+                                            '0 bedeutet: mit allen Leben starten.',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: [
+                                        for (
+                                          var scratches = 0;
+                                          scratches <= _kratzerLives;
+                                          scratches++
+                                        )
+                                          DropdownMenuItem(
+                                            value: scratches,
+                                            child: Text(
+                                              scratches == 0
+                                                  ? '0 Kratzer'
+                                                  : '$scratches Kratzer',
+                                            ),
+                                          ),
+                                      ],
+                                      onChanged:
+                                          _canEditKratzerStartingScratches
+                                          ? (value) {
+                                              if (value != null) {
+                                                _setKratzerStartingScratches(
+                                                  index,
+                                                  value,
+                                                );
+                                              }
+                                            }
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ],

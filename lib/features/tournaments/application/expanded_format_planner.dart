@@ -168,24 +168,25 @@ class ExpandedFormatPlanner {
             if (sample.totalMatches > 0 && hasScheduledStage) {
               minutes += parameters.boardIdleMinutes;
             }
-            final swiss =
-                stages[i].type == 'groups' &&
-                stages[i].groupPlayType == 'swiss';
-            final baseMatchMinutes = planner.estimatedMatchMinutes(
-              stages[i].gameFormat,
-            );
-            final matchMinutes = planner.estimatedMatchMinutes(formats[i]);
+            final stage = stages[i];
+            final isRoundRobin =
+                stage.type == 'groups' &&
+                (stage.groupPlayTypes.isEmpty
+                    ? stage.groupPlayType == 'round_robin'
+                    : stage.groupPlayTypes.every(
+                        (playType) => playType == 'round_robin',
+                      ));
+            final baseMatchMinutes = isRoundRobin
+                ? planner.estimatedMatchMinutes(stage.gameFormat)
+                : planner.estimatedWorstCaseMatchMinutes(stage.gameFormat);
+            final matchMinutes = isRoundRobin
+                ? planner.estimatedMatchMinutes(formats[i])
+                : planner.estimatedWorstCaseMatchMinutes(formats[i]);
             minutes +=
                 (sample.minutes - sample.waitMinutes) /
                     baseMatchMinutes *
                     matchMinutes +
                 sample.waitMinutes;
-            if (swiss) {
-              minutes +=
-                  _swissMatchBatches(stages[i], request.boards) *
-                  (planner.estimatedWorstCaseMatchMinutes(formats[i]) -
-                      matchMinutes);
-            }
             hasScheduledStage = hasScheduledStage || sample.totalMatches > 0;
           }
           final configs = [
@@ -519,25 +520,3 @@ Future<List<TournamentFormatSuggestion>> _planInBackground(
 ) => ExpandedFormatPlanner(
   parameters: input.$1,
 )._suggest(input.$2, allResults: input.$3);
-
-int _swissMatchBatches(TournamentStage stage, int boards) {
-  final groupRoundCounts = [
-    for (var index = 0; index < stage.groupSizes.length; index++)
-      index < stage.groupRoundRobinRepeats.length
-          ? stage.groupRoundRobinRepeats[index]
-          : 1,
-  ];
-  final rounds = groupRoundCounts.fold<int>(
-    0,
-    (current, count) => current > count ? current : count,
-  );
-  var batches = 0;
-  for (var round = 1; round <= rounds; round++) {
-    final matches = [
-      for (var index = 0; index < stage.groupSizes.length; index++)
-        if (groupRoundCounts[index] >= round) stage.groupSizes[index] ~/ 2,
-    ].fold<int>(0, (total, count) => total + count);
-    batches += (matches + boards - 1) ~/ boards;
-  }
-  return batches;
-}

@@ -119,12 +119,12 @@ void main() {
       knockoutByeCount: 1,
       gameFormat: TournamentGameFormat(bestOfLegs: 3),
     );
-    expect(estimator.estimate([ko], 4, parameters), 50);
+    expect(estimator.estimate([ko], 4, parameters), 60);
     expect(estimator.preview([ko], 4, parameters)!.totalMatches, 2);
     expect(estimator.preview([ko], 4, parameters)!.minimumMatches, 1);
     expect(estimator.preview([group, ko], 2, parameters)!.minimumMatches, 3);
     expect(estimator.preview([group, ko], 2, parameters)!.totalMatches, 8);
-    expect(estimator.estimate([group, ko], 2, parameters), 125);
+    expect(estimator.estimate([group, ko], 2, parameters), 135);
     expect(estimator.preview([group, ko], 2, parameters)!.matchEndSeconds, [
       1500,
       1500,
@@ -132,11 +132,39 @@ void main() {
       3000,
       4500,
       4500,
-      6000,
-      7500,
+      6300,
+      8100,
     ]);
     expect(estimator.estimate([], 2, parameters), isNull);
   });
+  test(
+    'KO rounds use full-distance match durations and wait for each round',
+    () {
+      const knockout = TournamentStage(
+        name: 'KO',
+        type: 'single_knockout',
+        knockoutParticipantCount: 8,
+        gameFormat: TournamentGameFormat(bestOfLegs: 5),
+      );
+      final withBoardChange = TournamentPlanningParameters.fromValues({
+        PlanningParameter.minutes501DoubleOut: 10,
+        PlanningParameter.boardIdleMinutes: 4,
+      });
+
+      final estimate = estimator.preview([knockout], 4, withBoardChange)!;
+
+      expect(estimate.minutes, 158);
+      expect(estimate.matchEndSeconds, [
+        3000,
+        3000,
+        3000,
+        3000,
+        6240,
+        6240,
+        9480,
+      ]);
+    },
+  );
   test('variable elimination uses a match-count lower bound for duration', () {
     const doubleKo = TournamentStage(
       name: 'Double KO',

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_timing.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_planning_parameters.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 
 void main() {
   final start = DateTime.utc(2026, 10, 3, 12);
@@ -82,7 +83,7 @@ void main() {
     expect(TournamentTiming.snapshot(t, start).averageSeconds, isNull);
   });
   test(
-    'first result backdates the tournament clock by match and board time',
+    'first result backdates the clock by match time without initial board wait',
     () {
       final t = fixture();
       final match = TournamentTiming.matches(t).single
@@ -97,7 +98,7 @@ void main() {
       expect(TournamentTiming.startFromFirstResult(t, parameters), isTrue);
       expect(
         t.startedAt,
-        match.finishedAt!.subtract(const Duration(minutes: 16, seconds: 30)),
+        match.finishedAt!.subtract(const Duration(minutes: 12, seconds: 30)),
       );
     },
   );
@@ -116,6 +117,40 @@ void main() {
       isFalse,
     );
     expect(t.startedAt, start);
+  });
+  test('league timing includes waits between occupied board slots', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: const ['H1', 'H2'],
+      awayPlayers: const ['G1', 'G2'],
+      singlesPerPlayer: 2,
+      doublesCount: 0,
+      gameFormat: const TournamentGameFormat(bestOfLegs: 3),
+    );
+    final tournament = CreatedTournament(
+      name: 'Liga',
+      players: [
+        TournamentPlayer.generated(1).copyWith(name: 'H1'),
+        TournamentPlayer.generated(2).copyWith(name: 'H2'),
+        TournamentPlayer.generated(3).copyWith(name: 'G1'),
+        TournamentPlayer.generated(4).copyWith(name: 'G2'),
+      ],
+      stages: const [],
+      runStages: const [],
+      leagueMatch: league,
+      boardCount: 1,
+      startedAt: start,
+    );
+    final parameters = TournamentPlanningParameters.fromValues({
+      PlanningParameter.minutes501DoubleOut: 10,
+      PlanningParameter.boardIdleMinutes: 4,
+    });
+
+    TournamentTiming.capture(tournament, parameters);
+
+    expect(tournament.plannedMinutes, 112);
+    expect(tournament.plannedMatchEndSeconds, [1500, 3240, 4980, 6720]);
   });
   test('reset clock restarts at the new time without clearing match data', () {
     final t = fixture()

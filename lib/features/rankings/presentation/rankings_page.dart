@@ -15,6 +15,7 @@ import '../application/local_ranking_elo_service.dart';
 import '../application/local_ranking_series_service.dart';
 import '../application/ranking_year_review_service.dart';
 import '../../achievements/application/ranking_achievement_service.dart';
+import '../../achievements/presentation/achievement_target_dialog.dart';
 import '../domain/local_ranking.dart';
 import '../domain/elo_tier.dart';
 import 'widgets/elo_trajectory_chart.dart';
@@ -1060,12 +1061,19 @@ class _RankingsPageState extends State<RankingsPage> {
     );
     if (updated == null) return;
     var rankingSaved = false;
+    final achievementTargetsChanged =
+        updated.achievementTargets.length !=
+            ranking.achievementTargets.length ||
+        updated.achievementTargets.entries.any(
+          (entry) => ranking.achievementTargets[entry.key] != entry.value,
+        );
     try {
       await _database.saveLocalRanking(updated);
       rankingSaved = true;
       if (updated.achievementsEnabled &&
           (!ranking.achievementsEnabled ||
-              updated.isCompleted != ranking.isCompleted)) {
+              updated.isCompleted != ranking.isCompleted ||
+              achievementTargetsChanged)) {
         await RankingAchievementService(
           database: _database,
           tournamentStorage: TournamentStorage(),
@@ -1364,6 +1372,7 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   bool _inactivityDecayEnabled = false;
   bool _isDefaultForStatistics = false;
   bool _achievementsEnabled = false;
+  Map<String, double> _achievementTargets = {};
   bool _isCompleted = false;
   List<TextEditingController> _tierNames = [];
   List<TextEditingController> _tierMinimums = [];
@@ -1394,6 +1403,7 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     _inactivityDecayPoints.text = '${initial.inactivityDecayPoints}';
     _isDefaultForStatistics = initial.isDefaultForStatistics;
     _achievementsEnabled = initial.achievementsEnabled;
+    _achievementTargets = Map.of(initial.achievementTargets);
     _isCompleted = initial.isCompleted;
     _fromDate =
         initial.validFromDate ??
@@ -1478,6 +1488,16 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     });
   }
 
+  Future<void> _adjustAchievementTargets() async {
+    final targets = await showDialog<Map<String, double>>(
+      context: context,
+      builder: (_) => AchievementTargetDialog(targets: _achievementTargets),
+    );
+    if (targets != null && mounted) {
+      setState(() => _achievementTargets = targets);
+    }
+  }
+
   void _submit() {
     setState(() {
       if (_fromDate != null &&
@@ -1533,6 +1553,7 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
             int.tryParse(_inactivityDecayPoints.text.trim()) ?? 0,
         isDefaultForStatistics: _isDefaultForStatistics,
         achievementsEnabled: _achievementsEnabled,
+        achievementTargets: _achievementTargets,
         isCompleted: _isCompleted,
       ),
     );
@@ -1950,6 +1971,27 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
               onChanged: (value) =>
                   setState(() => _achievementsEnabled = value),
             ),
+            if (_achievementsEnabled)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('adjust-achievement-targets'),
+                      onPressed: _adjustAchievementTargets,
+                      icon: const Icon(Icons.tune),
+                      label: const Text('Werte anpassen'),
+                    ),
+                    Text(
+                      _achievementTargets.isEmpty
+                          ? 'Es gelten die Standardwerte.'
+                          : '${_achievementTargets.length} eigene Werte; '
+                                'Änderungen werden mit der Rangliste gespeichert.',
+                    ),
+                  ],
+                ),
+              ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Rangliste als abgeschlossen markieren'),

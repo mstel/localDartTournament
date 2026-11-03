@@ -25,6 +25,7 @@ class TournamentAudioAnnouncementService {
 
   Future<void> announce({
     required String text,
+    String? alternativeText,
     required bool Function() isStillCurrent,
   }) async {
     final requestId = ++_requestId;
@@ -52,6 +53,34 @@ class TournamentAudioAnnouncementService {
     await _runAudioOperation(
       'Deutsche Turnieransage',
       () => _output.speakGerman(text),
+    );
+    if (alternativeText == null || requestId != _requestId) return;
+    try {
+      if (!isStillCurrent()) return;
+    } catch (error) {
+      debugPrint(
+        'Aktualität der alternativen Turnieransage konnte nicht geprüft werden: $error',
+      );
+      return;
+    }
+    try {
+      await _delay(const Duration(milliseconds: 500));
+    } catch (error) {
+      debugPrint('Wartezeit vor Alternativansage fehlgeschlagen: $error');
+      return;
+    }
+    if (requestId != _requestId) return;
+    try {
+      if (!isStillCurrent()) return;
+    } catch (error) {
+      debugPrint(
+        'Aktualität der alternativen Turnieransage konnte nicht geprüft werden: $error',
+      );
+      return;
+    }
+    await _runAudioOperation(
+      'Alternative deutsche Turnieransage',
+      () => _output.speakGerman(alternativeText),
     );
   }
 
@@ -99,10 +128,43 @@ class _LocalTournamentAnnouncementAudioOutput
   @override
   Future<void> speakGerman(String text) async {
     await _tts.setLanguage('de-DE');
-    await _tts.setSpeechRate(0.48);
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      await _preferInstalledGermanVoice();
+    }
+    await _tts.setSpeechRate(0.42);
     await _tts.setVolume(1.0);
     await _tts.awaitSpeakCompletion(true);
     await _tts.speak(text);
+  }
+
+  Future<void> _preferInstalledGermanVoice() async {
+    try {
+      final voices = await _tts.getVoices;
+      final germanVoices = voices
+          .where(
+            (voice) =>
+                voice['locale']?.toLowerCase().startsWith('de') == true &&
+                voice['name']?.toLowerCase().contains('online') != true,
+          )
+          .toList();
+      final voice =
+          germanVoices
+              .where(
+                (candidate) =>
+                    candidate['name']?.toLowerCase().contains('natural') ==
+                    true,
+              )
+              .firstOrNull ??
+          germanVoices.firstOrNull;
+      if (voice != null) {
+        await _tts.setVoice({
+          'locale': voice['locale']!,
+          'name': voice['name']!,
+        });
+      }
+    } catch (error) {
+      debugPrint('Lokale deutsche Stimme konnte nicht gewählt werden: $error');
+    }
   }
 
   @override

@@ -74,6 +74,51 @@ void main() {
     expect(output.events, ['stop', 'cue']);
   });
 
+  test('speaks the alternative after a separate half-second pause', () async {
+    final output = _FakeAudioOutput();
+    final service = TournamentAudioAnnouncementService(
+      output: output,
+      delay: (duration) async {
+        output.events.add('delay:${duration.inMilliseconds}');
+      },
+    );
+
+    await service.announce(
+      text: 'Nächste Partie: Marvin gegen Daniel an Board Nummer 3.',
+      alternativeText: 'Alternativ: Silas gegen Patrick an Board Nummer 3.',
+      isStillCurrent: () => true,
+    );
+
+    expect(output.events, [
+      'stop',
+      'cue',
+      'delay:1000',
+      'speak:Nächste Partie: Marvin gegen Daniel an Board Nummer 3.',
+      'delay:500',
+      'speak:Alternativ: Silas gegen Patrick an Board Nummer 3.',
+    ]);
+  });
+
+  test(
+    'skips an alternative that is no longer current after the pause',
+    () async {
+      final output = _FakeAudioOutput();
+      var validityChecks = 0;
+      final service = TournamentAudioAnnouncementService(
+        output: output,
+        delay: (_) async {},
+      );
+
+      await service.announce(
+        text: 'Nächste Partie',
+        alternativeText: 'Veraltete Alternative',
+        isStillCurrent: () => ++validityChecks < 3,
+      );
+
+      expect(output.events, ['stop', 'cue', 'speak:Nächste Partie']);
+    },
+  );
+
   test('cancellation while waiting prevents stale speech', () async {
     final output = _FakeAudioOutput();
     final delayCompleter = Completer<void>();

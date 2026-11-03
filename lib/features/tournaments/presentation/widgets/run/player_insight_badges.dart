@@ -81,7 +81,6 @@ IconData _insightIcon(PlayerInsightType type) => switch (type) {
   PlayerInsightType.backOnTrack => Icons.replay,
   PlayerInsightType.consistent => Icons.check_circle_outline,
   PlayerInsightType.bogeyOpponent => Icons.warning_amber,
-  PlayerInsightType.favoriteOpponent => Icons.favorite_outline,
   PlayerInsightType.rival => Icons.handshake_outlined,
   PlayerInsightType.sweetRevenge => Icons.gpp_good_outlined,
   PlayerInsightType.giantKiller => Icons.sports_kabaddi,

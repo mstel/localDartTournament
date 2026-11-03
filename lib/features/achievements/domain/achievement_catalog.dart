@@ -24,7 +24,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentParticipations,
       target: 1,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'tournament_participation_2',
@@ -33,7 +33,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentParticipations,
       target: 5,
-      experiencePoints: 15,
+      experiencePoints: 19,
     ),
     AchievementDefinition(
       id: 'tournament_participation_3',
@@ -42,7 +42,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentParticipations,
       target: 10,
-      experiencePoints: 25,
+      experiencePoints: 31,
     ),
     AchievementDefinition(
       id: 'tournament_participation_4',
@@ -51,7 +51,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentParticipations,
       target: 25,
-      experiencePoints: 40,
+      experiencePoints: 49,
     ),
     AchievementDefinition(
       id: 'tournament_participation_5',
@@ -60,7 +60,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentParticipations,
       target: 40,
-      experiencePoints: 60,
+      experiencePoints: 73,
     ),
     AchievementDefinition(
       id: 'first_tournament_win',
@@ -68,115 +68,115 @@ class AchievementCatalog {
       description: 'Gewinne ein Turnier dieser Rangliste.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentWins,
-      experiencePoints: 40,
+      experiencePoints: 49,
     ),
     AchievementDefinition(
       id: 'tournament_wins_3',
       name: 'Seriensieger I',
-      description: 'Gewinne drei Turniere dieser Rangliste.',
+      description: 'Gewinne zwei Turniere dieser Rangliste.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentWins,
-      target: 3,
-      experiencePoints: 25,
+      target: 2,
+      experiencePoints: 20,
     ),
     AchievementDefinition(
       id: 'tournament_wins_5',
       name: 'Seriensieger II',
-      description: 'Gewinne fünf Turniere dieser Rangliste.',
+      description: 'Gewinne drei Turniere dieser Rangliste.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentWins,
-      target: 5,
-      experiencePoints: 40,
+      target: 3,
+      experiencePoints: 30,
     ),
     AchievementDefinition(
       id: 'tournament_wins_7',
       name: 'Seriensieger III',
-      description: 'Gewinne sieben Turniere dieser Rangliste.',
+      description: 'Gewinne fünf Turniere dieser Rangliste.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentWins,
-      target: 7,
-      experiencePoints: 75,
+      target: 5,
+      experiencePoints: 50,
     ),
     AchievementDefinition(
       id: 'second_places_3',
       name: 'Silbermedaillist I',
-      description: 'Beende drei Turniere dieser Rangliste auf Platz zwei.',
+      description: 'Beende zwei Turniere dieser Rangliste auf Platz zwei.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.secondPlaces,
-      target: 3,
-      experiencePoints: 15,
+      target: 2,
+      experiencePoints: 20,
     ),
     AchievementDefinition(
       id: 'second_places_5',
       name: 'Silbermedaillist II',
-      description: 'Beende fünf Turniere dieser Rangliste auf Platz zwei.',
+      description: 'Beende drei Turniere dieser Rangliste auf Platz zwei.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.secondPlaces,
-      target: 5,
-      experiencePoints: 25,
+      target: 3,
+      experiencePoints: 30,
     ),
     AchievementDefinition(
       id: 'second_places_7',
       name: 'Silbermedaillist III',
-      description: 'Beende sieben Turniere dieser Rangliste auf Platz zwei.',
+      description: 'Beende fünf Turniere dieser Rangliste auf Platz zwei.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.secondPlaces,
-      target: 7,
-      experiencePoints: 40,
+      target: 5,
+      experiencePoints: 50,
     ),
     AchievementDefinition(
       id: 'third_places_3',
       name: 'Bronzejunge I',
-      description: 'Beende drei Turniere dieser Rangliste auf Platz drei.',
+      description: 'Beende zwei Turniere dieser Rangliste auf Platz drei.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.thirdPlaces,
-      target: 3,
-      experiencePoints: 15,
+      target: 2,
+      experiencePoints: 20,
     ),
     AchievementDefinition(
       id: 'third_places_5',
       name: 'Bronzejunge II',
-      description: 'Beende fünf Turniere dieser Rangliste auf Platz drei.',
+      description: 'Beende drei Turniere dieser Rangliste auf Platz drei.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.thirdPlaces,
-      target: 5,
-      experiencePoints: 25,
+      target: 3,
+      experiencePoints: 30,
     ),
     AchievementDefinition(
       id: 'third_places_7',
       name: 'Bronzejunge III',
-      description: 'Beende sieben Turniere dieser Rangliste auf Platz drei.',
+      description: 'Beende fünf Turniere dieser Rangliste auf Platz drei.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.thirdPlaces,
-      target: 7,
-      experiencePoints: 40,
+      target: 5,
+      experiencePoints: 50,
     ),
     AchievementDefinition(
       id: 'fourth_places_5',
       name: 'Fast geschafft I',
-      description: 'Beende fünf Turniere dieser Rangliste auf Platz vier.',
+      description: 'Beende zwei Turniere dieser Rangliste auf Platz vier.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.fourthPlaces,
-      target: 5,
-      experiencePoints: 10,
+      target: 2,
+      experiencePoints: 20,
     ),
     AchievementDefinition(
       id: 'fourth_places_10',
       name: 'Fast geschafft II',
-      description: 'Beende zehn Turniere dieser Rangliste auf Platz vier.',
+      description: 'Beende drei Turniere dieser Rangliste auf Platz vier.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.fourthPlaces,
-      target: 10,
-      experiencePoints: 20,
+      target: 3,
+      experiencePoints: 30,
     ),
     AchievementDefinition(
       id: 'fourth_places_25',
       name: 'Fast geschafft III',
-      description: 'Beende 25 Turniere dieser Rangliste auf Platz vier.',
+      description: 'Beende fünf Turniere dieser Rangliste auf Platz vier.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.fourthPlaces,
-      target: 25,
-      experiencePoints: 35,
+      target: 5,
+      experiencePoints: 50,
     ),
     AchievementDefinition(
       id: 'match_win_streak_3',
@@ -185,7 +185,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.matchWinStreak,
       target: 3,
-      experiencePoints: 30,
+      experiencePoints: 37,
     ),
     AchievementDefinition(
       id: 'match_win_streak_5',
@@ -194,7 +194,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.matchWinStreak,
       target: 5,
-      experiencePoints: 50,
+      experiencePoints: 61,
     ),
     AchievementDefinition(
       id: 'match_win_streak_7',
@@ -203,15 +203,16 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.matchWinStreak,
       target: 7,
-      experiencePoints: 75,
+      experiencePoints: 91,
     ),
     AchievementDefinition(
       id: 'title_defense',
-      name: 'Titelverteidiger',
-      description: 'Gewinne dasselbe Turnier zweimal in Folge.',
+      name: 'Gewinne zwei Turniere hintereinander',
+      description: 'Gewinne zwei Turniere in Folge.',
       category: AchievementCategory.tournamentResults,
-      metric: AchievementMetric.titleDefenses,
-      experiencePoints: 60,
+      metric: AchievementMetric.tournamentWinStreak,
+      target: 2,
+      experiencePoints: 73,
     ),
     AchievementDefinition(
       id: 'consecutive_tournament_participations_5',
@@ -220,7 +221,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.consecutiveTournamentParticipations,
       target: 5,
-      experiencePoints: 25,
+      experiencePoints: 31,
     ),
     AchievementDefinition(
       id: 'tournament_win_streak_3',
@@ -229,7 +230,7 @@ class AchievementCatalog {
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.tournamentWinStreak,
       target: 3,
-      experiencePoints: 50,
+      experiencePoints: 61,
     ),
     AchievementDefinition(
       id: 'legs_won_10',
@@ -238,7 +239,7 @@ class AchievementCatalog {
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsWon,
       target: 10,
-      experiencePoints: 5,
+      experiencePoints: 7,
     ),
     AchievementDefinition(
       id: 'legs_won_25',
@@ -247,7 +248,7 @@ class AchievementCatalog {
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsWon,
       target: 25,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'legs_won_50',
@@ -256,7 +257,7 @@ class AchievementCatalog {
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsWon,
       target: 50,
-      experiencePoints: 15,
+      experiencePoints: 19,
     ),
     AchievementDefinition(
       id: 'legs_won_100',
@@ -265,7 +266,7 @@ class AchievementCatalog {
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsWon,
       target: 100,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'legs_lost_10',
@@ -274,7 +275,7 @@ class AchievementCatalog {
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsLost,
       target: 10,
-      experiencePoints: 5,
+      experiencePoints: 7,
     ),
     AchievementDefinition(
       id: 'legs_lost_25',
@@ -283,7 +284,7 @@ class AchievementCatalog {
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsLost,
       target: 25,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'legs_lost_50',
@@ -292,7 +293,7 @@ class AchievementCatalog {
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsLost,
       target: 50,
-      experiencePoints: 15,
+      experiencePoints: 19,
     ),
     AchievementDefinition(
       id: 'score180_3',
@@ -301,7 +302,7 @@ class AchievementCatalog {
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.score180Count,
       target: 3,
-      experiencePoints: 25,
+      experiencePoints: 31,
     ),
     AchievementDefinition(
       id: 'score180_5',
@@ -310,7 +311,7 @@ class AchievementCatalog {
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.score180Count,
       target: 5,
-      experiencePoints: 40,
+      experiencePoints: 49,
     ),
     AchievementDefinition(
       id: 'score180_7',
@@ -319,7 +320,7 @@ class AchievementCatalog {
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.score180Count,
       target: 7,
-      experiencePoints: 60,
+      experiencePoints: 73,
     ),
     AchievementDefinition(
       id: 'first_score180',
@@ -327,7 +328,7 @@ class AchievementCatalog {
       description: 'Wirf deine erste 180.',
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.firstScore180,
-      experiencePoints: 15,
+      experiencePoints: 19,
     ),
     AchievementDefinition(
       id: 'first_score171',
@@ -335,7 +336,7 @@ class AchievementCatalog {
       description: 'Wirf deine erste 171.',
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.firstScore171,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'score171_1',
@@ -343,7 +344,7 @@ class AchievementCatalog {
       description: 'Wirf eine 171.',
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.score171Count,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'score171_3',
@@ -352,7 +353,7 @@ class AchievementCatalog {
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.score171Count,
       target: 3,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'score171_5',
@@ -361,7 +362,7 @@ class AchievementCatalog {
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.score171Count,
       target: 5,
-      experiencePoints: 30,
+      experiencePoints: 37,
     ),
     AchievementDefinition(
       id: 'score171_7',
@@ -370,7 +371,7 @@ class AchievementCatalog {
       category: AchievementCategory.scoringAndSpecials,
       metric: AchievementMetric.score171Count,
       target: 7,
-      experiencePoints: 40,
+      experiencePoints: 49,
     ),
     AchievementDefinition(
       id: 'nine_darter',
@@ -384,10 +385,10 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'score170_checkout',
       name: 'Angelschein',
-      description: 'Schaffe ein 170er Checkout.',
+      description: 'Erziele eine 170-Aufnahme.',
       category: AchievementCategory.scoringAndSpecials,
-      metric: AchievementMetric.score170CheckoutCount,
-      experiencePoints: 100,
+      metric: AchievementMetric.bigFish170Count,
+      experiencePoints: 121,
     ),
     AchievementDefinition(
       id: 'bullseye_finish_1',
@@ -395,7 +396,7 @@ class AchievementCatalog {
       description: 'Erziele ein Bullseye-Finish.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.bullseyeFinishCount,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'bullseye_finish_3',
@@ -404,7 +405,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.bullseyeFinishCount,
       target: 3,
-      experiencePoints: 30,
+      experiencePoints: 37,
     ),
     AchievementDefinition(
       id: 'bullseye_finish_5',
@@ -413,7 +414,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.bullseyeFinishCount,
       target: 5,
-      experiencePoints: 50,
+      experiencePoints: 61,
     ),
     AchievementDefinition(
       id: 'high_finish_1',
@@ -421,7 +422,7 @@ class AchievementCatalog {
       description: 'Erziele ein High Finish.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.highFinishCount,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'high_finish_3',
@@ -430,7 +431,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.highFinishCount,
       target: 3,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'high_finish_7',
@@ -439,7 +440,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.highFinishCount,
       target: 7,
-      experiencePoints: 40,
+      experiencePoints: 49,
     ),
     AchievementDefinition(
       id: 'checkout_rate_20',
@@ -451,7 +452,7 @@ class AchievementCatalog {
       metric: AchievementMetric.monthlyCheckoutRate,
       target: 20,
       strictTarget: true,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'checkout_rate_25',
@@ -463,7 +464,7 @@ class AchievementCatalog {
       metric: AchievementMetric.monthlyCheckoutRate,
       target: 25,
       strictTarget: true,
-      experiencePoints: 30,
+      experiencePoints: 37,
     ),
     AchievementDefinition(
       id: 'checkout_rate_30',
@@ -475,7 +476,7 @@ class AchievementCatalog {
       metric: AchievementMetric.monthlyCheckoutRate,
       target: 30,
       strictTarget: true,
-      experiencePoints: 50,
+      experiencePoints: 61,
     ),
     AchievementDefinition(
       id: 'shortleg_1',
@@ -483,7 +484,7 @@ class AchievementCatalog {
       description: 'Spiele ein Shortleg.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'shortleg_3',
@@ -492,7 +493,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 3,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'shortleg_5',
@@ -501,7 +502,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 5,
-      experiencePoints: 30,
+      experiencePoints: 37,
     ),
     AchievementDefinition(
       id: 'shortleg_10',
@@ -510,7 +511,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 10,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'shortleg_25',
@@ -519,7 +520,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 25,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'shortleg_50',
@@ -528,7 +529,7 @@ class AchievementCatalog {
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 50,
-      experiencePoints: 30,
+      experiencePoints: 37,
     ),
     AchievementDefinition(
       id: 'monthly_average_40',
@@ -539,7 +540,7 @@ class AchievementCatalog {
       category: AchievementCategory.performanceAndConsistency,
       metric: AchievementMetric.monthlyAverage,
       target: 40,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'monthly_average_50',
@@ -550,7 +551,7 @@ class AchievementCatalog {
       category: AchievementCategory.performanceAndConsistency,
       metric: AchievementMetric.monthlyAverage,
       target: 50,
-      experiencePoints: 25,
+      experiencePoints: 31,
     ),
     AchievementDefinition(
       id: 'monthly_average_60',
@@ -561,7 +562,7 @@ class AchievementCatalog {
       category: AchievementCategory.performanceAndConsistency,
       metric: AchievementMetric.monthlyAverage,
       target: 60,
-      experiencePoints: 50,
+      experiencePoints: 61,
     ),
     AchievementDefinition(
       id: 'monthly_scoring_40',
@@ -572,7 +573,7 @@ class AchievementCatalog {
       category: AchievementCategory.performanceAndConsistency,
       metric: AchievementMetric.monthlyScoring,
       target: 40,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'monthly_scoring_50',
@@ -583,7 +584,7 @@ class AchievementCatalog {
       category: AchievementCategory.performanceAndConsistency,
       metric: AchievementMetric.monthlyScoring,
       target: 50,
-      experiencePoints: 25,
+      experiencePoints: 31,
     ),
     AchievementDefinition(
       id: 'monthly_scoring_60',
@@ -594,7 +595,7 @@ class AchievementCatalog {
       category: AchievementCategory.performanceAndConsistency,
       metric: AchievementMetric.monthlyScoring,
       target: 60,
-      experiencePoints: 50,
+      experiencePoints: 61,
     ),
     AchievementDefinition(
       id: 'consecutive_active_months_6',
@@ -605,7 +606,7 @@ class AchievementCatalog {
       category: AchievementCategory.activityAndLoyalty,
       metric: AchievementMetric.consecutiveActiveMonths,
       target: 6,
-      experiencePoints: 25,
+      experiencePoints: 31,
     ),
     AchievementDefinition(
       id: 'active_months_12',
@@ -616,7 +617,7 @@ class AchievementCatalog {
       category: AchievementCategory.activityAndLoyalty,
       metric: AchievementMetric.activeMonthsInYear,
       target: 12,
-      experiencePoints: 50,
+      experiencePoints: 61,
     ),
     AchievementDefinition(
       id: 'training_sessions_10',
@@ -625,7 +626,7 @@ class AchievementCatalog {
       category: AchievementCategory.activityAndLoyalty,
       metric: AchievementMetric.trainingSessions,
       target: 10,
-      experiencePoints: 10,
+      experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'training_sessions_25',
@@ -634,7 +635,7 @@ class AchievementCatalog {
       category: AchievementCategory.activityAndLoyalty,
       metric: AchievementMetric.trainingSessions,
       target: 25,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'training_sessions_40',
@@ -643,7 +644,7 @@ class AchievementCatalog {
       category: AchievementCategory.activityAndLoyalty,
       metric: AchievementMetric.trainingSessions,
       target: 40,
-      experiencePoints: 35,
+      experiencePoints: 43,
     ),
     AchievementDefinition(
       id: 'win_after_five_losses',
@@ -651,7 +652,7 @@ class AchievementCatalog {
       description: 'Gewinne nach fünf Niederlagen in Folge wieder ein Match.',
       category: AchievementCategory.rivalriesAndComebacks,
       metric: AchievementMetric.winsAfterLossStreak,
-      experiencePoints: 25,
+      experiencePoints: 31,
     ),
     AchievementDefinition(
       id: 'elo_upset',
@@ -661,7 +662,7 @@ class AchievementCatalog {
           '200 ELO-Punkte mehr hat.',
       category: AchievementCategory.rivalriesAndComebacks,
       metric: AchievementMetric.eloUpsetWins,
-      experiencePoints: 40,
+      experiencePoints: 49,
     ),
     AchievementDefinition(
       id: 'opponents_beaten_10',
@@ -670,7 +671,7 @@ class AchievementCatalog {
       category: AchievementCategory.rivalriesAndComebacks,
       metric: AchievementMetric.distinctOpponentsBeaten,
       target: 10,
-      experiencePoints: 30,
+      experiencePoints: 37,
     ),
     AchievementDefinition(
       id: 'losses_to_same_opponent_10',
@@ -679,7 +680,7 @@ class AchievementCatalog {
       category: AchievementCategory.rivalriesAndComebacks,
       metric: AchievementMetric.lossesToSameOpponent,
       target: 10,
-      experiencePoints: 20,
+      experiencePoints: 25,
     ),
     AchievementDefinition(
       id: 'category_tournament_legend',
@@ -688,7 +689,7 @@ class AchievementCatalog {
           'Schließe alle Errungenschaften der Kategorie '
           'Turniererfolge ab.',
       category: AchievementCategory.tournamentResults,
-      experiencePoints: 100,
+      experiencePoints: 121,
       completionCategory: AchievementCategory.tournamentResults,
     ),
     AchievementDefinition(
@@ -698,7 +699,7 @@ class AchievementCatalog {
           'Schließe alle Errungenschaften der Kategorie Spielbetrieb '
           'ab.',
       category: AchievementCategory.gameplay,
-      experiencePoints: 75,
+      experiencePoints: 91,
       completionCategory: AchievementCategory.gameplay,
     ),
     AchievementDefinition(
@@ -708,7 +709,7 @@ class AchievementCatalog {
           'Schließe alle Errungenschaften der Kategorie '
           'Scoring & Specials ab.',
       category: AchievementCategory.scoringAndSpecials,
-      experiencePoints: 100,
+      experiencePoints: 121,
       completionCategory: AchievementCategory.scoringAndSpecials,
     ),
     AchievementDefinition(
@@ -718,7 +719,7 @@ class AchievementCatalog {
           'Schließe alle Errungenschaften der Kategorie '
           'Checkout & Präzision ab.',
       category: AchievementCategory.checkoutAndPrecision,
-      experiencePoints: 100,
+      experiencePoints: 121,
       completionCategory: AchievementCategory.checkoutAndPrecision,
     ),
     AchievementDefinition(
@@ -728,7 +729,7 @@ class AchievementCatalog {
           'Schließe alle Errungenschaften der Kategorie '
           'Leistung & Konstanz ab.',
       category: AchievementCategory.performanceAndConsistency,
-      experiencePoints: 75,
+      experiencePoints: 91,
       completionCategory: AchievementCategory.performanceAndConsistency,
     ),
     AchievementDefinition(
@@ -738,7 +739,7 @@ class AchievementCatalog {
           'Schließe alle Errungenschaften der Kategorie '
           'Aktivität & Treue ab.',
       category: AchievementCategory.activityAndLoyalty,
-      experiencePoints: 75,
+      experiencePoints: 91,
       completionCategory: AchievementCategory.activityAndLoyalty,
     ),
     AchievementDefinition(
@@ -748,7 +749,7 @@ class AchievementCatalog {
           'Schließe alle Errungenschaften der Kategorie '
           'Rivalitäten & Comebacks ab.',
       category: AchievementCategory.rivalriesAndComebacks,
-      experiencePoints: 75,
+      experiencePoints: 91,
       completionCategory: AchievementCategory.rivalriesAndComebacks,
     ),
     AchievementDefinition(
@@ -803,4 +804,9 @@ class AchievementCatalog {
     0,
     (total, definition) => total + definition.experiencePoints,
   );
+  static List<AchievementDefinition> withTargets(Map<String, double> targets) =>
+      [
+        for (final definition in definitions)
+          definition.copyWith(target: targets[definition.id]),
+      ];
 }

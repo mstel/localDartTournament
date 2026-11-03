@@ -124,6 +124,62 @@ void main() {
     );
   });
 
+  test(
+    'equal-life preference avoids repeated opponents and balances games',
+    () {
+      const engine = KratzerEngine();
+      final players = [for (var index = 1; index <= 5; index++) player(index)];
+      final history = <GroupMatch>[
+        GroupMatch(
+          isKratzer: true,
+          players: players.take(3).toList(),
+          scratchEligiblePlayers: players.take(3).toList(),
+          scratchedPlayer: players.first,
+          round: 1,
+        ),
+      ];
+
+      final nextRound = engine.assignRound(
+        players: players,
+        availableBoards: [1, 2],
+        round: 2,
+        playersPerBoard: 3,
+        preferSameScratchCount: true,
+        completedMatches: history,
+      );
+      final nextPlayers = nextRound.single.scratchEligiblePlayers;
+      expect(nextPlayers, containsAll(players.skip(3)));
+      expect(
+        nextPlayers.where((candidate) => players.take(3).contains(candidate)),
+        hasLength(1),
+      );
+      expect(
+        nextPlayers.where((candidate) => players.take(3).contains(candidate)),
+        isNot(contains(players.first)),
+      );
+
+      history.add(
+        GroupMatch(
+          isKratzer: true,
+          players: nextPlayers,
+          scratchEligiblePlayers: nextPlayers,
+          round: 2,
+        ),
+      );
+      final gamesPlayed = {for (final candidate in players) candidate: 0};
+      for (final match in history) {
+        for (final candidate in match.scratchEligiblePlayers) {
+          gamesPlayed.update(candidate, (count) => count + 1);
+        }
+      }
+      expect(
+        gamesPlayed.values.reduce((a, b) => a > b ? a : b) -
+            gamesPlayed.values.reduce((a, b) => a < b ? a : b),
+        lessThanOrEqualTo(1),
+      );
+    },
+  );
+
   test('groups repeat until a player is eliminated', () {
     const engine = KratzerEngine();
     final players = [for (var index = 1; index <= 6; index++) player(index)];
@@ -398,30 +454,61 @@ void main() {
     expect(matches.first.loser, players.first);
   });
 
-  test('duration scales with board group size and adds empty-board time', () {
+  test('unused boards do not increase the Kratzer duration estimate', () {
     const engine = KratzerEngine();
     final oneBoard = engine.estimateDuration(
       playerCount: 4,
       lives: 1,
       boards: 1,
       baseMatchMinutes: 4,
-      boardIdleMinutes: 0,
     );
     final twoBoards = engine.estimateDuration(
       playerCount: 4,
       lives: 1,
       boards: 2,
       baseMatchMinutes: 4,
-      boardIdleMinutes: 3,
     );
     expect(oneBoard.games, 3);
     expect(oneBoard.minutes, 20);
     expect(twoBoards.games, oneBoard.games);
-    expect(twoBoards.minutes, greaterThan(oneBoard.minutes));
+    expect(twoBoards.minutes, oneBoard.minutes);
+    final estimateByBoardCount = [
+      for (final boards in [3, 4, 5])
+        engine
+            .estimateDuration(
+              playerCount: 8,
+              lives: 3,
+              boards: boards,
+              baseMatchMinutes: 8,
+            )
+            .minutes,
+    ];
+    expect(estimateByBoardCount[1], lessThanOrEqualTo(estimateByBoardCount[0]));
+    expect(estimateByBoardCount[2], lessThanOrEqualTo(estimateByBoardCount[1]));
     expect(
       engine.estimatedGameCount(playerCount: 4, lives: 1, boards: 1),
       oneBoard.games,
     );
+  });
+
+  test('Kratzer adds board change time only between active rounds', () {
+    const engine = KratzerEngine();
+    final withoutIdle = engine.estimateDuration(
+      playerCount: 4,
+      lives: 1,
+      boards: 1,
+      baseMatchMinutes: 4,
+    );
+    final withIdle = engine.estimateDuration(
+      playerCount: 4,
+      lives: 1,
+      boards: 1,
+      baseMatchMinutes: 4,
+      boardIdleMinutes: 3,
+    );
+
+    expect(withIdle.rounds, greaterThan(1));
+    expect(withIdle.minutes, withoutIdle.minutes + (withIdle.rounds - 1) * 3);
   });
 
   test('duration estimates enough games to eliminate all but one player', () {
@@ -451,7 +538,6 @@ void main() {
       lives: 2,
       boards: 4,
       baseMatchMinutes: 4,
-      boardIdleMinutes: 0,
     );
     final sixPerBoard = engine.estimateDuration(
       playerCount: 12,
@@ -459,7 +545,6 @@ void main() {
       boards: 4,
       playersPerBoard: 6,
       baseMatchMinutes: 4,
-      boardIdleMinutes: 0,
     );
 
     expect(sixPerBoard.minutes, isNot(evenlyDistributed.minutes));

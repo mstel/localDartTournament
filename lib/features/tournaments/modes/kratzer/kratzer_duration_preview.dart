@@ -90,8 +90,9 @@ class KratzerDurationPreview extends StatelessWidget {
                   'Spielzeit je zusätzlichem Spieler +50 %',
                 ),
               Text(
-                'Je Runde wird die längste Board-Partie angesetzt; unbesetzte Boards '
-                'werden mit ${parameters.boardIdleMinutes} min Leerstand berücksichtigt.',
+                'Je Runde wird die längste tatsächlich belegte Board-Partie '
+                'angesetzt. Nicht belegte Boards verlängern die Vorschau nicht; '
+                'zwischen Runden wird die eingestellte Wechselzeit berücksichtigt.',
               ),
               Wrap(
                 spacing: 8,

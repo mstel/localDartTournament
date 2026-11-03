@@ -31,10 +31,10 @@ class TournamentSummaryCard extends StatelessWidget {
     final typeLabel = league != null
         ? league.variant == LeagueMatchVariant.traditional
               ? 'Ligaspiel'
-              : 'Angepasstes/Freundschaftsspiel'
-        : tournament.countsForRanking
+              : 'Angepasstes Freundschafts-/Ligaspiel'
+        : tournament.countsForRanking && tournament.rankingIds.isNotEmpty
         ? 'Ranglistenturnier'
-        : 'Angepasstes/Freundschaftsspiel';
+        : 'Normales Turnier';
     final winnerName = _winnerName(tournament, complete);
     return Card(
       clipBehavior: Clip.antiAlias,

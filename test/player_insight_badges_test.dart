@@ -85,10 +85,10 @@ void main() {
       );
       final match = GroupMatch(homePlayer: home, awayPlayer: away, round: 1);
       const insight = PlayerInsight(
-        type: PlayerInsightType.favoriteOpponent,
+        type: PlayerInsightType.bogeyOpponent,
         playerId: 'home',
         rivalId: 'away',
-        explanation: 'Sieben Siege in zehn direkten Duellen.',
+        explanation: 'Sieben Niederlagen in zehn direkten Duellen.',
       );
 
       await tester.pumpWidget(
@@ -112,7 +112,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Lieblingsgegner'), findsOneWidget);
+      expect(find.text('Angstgegner'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

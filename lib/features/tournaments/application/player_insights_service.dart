@@ -8,6 +8,16 @@ import '../domain/player_insight.dart';
 import '../domain/tournament_models.dart';
 import '../domain/tournament_winner.dart';
 
+const _rankingDependentInsights = {
+  PlayerInsightType.bogeyOpponent,
+  PlayerInsightType.rival,
+  PlayerInsightType.giantKiller,
+  PlayerInsightType.underdog,
+  PlayerInsightType.titleDefender,
+  PlayerInsightType.risingStar,
+  PlayerInsightType.eloClimber,
+};
+
 class PlayerInsightsService {
   const PlayerInsightsService({
     required LocalAppDatabase database,
@@ -59,7 +69,7 @@ class PlayerInsightsService {
             tournamentStorage: _storage,
           ).calculate(eloRanking, tournaments: history);
 
-    return PlayerInsightEngine().calculate(
+    final calculated = PlayerInsightEngine().calculate(
       tournament: tournament,
       history: history,
       monthlyEntries: monthlyEntries,
@@ -67,6 +77,31 @@ class PlayerInsightsService {
       eloSnapshot: eloSnapshot,
       now: now ?? DateTime.now(),
     );
+    final rankedPlayerIds = <String>{};
+    if (tournament.countsForRanking && tournament.rankingIds.isNotEmpty) {
+      final catalogIds = (await _database.loadPlayerProfiles())
+          .map((profile) => profile.id)
+          .toSet();
+      for (final ranking in rankings.where(
+        (ranking) => tournament.rankingIds.contains(ranking.id),
+      )) {
+        rankedPlayerIds.addAll(
+          (await _database.loadRankingPlayerIds(
+            ranking.id,
+          )).where(catalogIds.contains),
+        );
+      }
+    }
+    return {
+      for (final entry in calculated.entries)
+        entry.key: List.unmodifiable(
+          entry.value.where(
+            (insight) =>
+                !_rankingDependentInsights.contains(insight.type) ||
+                rankedPlayerIds.contains(entry.key),
+          ),
+        ),
+    };
   }
 }
 
@@ -121,9 +156,7 @@ class PlayerInsightEngine {
       final playerId = entry.key;
       final playerName = entry.value.name;
       final playerMatches = matchesByPlayer[playerId]!;
-      final recent = _hasAmbiguousChronology(playerMatches)
-          ? const <_InsightMatch>[]
-          : playerMatches.reversed.toList();
+      final recent = playerMatches.reversed.toList();
       final outcomes = [
         for (final match in recent)
           if (match.winnerIds.contains(playerId))
@@ -304,9 +337,7 @@ class PlayerInsightEngine {
             ? (firstId, secondId)
             : (secondId, firstId);
         final directMatches = directMatchesByPair[pair] ?? const [];
-        if (directMatches.isEmpty || _hasAmbiguousChronology(directMatches)) {
-          continue;
-        }
+        if (directMatches.isEmpty) continue;
 
         final firstName = participants[firstId]!.name;
         final secondName = participants[secondId]!.name;
@@ -339,15 +370,6 @@ class PlayerInsightEngine {
                 PlayerInsightType.bogeyOpponent,
                 '$playerName hat $losses seiner letzten 10 direkten Duelle '
                 'gegen $rivalName verloren.',
-                rivalId: rivalId,
-              );
-            }
-            if (wins >= 7) {
-              add(
-                playerId,
-                PlayerInsightType.favoriteOpponent,
-                '$playerName hat $wins seiner letzten 10 direkten Duelle '
-                'gegen $rivalName gewonnen.',
                 rivalId: rivalId,
               );
             }
@@ -623,13 +645,6 @@ class PlayerInsightEngine {
     );
     return dateComparison < 0 ||
         dateComparison == 0 && candidate.id.compareTo(current.id) < 0;
-  }
-
-  bool _hasAmbiguousChronology(List<_InsightMatch> matches) {
-    for (var index = 1; index < matches.length; index++) {
-      if (matches[index - 1].date == matches[index].date) return true;
-    }
-    return false;
   }
 
   String _seriesKey(CreatedTournament tournament) {

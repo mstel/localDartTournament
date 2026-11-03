@@ -31,6 +31,7 @@ void main() {
         ),
       ],
       countsForRanking: true,
+      rankingIds: ['ranking'],
       completedStageIndexes: {0},
     );
 
@@ -48,6 +49,32 @@ void main() {
 
     expect(find.text('Ranglistenturnier'), findsOneWidget);
     expect(find.text('Sieger: Anna'), findsOneWidget);
+  });
+
+  testWidgets('labels unassigned tournaments as normal tournaments', (
+    tester,
+  ) async {
+    final tournament = CreatedTournament(
+      name: 'Vereinsabend',
+      players: const [],
+      stages: const [],
+      runStages: const [],
+      countsForRanking: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSummaryCard(
+            tournament: tournament,
+            onOpen: () {},
+            onDelete: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Normales Turnier'), findsOneWidget);
   });
 
   testWidgets('shows the winning team for a completed league match', (
@@ -118,6 +145,6 @@ void main() {
       ),
     );
 
-    expect(find.text('Angepasstes/Freundschaftsspiel'), findsOneWidget);
+    expect(find.text('Angepasstes Freundschafts-/Ligaspiel'), findsOneWidget);
   });
 }

@@ -97,6 +97,10 @@ void main() {
       await tester.tap(playUntilElimination);
       await tester.pumpAndSettle();
       expect(tester.widget<SwitchListTile>(playUntilElimination).value, isTrue);
+      final specialRules = find.byKey(const ValueKey('kratzer-special-rules'));
+      await tester.ensureVisible(specialRules);
+      await tester.tap(specialRules);
+      await tester.pumpAndSettle();
       final bonus180 = find.byKey(const ValueKey('kratzer-bonus-life-180'));
       await tester.ensureVisible(bonus180);
       await tester.tap(bonus180);
