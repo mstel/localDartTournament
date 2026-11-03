@@ -629,6 +629,104 @@ void main() {
     expect(progress.evaluation.progress['third_places_3']!.currentValue, 1);
   });
 
+  test(
+    'best performances entered in imported archives contribute retroactively',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'ranking_achievement_imported_performances_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final profile = await database.createPlayerProfile(
+        displayName: 'Johannes Rau',
+      );
+      const ranking = LocalRanking(
+        id: 'imported-performance-ranking',
+        name: 'Rangliste',
+        achievementsEnabled: true,
+      );
+      await database.saveLocalRanking(ranking);
+      await database.setRankingPlayers(ranking.id, [profile.id]);
+      final player = TournamentPlayer(
+        profileId: profile.id,
+        name: profile.displayName,
+        isGenerated: false,
+      );
+      final opponent = TournamentPlayer(name: 'Gegner', isGenerated: true);
+      final tournament = CreatedTournament(
+        id: 'challonge-import',
+        name: 'Importiertes Turnier',
+        tournamentDate: DateTime(2026, 4, 10),
+        players: [player, opponent],
+        stages: const [],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Archiv',
+            groupPlayType: 'round_robin',
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: [player, opponent],
+                matches: [
+                  GroupMatch(
+                    homePlayer: player,
+                    awayPlayer: opponent,
+                    round: 1,
+                    homeLegs: 3,
+                    awayLegs: 1,
+                  ),
+                ],
+              ),
+            ],
+            qualificationPlan: null,
+            tieBreakers: const [],
+          ),
+        ],
+        rankingIds: [ranking.id],
+        finishedAt: DateTime(2026, 4, 10),
+        importedArchive: ImportedTournamentArchive(
+          sourceId: 'challonge-123',
+          url: 'https://challonge.example/archive',
+          mode: 'round robin',
+          participants: [
+            {
+              'id': 'player',
+              'name': profile.displayName,
+              'profileId': profile.id,
+            },
+            {'id': 'opponent', 'name': opponent.name},
+          ],
+          matches: [
+            {
+              'id': 'archive-match',
+              'player1_id': 'player',
+              'player2_id': 'opponent',
+              'bestPerformances': [
+                BestPerformance(
+                  type: BestPerformanceType.highFinish,
+                  playerName: profile.displayName,
+                  value: 170,
+                ).toJson(),
+              ],
+            },
+          ],
+        ),
+      );
+
+      final result = await RankingAchievementService(database: database)
+          .refreshPlayer(
+            ranking: ranking,
+            playerProfileId: profile.id,
+            tournaments: [tournament],
+          );
+
+      expect(result.evaluation.progress['high_finish_1']!.currentValue, 1);
+      expect(result.evaluation.progress['high_finish_1']!.isCompleted, isTrue);
+    },
+  );
+
   test('Elo upset requires a rating advantage of at least 200', () async {
     final directory = await Directory.systemTemp.createTemp(
       'ranking_achievement_elo_upset_test_',

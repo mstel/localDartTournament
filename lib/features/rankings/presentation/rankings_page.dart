@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../application/ranking_year_review_image_generator.dart';
 import '../application/ranking_standings_image_generator.dart';
 
@@ -1001,25 +1000,14 @@ class _RankingsPageState extends State<RankingsPage> {
   }
 
   Future<void> _restoreSortMode() async {
-    final preferences = await SharedPreferences.getInstance();
-    final stored = preferences.getString('ranking_sort_mode');
-    RankingSortMode? mode;
-    for (final value in RankingSortMode.values) {
-      if (value.name == stored) mode = value;
-    }
-    if (mode != null && mounted) setState(() => _sortMode = mode!);
+    final mode = await loadRankingSortMode();
+    if (mounted) setState(() => _sortMode = mode);
   }
 
   Future<void> _setSortMode(RankingSortMode mode) async {
     setState(() => _sortMode = mode);
     try {
-      final saved = await (await SharedPreferences.getInstance()).setString(
-        'ranking_sort_mode',
-        mode.name,
-      );
-      if (!saved) {
-        throw StateError('Die Sortierung konnte nicht gespeichert werden.');
-      }
+      await saveRankingSortMode(mode);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

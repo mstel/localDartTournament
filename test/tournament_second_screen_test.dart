@@ -13,8 +13,14 @@ import 'package:dart_tournament_manager/features/tournaments/presentation/widget
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('recommended table splits two groups into four match columns', (
     tester,
   ) async {

@@ -1,3 +1,15 @@
+# 2.4.1+61
+
+- Führt konfigurierbare globale Insights-Standardwerte ein und fasst gleiche
+  Insight-Kategorien pro Partie mit den beteiligten Spielernamen zusammen.
+  Unstoppable ersetzt bei längeren Siegesserien Momentum und Hot Streak;
+  höchstens drei Kategorien werden als Badges gezeigt.
+- Sortiert die Achievement-Abschnitte in Spielerprofilen wie die Ranglisten.
+- Berücksichtigt manuell ergänzte Bestleistungen aus Challonge-Archiven
+  rückwirkend für Achievement-Fortschritte.
+- Ergänzt das Read Model um Achievement-Fortschritte je Rangliste und stellt
+  sie als eigenständige API-Ressource `achievements` bereit.
+
 # 2.4.0+60
 
 - Verbessert die Zeitvorschau für KO-Runden mit voller Spieldistanz und

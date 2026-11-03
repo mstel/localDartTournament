@@ -1,4 +1,28 @@
 import '../domain/local_ranking.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const rankingSortModePreferenceKey = 'ranking_sort_mode';
+
+Future<RankingSortMode> loadRankingSortMode() async {
+  final preferences = await SharedPreferences.getInstance();
+  final stored = preferences.getString(rankingSortModePreferenceKey);
+  return RankingSortMode.values.firstWhere(
+    (mode) => mode.name == stored,
+    orElse: () => RankingSortMode.alphabetical,
+  );
+}
+
+Future<void> saveRankingSortMode(RankingSortMode mode) async {
+  final saved = await (await SharedPreferences.getInstance()).setString(
+    rankingSortModePreferenceKey,
+    mode.name,
+  );
+  if (!saved) {
+    throw StateError(
+      'Die Ranglisten-Sortierung konnte nicht gespeichert werden.',
+    );
+  }
+}
 
 enum RankingSortMode { startYearDescending, alphabetical, custom }
 

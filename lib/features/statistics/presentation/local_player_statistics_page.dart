@@ -5,6 +5,7 @@ import '../../../shared/utils/png_image_export.dart';
 import '../../achievements/application/ranking_achievement_service.dart';
 import '../../achievements/presentation/ranking_achievement_section.dart';
 import '../../rankings/domain/local_ranking.dart';
+import '../../rankings/application/ranking_order.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../application/player_statistics_image_generator.dart';
@@ -78,9 +79,10 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
         ...await _database.loadPlayerMonthlyPerformance(profileId),
     ];
     final achievementViews = <RankingAchievementView>[];
-    final achievementRankings = rankings
-        .where((ranking) => ranking.achievementsEnabled)
-        .toList();
+    final achievementRankings = sortRankings(
+      rankings.where((ranking) => ranking.achievementsEnabled),
+      await loadRankingSortMode(),
+    );
     final achievementService = RankingAchievementService(
       database: _database,
       tournamentStorage: _tournamentStorage,

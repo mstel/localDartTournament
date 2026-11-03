@@ -1,6 +1,7 @@
 import '../../rankings/application/local_ranking_elo_service.dart';
 import '../../rankings/application/local_ranking_series_service.dart';
 import '../../rankings/domain/local_ranking.dart';
+import '../../achievements/application/ranking_achievement_service.dart';
 import '../../statistics/domain/local_statistics.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
 import '../../tournaments/data/app_database.dart';
@@ -28,6 +29,7 @@ class WebsiteReadModelService {
     'rankings': 'website-v2-rankings.json',
     'statistics': 'website-v2-statistics.json',
     'performance': 'website-v2-performance.json',
+    'achievements': 'website-v2-achievements.json',
   };
   final LocalAppDatabase _database;
   final TournamentStorage _tournamentStorage;
@@ -139,6 +141,70 @@ class WebsiteReadModelService {
       }
     }
 
+    final achievementStandings = <Map<String, dynamic>>[];
+    final achievementService = RankingAchievementService(
+      database: _database,
+      tournamentStorage: _tournamentStorage,
+    );
+    final profileById = {for (final profile in profiles) profile.id: profile};
+    for (final ranking in rankings.where(
+      (ranking) => ranking.achievementsEnabled,
+    )) {
+      final refreshed = await achievementService.refreshRanking(
+        ranking,
+        tournaments: completed,
+      );
+      final playerEntries = refreshed.entries.toList()
+        ..sort(
+          (left, right) => profileById[left.key]!.displayName
+              .toLowerCase()
+              .compareTo(profileById[right.key]!.displayName.toLowerCase()),
+        );
+      achievementStandings.add({
+        'rankingId': ranking.id,
+        'rankingName': ranking.name,
+        'rankingType': ranking.type.name,
+        'players': [
+          for (final entry in playerEntries)
+            {
+              'playerId': entry.key,
+              'playerName': profileById[entry.key]!.displayName,
+              'level': entry.value.evaluation.level,
+              'totalExperiencePoints':
+                  entry.value.evaluation.totalExperiencePoints,
+              'levelEligibleExperiencePoints':
+                  entry.value.evaluation.levelEligibleExperiencePoints,
+              'levelStartExperiencePoints':
+                  entry.value.evaluation.levelStartExperiencePoints,
+              'nextLevelExperiencePoints':
+                  entry.value.evaluation.nextLevelExperiencePoints,
+              'experiencePointsToNextLevel':
+                  entry.value.evaluation.experiencePointsToNextLevel,
+              'levelProgress': entry.value.evaluation.levelProgress,
+              'achievements': [
+                for (final progress in entry.value.evaluation.progress.values)
+                  {
+                    'id': progress.definition.id,
+                    'name': progress.definition.name,
+                    'description': progress.definition.description,
+                    'category': progress.definition.category.name,
+                    'currentValue': progress.currentValue,
+                    'target': progress.definition.target,
+                    'status': progress.status.name,
+                    'isCompleted': progress.isCompleted,
+                    'experiencePoints': progress.definition.experiencePoints,
+                    'contributesToLevel':
+                        progress.definition.contributesToLevel,
+                    'unlockedAt': progress.unlockedAt
+                        ?.toUtc()
+                        .toIso8601String(),
+                  },
+              ],
+            },
+        ],
+      });
+    }
+
     return {
       'schemaVersion': schemaVersion,
       'generatedAt': DateTime.now().toUtc().toIso8601String(),
@@ -160,6 +226,7 @@ class WebsiteReadModelService {
           {'id': ranking.id, 'name': ranking.name, 'type': ranking.type.name},
       ],
       'rankingStandings': rankingStandings,
+      'rankingAchievements': achievementStandings,
       'statistics': playerStatistics,
       'currentForm': currentForms,
       'bestPerformances': _uniquePerformances(bestPerformances),
@@ -198,6 +265,9 @@ class WebsiteReadModelService {
         'statistics': readModel['statistics'],
         'bestPerformances': readModel['bestPerformances'],
         'currentForm': readModel['currentForm'],
+      }),
+      'achievements': _version2Resource('achievements', generatedAt, {
+        'rankingAchievements': readModel['rankingAchievements'] ?? const [],
       }),
     };
 

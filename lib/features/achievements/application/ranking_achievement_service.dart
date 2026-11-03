@@ -338,6 +338,26 @@ class RankingAchievementService {
     var highFinishes = 0;
     var shortLegs = 0;
 
+    void recordPerformance(BestPerformance performance) {
+      switch (performance.normalizedType) {
+        case BestPerformanceType.score180:
+          score180s++;
+        case BestPerformanceType.score171Plus:
+          score171s++;
+        case BestPerformanceType.highFinish:
+          highFinishes++;
+        case BestPerformanceType.bullseyeFinish:
+          bullseyeFinishes++;
+        case BestPerformanceType.shortLeg:
+          shortLegs++;
+          if (performance.value == 9) nineDarters++;
+        case BestPerformanceType.bigFish170:
+          bigFish170s++;
+        case BestPerformanceType.score170:
+          break;
+      }
+    }
+
     for (final tournament in tournaments) {
       final date = tournament.effectiveDate;
       if (_containsPlayer(tournament.players, profileId)) {
@@ -400,24 +420,11 @@ class RankingAchievementService {
 
         for (final performance in match.bestPerformances) {
           if (!_performanceBelongsTo(match, performance, profileId)) continue;
-          switch (performance.normalizedType) {
-            case BestPerformanceType.score180:
-              score180s++;
-            case BestPerformanceType.score171Plus:
-              score171s++;
-            case BestPerformanceType.highFinish:
-              highFinishes++;
-            case BestPerformanceType.bullseyeFinish:
-              bullseyeFinishes++;
-            case BestPerformanceType.shortLeg:
-              shortLegs++;
-              if (performance.value == 9) nineDarters++;
-            case BestPerformanceType.bigFish170:
-              bigFish170s++;
-            case BestPerformanceType.score170:
-              break;
-          }
+          recordPerformance(performance);
         }
+      }
+      for (final archived in _archivedBestPerformances(tournament)) {
+        if (archived.$2 == profileId) recordPerformance(archived.$1);
       }
     }
 
@@ -868,6 +875,56 @@ class RankingAchievementService {
             player.name.trim().toLowerCase() == name,
       ),
     );
+  }
+
+  List<(BestPerformance, String)> _archivedBestPerformances(
+    CreatedTournament tournament,
+  ) {
+    final archive = tournament.importedArchive;
+    if (archive == null) return const [];
+    final participantById = <String, Map<String, dynamic>>{};
+    for (final participant in archive.participants) {
+      final id = participant['id'];
+      if (id is! String || id.isEmpty) continue;
+      participantById[id] = participant;
+      for (final alias in participant['groupPlayerIds'] as List? ?? const []) {
+        participantById['$alias'] = participant;
+      }
+    }
+    final performances = <(BestPerformance, String)>[];
+    for (final match in archive.matches) {
+      final matchPlayerIds = [
+        '${match['player1_id'] ?? ''}',
+        '${match['player2_id'] ?? ''}',
+      ];
+      final serialized = match['bestPerformances'];
+      if (serialized is! List) continue;
+      for (final item in serialized.whereType<Map>()) {
+        final performance = BestPerformance.fromJson(
+          Map<String, dynamic>.from(item),
+        );
+        final explicitProfileId = performance.playerProfileId;
+        if (explicitProfileId != null && explicitProfileId.isNotEmpty) {
+          performances.add((performance, explicitProfileId));
+          continue;
+        }
+        final normalizedName = performance.playerName.trim().toLowerCase();
+        if (normalizedName.isEmpty) continue;
+        final matchingProfileIds = {
+          for (final participantId in matchPlayerIds)
+            if (participantById[participantId] case final participant?
+                when participant['name'] is String &&
+                    (participant['name'] as String).trim().toLowerCase() ==
+                        normalizedName &&
+                    participant['profileId'] is String)
+              participant['profileId'] as String,
+        };
+        if (matchingProfileIds.length == 1) {
+          performances.add((performance, matchingProfileIds.single));
+        }
+      }
+    }
+    return performances;
   }
 
   (List<TournamentPlayer>, List<TournamentPlayer>) _matchSides(

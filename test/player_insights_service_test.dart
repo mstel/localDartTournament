@@ -4,11 +4,13 @@ import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calcu
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/player_insights_service.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/player_insight_preferences.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/player_insight.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final _date = DateTime.utc(2026, 3, 15);
 
@@ -101,6 +103,11 @@ Map<String, List<PlayerInsight>> _calculate({
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test(
     'streak, last-leg, and rising-star insights use recent match history',
     () {
@@ -159,17 +166,48 @@ void main() {
       expect(
         homeTypes,
         containsAll({
-          PlayerInsightType.hotStreak,
-          PlayerInsightType.momentum,
           PlayerInsightType.unstoppable,
           PlayerInsightType.risingStar,
           PlayerInsightType.lastLegStanding,
         }),
       );
+      expect(homeTypes, isNot(contains(PlayerInsightType.hotStreak)));
+      expect(homeTypes, isNot(contains(PlayerInsightType.momentum)));
       expect(awayTypes, contains(PlayerInsightType.coldStreak));
       expect(awayTypes, contains(PlayerInsightType.lastLegStanding));
     },
   );
+
+  test('unstoppable replaces hot streak and momentum for five wins', () {
+    final player = _player('player');
+    final opponent = _player('opponent');
+    final history = [
+      for (var index = 0; index < 5; index++)
+        _tournament(
+          id: 'win-$index',
+          players: [player, opponent],
+          date: DateTime.utc(2026, 3, index + 1),
+          matches: [
+            _match(
+              player,
+              opponent,
+              homeLegs: 3,
+              awayLegs: 0,
+              date: DateTime.utc(2026, 3, index + 1),
+            ),
+          ],
+        ),
+    ];
+
+    final types = _calculate(
+      current: _tournament(id: 'current', players: [player, opponent]),
+      history: history,
+    )['player']!.map((insight) => insight.type).toSet();
+
+    expect(types, contains(PlayerInsightType.unstoppable));
+    expect(types, isNot(contains(PlayerInsightType.hotStreak)));
+    expect(types, isNot(contains(PlayerInsightType.momentum)));
+  });
 
   test(
     'ranking-dependent insights require a catalog player assigned to the tournament ranking',
@@ -233,6 +271,27 @@ void main() {
       expect(
         insights[unrankedProfile.id]!.map((insight) => insight.type),
         isNot(contains(PlayerInsightType.bogeyOpponent)),
+      );
+
+      final preferences = PlayerInsightPreferencesStorage();
+      await preferences.save(
+        (await preferences.load()).withEnabled(
+          PlayerInsightType.bogeyOpponent,
+          false,
+        ),
+      );
+      final filtered = await service.calculate(tournament: current, now: _date);
+      expect(
+        filtered.values.expand((playerInsights) => playerInsights),
+        isNot(
+          contains(
+            isA<PlayerInsight>().having(
+              (insight) => insight.type,
+              'type',
+              PlayerInsightType.bogeyOpponent,
+            ),
+          ),
+        ),
       );
     },
   );

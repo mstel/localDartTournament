@@ -6,6 +6,8 @@ active player catalog (names,
 nickname, city and country), configured ranking names and computed standings,
 per-player statistics, best performances, and completed tournaments. Player
 profile birthdays, external service IDs and darts setup details are omitted.
+Achievement-enabled rankings also include each eligible catalog player's level,
+experience progress, and achievement states in `rankingAchievements`.
 Completed tournament records retain their stored result and imported-archive
 data; unfinished tournaments and the full workspace backup are not included.
 
@@ -106,6 +108,11 @@ authorization header.
 - `rankings`: `{ id, name, type }`, where type is `elo` or `series`.
 - `rankingStandings`: `{ rankingId, entries }`; entry fields vary by ranking type
   and include the position and player ID/name.
+- `rankingAchievements`: one record per achievement-enabled ranking, with its
+  ID, name, type, and eligible catalog players. Each player record contains
+  their level/experience progress and achievement definitions, values, status,
+  completion state, experience value, and unlock timestamp. Only players
+  assigned to that ranking are included.
 - `statistics`: `{ playerId, tournaments, matches, wins, losses, draws,
   tournamentWins, legsWon, legsLost, legsDrawn, setsWon, setsLost, currentForm }`.
   `currentForm` contains `weightedLegs`, `scoring`, `average`, and `checkoutQuote`
@@ -145,6 +152,7 @@ Request one resource per call. `version=2` and `resource` are required;
 | `?version=2&resource=rankings` | `rankings`, `rankingStandings` |
 | `?version=2&resource=statistics` | `statistics`, `bestPerformances`, `currentForm` |
 | `?version=2&resource=performance` | `monthlyPerformance`, `currentForm` |
+| `?version=2&resource=achievements` | `rankingAchievements` |
 | `?version=2&resource=tournaments&page=N` | One page of `completedTournaments` and `tournamentPage` |
 
 Every response has `schemaVersion: 2`, `resource`, and `generatedAt`. A
@@ -165,6 +173,18 @@ requested `players` resource.
 up to the latest 100 weighted legs. Monthly statistics are weighted by their
 leg counts, and the current, incomplete calendar month is excluded. Metrics
 remain null when no values have been recorded for them.
+
+`rankingAchievements` in the achievements resource contains one entry for each
+ranking with achievements enabled. Each entry has `rankingId`, `rankingName`,
+`rankingType`, and `players`. A player contains `playerId`, `playerName`,
+`level`, `totalExperiencePoints`, `levelEligibleExperiencePoints`,
+`levelStartExperiencePoints`, `nextLevelExperiencePoints`,
+`experiencePointsToNextLevel`, `levelProgress`, and `achievements`. Each
+achievement contains `id`, `name`, `description`, `category`, `currentValue`,
+`target`, `status`, `isCompleted`, `experiencePoints`,
+`contributesToLevel`, and nullable `unlockedAt`. The app calculates and
+refreshes this data during publication; the website does not need to implement
+achievement rules or calculate progress.
 
 ### Compatibility and migration
 

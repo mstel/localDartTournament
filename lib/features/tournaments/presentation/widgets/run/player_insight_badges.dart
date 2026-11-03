@@ -14,7 +14,7 @@ class PlayerInsightBadgeRow extends StatelessWidget {
       spacing: 3,
       runSpacing: 2,
       children: [
-        for (final insight in insights)
+        for (final insight in insights.take(3))
           Tooltip(
             message: insight.explanation,
             child: ConstrainedBox(
@@ -65,10 +65,29 @@ List<PlayerInsight> insightsForMatch(
   }
   final homeId = _playerInsightId(match.homePlayer!);
   final awayId = _playerInsightId(match.awayPlayer!);
-  return [
+  final selected = [
     for (final entry in [(homeId, awayId), (awayId, homeId)])
       for (final insight in playerInsights[entry.$1] ?? const [])
         if (insight.rivalId == null || insight.rivalId == entry.$2) insight,
+  ];
+  final grouped = <PlayerInsightType, List<PlayerInsight>>{};
+  for (final insight in selected) {
+    (grouped[insight.type] ??= []).add(insight);
+  }
+  return [
+    for (final group in grouped.values.take(3))
+      if (group.length == 1)
+        group.single
+      else
+        PlayerInsight(
+          type: group.first.type,
+          playerId: group.first.playerId,
+          explanation: [
+            for (final insight in group)
+              '${insight.playerId == homeId ? match.homePlayer!.name : match.awayPlayer!.name}: '
+                  '${insight.explanation}',
+          ].join('\n'),
+        ),
   ];
 }
 

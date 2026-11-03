@@ -3,6 +3,7 @@ export const websiteResourceNames = [
   'rankings',
   'statistics',
   'performance',
+  'achievements',
   'tournaments',
 ] as const;
 
@@ -29,6 +30,41 @@ const hasExactKeys = (
   return Object.keys(value).length === expected.size &&
     Object.keys(value).every((key) => expected.has(key));
 };
+
+const isAchievementStanding = (value: unknown): value is Record<string, unknown> =>
+  isRecord(value) &&
+  typeof value.rankingId === 'string' &&
+  typeof value.rankingName === 'string' &&
+  typeof value.rankingType === 'string' &&
+  Array.isArray(value.players) &&
+  value.players.every((player) =>
+    isRecord(player) &&
+    typeof player.playerId === 'string' &&
+    typeof player.playerName === 'string' &&
+    typeof player.level === 'number' &&
+    typeof player.totalExperiencePoints === 'number' &&
+    typeof player.levelEligibleExperiencePoints === 'number' &&
+    typeof player.levelStartExperiencePoints === 'number' &&
+    typeof player.nextLevelExperiencePoints === 'number' &&
+    typeof player.experiencePointsToNextLevel === 'number' &&
+    typeof player.levelProgress === 'number' &&
+    Array.isArray(player.achievements) &&
+    player.achievements.every((achievement) =>
+      isRecord(achievement) &&
+      typeof achievement.id === 'string' &&
+      typeof achievement.name === 'string' &&
+      typeof achievement.description === 'string' &&
+      typeof achievement.category === 'string' &&
+      typeof achievement.currentValue === 'number' &&
+      typeof achievement.target === 'number' &&
+      typeof achievement.status === 'string' &&
+      typeof achievement.isCompleted === 'boolean' &&
+      typeof achievement.experiencePoints === 'number' &&
+      typeof achievement.contributesToLevel === 'boolean' &&
+      (achievement.unlockedAt === null ||
+        typeof achievement.unlockedAt === 'string')
+    )
+  );
 
 export function parseWebsiteResourceRequest(
   searchParams: URLSearchParams,
@@ -91,13 +127,19 @@ export function isWebsiteResourcePayload(
         Array.isArray(value.rankingStandings) &&
         value.rankingStandings.every(isRecord);
     case 'statistics':
-      return hasExactKeys(value, ['statistics', 'bestPerformances']) &&
+      return hasExactKeys(value, [
+        'statistics',
+        'bestPerformances',
+        'currentForm',
+      ]) &&
         Array.isArray(value.statistics) &&
         value.statistics.every(isRecord) &&
         Array.isArray(value.bestPerformances) &&
-        value.bestPerformances.every(isRecord);
+        value.bestPerformances.every(isRecord) &&
+        Array.isArray(value.currentForm) &&
+        value.currentForm.every(isRecord);
     case 'performance':
-      return hasExactKeys(value, ['monthlyPerformance']) &&
+      return hasExactKeys(value, ['monthlyPerformance', 'currentForm']) &&
         Array.isArray(value.monthlyPerformance) &&
         value.monthlyPerformance.every((entry) =>
           isRecord(entry) &&
@@ -106,7 +148,13 @@ export function isWebsiteResourcePayload(
           typeof entry.year === 'number' &&
           typeof entry.month === 'number' &&
           typeof entry.weightedLegs === 'number'
-        );
+        ) &&
+        Array.isArray(value.currentForm) &&
+        value.currentForm.every(isRecord);
+    case 'achievements':
+      return hasExactKeys(value, ['rankingAchievements']) &&
+        Array.isArray(value.rankingAchievements) &&
+        value.rankingAchievements.every(isAchievementStanding);
     case 'tournaments':
       return hasExactKeys(value, ['completedTournaments', 'tournamentPage']) &&
         Array.isArray(value.completedTournaments) &&

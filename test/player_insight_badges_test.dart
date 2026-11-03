@@ -65,6 +65,64 @@ void main() {
     expect(insights, [generic, matchingRival]);
   });
 
+  test('same insight type for both players is shown once with both names', () {
+    final home = TournamentPlayer(
+      profileId: 'home',
+      name: 'Marvin',
+      isGenerated: false,
+    );
+    final away = TournamentPlayer(
+      profileId: 'away',
+      name: 'Daniel',
+      isGenerated: false,
+    );
+    final match = GroupMatch(homePlayer: home, awayPlayer: away, round: 1);
+    const homeRival = PlayerInsight(
+      type: PlayerInsightType.rival,
+      playerId: 'home',
+      rivalId: 'away',
+      explanation: 'Marvin hat 5 direkte Duelle gewonnen.',
+    );
+    const awayRival = PlayerInsight(
+      type: PlayerInsightType.rival,
+      playerId: 'away',
+      rivalId: 'home',
+      explanation: 'Daniel hat 4 direkte Duelle gewonnen.',
+    );
+
+    final merged = insightsForMatch(match, {
+      'home': [homeRival],
+      'away': [awayRival],
+    });
+
+    expect(merged, hasLength(1));
+    expect(merged.single.type, PlayerInsightType.rival);
+    expect(merged.single.explanation, contains('Marvin'));
+    expect(merged.single.explanation, contains('Daniel'));
+  });
+
+  test('match insights show no more than three categories', () {
+    final home = TournamentPlayer(
+      profileId: 'home',
+      name: 'Marvin',
+      isGenerated: false,
+    );
+    final away = TournamentPlayer(
+      profileId: 'away',
+      name: 'Daniel',
+      isGenerated: false,
+    );
+    final match = GroupMatch(homePlayer: home, awayPlayer: away, round: 1);
+    final insights = insightsForMatch(match, {
+      'home': [
+        for (final type in PlayerInsightType.values.take(4))
+          PlayerInsight(type: type, playerId: 'home', explanation: type.label),
+      ],
+    });
+
+    expect(insights, hasLength(3));
+  });
+
   testWidgets(
     'badges stay within a narrow second-screen layout at large text',
     (tester) async {

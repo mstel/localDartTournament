@@ -190,6 +190,7 @@ Deno.serve(async (request: Request) => {
     rankingStandings,
     statistics,
     bestPerformances,
+    rankingAchievements,
     currentForm,
     completedTournaments,
   } = readModel;
@@ -206,6 +207,9 @@ Deno.serve(async (request: Request) => {
     !statistics.every(isRecord) ||
     !Array.isArray(bestPerformances) ||
     !bestPerformances.every(isRecord) ||
+    (rankingAchievements !== undefined &&
+      (!Array.isArray(rankingAchievements) ||
+        !rankingAchievements.every(isRecord))) ||
     !Array.isArray(completedTournaments) ||
     !completedTournaments.every(isRecord) ||
     (readModel.schemaVersion === 2 &&
@@ -247,6 +251,7 @@ Deno.serve(async (request: Request) => {
     players,
     rankings,
     rankingStandings,
+    ...(Array.isArray(rankingAchievements) ? { rankingAchievements } : {}),
     statistics,
     bestPerformances,
     ...(Array.isArray(currentForm) ? { currentForm } : {}),

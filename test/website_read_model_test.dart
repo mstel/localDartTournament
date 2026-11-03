@@ -456,4 +456,48 @@ void main() {
       );
     },
   );
+
+  test('publishes achievements as an independent version-2 resource', () async {
+    final player = await database.createPlayerProfile(
+      firstName: 'Johannes',
+      lastName: 'Rau',
+    );
+    const ranking = LocalRanking(
+      id: 'achievements-ranking',
+      name: 'Vereinsrangliste',
+      achievementsEnabled: true,
+    );
+    await database.saveLocalRanking(ranking);
+    await database.setRankingPlayers(ranking.id, [player.id]);
+    await tournamentStorage.saveTournament(
+      CreatedTournament(
+        id: 'achievement-event',
+        name: 'Turnier',
+        players: const [],
+        stages: const [],
+        runStages: const [],
+        rankingIds: [ranking.id],
+        finishedAt: DateTime.utc(2026, 10, 20),
+      ),
+    );
+
+    final service = WebsiteReadModelService(
+      database: database,
+      tournamentStorage: tournamentStorage,
+    );
+    final model = await service.create();
+    final resources = await service.createVersion2Resources(model);
+    final achievements = resources['achievements']!;
+    final standings =
+        achievements['rankingAchievements'] as List<Map<String, dynamic>>;
+
+    expect(standings, hasLength(1));
+    expect(standings.single['rankingId'], ranking.id);
+    final players = standings.single['players'] as List<Map<String, dynamic>>;
+    expect(players, hasLength(1));
+    expect(players.single['playerId'], player.id);
+    expect(players.single['achievements'], isNotEmpty);
+    expect(achievements['schemaVersion'], 2);
+    expect(achievements['resource'], 'achievements');
+  });
 }

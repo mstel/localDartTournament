@@ -1,8 +1,13 @@
 import 'package:dart_tournament_manager/features/rankings/application/ranking_order.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   const rankings = [
     LocalRanking(id: 'old', name: 'Beta', validFromYear: 2024, customOrder: 0),
     LocalRanking(id: 'new', name: 'Alpha', validFromYear: 2026, customOrder: 1),
@@ -40,5 +45,13 @@ void main() {
       sortRankings(tied, RankingSortMode.custom).map((ranking) => ranking.id),
       ['new', 'old', 'undated'],
     );
+  });
+
+  test('loads and saves the shared ranking sort preference', () async {
+    expect(await loadRankingSortMode(), RankingSortMode.alphabetical);
+
+    await saveRankingSortMode(RankingSortMode.startYearDescending);
+
+    expect(await loadRankingSortMode(), RankingSortMode.startYearDescending);
   });
 }

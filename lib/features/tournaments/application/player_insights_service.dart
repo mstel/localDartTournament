@@ -7,6 +7,7 @@ import '../data/tournament_storage.dart';
 import '../domain/player_insight.dart';
 import '../domain/tournament_models.dart';
 import '../domain/tournament_winner.dart';
+import 'player_insight_preferences.dart';
 
 const _rankingDependentInsights = {
   PlayerInsightType.bogeyOpponent,
@@ -77,6 +78,7 @@ class PlayerInsightsService {
       eloSnapshot: eloSnapshot,
       now: now ?? DateTime.now(),
     );
+    final preferences = await PlayerInsightPreferencesStorage().load();
     final rankedPlayerIds = <String>{};
     if (tournament.countsForRanking && tournament.rankingIds.isNotEmpty) {
       final catalogIds = (await _database.loadPlayerProfiles())
@@ -97,8 +99,9 @@ class PlayerInsightsService {
         entry.key: List.unmodifiable(
           entry.value.where(
             (insight) =>
-                !_rankingDependentInsights.contains(insight.type) ||
-                rankedPlayerIds.contains(entry.key),
+                preferences.isEnabled(insight.type) &&
+                (!_rankingDependentInsights.contains(insight.type) ||
+                    rankedPlayerIds.contains(entry.key)),
           ),
         ),
     };
@@ -169,7 +172,14 @@ class PlayerInsightEngine {
       final winsInARow = _leadingStreak(outcomes, true);
       final lossesInARow = _leadingStreak(outcomes, false);
 
-      if (winsInARow >= 3) {
+      if (winsInARow >= 5) {
+        add(
+          playerId,
+          PlayerInsightType.unstoppable,
+          '$playerName hat mindestens 5 Matches in Folge gewonnen '
+          '(aktuell $winsInARow).',
+        );
+      } else if (winsInARow >= 3) {
         add(
           playerId,
           PlayerInsightType.hotStreak,
@@ -183,20 +193,13 @@ class PlayerInsightEngine {
           '$playerName hat seine letzten $lossesInARow Matches in Folge verloren.',
         );
       }
-      if (outcomes.length >= 2 &&
+      if (winsInARow < 5 &&
+          outcomes.length >= 2 &&
           outcomes.take(2).every((won) => won == true)) {
         add(
           playerId,
           PlayerInsightType.momentum,
           '$playerName hat seine letzten 2 Matches gewonnen.',
-        );
-      }
-      if (winsInARow >= 5) {
-        add(
-          playerId,
-          PlayerInsightType.unstoppable,
-          '$playerName hat mindestens 5 Matches in Folge gewonnen '
-          '(aktuell $winsInARow).',
         );
       }
       if (outcomes.isNotEmpty && outcomes.first == true && lossesInARow == 0) {
