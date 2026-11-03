@@ -1261,6 +1261,8 @@ class _TournamentResultSummary {
     for (final stage in tournament.runStages) {
       for (final match in _matchesFor(stage)) {
         if (!match.hasResult) continue;
+        matchCount++;
+        if (match.isKratzer) continue;
         final home = match.homePlayer!;
         final away = match.awayPlayer!;
         final homeStats = stats.putIfAbsent(
@@ -1273,7 +1275,6 @@ class _TournamentResultSummary {
         );
         final homeLegs = match.homeLegs!;
         final awayLegs = match.awayLegs!;
-        matchCount++;
         legCount += homeLegs + awayLegs;
         homeStats.legsFor += homeLegs;
         homeStats.legsAgainst += awayLegs;
@@ -1358,6 +1359,19 @@ class _TournamentResultSummary {
   static List<TournamentPlayer> _knockoutRanking(
     KnockoutTournamentRunStage stage,
   ) {
+    if (stage.isKratzer) {
+      final players = [...stage.participants];
+      players.sort((a, b) {
+        final livesComparison = stage
+            .livesRemainingFor(b)
+            .compareTo(stage.livesRemainingFor(a));
+        return livesComparison != 0
+            ? livesComparison
+            : a.name.compareTo(b.name);
+      });
+      return players;
+    }
+
     final ranking = <TournamentPlayer>[];
     void add(TournamentPlayer? player) {
       if (player != null &&

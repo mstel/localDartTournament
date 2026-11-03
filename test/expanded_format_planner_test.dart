@@ -155,6 +155,47 @@ void main() {
       swiss.estimatedMinutes,
     );
   });
+
+  test(
+    'worst-case duration filtering omits out-of-range closest alternatives',
+    () async {
+      TournamentPlanningRequest request({
+        required bool considerBestWorstCase,
+      }) => TournamentPlanningRequest(
+        players: 12,
+        boards: 4,
+        minimumMatchesPerPlayer: 0,
+        minimumMinutes: 120,
+        maximumMinutes: 180,
+        x01Selection: '501',
+        checkoutType: 'double_out',
+        maximumGroups: 2,
+        maximumStages: 1,
+        maximumLives: 5,
+        considerBestWorstCase: considerBestWorstCase,
+      );
+      final planner = ExpandedFormatPlanner(parameters: parameters);
+      final closestAlternatives = await planner.suggest(
+        request(considerBestWorstCase: false),
+        allResults: true,
+      );
+      expect(closestAlternatives, isNotEmpty);
+      expect(
+        closestAlternatives.any(
+          (result) => result.durationSpan.maximumMinutes > 180,
+        ),
+        isTrue,
+      );
+
+      final results = await planner.suggest(
+        request(considerBestWorstCase: true),
+        allResults: true,
+      );
+
+      expect(results, isEmpty);
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
   test(
     'multi-stage group requirement, qualification and distance progression',
     () async {

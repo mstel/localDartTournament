@@ -649,7 +649,8 @@ class _TournamentSecondScreenViewState
             : _countMatchesForProgress(activeStage);
 
         Widget content;
-        if (activeStage is KnockoutTournamentRunStage) {
+        if (activeStage is KnockoutTournamentRunStage &&
+            !activeStage.isKratzer) {
           content = _buildBracketPreview(
             t,
             activeStage,
@@ -1640,17 +1641,13 @@ class _TournamentSecondScreenViewState
             : SingleChildScrollView(child: LeagueOverview(league: league));
       case 'nextStagePreview':
         return Center(
-          child: SizedBox(
-            width: double.infinity,
-            height: double.infinity,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 240),
             child: FilledButton.icon(
               key: const ValueKey('monitor-next-stage-preview-button'),
               onPressed: () => setState(() => _showNextStagePreview = true),
               icon: const Icon(Icons.account_tree_outlined),
-              label: const Text(
-                'Vorschau für die nächste Etappe',
-                textAlign: TextAlign.center,
-              ),
+              label: const Text('Nächste Etappe', textAlign: TextAlign.center),
             ),
           ),
         );

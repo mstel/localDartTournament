@@ -86,6 +86,61 @@ void main() {
     );
   });
 
+  testWidgets('Kratzer matches render in the monitor schedule', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final players = [
+      for (var index = 1; index <= 3; index++)
+        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+    ];
+    final tournament = CreatedTournament(
+      name: 'Kratzer',
+      players: players,
+      stages: const [TournamentStage(name: 'Kratzer', type: 'kratzer')],
+      runStages: [
+        KnockoutTournamentRunStage(
+          name: 'Kratzer',
+          rounds: [
+            [
+              GroupMatch(
+                isKratzer: true,
+                players: players,
+                scratchEligiblePlayers: players,
+                round: 1,
+              ),
+            ],
+          ],
+          isKratzer: true,
+          eliminationLossLimit: 2,
+          participants: players,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spielplan'), findsOneWidget);
+    expect(
+      find.text(players.map((player) => player.shortDisplayName).join(' · ')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('director mode shows board status and upcoming matches on TV', (
     tester,
   ) async {
@@ -1269,6 +1324,9 @@ void main() {
         const ValueKey('monitor-next-stage-preview-button'),
       );
       await tester.ensureVisible(previewButton);
+      final previewButtonRect = tester.getRect(previewButton);
+      expect(previewButtonRect.height, lessThanOrEqualTo(56));
+      expect(previewButtonRect.width, lessThanOrEqualTo(240));
       await tester.tap(previewButton);
       await tester.pumpAndSettle();
       expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);

@@ -335,7 +335,11 @@ class ExpandedFormatPlanner {
       frontier = next.take(48).map((e) => e.$1).toList();
     }
     final fitting = finalists.where((s) => !s.isClosestAlternative).toList();
-    final ranked = fitting.isEmpty ? finalists : fitting;
+    final ranked = request.considerBestWorstCase
+        ? fitting
+        : fitting.isEmpty
+        ? finalists
+        : fitting;
     ranked.sort((a, b) {
       if (request.targetMinutes != null) {
         final distance = (a.estimatedMinutes - request.targetMinutes!)

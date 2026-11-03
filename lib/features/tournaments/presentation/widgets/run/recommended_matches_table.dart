@@ -78,10 +78,8 @@ class RecommendedMatchesTable extends StatelessWidget {
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
         final columnCounts = List<int>.filled(visibleGroups.length, 1);
         for (var index = visibleGroups.length; index < columns; index++) {
-          columnCounts[
-            openGroupIndexes[(index - visibleGroups.length) %
-                openGroupIndexes.length]
-          ]++;
+          columnCounts[openGroupIndexes[(index - visibleGroups.length) %
+              openGroupIndexes.length]]++;
         }
         final displayColumns =
             <
@@ -266,13 +264,15 @@ class _MatchRow extends StatelessWidget {
       color: TournamentDisplayPalette.text,
       fontWeight: FontWeight.w600,
     );
+    final matchIdentity = match.isKratzer
+        ? match.players
+              .map((player) => player.profileId ?? player.name)
+              .join('-')
+        : '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
+              '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}';
 
     return Padding(
-      key: ValueKey(
-        'recommended-match-${match.round}-'
-        '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
-        '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
-      ),
+      key: ValueKey('recommended-match-${match.round}-$matchIdentity'),
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
@@ -291,13 +291,22 @@ class _MatchRow extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              match.homePlayer!.shortDisplayName,
+              match.isKratzer
+                  ? match.participantShortLabel
+                  : match.homePlayer!.shortDisplayName,
               style: dense ? playerStyle?.copyWith(fontSize: 12) : playerStyle,
-              maxLines: dense ? 1 : 2,
+              maxLines: match.isKratzer
+                  ? dense
+                        ? 2
+                        : 3
+                  : dense
+                  ? 1
+                  : 2,
               overflow: TextOverflow.ellipsis,
+              textAlign: match.isKratzer ? TextAlign.center : TextAlign.start,
             ),
           ),
-          if (onEditResult != null)
+          if (!match.isKratzer && onEditResult != null)
             IconButton(
               tooltip: 'Ergebnis eintragen',
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
@@ -306,7 +315,7 @@ class _MatchRow extends StatelessWidget {
               color: TournamentDisplayPalette.accent,
               onPressed: () => onEditResult!(match),
             ),
-          if (onEditResult == null)
+          if (!match.isKratzer && onEditResult == null)
             Padding(
               padding: EdgeInsets.symmetric(horizontal: dense ? 3 : 8),
               child: Text(
@@ -316,15 +325,18 @@ class _MatchRow extends StatelessWidget {
                 ),
               ),
             ),
-          Expanded(
-            child: Text(
-              match.awayPlayer!.shortDisplayName,
-              style: dense ? playerStyle?.copyWith(fontSize: 12) : playerStyle,
-              maxLines: dense ? 1 : 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
+          if (!match.isKratzer)
+            Expanded(
+              child: Text(
+                match.awayPlayer!.shortDisplayName,
+                style: dense
+                    ? playerStyle?.copyWith(fontSize: 12)
+                    : playerStyle,
+                maxLines: dense ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+              ),
             ),
-          ),
         ],
       ),
     );

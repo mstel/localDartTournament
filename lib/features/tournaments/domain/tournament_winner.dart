@@ -1,5 +1,6 @@
 import 'engines/group_standings_engine.dart';
 import 'tournament_models.dart';
+import '../modes/kratzer/kratzer_engine.dart';
 
 class TournamentWinner {
   const TournamentWinner._();
@@ -41,6 +42,14 @@ class TournamentWinner {
       return null;
     }
     final finalStage = tournament.runStages[lastIndex];
+    if (finalStage is KnockoutTournamentRunStage && finalStage.isKratzer) {
+      final survivors = const KratzerEngine().activePlayers(
+        players: finalStage.participants,
+        completedMatches: finalStage.matches,
+        lives: finalStage.eliminationLossLimit,
+      );
+      return survivors.length == 1 ? survivors.single : null;
+    }
     if (finalStage is KnockoutTournamentRunStage &&
         finalStage.rounds.isNotEmpty &&
         finalStage.rounds.last.length == 1 &&
