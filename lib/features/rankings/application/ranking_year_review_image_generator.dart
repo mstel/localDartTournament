@@ -31,12 +31,12 @@ class RankingYearReviewImageGenerator {
 
     // Prepare leaderboard data
     final rows = review.players.entries.toList();
-    List<MapEntry<String, int>> leadersFor(
-      int Function(RankingYearPlayerStats) metric,
+    List<MapEntry<String, num>> leadersFor(
+      num? Function(RankingYearPlayerStats) metric,
     ) {
       return rows
-          .where((r) => metric(r.value) > 0)
-          .map((r) => MapEntry(r.key, metric(r.value)))
+          .where((r) => (metric(r.value) ?? 0) > 0)
+          .map((r) => MapEntry(r.key, metric(r.value)!))
           .toList()
         ..sort((a, b) => b.value.compareTo(a.value));
     }
@@ -47,28 +47,105 @@ class RankingYearReviewImageGenerator {
     final topBests = leadersFor((s) => s.bestPerformances);
     final top180 = leadersFor((s) => s.scores180);
     final top170 = leadersFor((s) => s.scores170);
+    final top171Plus = leadersFor((s) => s.scores171Plus);
     final topShort = leadersFor((s) => s.shortLegs);
     final topHigh = leadersFor((s) => s.highFinishes);
+    final topBullseye = leadersFor((s) => s.bullseyeFinishes);
+    final topAverage = leadersFor((s) => s.highestAverage);
+    final topScoring = leadersFor((s) => s.highestScoring);
+    final topCheckoutRate = leadersFor((s) => s.highestCheckoutRate);
 
-    final leaderboardSections = <(String, List<MapEntry<String, int>>)>[
-      ('Meiste Turniersiege', topWins),
-      ('Meiste Teilnahmen', topParts),
-      ('Meiste gewonnene Legs', topLegs),
-      ('Meiste Bestleistungen', topBests),
-      if (top180.isNotEmpty) ('Meiste 180+', top180),
-      if (top170.isNotEmpty) ('Meiste 170+', top170),
-      if (topShort.isNotEmpty) ('Meiste Shortlegs', topShort),
-      if (topHigh.isNotEmpty) ('Meiste High Finishes', topHigh),
-    ];
+    final leaderboardSections =
+        <
+          ({
+            String title,
+            List<MapEntry<String, num>> entries,
+            String Function(num) format,
+          })
+        >[
+          (
+            title: 'Meiste Turniersiege',
+            entries: topWins,
+            format: (value) => '$value',
+          ),
+          (
+            title: 'Meiste Teilnahmen',
+            entries: topParts,
+            format: (value) => '$value',
+          ),
+          (
+            title: 'Meiste gewonnene Legs',
+            entries: topLegs,
+            format: (value) => '$value',
+          ),
+          (
+            title: 'Meiste Bestleistungen',
+            entries: topBests,
+            format: (value) => '$value',
+          ),
+          if (top180.isNotEmpty)
+            (
+              title: 'Meiste 180+',
+              entries: top180,
+              format: (value) => '$value',
+            ),
+          if (top170.isNotEmpty)
+            (
+              title: 'Meiste 170 (Big Fish)',
+              entries: top170,
+              format: (value) => '$value',
+            ),
+          if (top171Plus.isNotEmpty)
+            (
+              title: 'Meiste 171+',
+              entries: top171Plus,
+              format: (value) => '$value',
+            ),
+          if (topShort.isNotEmpty)
+            (
+              title: 'Meiste Shortlegs',
+              entries: topShort,
+              format: (value) => '$value',
+            ),
+          if (topHigh.isNotEmpty)
+            (
+              title: 'Meiste High Finishes',
+              entries: topHigh,
+              format: (value) => '$value',
+            ),
+          if (topBullseye.isNotEmpty)
+            (
+              title: 'Meiste Bullseye Finishes',
+              entries: topBullseye,
+              format: (value) => '$value',
+            ),
+          (
+            title: 'Höchster Average',
+            entries: topAverage,
+            format: (value) => value.toStringAsFixed(1),
+          ),
+          (
+            title: 'Höchstes Scoring',
+            entries: topScoring,
+            format: (value) => value.toStringAsFixed(1),
+          ),
+          (
+            title: 'Höchste Checkout-Quote',
+            entries: topCheckoutRate,
+            format: (value) => '${value.toStringAsFixed(1)} %',
+          ),
+        ];
 
     // Compute dynamic height
     // Header: ~140
-    // Cards: ~220
+    // KPI cards: 4 columns per row.
     // Chart: ~500
     // Leaderboard cards: ceil(sections / 2) * ~260
     final rowsCount = (leaderboardSections.length / 2).ceil();
+    const kpiCount = 9;
+    final kpiRows = (kpiCount / 4).ceil();
     final double totalHeight =
-        140.0 + 220.0 + 500.0 + (rowsCount * 280.0) + 120.0;
+        140.0 + (kpiRows * 104.0) + 500.0 + (rowsCount * 280.0) + 120.0;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, width, totalHeight));
@@ -117,15 +194,17 @@ class RankingYearReviewImageGenerator {
     subPainter.paint(canvas, Offset(padding, currentY));
     currentY += subPainter.height + 28;
 
-    // KPI Cards: 4 columns in row 1, 3 in row 2
+    // KPI Cards: 4 columns per row.
     final kpis = [
       ('Turniere', '${review.tournaments}'),
       ('Gewonnene Legs', '${review.totalLegs}'),
       ('Bestleistungen', '${review.totalBestPerformances}'),
       ('180+ Aufnahmen', '${review.total180}'),
-      ('170+ Aufnahmen', '${review.total170}'),
+      ('170 (Big Fish)', '${review.total170}'),
+      ('171+ Aufnahmen', '${review.total171Plus}'),
       ('Shortlegs', '${review.totalShortLegs}'),
       ('High Finishes', '${review.totalHighFinishes}'),
+      ('Bullseye Finishes', '${review.totalBullseyeFinishes}'),
     ];
 
     const double cardGap = 16.0;
@@ -174,7 +253,7 @@ class RankingYearReviewImageGenerator {
       lblPainter.paint(canvas, Offset(x + 14, y + 50));
     }
 
-    currentY += (2 * cardHeight) + cardGap + 36;
+    currentY += (((kpis.length / cols).ceil()) * (cardHeight + cardGap)) + 20;
 
     // Monthly Chart Card
     final maxMonth = review.monthlyTournaments.fold<int>(
@@ -295,7 +374,7 @@ class RankingYearReviewImageGenerator {
       // Section title
       final stPainter = TextPainter(
         text: TextSpan(
-          text: section.$1,
+          text: section.title,
           style: TextStyle(
             color: colors.primary,
             fontSize: 18,
@@ -307,7 +386,7 @@ class RankingYearReviewImageGenerator {
       stPainter.paint(canvas, Offset(x + 18, y + 16));
 
       // Items
-      final items = section.$2.take(5).toList();
+      final items = section.entries.take(5).toList();
       double itemY = y + 50.0;
       if (items.isEmpty) {
         final emptyPainter = TextPainter(
@@ -354,7 +433,7 @@ class RankingYearReviewImageGenerator {
           // Count
           final cPainter = TextPainter(
             text: TextSpan(
-              text: '${entry.value}',
+              text: section.format(entry.value),
               style: TextStyle(
                 color: colors.primary,
                 fontSize: 15,

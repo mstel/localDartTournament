@@ -4,12 +4,14 @@ import 'player_withdrawal.dart';
 import 'imported_tournament_archive.dart';
 import '../../statistics/domain/best_performance.dart';
 import '../../league/domain/league_match.dart';
+import 'second_screen_widget_placement.dart';
+import 'tournament_activity_entry.dart';
 
 const List<String> defaultGroupTieBreakers = [
   'points',
-  'headToHead',
   'legDifference',
   'legsFor',
+  'headToHead',
 ];
 
 String groupLabel(int groupNumber) {
@@ -57,12 +59,24 @@ List<int> _intListFromJson(Object? value) {
   ];
 }
 
+int? _kratzerPlayersPerBoardFromJson(Object? value) {
+  if (value is int && value >= 3 && value <= 6) return value;
+  return null;
+}
+
+bool _boolFromJson(Object? value) => value is bool && value;
+
+String _directorSchedulingStrategyFromJson(Object? value) {
+  final strategy = (value as String? ?? 'group').trim().toLowerCase();
+  return strategy == 'global' ? 'global' : 'group';
+}
+
 List<String> _groupTieBreakersFromJson(Object? value) {
   final tieBreakers = _stringListFromJson(
     value,
     fallback: defaultGroupTieBreakers,
   );
-  const previousDefault = ['points', 'legDifference', 'legsFor', 'headToHead'];
+  const previousDefault = ['points', 'headToHead', 'legDifference', 'legsFor'];
   final isPreviousDefault =
       tieBreakers.length == previousDefault.length &&
       tieBreakers.asMap().entries.every(
@@ -150,6 +164,24 @@ TournamentRunStage _runStageFromJson(Map<String, dynamic> json) {
       ),
       eliminationLossLimit: json['eliminationLossLimit'] as int? ?? 1,
       finalEndsTournament: json['finalEndsTournament'] as bool? ?? false,
+      isKratzer: json['isKratzer'] as bool? ?? false,
+      kratzerPlayersPerBoard: _kratzerPlayersPerBoardFromJson(
+        json['kratzerPlayersPerBoard'],
+      ),
+      kratzerPreferSameScratchCount: _boolFromJson(
+        json['kratzerPreferSameScratchCount'],
+      ),
+      kratzerPlayUntilElimination: _boolFromJson(
+        json['kratzerPlayUntilElimination'],
+      ),
+      kratzerBonusLifeFor180: _boolFromJson(json['kratzerBonusLifeFor180']),
+      kratzerBonusLifeForHighFinish: _boolFromJson(
+        json['kratzerBonusLifeForHighFinish'],
+      ),
+      participants: _mapListFromJson(
+        json['participants'],
+        TournamentPlayer.fromJson,
+      ),
     );
   }
 
@@ -183,6 +215,7 @@ class TournamentPlayer {
     required this.isGenerated,
     this.compactName,
     this.members = const [],
+    this.kratzerStartingScratches = 0,
   });
 
   factory TournamentPlayer.fromJson(Map<String, dynamic> json) {
@@ -191,6 +224,8 @@ class TournamentPlayer {
       name: json['name'] as String? ?? '',
       isGenerated: json['isGenerated'] as bool? ?? false,
       compactName: json['compactName'] as String?,
+      kratzerStartingScratches: (json['kratzerStartingScratches'] as int? ?? 0)
+          .clamp(0, 10),
       members: (json['members'] as List? ?? const [])
           .map(
             (e) =>
@@ -208,6 +243,7 @@ class TournamentPlayer {
   final String name;
   final bool isGenerated;
   final String? compactName;
+  final int kratzerStartingScratches;
   String get shortDisplayName {
     if (isTeam) {
       return members.map((player) => player.shortDisplayName).join(' / ');
@@ -246,6 +282,7 @@ class TournamentPlayer {
     String? name,
     bool? isGenerated,
     String? compactName,
+    int? kratzerStartingScratches,
   }) {
     return TournamentPlayer(
       profileId: profileId ?? this.profileId,
@@ -253,6 +290,8 @@ class TournamentPlayer {
       isGenerated: isGenerated ?? this.isGenerated,
       compactName: compactName ?? this.compactName,
       members: members,
+      kratzerStartingScratches:
+          kratzerStartingScratches ?? this.kratzerStartingScratches,
     );
   }
 
@@ -262,6 +301,8 @@ class TournamentPlayer {
       'name': name,
       'isGenerated': isGenerated,
       if (compactName != null) 'compactName': compactName,
+      if (kratzerStartingScratches > 0)
+        'kratzerStartingScratches': kratzerStartingScratches,
       if (isTeam) 'members': members.map((p) => p.toJson()).toList(),
     };
   }
@@ -273,6 +314,7 @@ class TournamentPlayer {
         other.name == name &&
         other.isGenerated == isGenerated &&
         other.compactName == compactName &&
+        other.kratzerStartingScratches == kratzerStartingScratches &&
         other.members.length == members.length &&
         Iterable<int>.generate(
           members.length,
@@ -285,6 +327,7 @@ class TournamentPlayer {
     name,
     isGenerated,
     compactName,
+    kratzerStartingScratches,
     Object.hashAll(members),
   );
 }
@@ -295,6 +338,11 @@ class TournamentStage {
     required this.type,
     this.finalEndsTournament = true,
     this.knockoutLives,
+    this.kratzerPlayersPerBoard,
+    this.kratzerPreferSameScratchCount = false,
+    this.kratzerPlayUntilElimination = false,
+    this.kratzerBonusLifeFor180 = false,
+    this.kratzerBonusLifeForHighFinish = false,
     this.placementPlaces = const [],
     this.groupCount,
     this.groupSizes = const [],
@@ -329,6 +377,19 @@ class TournamentStage {
       type: json['type'] as String? ?? 'groups',
       finalEndsTournament: json['finalEndsTournament'] as bool? ?? false,
       knockoutLives: json['knockoutLives'] as int?,
+      kratzerPlayersPerBoard: _kratzerPlayersPerBoardFromJson(
+        json['kratzerPlayersPerBoard'],
+      ),
+      kratzerPreferSameScratchCount: _boolFromJson(
+        json['kratzerPreferSameScratchCount'],
+      ),
+      kratzerPlayUntilElimination: _boolFromJson(
+        json['kratzerPlayUntilElimination'],
+      ),
+      kratzerBonusLifeFor180: _boolFromJson(json['kratzerBonusLifeFor180']),
+      kratzerBonusLifeForHighFinish: _boolFromJson(
+        json['kratzerBonusLifeForHighFinish'],
+      ),
       placementPlaces: _intListFromJson(json['placementPlaces']),
       groupCount: json['groupCount'] as int?,
       groupSizes: _intListFromJson(json['groupSizes']),
@@ -368,6 +429,11 @@ class TournamentStage {
   final String type;
   final bool finalEndsTournament;
   final int? knockoutLives;
+  final int? kratzerPlayersPerBoard;
+  final bool kratzerPreferSameScratchCount;
+  final bool kratzerPlayUntilElimination;
+  final bool kratzerBonusLifeFor180;
+  final bool kratzerBonusLifeForHighFinish;
   final List<int> placementPlaces;
   int get lossLimit =>
       knockoutLives ??
@@ -413,6 +479,12 @@ class TournamentStage {
       'type': type,
       'finalEndsTournament': finalEndsTournament,
       'knockoutLives': knockoutLives,
+      if (kratzerPlayersPerBoard != null)
+        'kratzerPlayersPerBoard': kratzerPlayersPerBoard,
+      'kratzerPreferSameScratchCount': kratzerPreferSameScratchCount,
+      'kratzerPlayUntilElimination': kratzerPlayUntilElimination,
+      'kratzerBonusLifeFor180': kratzerBonusLifeFor180,
+      'kratzerBonusLifeForHighFinish': kratzerBonusLifeForHighFinish,
       'placementPlaces': placementPlaces,
       'groupCount': groupCount,
       'groupSizes': groupSizes,
@@ -450,6 +522,11 @@ class TournamentStage {
     type: type,
     finalEndsTournament: finalEndsTournament,
     knockoutLives: knockoutLives,
+    kratzerPlayersPerBoard: kratzerPlayersPerBoard,
+    kratzerPreferSameScratchCount: kratzerPreferSameScratchCount,
+    kratzerPlayUntilElimination: kratzerPlayUntilElimination,
+    kratzerBonusLifeFor180: kratzerBonusLifeFor180,
+    kratzerBonusLifeForHighFinish: kratzerBonusLifeForHighFinish,
     placementPlaces: placementPlaces,
     groupCount: groupCount,
     groupSizes: groupSizes,
@@ -552,11 +629,21 @@ class CreatedTournament {
     required this.runStages,
     this.leagueMatch,
     this.importedArchive,
-    this.countsForRanking = true,
+    bool countsForRanking = true,
     List<String> rankingIds = const [],
     this.activeStageIndex = 0,
     this.boardCount = 1,
+    Map<int, String> directorBoardNames = const {},
+    Map<int, String> directorBoardLiveUrls = const {},
+    this.directorModeEnabled = false,
+    this.directorSchedulingStrategy = 'group',
+    Map<String, List<int>> directorGroupBoardAssignments = const {},
+    Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts =
+        const {},
+    this.secondScreenActiveLayout,
     this.syncRevision = 0,
+    DateTime? tournamentDate,
+    List<TournamentActivityEntry>? activityLog,
     List<PlayerWithdrawal>? withdrawals,
     Set<int>? blockedBoards,
     this.startedAt,
@@ -569,13 +656,32 @@ class CreatedTournament {
     this.plannedMatches,
     this.plannedMatchEndSeconds = const [],
     Set<int>? completedStageIndexes,
-  }) : id = id ?? _newTournamentId(),
+  }) : _countsForRanking = countsForRanking,
+       id = id ?? _newTournamentId(),
        createdAt = createdAt ?? DateTime.now(),
+       tournamentDate = tournamentDate == null
+           ? null
+           : DateTime(
+               tournamentDate.year,
+               tournamentDate.month,
+               tournamentDate.day,
+             ),
        updatedAt = updatedAt ?? DateTime.now(),
        completedStageIndexes = completedStageIndexes ?? <int>{},
        blockedBoards = blockedBoards ?? <int>{},
+       directorBoardNames = Map<int, String>.from(directorBoardNames),
+       directorBoardLiveUrls = Map<int, String>.from(directorBoardLiveUrls),
+       secondScreenLayouts = {
+         for (final entry in secondScreenLayouts.entries)
+           entry.key: List<SecondScreenWidgetPlacement>.from(entry.value),
+       },
+       directorGroupBoardAssignments = {
+         for (final entry in directorGroupBoardAssignments.entries)
+           entry.key: List<int>.from(entry.value),
+       },
        rankingIds = List<String>.from(rankingIds),
-       withdrawals = withdrawals ?? [];
+       withdrawals = withdrawals ?? [],
+       activityLog = activityLog ?? [];
 
   CreatedTournament copy({String? name}) {
     final data = Map<String, dynamic>.from(toJson());
@@ -594,6 +700,7 @@ class CreatedTournament {
     return CreatedTournament(
       id: json['id'] as String?,
       createdAt: _dateTimeFromJson(json['createdAt']),
+      tournamentDate: _dateTimeFromJson(json['tournamentDate']),
       updatedAt: _dateTimeFromJson(json['updatedAt']),
       name: json['name'] as String? ?? 'Neues Turnier',
       players: _mapListFromJson(json['players'], TournamentPlayer.fromJson),
@@ -615,7 +722,51 @@ class CreatedTournament {
       ),
       activeStageIndex: json['activeStageIndex'] as int? ?? 0,
       boardCount: (json['boardCount'] as int? ?? 1).clamp(1, 64),
+      directorBoardNames: {
+        for (final entry in (json['directorBoardNames'] as Map? ?? {}).entries)
+          if (int.tryParse(entry.key.toString()) case final board?)
+            if (board >= 1 && board <= 64 && entry.value is String)
+              board: entry.value as String,
+      },
+      directorBoardLiveUrls: {
+        for (final entry
+            in (json['directorBoardLiveUrls'] as Map? ?? {}).entries)
+          if (int.tryParse(entry.key.toString()) case final board?)
+            if (board >= 1 && board <= 64 && entry.value is String)
+              board: entry.value as String,
+      },
+      directorModeEnabled: json['directorModeEnabled'] as bool? ?? false,
+      directorSchedulingStrategy: _directorSchedulingStrategyFromJson(
+        json['directorSchedulingStrategy'],
+      ),
+      directorGroupBoardAssignments: {
+        for (final entry
+            in (json['directorGroupBoardAssignments'] as Map? ?? {}).entries)
+          if (entry.key is String && entry.value is List)
+            entry.key as String:
+                (entry.value as List)
+                    .whereType<int>()
+                    .where((board) => board >= 1 && board <= 64)
+                    .toSet()
+                    .toList()
+                  ..sort(),
+      },
+      secondScreenLayouts: {
+        for (final entry in (json['secondScreenLayouts'] as Map? ?? {}).entries)
+          if (entry.key is String && entry.value is List)
+            entry.key as String: [
+              for (final item in entry.value as List)
+                if (item is Map<String, dynamic>)
+                  SecondScreenWidgetPlacement.fromJson(item),
+            ],
+      },
+      secondScreenActiveLayout: json['secondScreenActiveLayout'] as String?,
       syncRevision: json['syncRevision'] as int? ?? 0,
+      activityLog: [
+        for (final item in json['activityLog'] as List? ?? const [])
+          if (item is Map<String, dynamic>)
+            TournamentActivityEntry.fromJson(item),
+      ],
       withdrawals: _mapListFromJson(
         json['withdrawals'],
         PlayerWithdrawal.fromJson,
@@ -641,27 +792,58 @@ class CreatedTournament {
   final String id;
   String name;
   final DateTime createdAt;
+  DateTime? tournamentDate;
   DateTime updatedAt;
   final List<TournamentPlayer> players;
   final List<TournamentStage> stages;
   final List<TournamentRunStage> runStages;
   final LeagueMatch? leagueMatch;
   final ImportedTournamentArchive? importedArchive;
-  bool countsForRanking;
+  bool _countsForRanking;
+  bool get isKratzerTournament =>
+      stages.any((stage) => stage.type == 'kratzer');
+  bool get countsForRanking =>
+      leagueMatch == null && !isKratzerTournament && _countsForRanking;
+  set countsForRanking(bool value) => _countsForRanking = value;
   List<String> rankingIds;
   int activeStageIndex;
   int boardCount;
+  final Map<int, String> directorBoardNames;
+  final Map<int, String> directorBoardLiveUrls;
+  bool directorModeEnabled;
+  String directorSchedulingStrategy;
+  final Map<String, List<int>> directorGroupBoardAssignments;
+  final Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts;
+  String? secondScreenActiveLayout;
   int syncRevision;
   final List<PlayerWithdrawal> withdrawals;
+  final List<TournamentActivityEntry> activityLog;
   final Set<int> blockedBoards;
   DateTime? startedAt, finishedAt, pausedAt;
   bool reopenedForCorrections;
   int totalPausedSeconds;
   bool get isClockPaused => pausedAt != null;
+  DateTime get effectiveDate => tournamentDate ?? startedAt ?? createdAt;
+
+  void addActivity(String type, String message, {DateTime? timestamp}) {
+    activityLog.add(
+      TournamentActivityEntry(
+        type: type,
+        message: message,
+        timestamp: timestamp ?? DateTime.now(),
+      ),
+    );
+  }
+
   int? plannedMinimumMinutes;
   int? plannedMinutes, plannedMatches;
   List<int> plannedMatchEndSeconds;
   final Set<int> completedStageIndexes;
+
+  String boardDisplayName(int board) {
+    final name = directorBoardNames[board]?.trim();
+    return name == null || name.isEmpty ? 'Board $board' : name;
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -670,6 +852,14 @@ class CreatedTournament {
         'withdrawals': withdrawals.map((w) => w.toJson()).toList(),
       'name': name,
       'createdAt': createdAt.toUtc().toIso8601String(),
+      if (tournamentDate != null)
+        'tournamentDate': DateTime(
+          tournamentDate!.year,
+          tournamentDate!.month,
+          tournamentDate!.day,
+        ).toIso8601String(),
+      if (activityLog.isNotEmpty)
+        'activityLog': activityLog.map((entry) => entry.toJson()).toList(),
       'updatedAt': updatedAt.toUtc().toIso8601String(),
       'players': players.map((player) => player.toJson()).toList(),
       'stages': stages.map((stage) => stage.toJson()).toList(),
@@ -680,6 +870,35 @@ class CreatedTournament {
       if (rankingIds.isNotEmpty) 'rankingIds': rankingIds,
       'activeStageIndex': activeStageIndex,
       'boardCount': boardCount,
+      if (directorBoardNames.isNotEmpty)
+        'directorBoardNames': {
+          for (final entry in directorBoardNames.entries)
+            if (entry.value.trim().isNotEmpty)
+              entry.key.toString(): entry.value.trim(),
+        },
+      if (directorBoardLiveUrls.isNotEmpty)
+        'directorBoardLiveUrls': {
+          for (final entry in directorBoardLiveUrls.entries)
+            if (entry.value.trim().isNotEmpty)
+              entry.key.toString(): entry.value.trim(),
+        },
+      if (directorModeEnabled) 'directorModeEnabled': true,
+      if (directorSchedulingStrategy != 'group')
+        'directorSchedulingStrategy': directorSchedulingStrategy,
+      if (directorGroupBoardAssignments.isNotEmpty)
+        'directorGroupBoardAssignments': {
+          for (final entry in directorGroupBoardAssignments.entries)
+            entry.key: entry.value.toSet().toList()..sort(),
+        },
+      if (secondScreenLayouts.isNotEmpty)
+        'secondScreenLayouts': {
+          for (final entry in secondScreenLayouts.entries)
+            entry.key: entry.value
+                .map((placement) => placement.toJson())
+                .toList(),
+        },
+      if (secondScreenActiveLayout != null)
+        'secondScreenActiveLayout': secondScreenActiveLayout,
       if (syncRevision != 0) 'syncRevision': syncRevision,
       if (blockedBoards.isNotEmpty)
         'blockedBoards': blockedBoards.toList()..sort(),
@@ -737,17 +956,46 @@ class KnockoutTournamentRunStage extends TournamentRunStage {
     this.placementMatches = const [],
     this.eliminationLossLimit = 1,
     this.finalEndsTournament = false,
+    this.isKratzer = false,
+    this.kratzerPlayersPerBoard,
+    this.kratzerPreferSameScratchCount = false,
+    this.kratzerPlayUntilElimination = false,
+    this.kratzerBonusLifeFor180 = false,
+    this.kratzerBonusLifeForHighFinish = false,
+    this.participants = const [],
   });
 
   final List<List<GroupMatch>> rounds;
   final List<GroupMatch> placementMatches;
   final int eliminationLossLimit;
   final bool finalEndsTournament;
+  final bool isKratzer;
+  final int? kratzerPlayersPerBoard;
+  final bool kratzerPreferSameScratchCount;
+  final bool kratzerPlayUntilElimination;
+  final bool kratzerBonusLifeFor180;
+  final bool kratzerBonusLifeForHighFinish;
+  final List<TournamentPlayer> participants;
 
   List<GroupMatch> get matches => [
     for (final round in rounds) ...round,
     ...placementMatches,
   ];
+
+  int scratchesFor(TournamentPlayer player) =>
+      player.kratzerStartingScratches +
+      matches.where((match) => match.scratchedPlayer == player).length;
+
+  int bonusLivesFor(TournamentPlayer player) => matches
+      .expand((match) => match.kratzerBonusLives)
+      .where((bonus) => bonus.player == player)
+      .length;
+
+  int livesRemainingFor(TournamentPlayer player) {
+    final remaining =
+        eliminationLossLimit - scratchesFor(player) + bonusLivesFor(player);
+    return remaining < 0 ? 0 : remaining;
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -761,6 +1009,17 @@ class KnockoutTournamentRunStage extends TournamentRunStage {
           .toList(),
       'eliminationLossLimit': eliminationLossLimit,
       'finalEndsTournament': finalEndsTournament,
+      if (isKratzer) 'isKratzer': true,
+      if (kratzerPlayersPerBoard != null)
+        'kratzerPlayersPerBoard': kratzerPlayersPerBoard,
+      if (isKratzer) ...{
+        'kratzerPreferSameScratchCount': kratzerPreferSameScratchCount,
+        'kratzerPlayUntilElimination': kratzerPlayUntilElimination,
+        'kratzerBonusLifeFor180': kratzerBonusLifeFor180,
+        'kratzerBonusLifeForHighFinish': kratzerBonusLifeForHighFinish,
+      },
+      if (participants.isNotEmpty)
+        'participants': participants.map((player) => player.toJson()).toList(),
     };
   }
 }
@@ -834,10 +1093,41 @@ class TournamentGroup {
   }
 }
 
+enum KratzerBonusLifeType { score180, highFinish }
+
+class KratzerBonusLife {
+  const KratzerBonusLife({required this.player, required this.type});
+
+  factory KratzerBonusLife.fromJson(Map<String, dynamic> json) {
+    final type = switch (json['type']) {
+      'score180' => KratzerBonusLifeType.score180,
+      'highFinish' => KratzerBonusLifeType.highFinish,
+      _ => throw const FormatException('Ungültiger Kratzer-Bonusleben-Typ'),
+    };
+    final player = _playerFromJson(json['player']);
+    if (player == null) {
+      throw const FormatException('Spieler für Kratzer-Bonusleben fehlt');
+    }
+    return KratzerBonusLife(player: player, type: type);
+  }
+
+  final TournamentPlayer player;
+  final KratzerBonusLifeType type;
+
+  Map<String, dynamic> toJson() => {
+    'player': player.toJson(),
+    'type': type.name,
+  };
+}
+
 class GroupMatch {
   GroupMatch({
     this.homePlayer,
     this.awayPlayer,
+    this.players = const [],
+    this.scratchedPlayer,
+    this.scratchEligiblePlayers = const [],
+    this.isKratzer = false,
     required this.round,
     this.homeLegs,
     this.awayLegs,
@@ -857,12 +1147,20 @@ class GroupMatch {
     this.withdrawalIgnored = false,
     this.withdrawalHadResult = false,
     this.bestPerformances = const [],
+    this.kratzerBonusLives = const [],
   });
 
   factory GroupMatch.fromJson(Map<String, dynamic> json) {
     return GroupMatch(
       homePlayer: _playerFromJson(json['homePlayer']),
       awayPlayer: _playerFromJson(json['awayPlayer']),
+      players: _mapListFromJson(json['players'], TournamentPlayer.fromJson),
+      scratchedPlayer: _playerFromJson(json['scratchedPlayer']),
+      scratchEligiblePlayers: _mapListFromJson(
+        json['scratchEligiblePlayers'],
+        TournamentPlayer.fromJson,
+      ),
+      isKratzer: json['isKratzer'] == true,
       round: json['round'] as int? ?? 1,
       homeLegs: json['homeLegs'] as int?,
       awayLegs: json['awayLegs'] as int?,
@@ -887,11 +1185,19 @@ class GroupMatch {
             (item) => BestPerformance.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList(),
+      kratzerBonusLives: _mapListFromJson(
+        json['kratzerBonusLives'],
+        KratzerBonusLife.fromJson,
+      ),
     );
   }
 
   TournamentPlayer? homePlayer;
   TournamentPlayer? awayPlayer;
+  List<TournamentPlayer> players;
+  TournamentPlayer? scratchedPlayer;
+  List<TournamentPlayer> scratchEligiblePlayers;
+  bool isKratzer;
   final int round;
   int? homeLegs;
   int? awayLegs;
@@ -900,7 +1206,11 @@ class GroupMatch {
   bool get hasSetScore => homeSets != null && awaySets != null;
   int? get homeScore => hasSetScore ? homeSets : homeLegs;
   int? get awayScore => hasSetScore ? awaySets : awayLegs;
-  String get scoreLabel => withdrawalIgnored
+  String get scoreLabel => isKratzer
+      ? scratchedPlayer == null
+            ? 'Noch offen'
+            : 'Kratzer: ${scratchedPlayer!.name}'
+      : withdrawalIgnored
       ? 'Nicht gewertet'
       : '$homeScore:$awayScore${hasSetScore ? ' Sets' : ''}${withdrawalSignature != null && !withdrawalHadResult ? ' · kampflos' : ''}';
   bool allowsBye;
@@ -917,14 +1227,27 @@ class GroupMatch {
   bool withdrawalIgnored;
   bool withdrawalHadResult;
   List<BestPerformance> bestPerformances;
+  List<KratzerBonusLife> kratzerBonusLives;
   bool get countsForStatistics => hasResult && !withdrawalIgnored;
 
-  bool get hasPlayers => homePlayer != null && awayPlayer != null;
-  bool get hasScore => hasPlayers && homeLegs != null && awayLegs != null;
-  bool get hasResult => hasScore && !isAnnulled;
+  bool get hasPlayers => isKratzer
+      ? players.length >= 3 && players.length <= 6
+      : homePlayer != null && awayPlayer != null;
+  String get participantLabel => isKratzer
+      ? players.map((player) => player.name).join(' · ')
+      : '${homePlayer?.name ?? 'Offen'} – ${awayPlayer?.name ?? 'Offen'}';
+  String get participantShortLabel => isKratzer
+      ? players.map((player) => player.shortDisplayName).join(' · ')
+      : '${homePlayer?.shortDisplayName ?? 'Offen'} – ${awayPlayer?.shortDisplayName ?? 'Offen'}';
+  bool get hasScore => isKratzer
+      ? scratchedPlayer != null
+      : hasPlayers && homeLegs != null && awayLegs != null;
+  bool get hasResult =>
+      isKratzer ? scratchedPlayer != null : hasScore && !isAnnulled;
   bool get isResolved => isAnnulled || hasResult || winner != null;
 
   TournamentPlayer? get winner {
+    if (isKratzer) return null;
     if (allowsBye && homePlayer != null && awayPlayer == null) {
       return homePlayer;
     }
@@ -942,6 +1265,7 @@ class GroupMatch {
   }
 
   TournamentPlayer? get loser {
+    if (isKratzer) return scratchedPlayer;
     final winningPlayer = winner;
     if (winningPlayer == null || !hasResult) {
       return null;
@@ -952,6 +1276,14 @@ class GroupMatch {
 
   Map<String, dynamic> toJson() {
     return {
+      if (players.isNotEmpty)
+        'players': players.map((player) => player.toJson()).toList(),
+      if (scratchedPlayer != null) 'scratchedPlayer': scratchedPlayer!.toJson(),
+      if (scratchEligiblePlayers.isNotEmpty)
+        'scratchEligiblePlayers': scratchEligiblePlayers
+            .map((player) => player.toJson())
+            .toList(),
+      if (isKratzer) 'isKratzer': true,
       'homePlayer': homePlayer?.toJson(),
       'awayPlayer': awayPlayer?.toJson(),
       'round': round,
@@ -976,6 +1308,10 @@ class GroupMatch {
       'bestPerformances': bestPerformances
           .map((item) => item.toJson())
           .toList(),
+      if (kratzerBonusLives.isNotEmpty)
+        'kratzerBonusLives': kratzerBonusLives
+            .map((bonus) => bonus.toJson())
+            .toList(),
     };
   }
 }

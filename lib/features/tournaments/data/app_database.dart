@@ -12,11 +12,12 @@ import 'package:sqlite3/sqlite3.dart';
 
 import '../domain/tournament_models.dart';
 import '../../rankings/domain/local_ranking.dart';
+import '../../statistics/domain/player_monthly_performance.dart';
 
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 11;
+  static const schemaVersion = 12;
 
   final Directory? _baseDirectory;
 
@@ -63,6 +64,107 @@ class LocalAppDatabase {
             ),
           ).copyWith(customOrder: row['custom_order'] as int? ?? 0),
       ];
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<List<PlayerMonthlyPerformance>> loadPlayerMonthlyPerformance(
+    String playerId, {
+    int? year,
+  }) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      final rows = database.select(
+        '''SELECT player_profile_id, year, month, weighted_legs,
+                  scoring, average, checkout_rate
+           FROM player_monthly_performance
+           WHERE player_profile_id = ?${year == null ? '' : ' AND year = ?'}
+           ORDER BY year, month''',
+        year == null ? [playerId] : [playerId, year],
+      );
+      return [
+        for (final row in rows)
+          PlayerMonthlyPerformance.fromRow(Map<String, Object?>.from(row)),
+      ];
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<List<PlayerMonthlyPerformance>> loadPlayerMonthlyPerformanceForPlayers(
+    Set<String> playerIds, {
+    int? year,
+  }) => StorageAccess.run(() async {
+    if (playerIds.isEmpty) return const [];
+    final database = await _openDatabase();
+    try {
+      final ids = playerIds.toList()..sort();
+      final performances = <PlayerMonthlyPerformance>[];
+      for (var start = 0; start < ids.length; start += 900) {
+        final batch = ids.skip(start).take(900).toList();
+        final rows = database.select(
+          '''SELECT player_profile_id, year, month, weighted_legs,
+                    scoring, average, checkout_rate
+             FROM player_monthly_performance
+             WHERE player_profile_id IN (${List.filled(batch.length, '?').join(',')})
+             ${year == null ? '' : 'AND year = ?'}
+             ORDER BY year, month, player_profile_id''',
+          [...batch, ?year],
+        );
+        performances.addAll(
+          rows.map(
+            (row) => PlayerMonthlyPerformance.fromRow(
+              Map<String, Object?>.from(row),
+            ),
+          ),
+        );
+      }
+      return performances;
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<void> savePlayerMonthlyPerformance(
+    PlayerMonthlyPerformance performance,
+  ) => StorageAccess.run(() async {
+    if (performance.month < 1 ||
+        performance.month > 12 ||
+        performance.weightedLegs < 0 ||
+        performance.scoring != null &&
+            (!performance.scoring!.isFinite || performance.scoring! < 0) ||
+        performance.average != null &&
+            (!performance.average!.isFinite || performance.average! < 0) ||
+        performance.checkoutRate != null &&
+            (!performance.checkoutRate!.isFinite ||
+                performance.checkoutRate! < 0 ||
+                performance.checkoutRate! > 100)) {
+      throw ArgumentError('Performance-Daten sind ungültig.');
+    }
+    final database = await _openDatabase();
+    try {
+      database.execute(
+        '''INSERT INTO player_monthly_performance(
+             player_profile_id, year, month, weighted_legs,
+             scoring, average, checkout_rate
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(player_profile_id, year, month) DO UPDATE SET
+             weighted_legs = excluded.weighted_legs,
+             scoring = excluded.scoring,
+             average = excluded.average,
+             checkout_rate = excluded.checkout_rate''',
+        [
+          performance.playerId,
+          performance.year,
+          performance.month,
+          performance.weightedLegs,
+          performance.scoring,
+          performance.average,
+          performance.checkoutRate,
+        ],
+      );
+      StorageAccess.markLocalDataChanged();
     } finally {
       database.close();
     }
@@ -435,7 +537,7 @@ class LocalAppDatabase {
           'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
         );
       }
-      if (version > 0 && version < schemaVersion - 2) {
+      if (version > 0 && version < schemaVersion - 3) {
         throw StateError(
           'Lokale Datenbank-Version $version kann nicht sicher migriert werden. '
           'Die Datei wurde nicht verändert. Bitte erstelle eine Kopie der '
@@ -464,11 +566,14 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion == schemaVersion - 1) {
+      if (currentVersion == 11) {
+        _createPlayerMonthlyPerformanceTable(database);
+      } else if (currentVersion == 10) {
         database.execute(
           "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
         );
-      } else if (currentVersion == schemaVersion - 2) {
+        _createPlayerMonthlyPerformanceTable(database);
+      } else if (currentVersion == 9) {
         database.execute(
           'ALTER TABLE local_rankings ADD COLUMN custom_order INTEGER NOT NULL DEFAULT 0',
         );
@@ -484,6 +589,7 @@ class LocalAppDatabase {
         database.execute(
           "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
         );
+        _createPlayerMonthlyPerformanceTable(database);
       } else {
         if (currentVersion > 0) {
           final oldTables = database.select(
@@ -551,6 +657,25 @@ class LocalAppDatabase {
 
       CREATE INDEX idx_player_profiles_display_name
         ON player_profiles(display_name);
+    ''');
+    _createPlayerMonthlyPerformanceTable(database);
+  }
+
+  void _createPlayerMonthlyPerformanceTable(Database database) {
+    database.execute('''
+      CREATE TABLE player_monthly_performance (
+        player_profile_id TEXT NOT NULL
+          REFERENCES player_profiles(id) ON DELETE CASCADE,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+        weighted_legs INTEGER NOT NULL CHECK (weighted_legs >= 0),
+        scoring REAL,
+        average REAL,
+        checkout_rate REAL CHECK (
+          checkout_rate IS NULL OR checkout_rate BETWEEN 0 AND 100
+        ),
+        PRIMARY KEY (player_profile_id, year, month)
+      )
     ''');
   }
 

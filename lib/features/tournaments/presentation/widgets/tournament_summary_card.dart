@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../league/domain/league_match.dart';
 import '../../domain/tournament_models.dart';
+import '../../domain/tournament_winner.dart';
 import '../../application/tournament_timing.dart';
 
 class TournamentSummaryCard extends StatelessWidget {
@@ -25,6 +27,15 @@ class TournamentSummaryCard extends StatelessWidget {
         : tournament.startedAt != null
         ? 'Läuft'
         : 'Bereit';
+    final league = tournament.leagueMatch;
+    final typeLabel = league != null
+        ? league.variant == LeagueMatchVariant.traditional
+              ? 'Ligaspiel'
+              : 'Angepasstes/Freundschaftsspiel'
+        : tournament.countsForRanking
+        ? 'Ranglistenturnier'
+        : 'Angepasstes/Freundschaftsspiel';
+    final winnerName = _winnerName(tournament, complete);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -81,13 +92,30 @@ class TournamentSummaryCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                tournament.leagueMatch != null
-                    ? 'Ligaspiel · ${tournament.leagueMatch!.homePoints}:${tournament.leagueMatch!.awayPoints} Mannschaftspunkte'
+                typeLabel,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                league != null
+                    ? '${league.homePoints}:${league.awayPoints} Mannschaftspunkte'
                     : '${tournament.players.length} Spieler · ${tournament.stages.length} Etappen',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
               ),
+              if (winnerName != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Sieger: $winnerName',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               if (tournament.importedArchive == null) ...[
                 Builder(
                   builder: (context) {
@@ -155,5 +183,19 @@ class TournamentSummaryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String? _winnerName(CreatedTournament tournament, bool complete) {
+    if (!complete) return null;
+    final league = tournament.leagueMatch;
+    if (league != null) {
+      if (!league.complete || league.homePoints == league.awayPoints) {
+        return null;
+      }
+      return league.homePoints > league.awayPoints
+          ? league.homeTeam
+          : league.awayTeam;
+    }
+    return TournamentWinner.name(tournament);
   }
 }

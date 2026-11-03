@@ -85,6 +85,20 @@ void main() {
     );
   });
 
+  testWidgets('saved API key can be deleted after confirmation', (tester) async {
+    SharedPreferences.setMockInitialValues({'govee_api_key': 'saved-key'});
+    await tester.pumpWidget(const MaterialApp(home: GoveeHubPage()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('API-Key löschen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Löschen').last);
+    await tester.pumpAndSettle();
+
+    expect(await GoveeApiKeyStorage().load(), isNull);
+    expect(find.text('API-Key löschen'), findsNothing);
+  });
+
   testWidgets('ambience panel lists devices and applies color swatches', (
     tester,
   ) async {

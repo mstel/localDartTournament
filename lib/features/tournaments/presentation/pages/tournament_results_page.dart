@@ -173,15 +173,19 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                                     value: '${summary.matchCount}',
                                   ),
                                   _CompletionMetric(
-                                    label: 'Gespielte Legs',
-                                    value: '${summary.legCount}',
+                                    label: tournament.isKratzerTournament
+                                        ? 'Eingetragene Kratzer'
+                                        : 'Gespielte Legs',
+                                    value: tournament.isKratzerTournament
+                                        ? '${_resultMatches(tournament).where((entry) => entry.match.scratchedPlayer != null).length}'
+                                        : '${summary.legCount}',
                                   ),
-                                  _CompletionMetric(
-                                    label: 'Legs / Match',
-                                    value: averageLegsPerMatch.toStringAsFixed(
-                                      1,
+                                  if (!tournament.isKratzerTournament)
+                                    _CompletionMetric(
+                                      label: 'Legs / Match',
+                                      value: averageLegsPerMatch
+                                          .toStringAsFixed(1),
                                     ),
-                                  ),
                                 ],
                               ),
                               const SizedBox(height: 8),
@@ -269,44 +273,55 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               ],
             ),
             const SizedBox(height: 20),
-            Text(
-              'Podium',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            if (podium.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Es liegen noch keine Ergebnisse vor.'),
-                ),
-              )
-            else ...[
-              _Podium(
-                ranking: podium,
-                onPlayerTap: (stats) => _openPlayer(context, stats.player),
+            if (tournament.isKratzerTournament) ...[
+              Text(
+                'Lebenstand',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
-            ],
-            const SizedBox(height: 16),
-            TournamentRankingAssignment(
-              tournament: tournament,
-              database: widget.database,
-              storage: widget.storage,
-              onSaved: () {
-                if (mounted) setState(() {});
-              },
-            ),
-            if (tournament.countsForRanking &&
-                tournament.rankingIds.isNotEmpty) ...[
               const SizedBox(height: 12),
-              TournamentRankingChangesSection(
+              _KratzerLifeSummary(tournament: tournament),
+            ] else ...[
+              Text(
+                'Podium',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              if (podium.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Es liegen noch keine Ergebnisse vor.'),
+                  ),
+                )
+              else
+                _Podium(
+                  ranking: podium,
+                  onPlayerTap: (stats) => _openPlayer(context, stats.player),
+                ),
+              const SizedBox(height: 16),
+              TournamentRankingAssignment(
                 tournament: tournament,
                 database: widget.database,
                 storage: widget.storage,
+                onSaved: () {
+                  if (mounted) setState(() {});
+                },
               ),
+              if (tournament.countsForRanking &&
+                  tournament.rankingIds.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                TournamentRankingChangesSection(
+                  tournament: tournament,
+                  database: widget.database,
+                  storage: widget.storage,
+                ),
+              ],
             ],
+            const SizedBox(height: 16),
             if (performances.isNotEmpty) ...[
               const SizedBox(height: 12),
               _BestPerformancesSummary(performances: performances),
@@ -635,6 +650,54 @@ class _CompletionMetric extends StatelessWidget {
   );
 }
 
+class _KratzerLifeSummary extends StatelessWidget {
+  const _KratzerLifeSummary({required this.tournament});
+
+  final CreatedTournament tournament;
+
+  @override
+  Widget build(BuildContext context) {
+    final stage = tournament.stages.lastWhere(
+      (stage) => stage.type == 'kratzer',
+    );
+    KnockoutTournamentRunStage? runStage;
+    for (final candidate
+        in tournament.runStages.whereType<KnockoutTournamentRunStage>()) {
+      if (candidate.isKratzer) {
+        runStage = candidate;
+        break;
+      }
+    }
+    int livesRemaining(TournamentPlayer player) {
+      final remaining =
+          stage.lossLimit -
+          _playerScratches(tournament, player) +
+          (runStage?.bonusLivesFor(player) ?? 0);
+      return remaining < 0 ? 0 : remaining;
+    }
+
+    return Card(
+      child: Column(
+        children: [
+          for (final player in tournament.players)
+            ListTile(
+              leading: Icon(
+                livesRemaining(player) == 0
+                    ? Icons.person_off_outlined
+                    : Icons.favorite_outline,
+              ),
+              title: Text(player.name),
+              subtitle: Text(
+                '${_playerScratches(tournament, player)} Kratzer · '
+                '${livesRemaining(player)} Leben übrig',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BestPerformancesSummary extends StatelessWidget {
   const _BestPerformancesSummary({required this.performances});
 
@@ -659,7 +722,9 @@ class _BestPerformancesSummary extends StatelessWidget {
                 leading: const Icon(Icons.military_tech_outlined),
                 title: Text('${performance.playerName} · ${performance.label}'),
                 trailing: performance.value == null
-                    ? null
+                    ? (performance.details == null
+                          ? null
+                          : Text(performance.details!))
                     : Text('${performance.value}'),
               ),
           ],
@@ -726,24 +791,41 @@ class _TournamentPlayerListPage extends StatelessWidget {
         Card(
           child: Column(
             children: [
-              for (var index = 0; index < ranking.length; index++)
-                _RankingRow(
-                  place: index + 1,
-                  stats: ranking[index],
-                  maxLegs: ranking.fold<int>(
-                    0,
-                    (maxLegs, entry) =>
-                        entry.legsFor > maxLegs ? entry.legsFor : maxLegs,
-                  ),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => TournamentPlayerResultsPage(
-                        tournament: tournament,
-                        player: ranking[index].player,
+              if (tournament.isKratzerTournament)
+                for (final player in tournament.players)
+                  ListTile(
+                    title: Text(player.name),
+                    subtitle: Text(
+                      '${_playerScratches(tournament, player)} Kratzer',
+                    ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => TournamentPlayerResultsPage(
+                          tournament: tournament,
+                          player: player,
+                        ),
+                      ),
+                    ),
+                  )
+              else
+                for (var index = 0; index < ranking.length; index++)
+                  _RankingRow(
+                    place: index + 1,
+                    stats: ranking[index],
+                    maxLegs: ranking.fold<int>(
+                      0,
+                      (maxLegs, entry) =>
+                          entry.legsFor > maxLegs ? entry.legsFor : maxLegs,
+                    ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => TournamentPlayerResultsPage(
+                          tournament: tournament,
+                          player: ranking[index].player,
+                        ),
                       ),
                     ),
                   ),
-                ),
             ],
           ),
         ),
@@ -776,15 +858,17 @@ class _TournamentPlayerResultsPageState
   Widget build(BuildContext context) {
     final matches = _resultMatches(widget.tournament)
         .where(
-          (entry) =>
-              entry.match.homePlayer?.name == widget.player.name ||
-              entry.match.awayPlayer?.name == widget.player.name,
+          (entry) => entry.match.isKratzer
+              ? entry.match.players.contains(widget.player)
+              : entry.match.homePlayer?.name == widget.player.name ||
+                    entry.match.awayPlayer?.name == widget.player.name,
         )
         .toList();
     final played = matches.where((entry) => entry.match.hasResult).toList();
     final wins = played
         .where((entry) => entry.match.winner?.name == widget.player.name)
         .length;
+    final scratches = _playerScratches(widget.tournament, widget.player);
     return Scaffold(
       appBar: AppBar(title: Text(widget.player.name)),
       body: AdaptiveContentList(
@@ -797,7 +881,11 @@ class _TournamentPlayerResultsPageState
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text('$wins Siege aus ${played.length} gewerteten Begegnungen'),
+          Text(
+            widget.tournament.isKratzerTournament
+                ? '$scratches Kratzer aus ${played.length} Partien'
+                : '$wins Siege aus ${played.length} gewerteten Begegnungen',
+          ),
           const SizedBox(height: 16),
           FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
             future: _eloChanges,
@@ -965,14 +1053,20 @@ class _ResultMatchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final match = entry.match;
-    final home = match.homePlayer?.name ?? 'Noch offen';
-    final away = match.awayPlayer?.name ?? 'Noch offen';
+    final home = match.isKratzer
+        ? match.participantLabel
+        : match.homePlayer?.name ?? 'Noch offen';
+    final away = match.isKratzer
+        ? match.scratchedPlayer?.name ?? 'Noch kein Kratzer'
+        : match.awayPlayer?.name ?? 'Noch offen';
     final score = match.isAnnulled
         ? 'Annulliert'
         : match.hasResult
         ? match.scoreLabel
         : 'Noch nicht gespielt';
-    final highlightHome = highlightPlayer?.name == home;
+    final highlightHome = match.isKratzer
+        ? match.players.contains(highlightPlayer)
+        : highlightPlayer?.name == home;
     final highlightAway = highlightPlayer?.name == away;
     return Card(
       child: Padding(
@@ -991,23 +1085,24 @@ class _ResultMatchCard extends StatelessWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
-            for (final change in eloChanges)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(text: '${change.rankingName}: $home '),
-                      _eloDeltaSpan(context, change.homeDelta),
-                      const TextSpan(text: ' · '),
-                      TextSpan(text: '$away '),
-                      _eloDeltaSpan(context, change.awayDelta),
-                    ],
+            if (!match.isKratzer)
+              for (final change in eloChanges)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: '${change.rankingName}: $home '),
+                        _eloDeltaSpan(context, change.homeDelta),
+                        const TextSpan(text: ' · '),
+                        TextSpan(text: '$away '),
+                        _eloDeltaSpan(context, change.awayDelta),
+                      ],
+                    ),
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-              ),
-            if (highlightHome || highlightAway)
+            if (!match.isKratzer && (highlightHome || highlightAway))
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
@@ -1016,7 +1111,7 @@ class _ResultMatchCard extends StatelessWidget {
                       : '$away spielte auswärts',
                 ),
               ),
-            if (onEditBestPerformances != null)
+            if (!match.isKratzer && onEditBestPerformances != null)
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
@@ -1124,6 +1219,16 @@ List<_ResultMatch> _resultMatches(CreatedTournament tournament) => [
             stageMatchName(stage, match),
           ),
 ];
+
+int _playerScratches(CreatedTournament tournament, TournamentPlayer player) {
+  var total = player.kratzerStartingScratches;
+  for (final entry in _resultMatches(tournament)) {
+    if (entry.match.isKratzer && entry.match.scratchedPlayer == player) {
+      total++;
+    }
+  }
+  return total;
+}
 
 class _TournamentResultSummary {
   _TournamentResultSummary({

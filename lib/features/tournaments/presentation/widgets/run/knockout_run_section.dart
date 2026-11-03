@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../../../shared/widgets/sport_settings_section.dart';
 import '../../../domain/knockout_round_names.dart';
 import 'round_match_list.dart';
@@ -10,7 +12,7 @@ typedef KnockoutBracketBuilder =
     Widget Function(
       KnockoutTournamentRunStage stage,
       int qualifyingRank,
-      void Function(GroupMatch match) onEditResult,
+      FutureOr<void> Function(GroupMatch match) onEditResult,
       bool canEditResults,
       bool isEditMode,
       void Function(int fromSlotIndex, int toSlotIndex) onSwapSlot,
@@ -32,7 +34,7 @@ class KnockoutRunSection extends StatelessWidget {
 
   final KnockoutTournamentRunStage stage;
   final int qualifyingRank;
-  final void Function(GroupMatch match) onEditResult;
+  final FutureOr<void> Function(GroupMatch match) onEditResult;
   final bool canEditResults;
   final bool isEditMode;
   final bool canEditBracket;
@@ -80,6 +82,76 @@ class KnockoutRunSection extends StatelessWidget {
         final compact =
             constraints.maxWidth < 840 ||
             MediaQuery.textScalerOf(context).scale(16) > 24;
+        if (stage.isKratzer) {
+          final activePlayers = stage.participants
+              .where((player) => stage.livesRemainingFor(player) > 0)
+              .toList();
+          return StageSurface(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  stage.name,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '3–6 Spieler pro Board spielen gleichzeitig. Es gibt keinen Sieger: pro Partie wird genau ein Kratzer eingetragen.',
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final player in stage.participants)
+                      Builder(
+                        builder: (context) {
+                          final lives = stage.livesRemainingFor(player);
+                          return Chip(
+                            avatar: Icon(
+                              lives == 0
+                                  ? Icons.person_off_outlined
+                                  : Icons.favorite_outline,
+                              size: 18,
+                            ),
+                            label: Text('${player.name} · $lives Leben'),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+                if (activePlayers.length <= 1 && activePlayers.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'Letzte Person im Turnier: ${activePlayers.single.name}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                if (stage.rounds.isEmpty || stage.rounds.first.isEmpty)
+                  const Text(
+                    'Für Kratzer werden mindestens drei Teilnehmende und ein freies Board benötigt.',
+                  )
+                else
+                  RoundMatchList(
+                    key: ValueKey(stage),
+                    rounds: stage.rounds,
+                    labels: [
+                      for (var index = 0; index < stage.rounds.length; index++)
+                        'Runde ${index + 1}',
+                    ],
+                    onEditResult: onEditResult,
+                    canEditResults: canEditResults,
+                  ),
+              ],
+            ),
+          );
+        }
         return StageSurface(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -119,7 +191,7 @@ class KnockoutRunSection extends StatelessWidget {
                           : 'Runde ${i + 1}',
                     if (stage.placementMatches.isNotEmpty) 'Platzierung',
                   ],
-                  onEditResult: onEditResult,
+                  onEditResult: (match) => onEditResult(match),
                   canEditResults: canEditResults,
                 ),
                 SportSettingsSection(

@@ -4,10 +4,12 @@ import '../../../shared/widgets/sport_settings_section.dart';
 import 'package:flutter/material.dart';
 import '../../tournaments/application/tournament_timing.dart';
 import '../../tournaments/presentation/widgets/run/tournament_timing_panel.dart';
+import '../../tournaments/presentation/widgets/tournament_date_picker_field.dart';
 import '../../tournaments/application/order_of_play/order_of_play_controller.dart';
 import '../application/league_board_runtime.dart';
 import '../application/league_duration_estimator.dart';
 import 'league_overview.dart';
+import 'league_game_format_setup.dart';
 import 'league_player_picker.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../../shared/widgets/adaptive_content.dart';
@@ -26,12 +28,26 @@ class LeagueMatchPage extends StatefulWidget {
     this.tournament,
     this.storage,
     this.database,
+    this.onCreated,
   });
   final LocalAppDatabase? database;
   final CreatedTournament? tournament;
   final TournamentStorage? storage;
+  final ValueChanged<CreatedTournament>? onCreated;
   @override
   State<LeagueMatchPage> createState() => _LeagueMatchPageState();
+}
+
+List<(int, int)> _validScores(LeagueMatch league) {
+  final format = league.gameFormat;
+  final target = format.bestOfSets > 1
+      ? format.bestOfSets ~/ 2 + 1
+      : format.bestOfLegs ~/ 2 + 1;
+  return [
+    for (var score = 0; score < target; score++) (target, score),
+    for (var score = 0; score < target; score++) (score, target),
+    if (format.allowsDraws) (format.bestOfLegs ~/ 2, format.bestOfLegs ~/ 2),
+  ];
 }
 
 class _LeagueMatchPageState extends State<LeagueMatchPage> {
@@ -57,6 +73,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
   late final _storage = widget.storage ?? TournamentStorage();
   late CreatedTournament? _tournament = widget.tournament;
   bool _busy = false;
+  DateTime _tournamentDate = DateUtils.dateOnly(DateTime.now());
   String? _error;
   final _profiles = <String, TournamentPlayer>{};
 
@@ -129,6 +146,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
 
   int _boards = 1;
   LeagueMatchVariant _variant = LeagueMatchVariant.traditional;
+  TournamentGameFormat _gameFormat = const TournamentGameFormat(bestOfLegs: 5);
   int _singlesPerPlayer = 2;
   int _doublesCount = 2;
   TournamentPlanningParameters _planningParameters =
@@ -145,6 +163,14 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
 
   void _setVariant(LeagueMatchVariant variant) {
     setState(() {
+      final oldDefaultName = _variant == LeagueMatchVariant.adjusted
+          ? 'Angepasstes Liga-/Freundschaftsspiel'
+          : 'Ligaspiel';
+      if (_name.text == oldDefaultName) {
+        _name.text = variant == LeagueMatchVariant.adjusted
+            ? 'Angepasstes Liga-/Freundschaftsspiel'
+            : 'Ligaspiel';
+      }
       _variant = variant;
       if (variant == LeagueMatchVariant.traditional) {
         for (var team = 0; team < _rosters.length; team++) {
@@ -203,6 +229,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         awayPlayers: names[1],
         singlesPerPlayer: _singlesPerPlayer,
         doublesCount: _doublesCount,
+        gameFormat: _gameFormat,
       );
       return const LeagueDurationEstimator()
           .estimate(
@@ -292,6 +319,31 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     }
   }
 
+  Future<void> _changeTournamentDate(DateTime date) async {
+    final tournament = _tournament;
+    if (tournament == null) return;
+    final previous = tournament.tournamentDate;
+    final normalized = DateTime(date.year, date.month, date.day);
+    if (previous != null &&
+        previous.year == normalized.year &&
+        previous.month == normalized.month &&
+        previous.day == normalized.day) {
+      return;
+    }
+    tournament.tournamentDate = normalized;
+    tournament.addActivity(
+      'tournament_date_changed',
+      'Turnierdatum geändert: ${MaterialLocalizations.of(context).formatMediumDate(normalized)}',
+    );
+    try {
+      await _save(tournament, rethrowError: true);
+    } catch (_) {
+      tournament
+        ..tournamentDate = previous
+        ..activityLog.removeLast();
+    }
+  }
+
   Future<void> _create() async {
     if (_busy) return;
     if (!_form.currentState!.validate()) {
@@ -332,45 +384,42 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
             awayPlayers: awayPlayers,
             singlesPerPlayer: _singlesPerPlayer,
             doublesCount: _doublesCount,
+            gameFormat: _gameFormat,
           );
-    await _save(
-      CreatedTournament(
-        name: _name.text.trim(),
-        players: [
-          for (var team = 0; team < 2; team++)
-            for (var slot = 0; slot < homePlayers.length; slot++)
-              _profiles['$team:$slot'] ??
-                  TournamentPlayer(
-                    name: _rosters[team][slot].text.trim(),
-                    isGenerated: false,
-                  ),
-        ],
-        stages: [],
-        runStages: [],
-        leagueMatch: league,
-        boardCount: _boards,
-      ),
+    final tournament = CreatedTournament(
+      name: _name.text.trim(),
+      players: [
+        for (var team = 0; team < 2; team++)
+          for (var slot = 0; slot < homePlayers.length; slot++)
+            _profiles['$team:$slot'] ??
+                TournamentPlayer(
+                  name: _rosters[team][slot].text.trim(),
+                  isGenerated: false,
+                ),
+      ],
+      stages: [],
+      runStages: [],
+      leagueMatch: league,
+      boardCount: _boards,
+      tournamentDate: _tournamentDate,
     );
+    await _save(tournament);
+    if (mounted && _tournament != null) {
+      widget.onCreated?.call(_tournament!);
+    }
   }
 
   Future<void> _result(int index) async {
     final result = await showDialog<(int?, int?)>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Ergebnis · Best of 5'),
+        title: Text('Ergebnis · ${_tournament!.leagueMatch!.gameFormat.label}'),
         content: SingleChildScrollView(
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final score in [
-                (3, 0),
-                (3, 1),
-                (3, 2),
-                (0, 3),
-                (1, 3),
-                (2, 3),
-              ])
+              for (final score in _validScores(_tournament!.leagueMatch!))
                 OutlinedButton(
                   onPressed: () => Navigator.pop(context, score),
                   child: Text('${score.$1}:${score.$2}'),
@@ -392,7 +441,17 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     );
     if (!mounted || result == null) return;
     final next = CreatedTournament.fromJson(_tournament!.toJson());
-    next.leagueMatch!.games[index].score(result.$1, result.$2);
+    next.leagueMatch!.games[index].score(
+      result.$1,
+      result.$2,
+      format: next.leagueMatch!.gameFormat,
+    );
+    if (result.$1 != null && result.$2 != null) {
+      next.addActivity(
+        'result_entered',
+        'Ergebnis eingetragen · Begegnung ${index + 1} · ${result.$1}:${result.$2}',
+      );
+    }
     final runtime = LeagueBoardRuntime(next);
     const OrderOfPlayController().resultRecorded(runtime.matches[index]);
     runtime.writeTo(next);
@@ -434,7 +493,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         children: [
           Text(
             _tournament?.leagueMatch?.variant == LeagueMatchVariant.adjusted
-                ? '${_tournament!.leagueMatch!.games.length} Begegnungen · 501 Single In / Double Out · Best of 5 Legs'
+                ? '${_tournament!.leagueMatch!.games.length} Begegnungen · ${_tournament!.leagueMatch!.gameFormat.label}'
                 : '18 Begegnungen · 501 Single In / Double Out · Best of 5 Legs',
           ),
           const SizedBox(height: 12),
@@ -450,6 +509,13 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
               _error!,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
+          if (_tournament != null) ...[
+            TournamentDatePickerField(
+              value: DateUtils.dateOnly(_tournament!.effectiveDate.toLocal()),
+              onChanged: _changeTournamentDate,
+            ),
+            const SizedBox(height: 12),
+          ],
           if (_tournament == null) _setup(context) else ..._games(context),
         ],
       ),
@@ -464,11 +530,20 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
           key: const ValueKey('league-name'),
           controller: _name,
           maxLength: 200,
-          decoration: const InputDecoration(
-            labelText: 'Name des Ligaspiels',
-            hintText: 'Zum Beispiel: Vereinsliga · 3. Spieltag',
+          decoration: InputDecoration(
+            labelText: _variant == LeagueMatchVariant.adjusted
+                ? 'Name des angepassten Liga-/Freundschaftsspiels'
+                : 'Name des Ligaspiels',
+            hintText: _variant == LeagueMatchVariant.adjusted
+                ? 'Zum Beispiel: Freundschaftsspiel · Dartclub'
+                : 'Zum Beispiel: Vereinsliga · 3. Spieltag',
           ),
           validator: _required,
+        ),
+        const SizedBox(height: 12),
+        TournamentDatePickerField(
+          value: _tournamentDate,
+          onChanged: (date) => setState(() => _tournamentDate = date),
         ),
         const SizedBox(height: 16),
         SegmentedButton<LeagueMatchVariant>(
@@ -528,6 +603,11 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                 },
               ),
               const SizedBox(height: 8),
+              LeagueGameFormatSetup(
+                value: _gameFormat,
+                onChanged: (format) => setState(() => _gameFormat = format),
+              ),
+              const SizedBox(height: 8),
               _boardControls(),
               Builder(
                 builder: (context) {
@@ -546,7 +626,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                       subtitle: Text(
                         duration == null
                             ? 'Dauer wird berechnet, sobald beide Teams gleich viele Spieler haben.'
-                            : 'Voraussichtliche Dauer: ${_formatDuration(duration)} · Best of 5 · $_boards ${_boards == 1 ? 'Board' : 'Boards'}',
+                            : 'Voraussichtliche Dauer: ${_formatDuration(duration)} · ${_gameFormat.lengthLabel} · $_boards ${_boards == 1 ? 'Board' : 'Boards'}',
                       ),
                     ),
                   );
@@ -649,7 +729,11 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         const SizedBox(height: 16),
         FilledButton(
           onPressed: _busy ? null : _create,
-          child: const Text('Ligaspiel anlegen'),
+          child: Text(
+            _variant == LeagueMatchVariant.adjusted
+                ? 'Angepasstes Liga-/Freundschaftsspiel anlegen'
+                : 'Ligaspiel anlegen',
+          ),
         ),
       ],
     ),

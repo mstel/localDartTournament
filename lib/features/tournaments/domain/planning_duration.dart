@@ -52,6 +52,7 @@ class PlanningDuration {
     required int qualifiers,
     required int boards,
     required num matchMinutes,
+    String strategy = 'global',
     num? knockoutMatchMinutes,
     num boardIdleMinutes = 0,
   }) {
@@ -68,13 +69,14 @@ class PlanningDuration {
           TournamentPlayer(name: 'G$group-P$player', isGenerated: true),
       ];
       for (final match in tournamentEngine.buildRoundRobinMatches(players)) {
-        groupEntries.add(PlayEntry(match, 0, 'G$group'));
+        groupEntries.add(PlayEntry(match, 0, 'G$group', 'G$group'));
       }
     }
     final assignments = const BoardSchedulingEngine().schedule(
       all: groupEntries,
       ready: groupEntries,
       boardCount: boards,
+      strategy: strategy,
     );
     final groupSlots = assignments.isEmpty ? 0 : assignments.last.block + 1;
     var knockoutSlots = 0;

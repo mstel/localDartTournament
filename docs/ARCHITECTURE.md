@@ -43,6 +43,13 @@ Das Ziel ist eine modulare Flutter-App, in der neue Features als eigene Bereiche
 - Keine neue Fachlogik direkt in Widgets, wenn sie als Service/Engine testbar waere.
 - Keine weitere Kopplung ueber globale private Helfer in `part`-Dateien.
 - Keine unversionierten Speicherformat-Aenderungen.
+
+## Prioritätshinweise
+
+Die geräteweiten Schwellen und die relative Gruppenfortschrittslogik sind unter
+[`tournament_priority_hints.md`](tournament_priority_hints.md) dokumentiert.
+Die Einstellungswerte werden mit versionierten `SharedPreferences`-Schlüsseln
+gespeichert und bei fehlenden Werten mit den bisherigen Defaults geladen.
 - Keine neuen Features direkt in bestehende Turnierseiten pressen, wenn ein eigener Feature-Bereich sinnvoll ist.
 
 ## Zielstruktur

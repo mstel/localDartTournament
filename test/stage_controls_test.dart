@@ -25,7 +25,27 @@ void main() {
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Ergebnisse'), findsOneWidget);
     expect(find.text('Einstellungen'), findsOneWidget);
+    expect(find.text('Leitung'), findsNothing);
   });
+
+  testWidgets(
+    'director navigation appears only when director mode is enabled',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: StageViewModeSwitch(
+              selectedMode: StageViewMode.director,
+              onModeChanged: _ignoreMode,
+              directorModeEnabled: true,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Leitung'), findsOneWidget);
+    },
+  );
 }
 
 void _ignoreMode(StageViewMode _) {}

@@ -10,6 +10,8 @@ import '../../notifications/presentation/push_device_menu.dart';
 import '../../dev_tools/presentation/dev_tools_page.dart';
 import '../../govee/presentation/govee_hub_page.dart';
 import '../../random_draw/presentation/random_draw_tool_page.dart';
+import 'priority_notice_settings_panel.dart';
+import 'tie_breaker_defaults_panel.dart';
 
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'appearance_panel.dart';
@@ -93,12 +95,19 @@ class _DataPanel extends StatelessWidget {
   );
 }
 
-class _AdministrationPanel extends StatelessWidget {
+class _AdministrationPanel extends StatefulWidget {
   const _AdministrationPanel();
 
   @override
-  Widget build(BuildContext context) => AdaptiveContentList(
-    padding: const EdgeInsets.all(20),
+  State<_AdministrationPanel> createState() => _AdministrationPanelState();
+}
+
+class _AdministrationPanelState extends State<_AdministrationPanel> {
+  @override
+  Widget build(BuildContext context) => _toolsPanel(context);
+
+  Widget _toolsPanel(BuildContext context) => AdaptiveContentList(
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
     children: [
       Text(
         'Werkzeuge & Verwaltung',
@@ -151,7 +160,51 @@ class _AdministrationPanel extends StatelessWidget {
           ),
         ),
       ),
+      Card(
+        child: ListTile(
+          leading: const Icon(Icons.rule_folder_outlined),
+          title: const Text('Tie Breaker Standardwerte'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const _TieBreakerDefaultsPage(),
+            ),
+          ),
+        ),
+      ),
+      Card(
+        child: ListTile(
+          leading: const Icon(Icons.tips_and_updates_outlined),
+          title: const Text('Hinweiseinstellungen'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const _PriorityNoticeSettingsPage(),
+            ),
+          ),
+        ),
+      ),
     ],
+  );
+}
+
+class _TieBreakerDefaultsPage extends StatelessWidget {
+  const _TieBreakerDefaultsPage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Tie Breaker Standardwerte')),
+    body: const TieBreakerDefaultsPanel(showTitle: false),
+  );
+}
+
+class _PriorityNoticeSettingsPage extends StatelessWidget {
+  const _PriorityNoticeSettingsPage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Hinweiseinstellungen')),
+    body: const PriorityNoticeSettingsPanel(showTitle: false),
   );
 }
 

@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/adaptive_content.dart';
 import '../../../shared/utils/png_image_export.dart';
 import '../../rankings/domain/local_ranking.dart';
+import '../../tournaments/data/app_database.dart';
+import '../../tournaments/data/tournament_storage.dart';
 import '../application/player_statistics_image_generator.dart';
 import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
+import '../domain/player_monthly_performance.dart';
+import 'widgets/player_performance_section.dart';
 import 'widgets/structured_best_performances_view.dart';
 
 class LocalPlayerStatisticsPage extends StatefulWidget {
@@ -14,10 +18,15 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
     required this.name,
     required this.profileIds,
     this.year,
-  });
+    LocalAppDatabase? database,
+    TournamentStorage? tournamentStorage,
+  }) : _database = database,
+       _tournamentStorage = tournamentStorage;
   final String name;
   final Set<String> profileIds;
   final int? year;
+  final LocalAppDatabase? _database;
+  final TournamentStorage? _tournamentStorage;
   @override
   State<LocalPlayerStatisticsPage> createState() =>
       _LocalPlayerStatisticsPageState();
@@ -25,14 +34,32 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
 
 class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
   bool _exporting = false;
+  late final _database = widget._database ?? LocalAppDatabase();
+  late final _tournamentStorage =
+      widget._tournamentStorage ?? TournamentStorage();
   late Future<
-    (LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)
+    (
+      LocalPlayerStatistics,
+      List<LocalRanking>,
+      List<RankingPosition>,
+      List<PlayerMonthlyPerformance>,
+    )
   >
   _future = _load();
 
-  Future<(LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)>
+  Future<
+    (
+      LocalPlayerStatistics,
+      List<LocalRanking>,
+      List<RankingPosition>,
+      List<PlayerMonthlyPerformance>,
+    )
+  >
   _load() async {
-    const service = LocalStatisticsService();
+    final service = LocalStatisticsService(
+      database: _database,
+      storage: _tournamentStorage,
+    );
     final stats = await service.forPlayers(
       widget.profileIds,
       year: widget.year,
@@ -42,7 +69,11 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       widget.profileIds,
       rankings,
     );
-    return (stats, rankings, positions);
+    final performance = [
+      for (final profileId in widget.profileIds)
+        ...await _database.loadPlayerMonthlyPerformance(profileId),
+    ];
+    return (stats, rankings, positions, performance);
   }
 
   Future<void> _export(PlayerStatisticsImageOrientation orientation) async {
@@ -114,7 +145,12 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
     ),
     body:
         FutureBuilder<
-          (LocalPlayerStatistics, List<LocalRanking>, List<RankingPosition>)
+          (
+            LocalPlayerStatistics,
+            List<LocalRanking>,
+            List<RankingPosition>,
+            List<PlayerMonthlyPerformance>,
+          )
         >(
           future: _future,
           builder: (context, snapshot) {
@@ -136,10 +172,13 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
             final stats = data.$1;
             final rankings = data.$2;
             final positions = data.$3;
+            final performance = data.$4;
             final performanceCounts = {
-              for (final type in BestPerformanceType.values)
+              for (final type in BestPerformanceType.values.where(
+                (type) => type != BestPerformanceType.score170,
+              ))
                 type: stats.bestPerformances
-                    .where((item) => item.type == type)
+                    .where((item) => item.normalizedType == type)
                     .length,
             };
             return AdaptiveContentList(
@@ -244,6 +283,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                     ),
                   ],
                 ),
+                PlayerPerformanceSection(performance: performance),
                 const SizedBox(height: 20),
                 Text(
                   'Bestleistungen',
@@ -254,14 +294,24 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   runSpacing: 12,
                   children: [
                     _StatCard(
-                      label: '170+ Aufnahmen',
+                      label: '170 (Big Fish)',
                       value:
-                          '${performanceCounts[BestPerformanceType.score170]}',
+                          '${performanceCounts[BestPerformanceType.bigFish170]}',
+                    ),
+                    _StatCard(
+                      label: '171+ Aufnahmen',
+                      value:
+                          '${performanceCounts[BestPerformanceType.score171Plus]}',
                     ),
                     _StatCard(
                       label: '180+ Aufnahmen',
                       value:
                           '${performanceCounts[BestPerformanceType.score180]}',
+                    ),
+                    _StatCard(
+                      label: 'Bullseye Finishes',
+                      value:
+                          '${performanceCounts[BestPerformanceType.bullseyeFinish]}',
                     ),
                     _StatCard(
                       label: 'High Finish (100+)',

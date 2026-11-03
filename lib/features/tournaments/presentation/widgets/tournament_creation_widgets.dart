@@ -13,9 +13,7 @@ class _KnockoutPreview extends StatelessWidget {
     required this.slotOrder,
     required this.participantLabels,
     required this.allowCrossSeed,
-    required this.drawOnStart,
     required this.onSeedingModeChanged,
-    required this.onDrawOnStartChanged,
     required this.onSwapSlot,
     required this.onResetSlots,
   });
@@ -29,9 +27,7 @@ class _KnockoutPreview extends StatelessWidget {
   final List<int?> slotOrder;
   final List<String> participantLabels;
   final bool allowCrossSeed;
-  final bool drawOnStart;
   final ValueChanged<String> onSeedingModeChanged;
-  final ValueChanged<bool> onDrawOnStartChanged;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
   final VoidCallback onResetSlots;
 
@@ -97,19 +93,6 @@ class _KnockoutPreview extends StatelessWidget {
             avatar: Icon(Icons.shuffle, size: 18),
             label: Text('Zufall'),
           ),
-        if (effectiveSeedingMode == 'random') ...[
-          const SizedBox(height: 8),
-          SwitchListTile(
-            key: const ValueKey('knockout-draw-on-start-switch'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Auslosungsrad beim Turnierstart'),
-            subtitle: const Text(
-              'Die Positionen werden erst ausgelost, wenn du das Turnier anlegst.',
-            ),
-            value: drawOnStart,
-            onChanged: onDrawOnStartChanged,
-          ),
-        ],
         if (effectiveSeedingMode == 'cross' && byeCount > 0) ...[
           const SizedBox(height: 8),
           Text(
@@ -250,77 +233,80 @@ class _TripleEliminationPreview extends StatelessWidget {
     ];
     final finalMatches = _matchesWithLabel(rounds, _tripleFinalLabel);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var lossCount = 0; lossCount < lossLimit; lossCount++) ...[
-          _BracketBandTitle(title: _lossLevelBracketLabel(lossCount)),
+    return TripleKoPreviewSections(
+      phases: [
+        for (var lossCount = 0; lossCount < lossLimit; lossCount++)
+          TripleKoPreviewPhase(
+            title: _lossLevelBracketLabel(lossCount),
+            roundCount: lossRounds[lossCount].length,
+            encounterCount: lossRounds[lossCount].fold<int>(
+              0,
+              (total, round) => total + round.length,
+            ),
+            child: _BracketTreeLayout(
+              totalRounds: lossRounds[lossCount].length,
+              roundTitles: [
+                for (
+                  var roundNumber = 1;
+                  roundNumber <= lossRounds[lossCount].length;
+                  roundNumber++
+                )
+                  _bracketRoundTitle(
+                    roundNumber - 1,
+                    lossRounds[lossCount].length,
+                  ),
+              ],
+              roundCards: [
+                for (
+                  var roundIndex = 0;
+                  roundIndex < lossRounds[lossCount].length;
+                  roundIndex++
+                )
+                  _previewCardsFor(
+                    lossRounds[lossCount][roundIndex],
+                    rounds,
+                    matchNumbers,
+                    sourceLabels,
+                    roundIndex: roundIndex,
+                    totalRounds: lossRounds[lossCount].length,
+                  ),
+              ],
+              roundMatches: lossRounds[lossCount],
+              sourceMatches: sourceMatches,
+              columnWidth: 170,
+              cardHeight: _previewBracketCardHeight,
+              firstRoundGap: 10,
+              useBalancedColumnLayout: true,
+            ),
+          ),
+      ],
+      finalChild: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _BracketBandTitle(title: 'Finale'),
           const SizedBox(height: 8),
           _BracketTreeLayout(
-            totalRounds: lossRounds[lossCount].length,
-            roundTitles: [
-              for (
-                var roundNumber = 1;
-                roundNumber <= lossRounds[lossCount].length;
-                roundNumber++
-              )
-                lossCount == 0
-                    ? _bracketRoundTitle(
-                        roundNumber - 1,
-                        lossRounds[lossCount].length,
-                      )
-                    : _bracketRoundTitle(
-                        roundNumber - 1,
-                        lossRounds[lossCount].length,
-                      ),
-            ],
+            totalRounds: 1,
+            roundTitles: const ['Finale'],
             roundCards: [
-              for (
-                var roundIndex = 0;
-                roundIndex < lossRounds[lossCount].length;
-                roundIndex++
-              )
-                _previewCardsFor(
-                  lossRounds[lossCount][roundIndex],
-                  rounds,
-                  matchNumbers,
-                  sourceLabels,
-                  roundIndex: roundIndex,
-                  totalRounds: lossRounds[lossCount].length,
-                ),
+              _previewCardsFor(
+                finalMatches,
+                rounds,
+                matchNumbers,
+                sourceLabels,
+                roundIndex: 0,
+                totalRounds: 1,
+              ),
             ],
-            roundMatches: lossRounds[lossCount],
+            roundMatches: [finalMatches],
             sourceMatches: sourceMatches,
             columnWidth: 170,
             cardHeight: _previewBracketCardHeight,
             firstRoundGap: 10,
             useBalancedColumnLayout: true,
           ),
-          const SizedBox(height: 16),
         ],
-        const _BracketBandTitle(title: 'Finale'),
-        const SizedBox(height: 8),
-        _BracketTreeLayout(
-          totalRounds: 1,
-          roundTitles: const ['Finale'],
-          roundCards: [
-            _previewCardsFor(
-              finalMatches,
-              rounds,
-              matchNumbers,
-              sourceLabels,
-              roundIndex: 0,
-              totalRounds: 1,
-            ),
-          ],
-          roundMatches: [finalMatches],
-          sourceMatches: sourceMatches,
-          columnWidth: 170,
-          cardHeight: _previewBracketCardHeight,
-          firstRoundGap: 10,
-          useBalancedColumnLayout: true,
-        ),
-      ],
+      ),
     );
   }
 
@@ -1221,9 +1207,7 @@ class _InheritedKnockoutSetup extends StatelessWidget {
     required this.slotOrder,
     required this.participantLabels,
     required this.allowCrossSeed,
-    required this.drawOnStart,
     required this.onSeedingModeChanged,
-    required this.onDrawOnStartChanged,
     required this.onSwapSlot,
     required this.onResetSlots,
   });
@@ -1239,9 +1223,7 @@ class _InheritedKnockoutSetup extends StatelessWidget {
   final List<int?> slotOrder;
   final List<String> participantLabels;
   final bool allowCrossSeed;
-  final bool drawOnStart;
   final ValueChanged<String> onSeedingModeChanged;
-  final ValueChanged<bool> onDrawOnStartChanged;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
   final VoidCallback onResetSlots;
 
@@ -1276,9 +1258,7 @@ class _InheritedKnockoutSetup extends StatelessWidget {
           slotOrder: slotOrder,
           participantLabels: participantLabels,
           allowCrossSeed: allowCrossSeed,
-          drawOnStart: drawOnStart,
           onSeedingModeChanged: onSeedingModeChanged,
-          onDrawOnStartChanged: onDrawOnStartChanged,
           onSwapSlot: onSwapSlot,
           onResetSlots: onResetSlots,
         ),
@@ -1290,12 +1270,14 @@ class _InheritedKnockoutSetup extends StatelessWidget {
 class _StageList extends StatelessWidget {
   const _StageList({
     required this.stages,
+    required this.boardCount,
     required this.editingStageIndex,
     required this.onEditStage,
     required this.onRemoveStage,
   });
 
   final List<TournamentStage> stages;
+  final int boardCount;
   final int? editingStageIndex;
   final void Function(int index) onEditStage;
   final void Function(int index) onRemoveStage;
@@ -1327,6 +1309,14 @@ class _StageList extends StatelessWidget {
   }
 
   int _stageMatchCount(TournamentStage stage) {
+    if (stage.type == 'kratzer') {
+      return const KratzerEngine().estimatedGameCount(
+        playerCount: stage.knockoutParticipantCount ?? 0,
+        lives: stage.lossLimit,
+        boards: boardCount,
+        playersPerBoard: stage.kratzerPlayersPerBoard,
+      );
+    }
     if (_isKnockoutStageType(stage.type)) {
       return _eliminationMatchEstimate(
             stage.knockoutParticipantCount ?? 0,
@@ -1391,6 +1381,16 @@ class _StageList extends StatelessWidget {
   }
 
   String _stageDetails(TournamentStage stage) {
+    if (stage.type == 'kratzer') {
+      final playersPerBoard = stage.kratzerPlayersPerBoard;
+      return '${_typeLabel(stage.type)} - '
+          '${stage.knockoutParticipantCount ?? 0} Teilnehmende, '
+          '${stage.lossLimit} Leben, '
+          '${playersPerBoard == null ? 'gleichmäßig auf Boards verteilt' : '$playersPerBoard Spieler pro Board'}'
+          '${stage.kratzerPreferSameScratchCount ? ', Paarung nach Lebensstand' : ''}'
+          '${stage.kratzerPlayUntilElimination ? ', Gruppen bis zum Ausscheiden' : ''}'
+          '${_matchCountDetails(stage)}';
+    }
     if (stage.type != 'groups' || stage.groupSizes.isEmpty) {
       if (_isKnockoutStageType(stage.type) &&
           stage.knockoutParticipantCount != null &&
@@ -1401,10 +1401,6 @@ class _StageList extends StatelessWidget {
         final seedingText = stage.knockoutSeedingMode == 'random'
             ? ' - Zufall'
             : ' - Cross seeded';
-        final drawText = stage.knockoutDrawOnStart
-            ? ' - Auslosungsrad aktiv'
-            : '';
-
         return '${_typeLabel(stage.type)} - '
             '${stage.knockoutParticipantCount} Teilnehmer, '
             '${stage.knockoutBracketSize}er Feld, '
@@ -1416,7 +1412,6 @@ class _StageList extends StatelessWidget {
                 : ''}'
             '${stage.placementPlaces.isEmpty ? '' : ' - Platzierungsspiele: ${stage.placementPlaces.join(', ')}'}'
             '$seedingText'
-            '$drawText'
             '${_matchCountDetails(stage)}'
             '$qualifierText';
       }

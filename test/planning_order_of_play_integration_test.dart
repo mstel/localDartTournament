@@ -40,6 +40,7 @@ void main() {
             qualifiers: 0,
             boards: boards,
             matchMinutes: 25,
+            strategy: tournament.directorSchedulingStrategy,
           );
           expect(
             estimate.groupSlots,

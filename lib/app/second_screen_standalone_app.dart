@@ -8,6 +8,7 @@ import 'app_theme.dart';
 import '../features/tournaments/data/tournament_storage.dart';
 import '../features/tournaments/domain/tournament_models.dart';
 import '../features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
+import '../shared/widgets/arrow_key_dropdown_navigation.dart';
 
 CreatedTournament? resolveSecondScreenTournament(
   List<CreatedTournament> tournaments, {
@@ -39,6 +40,8 @@ class SecondScreenStandaloneApp extends StatelessWidget {
       themeMode: ThemeMode.dark,
       theme: buildDartTournamentTheme(),
       darkTheme: buildDartTournamentDarkTheme(),
+      builder: (context, child) =>
+          ArrowKeyDropdownNavigation(child: child ?? const SizedBox.shrink()),
       home: _SecondScreenStandalonePage(tournamentId: tournamentId),
     );
   }

@@ -1,4 +1,5 @@
 import '../../statistics/domain/best_performance.dart';
+import '../../statistics/domain/player_monthly_performance.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
@@ -10,8 +11,29 @@ class RankingYearPlayerStats {
   int bestPerformances = 0,
       scores180 = 0,
       scores170 = 0,
+      scores171Plus = 0,
       shortLegs = 0,
-      highFinishes = 0;
+      highFinishes = 0,
+      bullseyeFinishes = 0;
+  double? highestAverage;
+  double? highestScoring;
+  double? highestCheckoutRate;
+}
+
+class RankingMonthlyClubPerformance {
+  const RankingMonthlyClubPerformance({
+    required this.month,
+    required this.weightedLegs,
+    required this.scoring,
+    required this.average,
+    required this.checkoutRate,
+  });
+
+  final int month;
+  final int weightedLegs;
+  final double? scoring;
+  final double? average;
+  final double? checkoutRate;
 }
 
 class RankingYearReview {
@@ -22,6 +44,7 @@ class RankingYearReview {
     this.tournaments, {
     this.yearlyTournaments = const {},
     this.profileIds = const {},
+    this.monthlyClubPerformance = const [],
   });
   final int? year;
   final int tournaments;
@@ -29,6 +52,7 @@ class RankingYearReview {
   final List<int> monthlyTournaments;
   final Map<int, int> yearlyTournaments;
   final Map<String, String> profileIds;
+  final List<RankingMonthlyClubPerformance> monthlyClubPerformance;
   int get totalLegs =>
       players.values.fold(0, (sum, player) => sum + player.legsWon);
   int get totalBestPerformances =>
@@ -37,10 +61,14 @@ class RankingYearReview {
       players.values.fold(0, (sum, player) => sum + player.scores180);
   int get total170 =>
       players.values.fold(0, (sum, player) => sum + player.scores170);
+  int get total171Plus =>
+      players.values.fold(0, (sum, player) => sum + player.scores171Plus);
   int get totalShortLegs =>
       players.values.fold(0, (sum, player) => sum + player.shortLegs);
   int get totalHighFinishes =>
       players.values.fold(0, (sum, player) => sum + player.highFinishes);
+  int get totalBullseyeFinishes =>
+      players.values.fold(0, (sum, player) => sum + player.bullseyeFinishes);
 }
 
 class RankingYearReviewService {
@@ -60,13 +88,38 @@ class RankingYearReviewService {
         entry.value.trim().toLowerCase(): entry.key,
     };
     final stats = {for (final id in roster) id: RankingYearPlayerStats()};
+    final monthlyPerformance = await db.loadPlayerMonthlyPerformanceForPlayers(
+      roster,
+      year: year,
+    );
+    final monthlyClubPerformance = _monthlyClubPerformance(monthlyPerformance);
+    for (final performance in monthlyPerformance) {
+      final playerStats = stats[performance.playerId];
+      if (playerStats == null) continue;
+      playerStats.highestAverage = _maximum(
+        playerStats.highestAverage,
+        performance.average,
+      );
+      playerStats.highestScoring = _maximum(
+        playerStats.highestScoring,
+        performance.scoring,
+      );
+      playerStats.highestCheckoutRate = _maximum(
+        playerStats.highestCheckoutRate,
+        performance.checkoutRate,
+      );
+    }
     final monthly = List<int>.filled(12, 0);
     final yearly = <int, int>{};
     var tournamentCount = 0;
     final tournaments = await (tournamentStorage ?? TournamentStorage())
         .loadTournaments();
     for (final tournament in tournaments) {
-      final date = (tournament.finishedAt ?? tournament.createdAt).toLocal();
+      final date =
+          (tournament.tournamentDate ??
+                  tournament.finishedAt ??
+                  tournament.createdAt)
+              .toLocal();
       if (year != null && date.year != year) continue;
       if (!ranking.includesTournamentDate(date) ||
           !tournament.countsForRanking ||
@@ -102,13 +155,18 @@ class RankingYearReviewService {
           if (id == null || !stats.containsKey(id)) continue;
           final player = stats[id]!;
           player.bestPerformances++;
-          switch (performance.type) {
+          switch (performance.normalizedType) {
             case BestPerformanceType.score180:
               player.scores180++;
-            case BestPerformanceType.score170:
+            case BestPerformanceType.bigFish170:
               player.scores170++;
+            case BestPerformanceType.score171Plus ||
+                BestPerformanceType.score170:
+              player.scores171Plus++;
             case BestPerformanceType.highFinish:
               player.highFinishes++;
+            case BestPerformanceType.bullseyeFinish:
+              player.bullseyeFinishes++;
             case BestPerformanceType.shortLeg:
               player.shortLegs++;
           }
@@ -140,13 +198,18 @@ class RankingYearReviewService {
             if (id == null || !stats.containsKey(id)) continue;
             final player = stats[id]!;
             player.bestPerformances++;
-            switch (performance.type) {
+            switch (performance.normalizedType) {
               case BestPerformanceType.score180:
                 player.scores180++;
-              case BestPerformanceType.score170:
+              case BestPerformanceType.bigFish170:
                 player.scores170++;
+              case BestPerformanceType.score171Plus ||
+                  BestPerformanceType.score170:
+                player.scores171Plus++;
               case BestPerformanceType.highFinish:
                 player.highFinishes++;
+              case BestPerformanceType.bullseyeFinish:
+                player.bullseyeFinishes++;
               case BestPerformanceType.shortLeg:
                 player.shortLegs++;
             }
@@ -173,7 +236,48 @@ class RankingYearReviewService {
       tournamentCount,
       yearlyTournaments: yearly,
       profileIds: mappedProfileIds,
+      monthlyClubPerformance: monthlyClubPerformance,
     );
+  }
+
+  List<RankingMonthlyClubPerformance> _monthlyClubPerformance(
+    Iterable<PlayerMonthlyPerformance> performances,
+  ) {
+    final byMonth = <int, List<PlayerMonthlyPerformance>>{};
+    for (final performance in performances) {
+      if (performance.weightedLegs <= 0 ||
+          performance.month < 1 ||
+          performance.month > 12) {
+        continue;
+      }
+      byMonth.putIfAbsent(performance.month, () => []).add(performance);
+    }
+
+    double? mean(Iterable<double?> values) {
+      final present = values.whereType<double>().toList();
+      if (present.isEmpty) return null;
+      return present.reduce((left, right) => left + right) / present.length;
+    }
+
+    return [
+      for (var month = 1; month <= 12; month++)
+        if (byMonth[month] case final monthEntries?)
+          RankingMonthlyClubPerformance(
+            month: month,
+            weightedLegs: monthEntries.fold<int>(
+              0,
+              (total, entry) => total + entry.weightedLegs,
+            ),
+            scoring: mean(monthEntries.map((entry) => entry.scoring)),
+            average: mean(monthEntries.map((entry) => entry.average)),
+            checkoutRate: mean(monthEntries.map((entry) => entry.checkoutRate)),
+          ),
+    ];
+  }
+
+  double? _maximum(double? current, double? candidate) {
+    if (candidate == null) return current;
+    return current == null || candidate > current ? candidate : current;
   }
 
   Iterable<GroupMatch> _matches(CreatedTournament tournament) sync* {

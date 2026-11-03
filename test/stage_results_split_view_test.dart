@@ -5,6 +5,74 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('director mode marks running matches on the results screen', (
+    tester,
+  ) async {
+    final stage = _groupStage();
+    final match = stage.groups.first.matches.single;
+    final tournament = _tournamentFor(stage)..directorModeEnabled = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: stage,
+              tournament: tournament,
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: true,
+              runningMatches: {match},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tile = tester.widget<MatchResultTile>(find.byType(MatchResultTile).first);
+    expect(tile.isRunning, isTrue);
+    expect(find.text('Läuft'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('recent result rows open their match for correction', (
+    tester,
+  ) async {
+    final stage = _groupStage();
+    final match = stage.groups.first.matches.single
+      ..homeLegs = 3
+      ..awayLegs = 1
+      ..finishedAt = DateTime(2026, 11, 1, 10);
+    final tournament = _tournamentFor(stage);
+    GroupMatch? openedMatch;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: stage,
+              tournament: tournament,
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: true,
+              initialFilter: MatchCategoryFilter.finished,
+              onOpenMatch: (selected) => openedMatch = selected,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final recentRow = find.textContaining('besiegte');
+    expect(recentRow, findsOneWidget);
+    await tester.ensureVisible(recentRow);
+    await tester.tap(recentRow);
+    await tester.pumpAndSettle();
+
+    expect(identical(openedMatch, match), isTrue);
+  });
+
   testWidgets('group results use two compact, round-free columns on desktop', (
     tester,
   ) async {
@@ -39,9 +107,86 @@ void main() {
     for (final tile in tester.widgetList<MatchResultTile>(
       find.byType(MatchResultTile),
     )) {
+      expect(tester.getSize(find.byWidget(tile)).height, lessThan(60));
+    }
+    for (final tile in tester.widgetList<MatchResultTile>(
+      find.byType(MatchResultTile),
+    )) {
       expect(tile.compact, isTrue);
       expect(tile.showRoundLabel, isFalse);
     }
+    final card = tester.widget<Container>(
+      find.byKey(const ValueKey('match-result-tile-1-Spieler A-Spieler B')),
+    );
+    final cardDecoration = card.decoration! as BoxDecoration;
+    expect(cardDecoration.color, isNotNull);
+    expect(cardDecoration.borderRadius, BorderRadius.circular(8));
+    expect(find.byTooltip('Ergebnis eingeben'), findsNWidgets(2));
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('eight groups use four result columns on wide desktop', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final stage = _groupStage();
+    final template = stage.groups.first;
+    final multiGroupStage = GroupTournamentRunStage(
+      name: stage.name,
+      groupPlayType: stage.groupPlayType,
+      qualificationPlan: stage.qualificationPlan,
+      tieBreakers: stage.tieBreakers,
+      groups: [
+        for (var index = 0; index < 8; index++)
+          TournamentGroup(
+            name: 'Gruppe ${String.fromCharCode(65 + index)}',
+            playType: template.playType,
+            players: template.players,
+            matches: [
+              for (var matchIndex = 0; matchIndex < 8; matchIndex++)
+                GroupMatch(
+                  homePlayer: template.players[0],
+                  awayPlayer: template.players[1],
+                  round: matchIndex + 1,
+                ),
+            ],
+          ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: multiGroupStage,
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final firstRow = [
+      for (final name in ['Gruppe A', 'Gruppe B', 'Gruppe C', 'Gruppe D'])
+        tester.getRect(find.text(name).first),
+    ];
+    expect(
+      firstRow.every(
+        (rect) => (rect.center.dy - firstRow.first.center.dy).abs() < 4,
+      ),
+      isTrue,
+      reason: '$firstRow',
+    );
+    expect(firstRow.first.center.dx, lessThan(firstRow.last.center.dx));
+    expect(find.byType(MatchResultTile), findsNWidgets(64));
     expect(tester.takeException(), isNull);
   });
 
@@ -149,13 +294,7 @@ void main() {
       greaterThan(300),
     );
     expect(
-      tester
-          .getRect(
-            find
-                .descendant(of: tiles.first, matching: find.byType(IconButton))
-                .first,
-          )
-          .height,
+      tester.getRect(find.byTooltip('Ergebnis eingeben').first).height,
       greaterThanOrEqualTo(48),
     );
 
@@ -164,7 +303,7 @@ void main() {
     expect(find.text('Spiele von Spieler 1'), findsOneWidget);
     expect(find.byType(MatchResultTile), findsNWidgets(5));
 
-    await tester.tap(find.byTooltip('Ergebnis').first);
+    await tester.tap(find.byTooltip('Ergebnis eingeben').first);
     await tester.pumpAndSettle();
     expect(find.text('Spiele von Spieler 1'), findsNothing);
     expect(find.byType(MatchResultTile), findsNWidgets(14));
@@ -225,7 +364,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        final previewButton = find.text('Vorschau nächste Etappe');
+        final previewButton = find.text('KO Baum öffnen');
         await tester.ensureVisible(previewButton);
         await tester.tap(previewButton);
         await tester.pumpAndSettle();
@@ -241,6 +380,14 @@ void main() {
     }
   });
 }
+
+CreatedTournament _tournamentFor(GroupTournamentRunStage stage) =>
+    CreatedTournament(
+      name: 'Ergebnis-Test',
+      players: stage.groups.expand((group) => group.players).toList(),
+      stages: const [],
+      runStages: [stage],
+    );
 
 GroupTournamentRunStage _groupStage() {
   final players = [

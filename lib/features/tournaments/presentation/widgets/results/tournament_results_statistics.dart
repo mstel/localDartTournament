@@ -38,10 +38,14 @@ class TournamentResultsStatistics extends StatelessWidget {
         AdaptiveTileLayout(
           minTileWidth: 190,
           children: [
-            for (final type in BestPerformanceType.values)
+            for (final type in BestPerformanceType.values.where(
+              (type) => type != BestPerformanceType.score170,
+            ))
               _PerformanceCountCard(
                 type: type,
-                count: performances.where((item) => item.type == type).length,
+                count: performances
+                    .where((item) => item.normalizedType == type)
+                    .length,
               ),
           ],
         ),
@@ -53,7 +57,9 @@ class TournamentResultsStatistics extends StatelessWidget {
               leading: const Icon(Icons.military_tech_outlined),
               title: Text('${performance.playerName} · ${performance.label}'),
               trailing: performance.value == null
-                  ? null
+                  ? (performance.details == null
+                        ? null
+                        : Text(performance.details!))
                   : Text('${performance.value}'),
             ),
         ],
@@ -86,9 +92,12 @@ class _PerformanceCountCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(switch (type) {
-            BestPerformanceType.score170 => '170+',
+            BestPerformanceType.bigFish170 => '170 (Big Fish)',
+            BestPerformanceType.score171Plus ||
+            BestPerformanceType.score170 => '171+',
             BestPerformanceType.score180 => '180+',
             BestPerformanceType.highFinish => 'High Finishes',
+            BestPerformanceType.bullseyeFinish => 'Bullseye Finishes',
             BestPerformanceType.shortLeg => 'Shortlegs',
           }),
           const SizedBox(height: 6),

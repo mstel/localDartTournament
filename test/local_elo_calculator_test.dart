@@ -81,6 +81,29 @@ void main() {
   });
 
   test(
+    'manual tournament date controls ranking year and match history date',
+    () {
+      final datedTournament = tournament(
+        'historical-tournament',
+        DateTime(2026, 8),
+        'a',
+        'b',
+      )..tournamentDate = DateTime(2019, 6, 12);
+
+      final snapshot = calculator.calculate(
+        players: const {'a': 'Anna', 'b': 'Ben'},
+        tournaments: [datedTournament],
+        rankingId: 'season',
+        validFromYear: 2019,
+        validToYear: 2019,
+      );
+
+      expect(snapshot.entries.every((player) => player.matches == 1), isTrue);
+      expect(snapshot.history['a']!.single.playedAt, DateTime(2019, 6, 12));
+    },
+  );
+
+  test(
     'exposes exact ranked deltas for the corresponding tournament match',
     () {
       final ranked = tournament(

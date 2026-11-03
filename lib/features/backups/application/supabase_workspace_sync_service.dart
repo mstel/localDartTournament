@@ -22,8 +22,7 @@ class SupabaseWorkspaceSyncService {
     defaultValue: false,
   );
 
-  SupabaseWorkspaceSyncService._()
-    : _repository = SupabaseBackupRepository();
+  SupabaseWorkspaceSyncService._() : _repository = SupabaseBackupRepository();
 
   SupabaseWorkspaceSyncService({SupabaseBackupRepository? repository})
     : _repository = repository ?? SupabaseBackupRepository();
@@ -344,7 +343,9 @@ class SupabaseWorkspaceSyncService {
         });
         status.value = 'Aktueller Datenstand aus Supabase geladen';
       } else {
-        if (!await _repository.hasWebsiteReadModel()) {
+        if (!await _repository.hasWebsiteReadModel() ||
+            !await _repository.hasWebsiteTournamentIndex() ||
+            !await _repository.hasWebsiteResources()) {
           await _publishWebsiteReadModel();
         }
         status.value = 'Mit Supabase synchronisiert';
@@ -401,8 +402,13 @@ class SupabaseWorkspaceSyncService {
   }
 
   Future<void> _publishWebsiteReadModel() async {
-    final readModel = await WebsiteReadModelService().create();
-    await _repository.uploadWebsiteReadModel(readModel);
+    final service = WebsiteReadModelService();
+    final readModel = await service.create();
+    final resources = await service.createVersion2Resources(readModel);
+    await _repository.uploadWebsiteReadModel(
+      readModel,
+      version2Resources: resources,
+    );
   }
 
   /// User-confirmed resolution for simultaneous offline changes.

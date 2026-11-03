@@ -111,16 +111,21 @@ class _TournamentMatchStatisticsPageState
               Card(
                 child: ListTile(
                   leading: Icon(switch (performance.type) {
+                    BestPerformanceType.bigFish170 ||
+                    BestPerformanceType.score171Plus ||
                     BestPerformanceType.score170 ||
                     BestPerformanceType.score180 => Icons.bolt,
                     BestPerformanceType.highFinish => Icons.flag_outlined,
+                    BestPerformanceType.bullseyeFinish => Icons.gps_fixed,
                     BestPerformanceType.shortLeg => Icons.timer_outlined,
                   }),
                   title: Text(
                     '${performance.playerName} · ${performance.label}',
                   ),
                   trailing: performance.value == null
-                      ? null
+                      ? (performance.details == null
+                            ? null
+                            : Text(performance.details!))
                       : Text('${performance.value}'),
                 ),
               ),

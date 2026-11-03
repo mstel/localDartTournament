@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
@@ -49,6 +50,17 @@ void main() {
       );
       await database.saveLocalRanking(ranking);
       await database.setRankingPlayers(ranking.id, [player.id]);
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: player.id,
+          year: 2026,
+          month: 10,
+          weightedLegs: 18,
+          scoring: 72.5,
+          average: 51.2,
+          checkoutRate: 38.5,
+        ),
+      );
       final opponent = TournamentPlayer(name: 'Bert', isGenerated: true);
       final participant = TournamentPlayer(
         profileId: player.id,
@@ -105,10 +117,12 @@ void main() {
       await tournamentStorage.saveTournament(completed);
       await tournamentStorage.saveTournament(unfinished);
 
-      final model = await WebsiteReadModelService(
+      final service = WebsiteReadModelService(
         database: database,
         tournamentStorage: tournamentStorage,
-      ).create();
+        clock: () => DateTime(2026, 11, 3),
+      );
+      final model = await service.create();
 
       expect(model['schemaVersion'], WebsiteReadModelService.schemaVersion);
       expect(model['players'], [
@@ -147,6 +161,24 @@ void main() {
       ]);
       expect(model['completedTournaments'], hasLength(1));
       expect((model['completedTournaments'] as List).single['id'], 'finished');
+      expect(WebsiteReadModelService.createTournamentIndex(model), {
+        'schemaVersion': 1,
+        'generatedAt': model['generatedAt'],
+        'completedTournaments': [
+          {
+            'id': 'finished',
+            'name': 'Vereinsturnier',
+            'finishedAt': '2026-10-20T00:00:00.000Z',
+            'startedAt': null,
+            'createdAt':
+                (model['completedTournaments'] as List).single['createdAt'],
+            'playerCount': 2,
+            'matchCount': 1,
+            'mode': 'groups:round_robin',
+            'hasImportedArchive': false,
+          },
+        ],
+      });
       expect(model['statistics'], [
         {
           'playerId': player.id,
@@ -161,6 +193,21 @@ void main() {
           'legsDrawn': 0,
           'setsWon': 0,
           'setsLost': 0,
+          'currentForm': {
+            'weightedLegs': 18,
+            'scoring': 72.5,
+            'average': 51.2,
+            'checkoutQuote': 38.5,
+          },
+        },
+      ]);
+      expect(model['currentForm'], [
+        {
+          'playerId': player.id,
+          'weightedLegs': 18,
+          'scoring': 72.5,
+          'average': 51.2,
+          'checkoutQuote': 38.5,
         },
       ]);
       expect(model['bestPerformances'], [
@@ -172,10 +219,175 @@ void main() {
           'playerId': player.id,
         },
       ]);
+      final resources = await service.createVersion2Resources(model);
+      expect(
+        resources.keys,
+        containsAll([
+          'players',
+          'rankings',
+          'statistics',
+          'performance',
+          'tournaments:1',
+        ]),
+      );
+      expect(resources['players']!.keys, {
+        'schemaVersion',
+        'resource',
+        'generatedAt',
+        'players',
+      });
+      expect(resources['rankings']!.keys, {
+        'schemaVersion',
+        'resource',
+        'generatedAt',
+        'rankings',
+        'rankingStandings',
+      });
+      expect(resources['statistics']!.keys, {
+        'schemaVersion',
+        'resource',
+        'generatedAt',
+        'statistics',
+        'bestPerformances',
+        'currentForm',
+      });
+      expect((resources['statistics']!['currentForm'] as List).single, {
+        'playerId': player.id,
+        'weightedLegs': 18,
+        'scoring': 72.5,
+        'average': 51.2,
+        'checkoutQuote': 38.5,
+      });
+      expect(resources['performance'], {
+        'schemaVersion': 2,
+        'resource': 'performance',
+        'generatedAt': model['generatedAt'],
+        'monthlyPerformance': [
+          {
+            'playerId': player.id,
+            'period': '2026-10',
+            'year': 2026,
+            'month': 10,
+            'weightedLegs': 18,
+            'scoring': 72.5,
+            'average': 51.2,
+            'checkoutQuote': 38.5,
+          },
+        ],
+        'currentForm': [
+          {
+            'playerId': player.id,
+            'weightedLegs': 18,
+            'scoring': 72.5,
+            'average': 51.2,
+            'checkoutQuote': 38.5,
+          },
+        ],
+      });
+      expect(resources['tournaments:1']!['completedTournaments'], [
+        {
+          'id': 'finished',
+          'name': 'Vereinsturnier',
+          'finishedAt': '2026-10-20T00:00:00.000Z',
+          'startedAt': null,
+          'createdAt':
+              (model['completedTournaments'] as List).single['createdAt'],
+          'playerCount': 2,
+          'matchCount': 1,
+          'mode': 'groups:round_robin',
+          'hasImportedArchive': false,
+        },
+      ]);
       final serialized = model.toString();
       expect(serialized, isNot(contains('1990-01-01')));
       expect(serialized, isNot(contains('private-id')));
       expect(serialized, isNot(contains('dartsSetupJson')));
+    },
+  );
+
+  test(
+    'publishes the new best-performance categories and Bullseye details',
+    () async {
+      final player = await database.createPlayerProfile(
+        firstName: 'Ada',
+        lastName: 'Dart',
+        country: '',
+        city: '',
+        dartsSetupJson: '',
+      );
+      final participant = TournamentPlayer(
+        profileId: player.id,
+        name: player.displayName,
+        isGenerated: false,
+      );
+      final opponent = TournamentPlayer(name: 'Bert', isGenerated: true);
+      final tournament = CreatedTournament(
+        id: 'performance-categories',
+        name: 'Leistungsturnier',
+        players: [participant, opponent],
+        stages: const [],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppen',
+            groupPlayType: 'round_robin',
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: [participant, opponent],
+                matches: [
+                  GroupMatch(
+                    homePlayer: participant,
+                    awayPlayer: opponent,
+                    round: 1,
+                    homeLegs: 2,
+                    awayLegs: 1,
+                    bestPerformances: [
+                      BestPerformance(
+                        type: BestPerformanceType.bigFish170,
+                        playerName: player.displayName,
+                        playerProfileId: player.id,
+                      ),
+                      BestPerformance(
+                        type: BestPerformanceType.score171Plus,
+                        playerName: player.displayName,
+                        playerProfileId: player.id,
+                      ),
+                      BestPerformance(
+                        type: BestPerformanceType.bullseyeFinish,
+                        playerName: player.displayName,
+                        playerProfileId: player.id,
+                        details: 'Bullseye innen',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+            qualificationPlan: null,
+            tieBreakers: const [],
+          ),
+        ],
+        finishedAt: DateTime.utc(2026, 10, 20),
+      );
+      await tournamentStorage.saveTournament(tournament);
+
+      final model = await WebsiteReadModelService(
+        database: database,
+        tournamentStorage: tournamentStorage,
+      ).create();
+
+      final published = model['bestPerformances'] as List<Map<String, dynamic>>;
+      expect(
+        published.map((entry) => entry['type']),
+        containsAll(['bigFish170', 'score171Plus', 'bullseyeFinish']),
+      );
+      expect(
+        published.singleWhere(
+          (entry) => entry['type'] == 'bullseyeFinish',
+        )['details'],
+        'Bullseye innen',
+      );
     },
   );
 
@@ -191,4 +403,57 @@ void main() {
 
     expect(WebsiteReadModelService.completedTournaments([tournament]), isEmpty);
   });
+
+  test(
+    'publishes tournament summaries as independent versioned pages',
+    () async {
+      for (var index = 1; index <= 12; index++) {
+        await tournamentStorage.saveTournament(
+          CreatedTournament(
+            id: 'tournament-$index',
+            name: 'Turnier $index',
+            players: const [],
+            stages: const [],
+            runStages: const [],
+            finishedAt: DateTime.utc(2026, 10, index),
+          ),
+        );
+      }
+
+      final service = WebsiteReadModelService(
+        database: database,
+        tournamentStorage: tournamentStorage,
+      );
+      final model = await service.create();
+      final resources = await service.createVersion2Resources(model);
+
+      expect(resources.keys.where((key) => key.startsWith('tournaments:')), [
+        'tournaments:1',
+        'tournaments:2',
+      ]);
+      expect(
+        (resources['tournaments:1']!['completedTournaments'] as List).length,
+        10,
+      );
+      expect(
+        (resources['tournaments:1']!['tournamentPage'] as Map)['hasMore'],
+        isTrue,
+      );
+      expect(
+        (resources['tournaments:2']!['completedTournaments'] as List).length,
+        2,
+      );
+      expect(
+        (resources['tournaments:2']!['tournamentPage'] as Map)['hasMore'],
+        isFalse,
+      );
+      expect(
+        WebsiteReadModelService.version2ResourceObjectName(
+          'tournaments',
+          page: 2,
+        ),
+        'website-v2-tournaments-page-2.json',
+      );
+    },
+  );
 }

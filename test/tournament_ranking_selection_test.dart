@@ -317,6 +317,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     final button = find.widgetWithText(OutlinedButton, 'Bearbeiten');
     expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -420));
+    await tester.pumpAndSettle();
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: tester.getCenter(button));
     await mouse.moveTo(tester.getCenter(button));

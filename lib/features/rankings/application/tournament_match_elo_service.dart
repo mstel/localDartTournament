@@ -10,11 +10,19 @@ class TournamentMatchEloChange {
     required this.rankingName,
     required this.homeDelta,
     required this.awayDelta,
+    this.homeRatingBefore,
+    this.homeRatingAfter,
+    this.awayRatingBefore,
+    this.awayRatingAfter,
   });
 
   final String rankingName;
   final int? homeDelta;
   final int? awayDelta;
+  final int? homeRatingBefore;
+  final int? homeRatingAfter;
+  final int? awayRatingBefore;
+  final int? awayRatingAfter;
 }
 
 class TournamentMatchEloService {
@@ -70,6 +78,29 @@ class TournamentMatchEloService {
           if (delta == null || (delta.home == null && delta.away == null)) {
             continue;
           }
+          final matchIndex = int.tryParse(key.split(':').last);
+          final homeHistory = matchIndex == null
+              ? null
+              : snapshot
+                    .history[match.homePlayer?.profileId ??
+                        match.homePlayer?.name]
+                    ?.where(
+                      (item) =>
+                          item.tournamentId == tournament.id &&
+                          item.matchIndex == matchIndex,
+                    )
+                    .firstOrNull;
+          final awayHistory = matchIndex == null
+              ? null
+              : snapshot
+                    .history[match.awayPlayer?.profileId ??
+                        match.awayPlayer?.name]
+                    ?.where(
+                      (item) =>
+                          item.tournamentId == tournament.id &&
+                          item.matchIndex == matchIndex,
+                    )
+                    .firstOrNull;
           result
               .putIfAbsent(key, () => [])
               .add(
@@ -77,6 +108,10 @@ class TournamentMatchEloService {
                   rankingName: ranking.name,
                   homeDelta: delta.home,
                   awayDelta: delta.away,
+                  homeRatingBefore: homeHistory?.ratingBefore,
+                  homeRatingAfter: homeHistory?.ratingAfter,
+                  awayRatingBefore: awayHistory?.ratingBefore,
+                  awayRatingAfter: awayHistory?.ratingAfter,
                 ),
               );
         }

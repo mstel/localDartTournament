@@ -211,7 +211,9 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     final searchable = <String>[
       tournament.name,
       complete ? 'abgeschlossen archiv fertig' : 'bereit läuft aktiv',
-      tournament.createdAt.toLocal().toIso8601String(),
+      (tournament.tournamentDate ?? tournament.createdAt)
+          .toLocal()
+          .toIso8601String(),
       ...tournament.stages.map((stage) => stage.type),
       ...tournament.players.map((player) => player.name),
     ].join(' ').toLowerCase();
@@ -296,8 +298,16 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
               switch (_sortOption) {
                 case TournamentSortOption.date:
                   visibleTournaments.sort((a, b) {
-                    final aDate = a.startedAt ?? a.finishedAt ?? a.createdAt;
-                    final bDate = b.startedAt ?? b.finishedAt ?? b.createdAt;
+                    final aDate =
+                        a.tournamentDate ??
+                        a.startedAt ??
+                        a.finishedAt ??
+                        a.createdAt;
+                    final bDate =
+                        b.tournamentDate ??
+                        b.startedAt ??
+                        b.finishedAt ??
+                        b.createdAt;
                     return bDate.compareTo(aDate);
                   });
                   break;

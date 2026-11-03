@@ -6,10 +6,12 @@ import '../../../../../shared/widgets/sport_menu.dart';
 import 'package:flutter/material.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../application/tournament_flow_priority.dart';
+import '../../../application/tournament_flow_priority_preferences.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../../statistics/presentation/tournament_match_statistics_page.dart';
 
-class OrderOfPlaySection extends StatelessWidget {
+class OrderOfPlaySection extends StatefulWidget {
   const OrderOfPlaySection({
     super.key,
     required this.tournament,
@@ -23,14 +25,53 @@ class OrderOfPlaySection extends StatelessWidget {
   final Future<void> Function(GroupMatch) onResult;
 
   @override
+  State<OrderOfPlaySection> createState() => _OrderOfPlaySectionState();
+}
+
+class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
+  TournamentFlowPrioritySettings _prioritySettings =
+      TournamentFlowPriority.defaultSettings;
+  String? _prioritySettingsError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrioritySettings();
+  }
+
+  Future<void> _loadPrioritySettings() async {
+    try {
+      final settings = await TournamentFlowPriorityPreferences().load();
+      if (!mounted) return;
+      setState(() {
+        _prioritySettings = settings;
+        _prioritySettingsError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _prioritySettingsError =
+            'Hinweiseinstellungen konnten nicht geladen werden: $error',
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     const controller = OrderOfPlayController();
+    final tournament = widget.tournament;
+    final activeStage = widget.activeStage;
+    final onChange = widget.onChange;
+    final onResult = widget.onResult;
     final schedule = controller.plan(tournament, activeStage);
     final activeStageData =
         activeStage >= 0 && activeStage < tournament.runStages.length
         ? tournament.runStages[activeStage]
         : null;
-    final flowPriority = TournamentFlowPriority.forStage(activeStageData);
+    final flowPriority = TournamentFlowPriority.forStage(
+      activeStageData,
+      settings: _prioritySettings,
+    );
     final occupied = {for (final e in schedule.running) e.match.boardNumber};
     Widget title(String text) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -148,6 +189,13 @@ class OrderOfPlaySection extends StatelessWidget {
             Text(
               '${schedule.running.length} laufend · ${schedule.planned.length} eingeplant · ${schedule.finished.length} erledigt',
             ),
+            if (_prioritySettingsError case final error?) ...[
+              const SizedBox(height: 8),
+              Text(
+                error,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
               isExpanded: true,

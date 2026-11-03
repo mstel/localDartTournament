@@ -74,6 +74,20 @@ void main() {
       expect(matchChanges, hasLength(1));
       expect(matchChanges.single.homeDelta, greaterThan(0));
       expect(matchChanges.single.awayDelta, lessThan(0));
+      expect(matchChanges.single.homeRatingBefore, isNotNull);
+      expect(matchChanges.single.homeRatingAfter, isNotNull);
+      expect(
+        matchChanges.single.homeRatingAfter! -
+            matchChanges.single.homeRatingBefore!,
+        matchChanges.single.homeDelta,
+      );
+      expect(matchChanges.single.awayRatingBefore, isNotNull);
+      expect(matchChanges.single.awayRatingAfter, isNotNull);
+      expect(
+        matchChanges.single.awayRatingAfter! -
+            matchChanges.single.awayRatingBefore!,
+        matchChanges.single.awayDelta,
+      );
     },
   );
 }

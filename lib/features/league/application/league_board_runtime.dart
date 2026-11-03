@@ -13,9 +13,17 @@ class LeagueBoardRuntime {
         for (final i in indexes)
           if (source.players.length > offset + i &&
               source.players[offset + i].name == names[i])
-            source.players[offset + i].copyWith(profileId: source.players[offset + i].profileId ?? 'league:${source.id}:$side:$i')
+            source.players[offset + i].copyWith(
+              profileId:
+                  source.players[offset + i].profileId ??
+                  'league:${source.id}:$side:$i',
+            )
           else
-            TournamentPlayer(name: names[i], profileId: 'league:${source.id}:$side:$i', isGenerated: false),
+            TournamentPlayer(
+              name: names[i],
+              profileId: 'league:${source.id}:$side:$i',
+              isGenerated: false,
+            ),
       ];
       return people.length == 1 ? people.single : TournamentPlayer.team(people);
     }
@@ -29,6 +37,8 @@ class LeagueBoardRuntime {
           'awayPlayer': entrant(1, league.games[i].away).toJson(),
           'homeLegs': league.games[i].homeLegs,
           'awayLegs': league.games[i].awayLegs,
+          'homeSets': league.games[i].homeSets,
+          'awaySets': league.games[i].awaySets,
         }),
     ];
     tournament = CreatedTournament(
@@ -38,11 +48,11 @@ class LeagueBoardRuntime {
       rankingIds: source.rankingIds,
       boardCount: source.boardCount,
       players: source.players,
-      stages: const [
+      stages: [
         TournamentStage(
           name: 'Ligaspiel',
           type: 'groups',
-          gameFormat: TournamentGameFormat(bestOfLegs: 5),
+          gameFormat: league.gameFormat,
         ),
       ],
       runStages: [
@@ -66,13 +76,41 @@ class LeagueBoardRuntime {
   }
   late final CreatedTournament tournament;
   late final List<GroupMatch> matches;
+  void installOn(CreatedTournament target) {
+    target.stages
+      ..clear()
+      ..addAll(tournament.stages);
+    target.runStages
+      ..clear()
+      ..addAll(tournament.runStages);
+    target.completedStageIndexes
+      ..clear()
+      ..addAll(tournament.completedStageIndexes);
+    target.activeStageIndex = 0;
+  }
+
   BoardSchedule get schedule =>
       const OrderOfPlayController().plan(tournament, 0);
   void writeTo(CreatedTournament target) {
     for (var i = 0; i < matches.length; i++) {
       final game = target.leagueMatch!.games[i];
-      game.score(matches[i].homeLegs, matches[i].awayLegs);
-      game.runtime = matches[i].toJson();
+      final match = matches[i];
+      if (target.leagueMatch!.gameFormat.bestOfSets > 1) {
+        game.score(
+          match.homeSets,
+          match.awaySets,
+          format: target.leagueMatch!.gameFormat,
+          legsHome: match.homeLegs,
+          legsAway: match.awayLegs,
+        );
+      } else {
+        game.score(
+          match.homeLegs,
+          match.awayLegs,
+          format: target.leagueMatch!.gameFormat,
+        );
+      }
+      game.runtime = match.toJson();
     }
   }
 }

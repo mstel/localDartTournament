@@ -10,17 +10,21 @@ import '../domain/local_elo_calculator.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
+import '../../tournaments/application/tournament_activity_logger.dart';
 import '../application/local_ranking_elo_service.dart';
 import '../application/local_ranking_series_service.dart';
 import '../application/ranking_year_review_service.dart';
 import '../domain/local_ranking.dart';
 import '../domain/elo_tier.dart';
 import 'widgets/elo_trajectory_chart.dart';
+import 'widgets/ranking_monthly_club_performance_section.dart';
 
 import '../../statistics/domain/best_performance.dart';
 import '../../statistics/domain/local_statistics.dart';
 import '../../statistics/presentation/local_player_statistics_page.dart';
 import '../../statistics/presentation/widgets/structured_best_performances_view.dart';
+import '../../statistics/domain/player_monthly_performance.dart';
+import '../../statistics/presentation/widgets/player_performance_trend_chart.dart';
 
 class RankingsPage extends StatefulWidget {
   const RankingsPage({super.key, LocalAppDatabase? database})
@@ -64,6 +68,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
   int? _year = DateTime.now().year;
   Future<RankingYearReview>? _rankingReview;
   Future<LocalPlayerStatistics>? _playerReview;
+  Future<List<PlayerMonthlyPerformance>>? _playerPerformance;
   bool _exporting = false;
 
   void _selectRanking(LocalRanking? ranking) {
@@ -94,6 +99,9 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
               database: _database,
               storage: _tournamentStorage,
             ).forPlayers({player.id}, year: _year);
+      _playerPerformance = player == null
+          ? null
+          : _database.loadPlayerMonthlyPerformance(player.id, year: _year);
     });
   }
 
@@ -107,9 +115,14 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
         );
       }
       if (_selectedPlayer != null) {
-        _playerReview = const LocalStatisticsService().forPlayers({
+        _playerReview = LocalStatisticsService(
+          database: _database,
+          storage: _tournamentStorage,
+        ).forPlayers({_selectedPlayer!.id}, year: year);
+        _playerPerformance = _database.loadPlayerMonthlyPerformance(
           _selectedPlayer!.id,
-        }, year: year);
+          year: year,
+        );
       }
     });
   }
@@ -282,7 +295,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                         children: [
                           const SizedBox(height: 8),
                           Text(
-                            '${review.tournaments} Turniere · ${review.totalLegs} Legs · ${review.totalBestPerformances} Bestleistungen · ${review.total180} × 180+ · ${review.total170} × 170+ · ${review.totalShortLegs} Shortlegs · ${review.totalHighFinishes} High Finishes',
+                            '${review.tournaments} Turniere · ${review.totalLegs} Legs · ${review.totalBestPerformances} Bestleistungen · ${review.total180} × 180+ · ${review.total170} × Big Fish · ${review.total171Plus} × 171+ · ${review.totalShortLegs} Shortlegs · ${review.totalHighFinishes} High Finishes · ${review.totalBullseyeFinishes} Bullseye Finishes',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 12),
@@ -339,6 +352,10 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                   (a, b) => a > b ? a : b,
                                 ),
                               ),
+                            const SizedBox(height: 16),
+                            RankingMonthlyClubPerformanceSection(
+                              monthlyPerformance: review.monthlyClubPerformance,
+                            ),
                           ] else ...[
                             Text(
                               'Turniere pro Jahr',
@@ -409,9 +426,23 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                             year: _year,
                           ),
                           _ReviewLeaders(
-                            title: 'Meiste 170+',
+                            title: 'Meiste 170 (Big Fish)',
                             rows: rows,
                             metric: (s) => s.scores170,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Meiste 171+',
+                            rows: rows,
+                            metric: (s) => s.scores171Plus,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Meiste Bullseye Finishes',
+                            rows: rows,
+                            metric: (s) => s.bullseyeFinishes,
                             profileIds: review.profileIds,
                             year: _year,
                           ),
@@ -426,6 +457,34 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                             title: 'Meiste High Finishes',
                             rows: rows,
                             metric: (s) => s.highFinishes,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Höchster Average',
+                            rows: rows,
+                            metric: (s) => s.highestAverage,
+                            formatMetric: (value) => value.toStringAsFixed(1),
+                            includeZero: true,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Höchstes Scoring',
+                            rows: rows,
+                            metric: (s) => s.highestScoring,
+                            formatMetric: (value) => value.toStringAsFixed(1),
+                            includeZero: true,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Höchste Checkout-Quote',
+                            rows: rows,
+                            metric: (s) => s.highestCheckoutRate,
+                            formatMetric: (value) =>
+                                '${value.toStringAsFixed(1)} %',
+                            includeZero: true,
                             profileIds: review.profileIds,
                             year: _year,
                           ),
@@ -493,9 +552,11 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                       final stats = data.data!;
                       final p = _selectedPlayer!;
                       final performanceCounts = {
-                        for (final type in BestPerformanceType.values)
+                        for (final type in BestPerformanceType.values.where(
+                          (type) => type != BestPerformanceType.score170,
+                        ))
                           type: stats.bestPerformances
-                              .where((item) => item.type == type)
+                              .where((item) => item.normalizedType == type)
                               .length,
                       };
                       return Column(
@@ -544,9 +605,24 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                     '${performanceCounts[BestPerformanceType.score180]}',
                               ),
                               _StatMiniCard(
+                                label: '170 (Big Fish)',
+                                value:
+                                    '${performanceCounts[BestPerformanceType.bigFish170]}',
+                              ),
+                              _StatMiniCard(
+                                label: '171+ Aufnahmen',
+                                value:
+                                    '${performanceCounts[BestPerformanceType.score171Plus]}',
+                              ),
+                              _StatMiniCard(
                                 label: 'High Finishes (100+)',
                                 value:
                                     '${performanceCounts[BestPerformanceType.highFinish]}',
+                              ),
+                              _StatMiniCard(
+                                label: 'Bullseye Finishes',
+                                value:
+                                    '${performanceCounts[BestPerformanceType.bullseyeFinish]}',
                               ),
                               _StatMiniCard(
                                 label: 'Shortlegs (≤18)',
@@ -558,6 +634,82 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                           StructuredBestPerformancesView(
                             bestPerformances: stats.bestPerformances,
                           ),
+                          if (_playerPerformance case final performance?)
+                            FutureBuilder<List<PlayerMonthlyPerformance>>(
+                              future: performance,
+                              builder: (context, performanceSnapshot) {
+                                if (performanceSnapshot.hasError) {
+                                  return const Text(
+                                    'Performance-Entwicklung konnte nicht geladen werden.',
+                                  );
+                                }
+                                if (!performanceSnapshot.hasData) {
+                                  return const SizedBox.shrink();
+                                }
+                                final entries = performanceSnapshot.data!;
+                                final highestAverage = _maximumPerformanceValue(
+                                  entries.map((entry) => entry.average),
+                                );
+                                final highestScoring = _maximumPerformanceValue(
+                                  entries.map((entry) => entry.scoring),
+                                );
+                                final highestCheckoutRate =
+                                    _maximumPerformanceValue(
+                                      entries.map(
+                                        (entry) => entry.checkoutRate,
+                                      ),
+                                    );
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      'Monatsbestwerte',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      children: [
+                                        _StatMiniCard(
+                                          label: 'Höchster Average',
+                                          value:
+                                              highestAverage?.toStringAsFixed(
+                                                1,
+                                              ) ??
+                                              '–',
+                                        ),
+                                        _StatMiniCard(
+                                          label: 'Höchstes Scoring',
+                                          value:
+                                              highestScoring?.toStringAsFixed(
+                                                1,
+                                              ) ??
+                                              '–',
+                                        ),
+                                        _StatMiniCard(
+                                          label: 'Höchste Checkout-Quote',
+                                          value: highestCheckoutRate == null
+                                              ? '–'
+                                              : '${highestCheckoutRate.toStringAsFixed(1)} %',
+                                        ),
+                                      ],
+                                    ),
+                                    if (entries.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 20),
+                                        child: PlayerPerformanceTrendChart(
+                                          entries: entries,
+                                          year: _year,
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
                           if (stats.tournaments == 0 && stats.matches == 0) ...[
                             const SizedBox(height: 16),
                             Card(
@@ -610,6 +762,12 @@ class _StatMiniCard extends StatelessWidget {
   );
 }
 
+double? _maximumPerformanceValue(Iterable<double?> values) {
+  final present = values.whereType<double>();
+  if (present.isEmpty) return null;
+  return present.reduce((left, right) => left > right ? left : right);
+}
+
 class _ReviewLeaders extends StatefulWidget {
   const _ReviewLeaders({
     required this.title,
@@ -617,10 +775,14 @@ class _ReviewLeaders extends StatefulWidget {
     required this.metric,
     required this.profileIds,
     this.year,
+    this.formatMetric,
+    this.includeZero = false,
   });
   final String title;
   final List<MapEntry<String, RankingYearPlayerStats>> rows;
-  final int Function(RankingYearPlayerStats) metric;
+  final num? Function(RankingYearPlayerStats) metric;
+  final String Function(num)? formatMetric;
+  final bool includeZero;
   final Map<String, String> profileIds;
   final int? year;
 
@@ -634,10 +796,13 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ranked = widget.rows.where((r) => widget.metric(r.value) > 0).toList()
-      ..sort(
-        (a, b) => widget.metric(b.value).compareTo(widget.metric(a.value)),
-      );
+    final ranked =
+        widget.rows.where((row) {
+          final value = widget.metric(row.value);
+          return value != null && (widget.includeZero ? value >= 0 : value > 0);
+        }).toList()..sort(
+          (a, b) => widget.metric(b.value)!.compareTo(widget.metric(a.value)!),
+        );
     final visible = ranked.take(_showAll ? ranked.length : 5).toList();
 
     return Card(
@@ -669,7 +834,8 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '${ranked.first.key} (${widget.metric(ranked.first.value)})',
+                    '${ranked.first.key} '
+                    '(${_formattedMetric(widget.metric(ranked.first.value)!)})',
                     style: TextStyle(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w600,
@@ -710,7 +876,7 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${widget.metric(ranked[i].value)}',
+                          _formattedMetric(widget.metric(ranked[i].value)!),
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -754,6 +920,9 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
       ),
     );
   }
+
+  String _formattedMetric(num value) =>
+      widget.formatMetric?.call(value) ?? '$value';
 }
 
 class _MonthBar extends StatelessWidget {
@@ -889,8 +1058,31 @@ class _RankingsPageState extends State<RankingsPage> {
       builder: (_) => _RankingEditorDialog(initial: ranking),
     );
     if (updated == null) return;
-    await _database.saveLocalRanking(updated);
-    if (mounted) setState(() => _rankings = _database.loadLocalRankings());
+    var rankingSaved = false;
+    try {
+      await _database.saveLocalRanking(updated);
+      rankingSaved = true;
+      if (updated.name != ranking.name) {
+        await const TournamentActivityLogger().recordRankingRename(
+          rankingId: ranking.id,
+          oldName: ranking.name,
+          newName: updated.name,
+        );
+      }
+      if (mounted) setState(() => _rankings = _database.loadLocalRankings());
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              rankingSaved
+                  ? 'Rangliste gespeichert, aber Turnierprotokolle konnten nicht aktualisiert werden: $error'
+                  : 'Rangliste konnte nicht gespeichert werden: $error',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _moveRanking(
@@ -1859,7 +2051,9 @@ class _RankingTournamentsPageState extends State<_RankingTournamentsPage> {
                 value: _selected.contains(tournament.id),
                 title: Text(tournament.name),
                 subtitle: Text(
-                  (tournament.finishedAt ?? tournament.createdAt)
+                  (tournament.tournamentDate ??
+                          tournament.finishedAt ??
+                          tournament.createdAt)
                       .toLocal()
                       .toString()
                       .split(' ')
@@ -2762,10 +2956,8 @@ class _TournamentEloGroup {
   final List<LocalEloHistoryItem> matches = [];
 
   int get totalDelta => matches.fold<int>(0, (sum, m) => sum + m.delta);
-  int get ratingBefore =>
-      matches.isNotEmpty ? matches.first.ratingBefore : 0;
-  int get ratingAfter =>
-      matches.isNotEmpty ? matches.last.ratingAfter : 0;
+  int get ratingBefore => matches.isNotEmpty ? matches.first.ratingBefore : 0;
+  int get ratingAfter => matches.isNotEmpty ? matches.last.ratingAfter : 0;
   int get wins => matches.where((m) => m.matchIndex >= 0 && m.delta > 0).length;
   int get losses =>
       matches.where((m) => m.matchIndex >= 0 && m.delta < 0).length;

@@ -79,6 +79,14 @@ void main() {
       expect(GroupPositionEditor.canEdit(stage), isTrue);
     }
 
+    final runningStage = fixture();
+    final runningMatch = runningStage.groups.first.matches.first
+      ..startedAt = DateTime(2026)
+      ..boardNumber = 1
+      ..startedPlayers = 'Spieler 1\u0000Spieler 2';
+    expect(runningMatch.hasResult, isFalse);
+    expect(GroupPositionEditor.canEdit(runningStage), isFalse);
+
     final stage = fixture();
     final scoredMatch = stage.groups.last.matches.last
       ..homeLegs = 2

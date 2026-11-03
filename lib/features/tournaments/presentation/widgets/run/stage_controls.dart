@@ -151,11 +151,13 @@ class StageViewModeSwitch extends StatelessWidget {
     required this.selectedMode,
     required this.onModeChanged,
     this.canLead = true,
+    this.directorModeEnabled = false,
   });
 
   final StageViewMode selectedMode;
   final ValueChanged<StageViewMode> onModeChanged;
   final bool canLead;
+  final bool directorModeEnabled;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -170,6 +172,12 @@ class StageViewModeSwitch extends StatelessWidget {
             StageViewMode.dashboard,
             'Dashboard',
             Icons.dashboard_outlined,
+          ),
+        if (canLead && directorModeEnabled)
+          const SportSection(
+            StageViewMode.director,
+            'Leitung',
+            Icons.sports_score_rounded,
           ),
         const SportSection(
           StageViewMode.results,

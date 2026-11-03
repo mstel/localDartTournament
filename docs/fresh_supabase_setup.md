@@ -54,6 +54,15 @@ wenn auch das Schema aus `fresh_sync_schema.sql` samt Storage-Regeln im selben
 Projekt eingerichtet ist. Ohne ein dort angelegtes Benutzerkonto gibt es keine
 Selbstregistrierung über die App.
 
+Die Windows-App schreibt bei jedem Anmeldeversuch ein datensparsames
+Diagnoseprotokoll nach
+`%APPDATA%\DartTournamentManager\diagnostics\supabase-auth.log`. Über
+**Einstellungen → Daten → Supabase-Backup & Synchronisierung → Diagnosedatei
+exportieren** kann es an einem frei wählbaren Ort gespeichert werden. Es enthält
+App-/Windows-Version, Projekt-Host, Fehlerdetails sowie DNS- und HTTPS-Proben,
+aber keine E-Mail-Adresse, Passwörter, API-Keys oder Sitzungstoken. Vor dem
+Weitergeben trotzdem den Inhalt prüfen.
+
 Die Backup-Richtlinien beschränken Lesen, Erstellen, Ersetzen und Löschen auf
 den Ordner des angemeldeten Betreiberkontos. Es werden keine alten
 Community-Tabellen oder Testdaten migriert. Der lokale Export und die

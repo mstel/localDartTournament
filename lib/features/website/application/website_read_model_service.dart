@@ -2,6 +2,7 @@ import '../../rankings/application/local_ranking_elo_service.dart';
 import '../../rankings/application/local_ranking_series_service.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../statistics/domain/local_statistics.dart';
+import '../../statistics/domain/player_monthly_performance.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
@@ -10,13 +11,27 @@ class WebsiteReadModelService {
   WebsiteReadModelService({
     LocalAppDatabase? database,
     TournamentStorage? tournamentStorage,
+    DateTime Function()? clock,
   }) : _database = database ?? LocalAppDatabase(),
-       _tournamentStorage = tournamentStorage ?? TournamentStorage();
+       _tournamentStorage = tournamentStorage ?? TournamentStorage(),
+       _clock = clock ?? DateTime.now;
 
-  static const schemaVersion = 1;
+  static const schemaVersion = 2;
+  static const tournamentIndexSchemaVersion = 1;
+  static const resourceSchemaVersion = 2;
   static const objectName = 'website-read-model.json';
+  static const tournamentIndexObjectName = 'website-tournament-index.json';
+  static const resourceManifestObjectName = 'website-v2-manifest.json';
+  static const resourcePageSize = 10;
+  static const _resourceObjectNames = {
+    'players': 'website-v2-players.json',
+    'rankings': 'website-v2-rankings.json',
+    'statistics': 'website-v2-statistics.json',
+    'performance': 'website-v2-performance.json',
+  };
   final LocalAppDatabase _database;
   final TournamentStorage _tournamentStorage;
+  final DateTime Function() _clock;
 
   Future<Map<String, dynamic>> create() async {
     final profiles = await _database.loadPlayerProfiles();
@@ -27,7 +42,8 @@ class WebsiteReadModelService {
           right,
         ) {
           final leftDate = left.finishedAt ?? left.startedAt ?? left.createdAt;
-          final rightDate = right.finishedAt ?? right.startedAt ?? right.createdAt;
+          final rightDate =
+              right.finishedAt ?? right.startedAt ?? right.createdAt;
           final byDate = rightDate.compareTo(leftDate);
           return byDate != 0 ? byDate : left.id.compareTo(right.id);
         });
@@ -35,10 +51,17 @@ class WebsiteReadModelService {
     final statistics = LocalStatisticsService(database: _database);
     final playerStatistics = <Map<String, dynamic>>[];
     final bestPerformances = <Map<String, dynamic>>[];
+    final currentForms = <Map<String, dynamic>>[];
     for (final profile in profiles) {
       final result = await statistics.forPlayersFromTournaments({
         profile.id,
       }, completed);
+      final currentForm = calculateCurrentFormPerformance(
+        await _database.loadPlayerMonthlyPerformance(profile.id),
+        now: _clock(),
+      );
+      final currentFormJson = currentForm.toJson();
+      currentForms.add({'playerId': profile.id, ...currentFormJson});
       playerStatistics.add({
         'playerId': profile.id,
         'tournaments': result.tournaments,
@@ -52,6 +75,7 @@ class WebsiteReadModelService {
         'legsDrawn': result.legsDrawn,
         'setsWon': result.setsWon,
         'setsLost': result.setsLost,
+        'currentForm': currentFormJson,
       });
       for (final performance in result.bestPerformances) {
         bestPerformances.add({...performance.toJson(), 'playerId': profile.id});
@@ -137,6 +161,7 @@ class WebsiteReadModelService {
       ],
       'rankingStandings': rankingStandings,
       'statistics': playerStatistics,
+      'currentForm': currentForms,
       'bestPerformances': _uniquePerformances(bestPerformances),
       'completedTournaments': [
         for (final tournament in completed)
@@ -152,6 +177,188 @@ class WebsiteReadModelService {
           },
       ],
     };
+  }
+
+  /// Builds independently downloadable v2 resources without changing v1.
+  Future<Map<String, Map<String, dynamic>>> createVersion2Resources(
+    Map<String, dynamic> readModel,
+  ) async {
+    final generatedAt = readModel['generatedAt'];
+    final players = (readModel['players'] as List).cast<Map<String, dynamic>>();
+    final tournaments = createTournamentIndex(readModel);
+    final resources = <String, Map<String, dynamic>>{
+      'players': _version2Resource('players', generatedAt, {
+        'players': players,
+      }),
+      'rankings': _version2Resource('rankings', generatedAt, {
+        'rankings': readModel['rankings'],
+        'rankingStandings': readModel['rankingStandings'],
+      }),
+      'statistics': _version2Resource('statistics', generatedAt, {
+        'statistics': readModel['statistics'],
+        'bestPerformances': readModel['bestPerformances'],
+        'currentForm': readModel['currentForm'],
+      }),
+    };
+
+    final monthlyPerformance = <Map<String, dynamic>>[];
+    for (final player in players) {
+      final playerId = player['id'] as String;
+      for (final entry in await _database.loadPlayerMonthlyPerformance(
+        playerId,
+      )) {
+        monthlyPerformance.add({
+          'playerId': entry.playerId,
+          'period': entry.periodKey,
+          'year': entry.year,
+          'month': entry.month,
+          'weightedLegs': entry.weightedLegs,
+          'scoring': entry.scoring,
+          'average': entry.average,
+          'checkoutQuote': entry.checkoutRate,
+        });
+      }
+    }
+    resources['performance'] = _version2Resource('performance', generatedAt, {
+      'monthlyPerformance': monthlyPerformance,
+      'currentForm': readModel['currentForm'],
+    });
+
+    final tournamentSummaries =
+        tournaments['completedTournaments'] as List<dynamic>;
+    final pageCount = (tournamentSummaries.length / resourcePageSize).ceil();
+    final pageTotal = pageCount == 0 ? 1 : pageCount;
+    for (var page = 1; page <= pageTotal; page++) {
+      final start = (page - 1) * resourcePageSize;
+      final end = (start + resourcePageSize)
+          .clamp(0, tournamentSummaries.length)
+          .toInt();
+      resources['tournaments:$page'] = _version2Resource(
+        'tournaments',
+        generatedAt,
+        {
+          'completedTournaments': tournamentSummaries.sublist(start, end),
+          'tournamentPage': {
+            'page': page,
+            'pageSize': resourcePageSize,
+            'total': tournamentSummaries.length,
+            'hasMore': end < tournamentSummaries.length,
+          },
+        },
+      );
+    }
+    return resources;
+  }
+
+  static Map<String, dynamic> _version2Resource(
+    String resource,
+    Object? generatedAt,
+    Map<String, dynamic> content,
+  ) => {
+    'schemaVersion': resourceSchemaVersion,
+    'resource': resource,
+    'generatedAt': generatedAt,
+    ...content,
+  };
+
+  static String version2ResourceObjectName(String resource, {int? page}) {
+    if (resource == 'tournaments') {
+      if (page == null || page < 1) {
+        throw ArgumentError.value(page, 'page', 'Must be a positive page.');
+      }
+      return 'website-v2-tournaments-page-$page.json';
+    }
+    final objectName = _resourceObjectNames[resource];
+    if (objectName == null) {
+      throw ArgumentError.value(
+        resource,
+        'resource',
+        'Unknown website resource.',
+      );
+    }
+    return objectName;
+  }
+
+  static Map<String, dynamic> createTournamentIndex(
+    Map<String, dynamic> readModel,
+  ) {
+    final tournaments =
+        (readModel['completedTournaments'] as List<dynamic>? ?? const []);
+    return {
+      'schemaVersion': tournamentIndexSchemaVersion,
+      'generatedAt': readModel['generatedAt'],
+      'completedTournaments': [
+        for (final tournament in tournaments.cast<Map<String, dynamic>>())
+          {
+            'id': tournament['id'],
+            'name': tournament['name'],
+            'finishedAt': tournament['finishedAt'],
+            'startedAt': tournament['startedAt'],
+            'createdAt': tournament['createdAt'],
+            'playerCount':
+                (tournament['players'] as List<dynamic>? ?? const []).length,
+            'matchCount': _matchCount(tournament),
+            'mode': _mode(tournament),
+            'hasImportedArchive': tournament['importedArchive'] != null,
+          },
+      ],
+    };
+  }
+
+  static int _matchCount(Map<String, dynamic> tournament) {
+    var count = 0;
+    for (final stage in tournament['runStages'] as List<dynamic>? ?? const []) {
+      if (stage is! Map<String, dynamic>) continue;
+      if (stage['kind'] == 'groups') {
+        for (final group in stage['groups'] as List<dynamic>? ?? const []) {
+          if (group is Map<String, dynamic>) {
+            count += (group['matches'] as List<dynamic>? ?? const []).length;
+          }
+        }
+      } else if (stage['kind'] == 'single_knockout') {
+        for (final round in stage['rounds'] as List<dynamic>? ?? const []) {
+          if (round is List) count += round.length;
+        }
+        count +=
+            (stage['placementMatches'] as List<dynamic>? ?? const []).length;
+      }
+    }
+    if (tournament['leagueMatch'] != null) count++;
+    return count;
+  }
+
+  static String _mode(Map<String, dynamic> tournament) {
+    final archive = tournament['importedArchive'];
+    if (archive is Map<String, dynamic> && archive['mode'] is String) {
+      return archive['mode'] as String;
+    }
+    final stages = tournament['stages'] as List<dynamic>? ?? const [];
+    if (stages.isNotEmpty && stages.first is Map<String, dynamic>) {
+      final firstStage = stages.first as Map<String, dynamic>;
+      final type = firstStage['type'];
+      if (type is String) {
+        if (type == 'groups') {
+          final runStages =
+              tournament['runStages'] as List<dynamic>? ?? const [];
+          if (runStages.isNotEmpty && runStages.first is Map<String, dynamic>) {
+            final playType =
+                (runStages.first as Map<String, dynamic>)['groupPlayType'];
+            if (playType is String) return 'groups:$playType';
+          }
+        }
+        return type;
+      }
+    }
+    final runStages = tournament['runStages'] as List<dynamic>? ?? const [];
+    if (runStages.isNotEmpty && runStages.first is Map<String, dynamic>) {
+      final firstRunStage = runStages.first as Map<String, dynamic>;
+      final kind = firstRunStage['kind'];
+      if (kind == 'groups' && firstRunStage['groupPlayType'] is String) {
+        return 'groups:${firstRunStage['groupPlayType']}';
+      }
+      if (kind is String) return kind;
+    }
+    return 'unknown';
   }
 
   static List<CreatedTournament> completedTournaments(
@@ -171,7 +378,8 @@ class WebsiteReadModelService {
       for (final performance in performances)
         if (seen.add(
           '${performance['playerId']}|${performance['type']}|'
-          '${performance['playerName']}|${performance['value']}',
+          '${performance['playerName']}|${performance['value']}|'
+          '${performance['details']}',
         ))
           performance,
     ];

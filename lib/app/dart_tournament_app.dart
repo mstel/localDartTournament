@@ -5,6 +5,7 @@ import '../tournament_workspace.dart';
 import 'app_theme.dart';
 import 'theme_controller.dart';
 import '../features/backups/application/supabase_workspace_sync_service.dart';
+import '../shared/widgets/arrow_key_dropdown_navigation.dart';
 
 class DartTournamentApp extends StatefulWidget {
   const DartTournamentApp({super.key});
@@ -32,6 +33,8 @@ class _DartTournamentAppState extends State<DartTournamentApp> {
       themeMode: themeMode,
       theme: buildDartTournamentTheme(),
       darkTheme: buildDartTournamentDarkTheme(),
+      builder: (context, child) =>
+          ArrowKeyDropdownNavigation(child: child ?? const SizedBox.shrink()),
       home: const HomePage(),
     ),
   );

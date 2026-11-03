@@ -13,6 +13,17 @@ class _MemoryStorage extends TournamentStorage {
 }
 
 void main() {
+  int estimatedMinutes(WidgetTester tester) {
+    final text = tester
+        .widget<Text>(find.textContaining('Voraussichtliche Dauer:'))
+        .data!;
+    final hours =
+        RegExp(r'(\d+) (?:Std\.|Stunden)').firstMatch(text)?.group(1) ?? '0';
+    final minutes =
+        RegExp(r'(\d+) (?:Min\.|Minuten)').firstMatch(text)?.group(1) ?? '0';
+    return int.parse(hours) * 60 + int.parse(minutes);
+  }
+
   testWidgets('adjusted mode exposes fixture and duration settings', (
     tester,
   ) async {
@@ -28,10 +39,51 @@ void main() {
     await tester.tap(find.text('Angepasster Spielplan'));
     await tester.pumpAndSettle();
 
+    expect(
+      find.text('Name des angepassten Liga-/Freundschaftsspiels'),
+      findsOneWidget,
+    );
     expect(find.text('Einzel je Spieler'), findsOneWidget);
     expect(find.text('Doppel je Mannschaft'), findsOneWidget);
+    expect(find.text('X01-Punktzahl'), findsOneWidget);
+    expect(
+      find.text('Angepasstes Liga-/Freundschaftsspiel anlegen'),
+      findsOneWidget,
+    );
     expect(find.text('14 Begegnungen'), findsOneWidget);
     expect(find.textContaining('Voraussichtliche Dauer:'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('adjusted duration refreshes when the game format changes', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 1200);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(home: LeagueMatchPage(storage: _MemoryStorage())),
+    );
+    await tester.tap(find.text('Angepasst'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Angepasster Spielplan'));
+    await tester.pumpAndSettle();
+
+    final initialDuration = estimatedMinutes(tester);
+    final x01Field = find.byKey(const ValueKey('league-x01-501'));
+    await tester.tap(x01Field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('901').last);
+    await tester.pumpAndSettle();
+    final longerX01Duration = estimatedMinutes(tester);
+    expect(longerX01Duration, greaterThan(initialDuration));
+
+    final legsField = find.byKey(const ValueKey('league-legs-5'));
+    await tester.tap(legsField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('9 Legs').last);
+    await tester.pumpAndSettle();
+    expect(estimatedMinutes(tester), greaterThan(longerX01Duration));
     expect(tester.takeException(), isNull);
   });
 

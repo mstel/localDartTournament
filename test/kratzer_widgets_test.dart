@@ -4,7 +4,7 @@ import 'package:dart_tournament_manager/main.dart';
 
 void main() {
   testWidgets(
-    'creation defaults to deciding final and offers five-life brackets',
+    'creation configures Kratzer board size without draw or bracket controls',
     (tester) async {
       await tester.pumpWidget(const DartTournamentApp());
       await tester.tap(find.text('Turnier erstellen'));
@@ -50,6 +50,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Doppel-KO').last);
       await tester.pumpAndSettle();
+      expect(find.text('Auslosungsrad beim Turnierstart'), findsNothing);
       expect(
         tester
             .widget<SwitchListTile>(
@@ -69,19 +70,89 @@ void main() {
       await tester.tap(find.text('5 Leben').last);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('kratzer-lives-5')), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('4 Niederlagen Bracket', skipOffstage: false),
-        400,
-        scrollable: find
-            .descendant(
-              of: find.byType(ListView).last,
-              matching: find.byType(Scrollable),
-            )
-            .first,
-        maxScrolls: 50,
+      final distribution = find.byKey(
+        const ValueKey('kratzer-board-distribution-balanced'),
       );
-      expect(find.text('4 Niederlagen Bracket'), findsOneWidget);
-      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(distribution);
+      expect(distribution, findsOneWidget);
+      await tester.tap(distribution);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('4 Spieler').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('kratzer-board-distribution-4')),
+        findsOneWidget,
+      );
+      final sameScratches = find.byKey(
+        const ValueKey('kratzer-prefer-same-scratches'),
+      );
+      await tester.ensureVisible(sameScratches);
+      await tester.tap(sameScratches);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(sameScratches).value, isTrue);
+      final playUntilElimination = find.byKey(
+        const ValueKey('kratzer-play-until-elimination'),
+      );
+      await tester.ensureVisible(playUntilElimination);
+      await tester.tap(playUntilElimination);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(playUntilElimination).value, isTrue);
+      final bonus180 = find.byKey(const ValueKey('kratzer-bonus-life-180'));
+      await tester.ensureVisible(bonus180);
+      await tester.tap(bonus180);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(bonus180).value, isTrue);
+      final bonusHighFinish = find.byKey(
+        const ValueKey('kratzer-bonus-life-high-finish'),
+      );
+      await tester.ensureVisible(bonusHighFinish);
+      await tester.tap(bonusHighFinish);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(bonusHighFinish).value, isTrue);
+      final startScratches = find.byKey(
+        const ValueKey('kratzer-starting-scratches'),
+      );
+      await tester.ensureVisible(startScratches);
+      await tester.tap(startScratches);
+      await tester.pumpAndSettle();
+      final firstPlayerScratches = find.byKey(
+        const ValueKey('kratzer-start-scratches-0'),
+      );
+      await tester.ensureVisible(firstPlayerScratches);
+      await tester.tap(firstPlayerScratches);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2 Kratzer').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<DropdownButtonFormField<int>>(firstPlayerScratches)
+            .initialValue,
+        2,
+      );
+      expect(find.text('Auslosungsrad beim Turnierstart'), findsNothing);
+      expect(find.text('4 Weiter'), findsNothing);
+      expect(find.text('4er Feld'), findsNothing);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      for (final size in [
+        const Size(360, 800),
+        const Size(800, 600),
+        const Size(1440, 900),
+      ]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('kratzer-board-distribution-4')),
+        );
+        expect(
+          find.byKey(const ValueKey('kratzer-board-distribution-4')),
+          findsOneWidget,
+          reason: 'Kratzer-Auswahl bei $size',
+        );
+        await tester.ensureVisible(startScratches);
+        expect(tester.takeException(), isNull);
+      }
     },
   );
 }

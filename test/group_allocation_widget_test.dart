@@ -44,6 +44,7 @@ void main() {
     expect(find.text('Wertungsstufen bündeln'), findsWidgets);
     expect(find.text('Stärken gleichmäßig verteilen'), findsWidgets);
     expect(find.textContaining('Zufällig verteilen'), findsWidgets);
+    expect(find.text('Benutzerdefinierte Gruppen'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

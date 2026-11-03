@@ -522,9 +522,10 @@ class LocalEloCalculator {
   String _matchKey(CreatedTournament tournament, int matchIndex) =>
       '${tournament.id}:$matchIndex';
 
-  DateTime _date(CreatedTournament t) => t.startedAt ?? t.createdAt;
+  DateTime _date(CreatedTournament t) =>
+      t.tournamentDate ?? t.startedAt ?? t.createdAt;
   DateTime _matchDate(CreatedTournament t, GroupMatch m) =>
-      m.finishedAt ?? m.startedAt ?? _date(t);
+      t.tournamentDate ?? m.finishedAt ?? m.startedAt ?? _date(t);
   DateTime _dateOnly(DateTime date) =>
       DateTime(date.year, date.month, date.day);
   Iterable<GroupMatch> _matches(CreatedTournament t) sync* {

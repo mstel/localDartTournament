@@ -7,7 +7,7 @@ class TournamentTimingPanel extends StatefulWidget {
   const TournamentTimingPanel({
     super.key,
     required this.tournament,
-    required this.onStart,
+    this.onStart,
     this.onPauseToggle,
     this.onEditTimes,
     this.onResetClock,
@@ -16,7 +16,7 @@ class TournamentTimingPanel extends StatefulWidget {
     this.allowEndTimeEdit = false,
   });
   final CreatedTournament tournament;
-  final Future<void> Function() onStart;
+  final Future<void> Function()? onStart;
   final Future<void> Function()? onPauseToggle;
   final Future<void> Function(DateTime? startedAt, DateTime? finishedAt)?
   onEditTimes;
@@ -197,14 +197,14 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
                     'Nicht gestartet',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  if (widget.allowManualStart)
+                  if (widget.allowManualStart && widget.onStart != null)
                     TextButton.icon(
                       onPressed: _busy
                           ? null
                           : () async {
                               setState(() => _busy = true);
                               try {
-                                await widget.onStart();
+                                await widget.onStart!();
                               } catch (_) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(

@@ -156,7 +156,8 @@ class PlayerStatisticsImageGenerator {
         final typeLabel = _performanceLabel(performance.type);
         _text(
           canvas,
-          '${performance.value ?? typeLabel} · $typeLabel',
+          '${performance.value ?? performance.details ?? typeLabel} · '
+          '$typeLabel',
           Offset(padding + 24, performanceTop + 72 + index * rowHeight),
           maxWidth: contentWidth - 48,
           fontSize: 18,
@@ -183,9 +184,12 @@ class PlayerStatisticsImageGenerator {
   }
 
   String _performanceLabel(BestPerformanceType type) => switch (type) {
-    BestPerformanceType.score170 => '170+ Aufnahme',
+    BestPerformanceType.bigFish170 => '170 (Big Fish)',
+    BestPerformanceType.score171Plus ||
+    BestPerformanceType.score170 => '171+ Aufnahme',
     BestPerformanceType.score180 => '180+ Aufnahme',
     BestPerformanceType.highFinish => 'High Finish',
+    BestPerformanceType.bullseyeFinish => 'Bullseye Finish',
     BestPerformanceType.shortLeg => 'Shortleg',
   };
 

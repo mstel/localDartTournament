@@ -76,13 +76,12 @@ class TournamentCompletionImageGenerator {
     final losses =
         data.rankingChanges.where((change) => change.delta < 0).toList()
           ..sort((left, right) => left.delta.compareTo(right.delta));
-    final positions = data.rankingChanges
-        .where((change) => change.hasPositionChange)
-        .toList()
-      ..sort(
-        (left, right) =>
-            (right.positionChange ?? 0).compareTo(left.positionChange ?? 0),
-      );
+    final positions =
+        data.rankingChanges.where((change) => change.hasPositionChange).toList()
+          ..sort(
+            (left, right) =>
+                (right.positionChange ?? 0).compareTo(left.positionChange ?? 0),
+          );
     final rankingRows = math.max(
       1,
       math.max(
@@ -90,8 +89,7 @@ class TournamentCompletionImageGenerator {
         math.max(losses.take(3).length, positions.take(3).length),
       ),
     );
-    final rankingSummaryHeight =
-        112.0 + rankingRows * 48.0;
+    final rankingSummaryHeight = 112.0 + rankingRows * 48.0;
     final summaryHeight = data.durationSummary.isEmpty ? 220.0 : 248.0;
     final height =
         padding * 2 +
@@ -192,7 +190,7 @@ class TournamentCompletionImageGenerator {
     _sectionTitle(
       canvas,
       'Änderungen der Rangliste'
-          '${rankingNames.isEmpty ? '' : ' · $rankingNames'}',
+      '${rankingNames.isEmpty ? '' : ' · $rankingNames'}',
       padding + 24,
       y + 20,
     );
@@ -204,8 +202,7 @@ class TournamentCompletionImageGenerator {
       (
         title: 'Größter Punktezuwachs',
         changes: gains.take(3).toList(),
-        value: (TournamentRankingPlayerChange change) =>
-            '+${change.delta} Elo',
+        value: (TournamentRankingPlayerChange change) => '+${change.delta} Elo',
       ),
       (
         title: 'Größter Punkteverlust',
@@ -230,18 +227,18 @@ class TournamentCompletionImageGenerator {
           Rect.fromLTWH(cardX, cardTop, cardWidth, cardHeight),
           const Radius.circular(12),
         ),
-          Paint()..color = TournamentDisplayPalette.card,
-        );
-        _text(
-          canvas,
-          card.title,
-          Offset(cardX + 12, cardTop + 12),
-          maxWidth: cardWidth - 24,
-          fontSize: 17,
-          color: TournamentDisplayPalette.accent,
-          bold: true,
-        );
-        if (card.changes.isEmpty) {
+        Paint()..color = TournamentDisplayPalette.card,
+      );
+      _text(
+        canvas,
+        card.title,
+        Offset(cardX + 12, cardTop + 12),
+        maxWidth: cardWidth - 24,
+        fontSize: 17,
+        color: TournamentDisplayPalette.accent,
+        bold: true,
+      );
+      if (card.changes.isEmpty) {
         _text(
           canvas,
           cardIndex == 0
@@ -321,7 +318,8 @@ class TournamentCompletionImageGenerator {
         _text(
           canvas,
           '${performance.playerName} · ${_performanceLabel(performance.type)}'
-          '${performance.value == null ? '' : ' · ${performance.value}'}',
+          '${performance.value == null ? '' : ' · ${performance.value}'}'
+          '${performance.details == null ? '' : ' · ${performance.details}'}',
           Offset(padding + 24, y + 66.0 + index * 54.0),
           maxWidth: contentWidth - 48,
           fontSize: 18,
@@ -370,9 +368,12 @@ class TournamentCompletionImageGenerator {
   );
 
   String _performanceLabel(BestPerformanceType type) => switch (type) {
-    BestPerformanceType.score170 => '170+ Aufnahme',
+    BestPerformanceType.bigFish170 => '170 (Big Fish)',
+    BestPerformanceType.score171Plus ||
+    BestPerformanceType.score170 => '171+ Aufnahme',
     BestPerformanceType.score180 => '180er',
     BestPerformanceType.highFinish => 'High Finish',
+    BestPerformanceType.bullseyeFinish => 'Bullseye Finish',
     BestPerformanceType.shortLeg => 'Shortleg',
   };
 

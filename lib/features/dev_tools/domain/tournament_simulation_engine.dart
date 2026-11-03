@@ -10,6 +10,7 @@ class TournamentSimulationScenario {
     required this.playerCount,
     required this.stages,
     this.teamSize = 1,
+    this.boards = 1,
     this.withdrawnPlayers = const [],
     this.withdrawalMode = WithdrawalResultMode.loseOpen,
   });
@@ -17,6 +18,7 @@ class TournamentSimulationScenario {
   final String name;
   final int playerCount;
   final int teamSize;
+  final int boards;
   final List<int> withdrawnPlayers;
   final WithdrawalResultMode withdrawalMode;
   final List<SimulationStageSpec> stages;
@@ -72,10 +74,12 @@ class SimulationEliminationStageSpec extends SimulationStageSpec {
     super.placementPlaces,
     required this.lossLimit,
     this.finalEndsTournament = false,
+    this.isKratzer = false,
   });
 
   final int lossLimit;
   final bool finalEndsTournament;
+  final bool isKratzer;
 }
 
 class TournamentSimulationReport {
@@ -132,8 +136,11 @@ class SimulationMatchRecord {
   final String homeSource;
   final String awaySource;
   final String? groupPlayType;
-  bool get isRoundBased => groupPlayType == 'round_robin' || groupPlayType == 'swiss' ||
-      (groupPlayType == null && (bracket.endsWith(' - Liga') || bracket.endsWith(' - swiss')));
+  bool get isRoundBased =>
+      groupPlayType == 'round_robin' ||
+      groupPlayType == 'swiss' ||
+      (groupPlayType == null &&
+          (bracket.endsWith(' - Liga') || bracket.endsWith(' - swiss')));
 }
 
 class TournamentSimulationFailure implements Exception {
@@ -157,10 +164,14 @@ class TournamentSimulationEngine {
     }
     final players = [
       for (var i = 1; i <= scenario.playerCount; i++)
-        scenario.teamSize <= 1 ? TournamentPlayer.generated(i) : TournamentPlayer.team([
-          for (var member = 0; member < scenario.teamSize; member++)
-            TournamentPlayer.generated((i - 1) * scenario.teamSize + member + 1),
-        ]),
+        scenario.teamSize <= 1
+            ? TournamentPlayer.generated(i)
+            : TournamentPlayer.team([
+                for (var member = 0; member < scenario.teamSize; member++)
+                  TournamentPlayer.generated(
+                    (i - 1) * scenario.teamSize + member + 1,
+                  ),
+              ]),
     ];
     final strength = [...players];
     if (seed != null) strength.shuffle(Random(seed));
@@ -213,7 +224,9 @@ class TournamentSimulationEngine {
             placementPlaces: spec.placementPlaces,
             finalEndsTournament: spec.finalEndsTournament,
             knockoutLives: spec.lossLimit,
-            type: spec.lossLimit >= 3
+            type: spec.isKratzer
+                ? 'kratzer'
+                : spec.lossLimit >= 3
                 ? 'triple_knockout'
                 : spec.lossLimit == 2
                 ? 'double_knockout'
@@ -242,11 +255,17 @@ class TournamentSimulationEngine {
       players: players,
       stages: configs,
       runStages: [],
+      boardCount: scenario.boards,
     );
     final runtime = ProductionTournamentRuntime(tournament);
     for (final index in scenario.withdrawnPlayers) {
-      tournament.withdrawals.add(PlayerWithdrawal(playerKey: players[index].profileId ?? players[index].name,
-        mode: scenario.withdrawalMode, createdAt: DateTime(2026)));
+      tournament.withdrawals.add(
+        PlayerWithdrawal(
+          playerKey: players[index].profileId ?? players[index].name,
+          mode: scenario.withdrawalMode,
+          createdAt: DateTime(2026),
+        ),
+      );
     }
     var incoming = players;
     final reports = <SimulationStageReport>[];
@@ -263,12 +282,20 @@ class TournamentSimulationEngine {
       while (true) {
         runtime.advance();
         final all = runtime.matches(stage);
-        for (final match in all.where((m) => m.withdrawalSignature != null && m.isResolved)) {
-          if (recorded.add(match)) records.add(_record(stage, match, records.length + 1, sources));
+        for (final match in all.where(
+          (m) => m.withdrawalSignature != null && m.isResolved,
+        )) {
+          if (recorded.add(match)) {
+            records.add(_record(stage, match, records.length + 1, sources));
+          }
         }
         for (final match in all.where(
           (m) =>
-              (m.round == 1 || (stage is GroupTournamentRunStage && stage.groups.any((g) => g.playType == 'swiss' && g.matches.contains(m)))) &&
+              (m.round == 1 ||
+                  (stage is GroupTournamentRunStage &&
+                      stage.groups.any(
+                        (g) => g.playType == 'swiss' && g.matches.contains(m),
+                      ))) &&
               m.isResolved &&
               !m.hasPlayers &&
               (m.homePlayer != null || m.awayPlayer != null),
@@ -276,7 +303,8 @@ class TournamentSimulationEngine {
           if (recorded.add(match)) {
             records.add(_record(stage, match, records.length + 1, sources));
             if (match.winner != null) {
-              sources[match.winner!.name] = 'Sieger Spiel ${records.last.number}';
+              sources[match.winner!.name] =
+                  'Sieger Spiel ${records.last.number}';
             }
           }
         }
@@ -289,6 +317,24 @@ class TournamentSimulationEngine {
         }
         final match = ready.first;
         final record = _record(stage, match, records.length + 1, sources);
+        if (match.isKratzer) {
+          final eligible = match.scratchEligiblePlayers.isEmpty
+              ? match.players
+              : match.scratchEligiblePlayers;
+          if (eligible.isEmpty) {
+            throw TournamentSimulationFailure(
+              '${scenario.name} / ${stage.name}: kein Kratzer-Spieler verfügbar',
+            );
+          }
+          match
+            ..scratchedPlayer = randomResults
+                ? eligible[resultsRandom.nextInt(eligible.length)]
+                : eligible.first
+            ..finishedAt = DateTime(2026);
+          records.add(record);
+          recorded.add(match);
+          continue;
+        }
         final homeWins = randomResults
             ? resultsRandom.nextBool()
             : ranks[match.homePlayer!.name]! < ranks[match.awayPlayer!.name]!;
@@ -357,8 +403,11 @@ class TournamentSimulationEngine {
       reports.add(
         SimulationStageReport(
           name: stage.name,
-          lossLimit: stage is KnockoutTournamentRunStage ? stage.eliminationLossLimit : 1,
-          finalEndsTournament: stage is KnockoutTournamentRunStage && stage.finalEndsTournament,
+          lossLimit: stage is KnockoutTournamentRunStage
+              ? stage.eliminationLossLimit
+              : 1,
+          finalEndsTournament:
+              stage is KnockoutTournamentRunStage && stage.finalEndsTournament,
           inputCount: incoming.length,
           outputCount: advancing.length,
           matchCount: played.length,
@@ -401,10 +450,14 @@ class TournamentSimulationEngine {
       bracket: bracket,
       groupPlayType: groupPlayType,
       homeSource: match.homePlayer == null
-          ? 'Freilos'
+          ? match.isKratzer
+                ? match.players.map((player) => player.name).join(' · ')
+                : 'Freilos'
           : sources[match.homePlayer!.name] ?? match.homePlayer!.name,
       awaySource: match.awayPlayer == null
-          ? 'Freilos'
+          ? match.isKratzer
+                ? 'Kratzer'
+                : 'Freilos'
           : sources[match.awayPlayer!.name] ?? match.awayPlayer!.name,
     );
   }

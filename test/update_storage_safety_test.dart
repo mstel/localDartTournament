@@ -60,7 +60,7 @@ void main() {
   test(
     'unknown tournament version reports its version and remains untouched',
     () async {
-      const content = '{"schemaVersion":29,"tournaments":[]}';
+      const content = '{"schemaVersion":38,"tournaments":[]}';
       await file.writeAsString(content);
       final storage = TournamentStorage(file: file);
 
@@ -68,8 +68,8 @@ void main() {
         await storage.loadTournaments();
         fail('A future storage version must not be interpreted as supported.');
       } on FormatException catch (error) {
-        expect(error.message, contains('Version 29'));
-        expect(error.message, contains('1 bis 28'));
+        expect(error.message, contains('Version 38'));
+        expect(error.message, contains('1 bis 37'));
       }
 
       await expectLater(
@@ -115,7 +115,7 @@ void main() {
       );
 
       final saved = jsonDecode(await file.readAsString());
-      expect(saved['schemaVersion'], 28);
+      expect(saved['schemaVersion'], 37);
       expect(saved['playerStatistics'], {'total': 7});
       expect((saved['tournaments'] as List).length, 2);
       expect(
@@ -205,7 +205,7 @@ void main() {
     },
   );
 
-  test('v9 to v11 migration keeps players, rankings and assignments', () async {
+  test('v9 to v12 migration keeps players, rankings and assignments', () async {
     final path = '${directory.path}/app_database.sqlite';
     final old = sqlite3.open(path);
     old.execute('''
@@ -273,7 +273,7 @@ void main() {
     expect(await storage.loadRankingPlayerIds('ranking-1'), ['player-1']);
 
     final migrated = sqlite3.open(path, mode: OpenMode.readOnly);
-    expect(migrated.select('PRAGMA user_version').single.values.single, 11);
+    expect(migrated.select('PRAGMA user_version').single.values.single, 12);
     expect(
       migrated
           .select('SELECT custom_order FROM local_rankings')

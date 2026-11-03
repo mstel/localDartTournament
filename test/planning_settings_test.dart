@@ -14,7 +14,7 @@ import 'package:dart_tournament_manager/features/tournaments/domain/tournament_m
 void main() {
   test('new tournament drafts default to four boards', () async {
     final storage = _RecordingTournamentStorage();
-    final tournament = TournamentCreationController(storage: storage)
+    final tournament = await TournamentCreationController(storage: storage)
         .createTournament(
           name: 'Vier Boards',
           players: const [],
