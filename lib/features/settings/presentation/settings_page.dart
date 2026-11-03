@@ -13,6 +13,7 @@ import '../../random_draw/presentation/random_draw_tool_page.dart';
 import 'priority_notice_settings_panel.dart';
 import 'tie_breaker_defaults_panel.dart';
 import 'player_insight_defaults_panel.dart';
+import 'audio_announcement_defaults_panel.dart';
 
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'appearance_panel.dart';
@@ -118,6 +119,7 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
       const PushSenderMenu(),
       const PushDeviceMenu(),
       const Card(child: PlayerInsightDefaultsPanel()),
+      const Card(child: AudioAnnouncementDefaultsPanel()),
       Card(
         child: ListTile(
           leading: const Icon(Icons.lightbulb_outline),

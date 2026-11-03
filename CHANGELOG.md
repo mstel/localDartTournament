@@ -1,3 +1,11 @@
+# 2.4.2+62
+
+- Aktualisiert Achievement-Beschreibungen passend zu angepassten Zielwerten.
+- Fasst die vier gegenseitig ausschließenden Ranglisten-Achievements als
+  gemeinsamen Fortschritt von 0/1 bzw. 1/1 zusammen.
+- Ergänzt globale Tonmodus-Standards für vollständige Namen oder Vorname mit
+  Nachnamensinitial sowie eine optionale Spitznamen-Priorität.
+
 # 2.4.1+61
 
 - Führt konfigurierbare globale Insights-Standardwerte ein und fasst gleiche

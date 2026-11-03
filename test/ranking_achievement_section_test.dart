@@ -140,4 +140,35 @@ void main() {
     expect(find.textContaining('3 / 3'), findsOneWidget);
     expect(find.textContaining('Nächste Stufe:'), findsNothing);
   });
+
+  testWidgets('ranking awards category is summarized as one possible award', (
+    tester,
+  ) async {
+    final evaluation = const AchievementEngine().evaluate(
+      values: const {AchievementMetric.rankingGold: 1},
+      rankingCompleted: true,
+    );
+    final view = RankingAchievementView(
+      ranking: const LocalRanking(
+        id: 'ranking',
+        name: 'Saison 2026',
+        achievementsEnabled: true,
+      ),
+      playerProfileId: 'player',
+      evaluation: evaluation,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: RankingAchievementSection(achievements: [view])),
+      ),
+    );
+    await tester.ensureVisible(find.text('Errungenschaften anzeigen'));
+    await tester.tap(find.text('Errungenschaften anzeigen'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Ranglisten-Achievements'));
+    await tester.tap(find.text('Ranglisten-Achievements'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1 abgeschlossen'), findsOneWidget);
+  });
 }

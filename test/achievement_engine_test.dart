@@ -60,6 +60,73 @@ void main() {
     expect(result.totalExperiencePoints, 39);
   });
 
+  test('category completion progress is consistently binary', () {
+    final definitions = AchievementCatalog.definitions
+        .where(
+          (definition) =>
+              definition.category == AchievementCategory.activityAndLoyalty,
+        )
+        .toList();
+    final categoryAchievements = definitions
+        .where((definition) => !definition.isCategoryCompletion)
+        .toList();
+    final completionAchievement = definitions.singleWhere(
+      (definition) => definition.isCategoryCompletion,
+    );
+    final partialValues = <AchievementMetric, double>{
+      AchievementMetric.consecutiveActiveMonths: 6,
+      AchievementMetric.trainingSessions: 10,
+    };
+    final partial = engine.evaluate(
+      values: partialValues,
+      rankingCompleted: false,
+    );
+    final partialCompletion = partial.progress[completionAchievement.id]!;
+
+    expect(
+      categoryAchievements.where(
+        (definition) => partial.progress[definition.id]!.isCompleted,
+      ),
+      isNotEmpty,
+    );
+    expect(partialCompletion.currentValue, 0);
+    expect(partialCompletion.definition.target, 1);
+    expect(partialCompletion.fraction, 0);
+
+    final preserved = engine.evaluate(
+      values: partialValues,
+      rankingCompleted: false,
+      permanentlyUnlocked: {completionAchievement.id},
+    );
+    final preservedCompletion = preserved.progress[completionAchievement.id]!;
+    expect(preservedCompletion.isCompleted, isTrue);
+    expect(preservedCompletion.currentValue, 1);
+    expect(preservedCompletion.fraction, 1);
+
+    final completeValues = <AchievementMetric, double>{};
+    for (final definition in categoryAchievements) {
+      final metric = definition.metric;
+      if (metric == null) continue;
+      final requiredValue = definition.strictTarget
+          ? definition.target + 0.01
+          : definition.target;
+      final currentValue = completeValues[metric] ?? 0;
+      if (requiredValue > currentValue) {
+        completeValues[metric] = requiredValue;
+      }
+    }
+    final complete = engine.evaluate(
+      values: completeValues,
+      rankingCompleted: false,
+    );
+    final completeProgress = complete.progress[completionAchievement.id]!;
+
+    expect(completeProgress.isCompleted, isTrue);
+    expect(completeProgress.currentValue, 1);
+    expect(completeProgress.definition.target, 1);
+    expect(completeProgress.fraction, 1);
+  });
+
   test('ranking-specific thresholds drive evaluation dynamically', () {
     final definitions = AchievementCatalog.withTargets({
       'legs_won_10': 3,
@@ -75,6 +142,18 @@ void main() {
     expect(result.progress['legs_won_10']!.isCompleted, isTrue);
     expect(result.progress['legs_won_25']!.definition.target, 7);
     expect(result.progress['legs_won_25']!.isCompleted, isFalse);
+  });
+
+  test('adjusted targets are reflected in achievement descriptions', () {
+    final achievement = AchievementCatalog.withTargets({
+      'legs_won_10': 9,
+    }).singleWhere((definition) => definition.id == 'legs_won_10');
+
+    expect(achievement.description, 'Gewinne insgesamt 9 Legs.');
+    expect(
+      achievement.copyWith(target: 8).description,
+      'Gewinne insgesamt 8 Legs.',
+    );
   });
 
   test(

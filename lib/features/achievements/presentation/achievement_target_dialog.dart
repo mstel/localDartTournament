@@ -96,9 +96,19 @@ class _AchievementTargetDialogState extends State<AchievementTargetDialog> {
                                   ),
                               decoration: InputDecoration(
                                 labelText: definition.name,
-                                helperText: definition.description,
+                                helperText: definition
+                                    .copyWith(
+                                      target:
+                                          _value(
+                                            _controllers[definition.id]!.text,
+                                          ) ??
+                                          (widget.targets[definition.id] ??
+                                              definition.target),
+                                    )
+                                    .description,
                                 border: const OutlineInputBorder(),
                               ),
+                              onChanged: (_) => setState(() {}),
                               validator: (text) {
                                 final value = _value(text ?? '');
                                 return value == null ||

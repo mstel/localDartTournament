@@ -108,4 +108,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(result, isEmpty);
   });
+
+  testWidgets('updates helper description when an achievement target changes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const ValueKey('open-dialog'),
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const AchievementTargetDialog(targets: {}),
+              ),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-dialog')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Spielbetrieb'));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('achievement-target-legs_won_10'));
+    await tester.enterText(field, '9');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gewinne insgesamt 9 Legs.'), findsOneWidget);
+  });
 }

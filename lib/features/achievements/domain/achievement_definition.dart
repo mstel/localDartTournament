@@ -90,7 +90,9 @@ class AchievementDefinition {
   AchievementDefinition copyWith({double? target}) => AchievementDefinition(
     id: id,
     name: name,
-    description: description,
+    description: target == null || target == this.target
+        ? description
+        : _descriptionForTarget(description, this.target, target),
     category: category,
     experiencePoints: experiencePoints,
     metric: metric,
@@ -101,6 +103,59 @@ class AchievementDefinition {
     completionCategory: completionCategory,
   );
 }
+
+String _descriptionForTarget(
+  String description,
+  double previousTarget,
+  double nextTarget,
+) {
+  final replacement = nextTarget == nextTarget.roundToDouble()
+      ? nextTarget.toInt().toString()
+      : nextTarget.toString();
+  final candidates = [
+    _formatTarget(previousTarget),
+    ...?_germanTargetWords[previousTarget.round()],
+  ];
+  for (final candidate in candidates.toSet()) {
+    final escaped = RegExp.escape(candidate);
+    final match = RegExp(
+      '(^|[^\\p{L}\\p{N}])$escaped(?=[^\\p{L}\\p{N}]|\$)',
+      caseSensitive: false,
+      unicode: true,
+    ).firstMatch(description);
+    if (match == null) continue;
+    return description.replaceRange(
+      match.start,
+      match.end,
+      '${match.group(1)}$replacement',
+    );
+  }
+  return description;
+}
+
+String _formatTarget(double value) => value == value.roundToDouble()
+    ? value.toInt().toString()
+    : value.toString();
+
+const _germanTargetWords = <int, List<String>>{
+  1: ['ein', 'eine', 'einen', 'einem', 'einer', 'eines'],
+  2: ['zwei'],
+  3: ['drei'],
+  4: ['vier'],
+  5: ['fünf'],
+  6: ['sechs'],
+  7: ['sieben'],
+  8: ['acht'],
+  9: ['neun'],
+  10: ['zehn'],
+  11: ['elf'],
+  12: ['zwölf'],
+  20: ['zwanzig'],
+  25: ['fünfundzwanzig'],
+  40: ['vierzig'],
+  50: ['fünfzig'],
+  100: ['hundert'],
+};
 
 enum AchievementStatus { locked, inProgress, completed }
 

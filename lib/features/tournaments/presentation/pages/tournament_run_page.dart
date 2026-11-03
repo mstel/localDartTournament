@@ -864,7 +864,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  void _announceRecommendationForBoard(int board) {
+  Future<void> _announceRecommendationForBoard(int board) async {
     try {
       if (!mounted ||
           !widget.tournament.soundModeEnabled ||
@@ -882,16 +882,22 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       final nextMatch = recommendation.next.entry.match;
       final alternativeMatch = recommendation.alternative?.entry.match;
       final boardName = widget.tournament.boardDisplayName(board);
+      final settings = await AudioAnnouncementPreferencesStorage().load();
+      final profiles = await LocalAppDatabase().loadPlayerProfiles();
+      if (!mounted || !widget.tournament.soundModeEnabled) return;
+      final profilesById = {
+        for (final profile in profiles) profile.id: profile,
+      };
       final audioService = _audioAnnouncementService ??=
           TournamentAudioAnnouncementService();
       unawaited(
         audioService.announce(
           text:
-              'Nächste Partie: ${_spokenMatchLabel(nextMatch)} an '
+              'Nächste Partie: ${spokenMatchLabel(nextMatch, settings, profilesById)} an '
               '${_spokenBoardName(boardName)}.',
           alternativeText: alternativeMatch == null
               ? null
-              : 'Alternativ: ${_spokenMatchLabel(alternativeMatch)} an '
+              : 'Alternativ: ${spokenMatchLabel(alternativeMatch, settings, profilesById)} an '
                     '${_spokenBoardName(boardName)}.',
           isStillCurrent: () {
             if (!mounted ||
@@ -916,9 +922,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       debugPrint('Turnierempfehlung konnte nicht angesagt werden: $error');
     }
   }
-
-  String _spokenMatchLabel(GroupMatch match) =>
-      match.participantShortLabel.replaceFirst(' – ', ' gegen ');
 
   String _spokenBoardName(String boardName) {
     final match = RegExp(r'^Board\s+(\d+)$').firstMatch(boardName);
@@ -4136,7 +4139,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                           return _editResult(
                             match,
                             onSaved: announce
-                                ? () => _announceRecommendationForBoard(board)
+                                ? () => unawaited(
+                                    _announceRecommendationForBoard(board),
+                                  )
                                 : null,
                           );
                         },

@@ -84,9 +84,9 @@ class AchievementEngine {
       final allComplete =
           categoryProgress.isNotEmpty &&
           achievedCount == categoryProgress.length;
-      final current = allComplete ? 1.0 : achievedCount.toDouble();
       final completed =
           allComplete || permanentlyUnlocked.contains(definition.id);
+      final current = completed ? 1.0 : 0.0;
       progress[definition.id] = AchievementProgress(
         definition: definition,
         currentValue: current,

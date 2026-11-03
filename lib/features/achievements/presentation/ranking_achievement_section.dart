@@ -222,17 +222,26 @@ class _AchievementDetailsDialogState extends State<_AchievementDetailsDialog> {
                 ),
                 const SizedBox(height: 8),
                 for (final category in categories)
-                  ExpansionTile(
-                    tilePadding: EdgeInsets.zero,
-                    title: Text(category.label),
-                    subtitle: Text(
-                      '${grouped[category]!.where((item) => item.isCompleted).length}'
-                      ' / ${grouped[category]!.length} abgeschlossen',
-                    ),
-                    children: [
-                      for (final progress in grouped[category]!)
-                        _AchievementProgressTile(progress: progress),
-                    ],
+                  Builder(
+                    builder: (context) {
+                      final categoryItems = grouped[category]!;
+                      final completedCount = categoryItems
+                          .where((item) => item.isCompleted)
+                          .length;
+                      final countLabel =
+                          category == AchievementCategory.rankingAwards
+                          ? '${completedCount == 0 ? 0 : 1} / 1 abgeschlossen'
+                          : '$completedCount / ${categoryItems.length} abgeschlossen';
+                      return ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        title: Text(category.label),
+                        subtitle: Text(countLabel),
+                        children: [
+                          for (final progress in categoryItems)
+                            _AchievementProgressTile(progress: progress),
+                        ],
+                      );
+                    },
                   ),
                 if (recentUnlocks.isNotEmpty) ...[
                   const Divider(),
