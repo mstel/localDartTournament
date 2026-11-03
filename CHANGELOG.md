@@ -1,3 +1,12 @@
+# 2.3.7+57
+
+- Korrigiert die Auswahl passender Spielpläne bei der Planung erweiterter
+  Turnierformate mit Best-/Worst-Case-Betrachtung.
+- Ermittelt Sieger und Platzierungen in Kratzer-Turnieren korrekt und zeigt
+  empfohlene Kratzer-Partien sowie die Zweitmonitor-Vorschau passend an.
+- Hält Kratzer-Partien aus Einzel- und Leg-Statistiken heraus, zählt sie aber
+  weiterhin als Matches.
+
 # 2.3.6+56
 
 - Ergänzt aktuelle Form aus den letzten 100 gewerteten Legs in den
