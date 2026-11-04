@@ -1,3 +1,12 @@
+# 2.4.8+68
+
+- Rekonstruiert Challonge-K.-o.-Brackets anhand der gespeicherten Seeds statt
+  der Reihenfolge, in der Challonge Spieldatensätze liefert. Dadurch bleiben
+  auch bei unsortierten historischen KO-Spielen die Weiterleitungen erhalten.
+- Verlängert auf Windows die Wartezeit auf die Startbestätigung des Update-
+  Hilfsprogramms von 10 auf 30 Sekunden, damit verzögerter PowerShell-Start
+  nicht vorschnell als fehlgeschlagen gilt.
+
 # 2.4.7+67
 
 - Ermöglicht den Austausch von Gruppeneinteilungen zwischen der

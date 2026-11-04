@@ -287,13 +287,14 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
         );
         throw FileSystemException('$message $error Log: ${logFile.path}');
       }
-      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      final deadline = DateTime.now().add(const Duration(seconds: 30));
       while (DateTime.now().isBefore(deadline)) {
         if (await startedFile.exists()) return;
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
       updater.kill();
-      const message = 'Update-Hilfsprogramm hat den Start nicht bestätigt.';
+      const message =
+          'Update-Hilfsprogramm hat den Start innerhalb von 30 Sekunden nicht bestätigt.';
       await logFile.writeAsString(
         '${DateTime.now().toUtc().toIso8601String()} $message\n',
         mode: FileMode.append,

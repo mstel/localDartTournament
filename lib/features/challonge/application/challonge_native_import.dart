@@ -1,6 +1,7 @@
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime;
 import '../../statistics/domain/best_performance.dart';
+import '../../tournaments/domain/engines/tournament_engine.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/domain/imported_tournament_archive.dart';
 
@@ -346,18 +347,55 @@ class ChallongeNativeImport {
       final firstRound = finals
           .where((m) => (m['round'] as int? ?? 0) == 1)
           .toList();
-      final slots = <TournamentPlayer?>[];
-      for (final m in firstRound) {
-        slots.add(bySourceId['${m['player1_id']}']);
-        slots.add(bySourceId['${m['player2_id']}']);
-      }
-      for (final p in entrants.where((p) => !slots.contains(p))) {
-        slots.add(p);
-        slots.add(null);
-      }
       var size = 2;
       while (size < entrants.length) {
         size *= 2;
+      }
+      final seedByPlayer = <String, int>{};
+      var hasConsistentSeeds = true;
+      for (final match in finals) {
+        for (var index = 1; index <= 2; index++) {
+          final sourceId = match['player${index}_id'];
+          final seed = int.tryParse('${match['player${index}_seed'] ?? ''}');
+          if (sourceId == null || seed == null || seed < 1) continue;
+          final player = bySourceId['$sourceId'];
+          if (player == null) continue;
+          final identity = _playerIdentity(player);
+          final previous = seedByPlayer[identity];
+          if (previous != null && previous != seed) {
+            hasConsistentSeeds = false;
+          } else {
+            seedByPlayer[identity] = seed;
+          }
+        }
+      }
+      final expectedSeeds = List<int>.generate(entrants.length, (i) => i + 1);
+      final seededSlotsAreComplete =
+          hasConsistentSeeds &&
+          seedByPlayer.length == entrants.length &&
+          seedByPlayer.values.toSet().length == entrants.length &&
+          seedByPlayer.values.toSet().containsAll(expectedSeeds);
+      final slots = <TournamentPlayer?>[];
+      if (seededSlotsAreComplete) {
+        final playerBySeed = {
+          for (final player in entrants)
+            seedByPlayer[_playerIdentity(player)]!: player,
+        };
+        slots.addAll(
+          const TournamentEngine()
+              .seedOrderForSize(size)
+              .map((seed) => playerBySeed[seed]),
+        );
+      } else {
+        for (final match in firstRound) {
+          slots.add(bySourceId['${match['player1_id']}']);
+          slots.add(bySourceId['${match['player2_id']}']);
+        }
+        for (final player in entrants.where((p) => !slots.contains(p))) {
+          slots
+            ..add(player)
+            ..add(null);
+        }
       }
       while (slots.length < size) {
         slots.add(null);

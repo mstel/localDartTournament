@@ -105,6 +105,78 @@ void main() {
   );
 
   test(
+    'uses Challonge seeds to preserve knockout paths when matches are unordered',
+    () async {
+      Map<String, dynamic> match(
+        int id,
+        int round,
+        int home,
+        int away,
+        int homeSeed,
+        int awaySeed,
+      ) => {
+        'id': id,
+        'identifier': 'M$id',
+        'round': round,
+        'state': 'complete',
+        'player1_id': home,
+        'player2_id': away,
+        'player1_seed': homeSeed,
+        'player2_seed': awaySeed,
+        'winner_id': home,
+        'scores_csv': '2-0',
+        'started_at': '2026-04-04T13:00:00Z',
+        'completed_at': '2026-04-04T13:05:00Z',
+      };
+
+      final data = {
+        'id': 43,
+        'name': 'Unsortierter KO-Baum',
+        'state': 'complete',
+        'tournament_type': 'single elimination',
+        'created_at': '2026-04-04T12:00:00Z',
+        'started_at': '2026-04-04T13:00:00Z',
+        'completed_at': '2026-04-04T14:00:00Z',
+        'full_challonge_url': 'https://challonge.com/unsortierterbaum',
+        'participants': [
+          for (var seed = 1; seed <= 8; seed++)
+            {'id': seed, 'name': 'Spieler $seed', 'final_rank': seed},
+        ],
+        // The second-round paths require [1 vs 8, 4 vs 5] and [2 vs 7,
+        // 3 vs 6]. Challonge may return first-round rows in another order.
+        'matches': [
+          match(11, 1, 1, 8, 1, 8),
+          match(12, 1, 2, 7, 2, 7),
+          match(13, 1, 3, 6, 3, 6),
+          match(14, 1, 4, 5, 4, 5),
+          match(21, 2, 1, 4, 1, 4),
+          match(22, 2, 2, 3, 2, 3),
+          match(31, 3, 1, 2, 1, 2),
+        ],
+      };
+      final archived = ChallongeTournament(
+        data,
+      ).convert({for (var seed = 1; seed <= 8; seed++) '$seed': 'p$seed'});
+
+      final converted = await ChallongeTournamentConversionService().convert(
+        archived,
+      );
+
+      final stage = converted.runStages.single as KnockoutTournamentRunStage;
+      expect(converted.completedStageIndexes, {0});
+      expect(stage.rounds[1], hasLength(2));
+      expect(
+        stage.rounds[1].map((m) => {m.homePlayer!.name, m.awayPlayer!.name}),
+        [
+          {'Spieler 1', 'Spieler 4'},
+          {'Spieler 2', 'Spieler 3'},
+        ],
+      );
+      expect(stage.rounds.last.single.winner?.name, 'Spieler 1');
+    },
+  );
+
+  test(
     'converts incomplete assignments while preserving local opponents',
     () async {
       final original = archivedTournament();
