@@ -60,7 +60,7 @@ void main() {
   test(
     'unknown tournament version reports its version and remains untouched',
     () async {
-      const content = '{"schemaVersion":38,"tournaments":[]}';
+      const content = '{"schemaVersion":39,"tournaments":[]}';
       await file.writeAsString(content);
       final storage = TournamentStorage(file: file);
 
@@ -68,7 +68,7 @@ void main() {
         await storage.loadTournaments();
         fail('A future storage version must not be interpreted as supported.');
       } on FormatException catch (error) {
-        expect(error.message, contains('Version 38'));
+        expect(error.message, contains('Version 39'));
         expect(error.message, contains('1 bis 38'));
       }
 
