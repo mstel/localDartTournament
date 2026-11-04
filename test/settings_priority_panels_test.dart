@@ -8,13 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('administration settings open as full settings pages', (
-    tester,
-  ) async {
+  testWidgets('administration settings expand inline', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
     await tester.tap(find.byType(ChoiceChip).last);
     await tester.pumpAndSettle();
-    expect(find.text('Werkzeuge & Verwaltung'), findsNWidgets(2));
+    expect(find.text('Sonstige Einstellungen'), findsNWidgets(2));
 
     await tester.scrollUntilVisible(
       find.text('Tie Breaker Standardwerte'),
@@ -25,8 +23,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Tie Breaker Standardwerte'), findsOneWidget);
     expect(find.textContaining('Diese Reihenfolge wird'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
       find.text('Hinweiseinstellungen'),
@@ -55,17 +51,20 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(2)),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
-          home: const Scaffold(body: PriorityNoticeSettingsPanel()),
+          home: const Scaffold(
+            body: SingleChildScrollView(child: PriorityNoticeSettingsPanel()),
+          ),
         ),
       );
       await tester.pumpAndSettle();
 
       expect(find.text('Hinweiseinstellungen'), findsOneWidget);
+      await tester.tap(find.text('Hinweiseinstellungen'));
+      await tester.pumpAndSettle();
       expect(
         find.text('Prioritätshinweis pro Spieler ab Verzug von'),
         findsOneWidget,
@@ -87,17 +86,21 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(2)),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
-          home: const Scaffold(body: TieBreakerDefaultsPanel()),
+          home: const Scaffold(
+            body: SingleChildScrollView(child: TieBreakerDefaultsPanel()),
+          ),
         ),
       );
       await tester.pumpAndSettle();
 
       expect(find.text('Tie Breaker Standardwerte'), findsOneWidget);
+      await tester.tap(find.text('Tie Breaker Standardwerte'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Diese Reihenfolge wird'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

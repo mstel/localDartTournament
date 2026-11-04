@@ -41,8 +41,7 @@ import '../../../../league/presentation/league_overview.dart';
 
 const Map<String, String> _monitorWidgetTitles = {
   'standings': 'Tabellen & Zwischenstände',
-  'forecast': 'Siegprognose & Weiterkommen',
-  'combined': 'Tabellen & Prognose (Umschalter)',
+  'combined': 'Tabellen/Siegprognose mit Umschalter',
   'recent': 'Zuletzt beendete Matches',
   'boards': 'Boards & nächste Begegnungen',
   'liveBoard': 'Live Board Ansicht',
@@ -171,8 +170,27 @@ class _TournamentSecondScreenViewState
     final saved = activeName == null
         ? null
         : widget.tournament.secondScreenLayouts[activeName];
+    final placements = saved ?? _defaultMonitorLayout;
+    final hasCombinedWidget = placements.any(
+      (placement) => placement.widgetId == 'combined',
+    );
     return _withIndependentColumns(
-      (saved ?? _defaultMonitorLayout)
+      placements
+          .where(
+            (placement) =>
+                placement.widgetId != 'forecast' || !hasCombinedWidget,
+          )
+          .map(
+            (placement) => placement.widgetId == 'forecast'
+                ? SecondScreenWidgetPlacement(
+                    widgetId: 'combined',
+                    widthUnits: placement.widthUnits,
+                    heightUnits: placement.heightUnits,
+                    startsNewRow: placement.startsNewRow,
+                    columnIndex: placement.columnIndex,
+                  )
+                : placement,
+          )
           .where(_isMonitorWidgetAvailable)
           .toList(),
     );
@@ -1615,14 +1633,6 @@ class _TournamentSecondScreenViewState
           tournament,
           activeStage,
           full: true,
-          expand: true,
-        );
-      case 'forecast':
-        return _buildKoPrognosisPanel(
-          context,
-          tournament,
-          activeIndex,
-          activeStage,
           expand: true,
         );
       case 'combined':

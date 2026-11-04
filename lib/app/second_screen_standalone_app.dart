@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_theme.dart';
+import 'christmas_decorations.dart';
+import 'theme_controller.dart';
 import '../features/tournaments/data/tournament_storage.dart';
 import '../features/tournaments/domain/tournament_models.dart';
 import '../features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
@@ -27,24 +29,44 @@ CreatedTournament? resolveSecondScreenTournament(
   return tournaments.isEmpty ? null : tournaments.last;
 }
 
-class SecondScreenStandaloneApp extends StatelessWidget {
+class SecondScreenStandaloneApp extends StatefulWidget {
   const SecondScreenStandaloneApp({super.key, this.tournamentId});
 
   final String? tournamentId;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Dart Turnieranzeige (2. Bildschirm)',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
-      theme: buildDartTournamentTheme(),
-      darkTheme: buildDartTournamentDarkTheme(),
-      builder: (context, child) =>
-          ArrowKeyDropdownNavigation(child: child ?? const SizedBox.shrink()),
-      home: _SecondScreenStandalonePage(tournamentId: tournamentId),
-    );
+  State<SecondScreenStandaloneApp> createState() =>
+      _SecondScreenStandaloneAppState();
+}
+
+class _SecondScreenStandaloneAppState extends State<SecondScreenStandaloneApp> {
+  @override
+  void initState() {
+    super.initState();
+    AppThemeController.instance.load();
   }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<AppThemeStyle>(
+    valueListenable: AppThemeController.instance.themeStyleNotifier,
+    builder: (context, style, _) {
+      final christmas = style == AppThemeStyle.christmas;
+      return MaterialApp(
+        title: 'Dart Turnieranzeige (2. Bildschirm)',
+        debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.dark,
+        theme: buildDartTournamentTheme(christmas: christmas),
+        darkTheme: buildDartTournamentDarkTheme(christmas: christmas),
+        builder: (context, child) {
+          final app = ArrowKeyDropdownNavigation(
+            child: child ?? const SizedBox.shrink(),
+          );
+          return christmas ? ChristmasDecorations(child: app) : app;
+        },
+        home: _SecondScreenStandalonePage(tournamentId: widget.tournamentId),
+      );
+    },
+  );
 }
 
 class _SecondScreenStandalonePage extends StatefulWidget {

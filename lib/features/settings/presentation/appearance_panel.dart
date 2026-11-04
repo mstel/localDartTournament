@@ -1,6 +1,8 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+
 import '../../../app/theme_controller.dart';
+
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 
 class AppearancePanel extends StatefulWidget {
@@ -45,6 +47,20 @@ class _AppearancePanelState extends State<AppearancePanel> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Standardlogo konnte nicht geladen werden: $error'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _setThemeStyle(AppThemeStyle style) async {
+    try {
+      await AppThemeController.instance.setThemeStyle(style);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Design konnte nicht gespeichert werden: $error'),
           ),
         );
       }
@@ -118,6 +134,30 @@ class _AppearancePanelState extends State<AppearancePanel> {
               },
             );
           },
+        ),
+        const SizedBox(height: 16),
+        ValueListenableBuilder<AppThemeStyle>(
+          valueListenable: controller.themeStyleNotifier,
+          builder: (context, style, _) =>
+              DropdownButtonFormField<AppThemeStyle>(
+                initialValue: style,
+                decoration: const InputDecoration(labelText: 'Farbschema'),
+                items: const [
+                  DropdownMenuItem(
+                    value: AppThemeStyle.club,
+                    child: Text('Vereinsdesign · Blau'),
+                  ),
+                  DropdownMenuItem(
+                    value: AppThemeStyle.christmas,
+                    child: Text(
+                      'Weihnachten · Schnee, Lichter & Weihnachtsmann',
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) _setThemeStyle(value);
+                },
+              ),
         ),
       ],
     );

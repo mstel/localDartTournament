@@ -4,12 +4,15 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+enum AppThemeStyle { club, christmas }
+
 /// Manages and persists the app's ThemeMode (system, light, dark).
 class AppThemeController {
   AppThemeController._();
   static final AppThemeController instance = AppThemeController._();
 
   static const _prefKey = 'app_theme_mode';
+  static const _stylePrefKey = 'app_theme_style';
   static const _logoPrefKey = 'app_brand_logo';
   final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(
     ThemeMode.system,
@@ -17,6 +20,8 @@ class AppThemeController {
   final ValueNotifier<Uint8List?> logoBytesNotifier = ValueNotifier<Uint8List?>(
     null,
   );
+  final ValueNotifier<AppThemeStyle> themeStyleNotifier =
+      ValueNotifier<AppThemeStyle>(AppThemeStyle.club);
 
   ThemeMode get themeMode => themeModeNotifier.value;
 
@@ -24,6 +29,7 @@ class AppThemeController {
     try {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getString(_prefKey);
+      final savedStyle = prefs.getString(_stylePrefKey);
       final logo = prefs.getString(_logoPrefKey);
       if (saved == 'dark') {
         themeModeNotifier.value = ThemeMode.dark;
@@ -32,6 +38,9 @@ class AppThemeController {
       } else {
         themeModeNotifier.value = ThemeMode.system;
       }
+      themeStyleNotifier.value = savedStyle == 'christmas'
+          ? AppThemeStyle.christmas
+          : AppThemeStyle.club;
       if (logo != null) logoBytesNotifier.value = base64Decode(logo);
     } catch (_) {}
   }
@@ -61,5 +70,15 @@ class AppThemeController {
         await prefs.remove(_prefKey);
       }
     } catch (_) {}
+  }
+
+  Future<void> setThemeStyle(AppThemeStyle style) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (style == AppThemeStyle.christmas) {
+      await prefs.setString(_stylePrefKey, 'christmas');
+    } else {
+      await prefs.remove(_stylePrefKey);
+    }
+    themeStyleNotifier.value = style;
   }
 }

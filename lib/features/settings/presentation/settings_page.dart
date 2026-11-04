@@ -32,7 +32,7 @@ class _SettingsPageState extends State<SettingsPage> {
     'Daten',
     'Updates',
     'Darstellung',
-    'Werkzeuge & Verwaltung',
+    'Sonstige Einstellungen',
   ];
 
   @override
@@ -112,7 +112,7 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
     padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
     children: [
       Text(
-        'Werkzeuge & Verwaltung',
+        'Sonstige Einstellungen',
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 16),
@@ -146,17 +146,10 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
       ),
       Card(
         child: ListTile(
-          leading: const Icon(Icons.science_outlined),
-          title: const Text('Dev Tools'),
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: (_) => const DevToolsPage())),
-        ),
-      ),
-      Card(
-        child: ListTile(
           leading: const Icon(Icons.auto_awesome_outlined),
-          title: const Text('Passende Turnierform'),
+          title: const Text(
+            'Passende Turnierform finden - Zeitberechnung & Standardwerte',
+          ),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => const PlanningParametersPage(),
@@ -164,51 +157,18 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
           ),
         ),
       ),
+      const Card(child: TieBreakerDefaultsPanel()),
+      const Card(child: PriorityNoticeSettingsPanel()),
       Card(
         child: ListTile(
-          leading: const Icon(Icons.rule_folder_outlined),
-          title: const Text('Tie Breaker Standardwerte'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const _TieBreakerDefaultsPage(),
-            ),
-          ),
-        ),
-      ),
-      Card(
-        child: ListTile(
-          leading: const Icon(Icons.tips_and_updates_outlined),
-          title: const Text('Hinweiseinstellungen'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const _PriorityNoticeSettingsPage(),
-            ),
-          ),
+          leading: const Icon(Icons.science_outlined),
+          title: const Text('Dev Tools'),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const DevToolsPage())),
         ),
       ),
     ],
-  );
-}
-
-class _TieBreakerDefaultsPage extends StatelessWidget {
-  const _TieBreakerDefaultsPage();
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Tie Breaker Standardwerte')),
-    body: const TieBreakerDefaultsPanel(showTitle: false),
-  );
-}
-
-class _PriorityNoticeSettingsPage extends StatelessWidget {
-  const _PriorityNoticeSettingsPage();
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Hinweiseinstellungen')),
-    body: const PriorityNoticeSettingsPanel(showTitle: false),
   );
 }
 
@@ -217,7 +177,11 @@ class PlanningParametersPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Passende Turnierform')),
+    appBar: AppBar(
+      title: const Text(
+        'Passende Turnierform finden - Zeitberechnung & Standardwerte',
+      ),
+    ),
     body: const SafeArea(child: _PlanningParametersPanel()),
   );
 }
@@ -385,7 +349,7 @@ class _PlanningParametersPanelState extends State<_PlanningParametersPanel> {
         padding: const EdgeInsets.all(20),
         children: [
           Text(
-            'Passende Turnierform',
+            'Passende Turnierform finden - Zeitberechnung & Standardwerte',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 8),
@@ -451,11 +415,15 @@ class _PlanningParametersPanelState extends State<_PlanningParametersPanel> {
           const SizedBox(height: 12),
           const SportSettingsSection(
             title: 'So wird gerechnet',
-            summary: 'Leg-Dauern und Bewertung erklärt',
+            summary: 'Leg-Dauern, Strafpunkte und Bewertung erklärt',
             icon: Icons.info_outline,
             children: [
               Text(
                 'Leg-Dauern sind Schätzwerte. Pro Match gilt der Mittelwert aus minimaler und maximaler Leg-Zahl: Bo3 = 2,5; Bo5 = 4; Bo101 = 76; Bo1 = 1 Leg. Bei Sets wird zusätzlich mit der mittleren Set-Zahl gerechnet. Double In verwendet die Double-Out-Dauer. Weniger Strafpunkte bedeuten eine bessere Platzierung. Spielerzahl, Boards, Zeitfenster, Punktzahl und Checkout werden weiterhin je Turniersuche festgelegt.',
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Strafpunkte sind nur Bewertungsgewichte für die Sortierung der Turniervorschläge, keine Minuspunkte für Spieler. Ein fehlendes Mindestspiel pro Spieler wiegt standardmäßig 10.000 Punkte, eine Minute außerhalb des Zeitfensters 10 Punkte und eine Minute Abweichung von der Maximaldauer 1 Punkt. Bei der Suche nach einer Zielzeit wird außerdem berücksichtigt, wie nah ein Vorschlag an dieser Zeit liegt. Je niedriger der Gesamtwert, desto weiter oben steht der Vorschlag.',
               ),
             ],
           ),

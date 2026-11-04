@@ -81,16 +81,15 @@ class _StandingsTableState extends State<StandingsTable> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = colorScheme.brightness == Brightness.dark;
     final sureColor = isDarkMode
         ? const Color(0xFF144D34)
         : const Color(0xFF0B6B45);
     final possibleColor = isDarkMode
         ? const Color(0xFF163828)
         : const Color(0xFFD6F5E3);
-    final bestOfColor = isDarkMode
-        ? const Color(0xFF3B3216)
-        : const Color(0xFFFFF1C2);
+    final bestOfColor = colorScheme.primaryContainer;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -204,9 +203,7 @@ class _StandingsTableState extends State<StandingsTable> {
       fontWeight = FontWeight.w500;
     } else if (isBestOf) {
       rowColor = bestOfColor;
-      cellTextColor = isDarkMode
-          ? const Color(0xFFFDE68A)
-          : const Color(0xFF78350F);
+      cellTextColor = Theme.of(context).colorScheme.onPrimaryContainer;
       fontWeight = FontWeight.w500;
     }
 

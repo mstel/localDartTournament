@@ -1,52 +1,58 @@
 import 'package:flutter/material.dart';
 
 /// Club-inspired color palette for DC Unzenberg/Heinzenbach.
-ThemeData buildDartTournamentTheme() => _buildTheme(isDark: false);
+ThemeData buildDartTournamentTheme({bool christmas = false}) =>
+    _buildTheme(isDark: false, christmas: christmas);
 
-ThemeData buildDartTournamentDarkTheme() => _buildTheme(isDark: true);
+ThemeData buildDartTournamentDarkTheme({bool christmas = false}) =>
+    _buildTheme(isDark: true, christmas: christmas);
 
-ThemeData _buildTheme({required bool isDark}) {
-  final ink = isDark ? const Color(0xFFF5F3ED) : const Color(0xFF191B20);
-  final gold = isDark ? const Color(0xFFD49B44) : const Color(0xFFB5811E);
-  final bg = isDark ? const Color(0xFF121316) : const Color(0xFFF7F5F0);
-  final surface = isDark ? const Color(0xFF1B1D24) : const Color(0xFFFFFFFF);
+ThemeData _buildTheme({required bool isDark, required bool christmas}) {
+  final ink = isDark ? const Color(0xFFF1F5F8) : const Color(0xFF15212B);
+  final primary = christmas
+      ? (isDark ? const Color(0xFFF0808B) : const Color(0xFFB52D43))
+      : (isDark ? const Color(0xFF70C4E8) : const Color(0xFF1D648A));
+  final bg = isDark ? const Color(0xFF0F1720) : const Color(0xFFF4F7FA);
+  final surface = isDark ? const Color(0xFF16212B) : const Color(0xFFFFFFFF);
   final surfaceSecondary = isDark
-      ? const Color(0xFF242731)
-      : const Color(0xFFF1EFEA);
+      ? const Color(0xFF1D2D3A)
+      : const Color(0xFFE9F0F5);
+  final primaryContainer = christmas
+      ? (isDark ? const Color(0xFF3A1D29) : const Color(0xFFFBE8EC))
+      : (isDark ? const Color(0xFF19394B) : const Color(0xFFDCECF5));
+  final onPrimaryContainer = christmas
+      ? (isDark ? const Color(0xFFFFE7EA) : const Color(0xFF45101B))
+      : (isDark ? const Color(0xFFC9EDFA) : const Color(0xFF163144));
 
   final scheme =
       (isDark
               ? ColorScheme.fromSeed(
-                  seedColor: gold,
+                  seedColor: primary,
                   brightness: Brightness.dark,
                 )
               : ColorScheme.fromSeed(
-                  seedColor: gold,
+                  seedColor: primary,
                   brightness: Brightness.light,
                 ))
           .copyWith(
-            primary: gold,
-            onPrimary: isDark ? const Color(0xFF121316) : Colors.white,
-            primaryContainer: isDark
-                ? const Color(0xFF382B14)
-                : const Color(0xFFFCEECF),
-            onPrimaryContainer: isDark
-                ? const Color(0xFFFDE8B5)
-                : const Color(0xFF281C03),
-            secondary: isDark
-                ? const Color(0xFFB0B4C0)
-                : const Color(0xFF2D323E),
-            onSecondary: isDark ? const Color(0xFF121316) : Colors.white,
+            primary: primary,
+            onPrimary: isDark ? const Color(0xFF0F1720) : Colors.white,
+            primaryContainer: primaryContainer,
+            onPrimaryContainer: onPrimaryContainer,
+            secondary: christmas
+                ? (isDark ? const Color(0xFF8BD7A8) : const Color(0xFF287548))
+                : (isDark ? const Color(0xFFA9C6D6) : const Color(0xFF385D76)),
+            onSecondary: isDark ? const Color(0xFF0F1720) : Colors.white,
             secondaryContainer: surfaceSecondary,
             surface: surface,
             onSurface: ink,
             onSurfaceVariant: isDark
-                ? const Color(0xFFA5AAB7)
-                : const Color(0xFF5B606D),
-            outline: isDark ? const Color(0xFF3E4351) : const Color(0xFF757065),
+                ? const Color(0xFFA8B8C3)
+                : const Color(0xFF536674),
+            outline: isDark ? const Color(0xFF405464) : const Color(0xFF718696),
             outlineVariant: isDark
-                ? const Color(0xFF2A2E38)
-                : const Color(0xFFE2DDD2),
+                ? const Color(0xFF2D3F50)
+                : const Color(0xFFD3DFE8),
           );
 
   final base = ThemeData(
@@ -111,7 +117,7 @@ ThemeData _buildTheme({required bool isDark}) {
       border: border,
       enabledBorder: border,
       focusedBorder: border.copyWith(
-        borderSide: BorderSide(color: gold, width: 2),
+        borderSide: BorderSide(color: primary, width: 2),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -142,7 +148,7 @@ ThemeData _buildTheme({required bool isDark}) {
     ),
     listTileTheme: ListTileThemeData(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      iconColor: gold,
+      iconColor: primary,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     chipTheme: base.chipTheme.copyWith(
@@ -193,7 +199,7 @@ ThemeData _buildTheme({required bool isDark}) {
       columnSpacing: 28,
     ),
     tabBarTheme: TabBarThemeData(
-      labelColor: gold,
+      labelColor: primary,
       unselectedLabelColor: scheme.onSurfaceVariant,
       indicatorSize: TabBarIndicatorSize.label,
       dividerColor: scheme.outlineVariant,
@@ -211,11 +217,11 @@ ThemeData _buildTheme({required bool isDark}) {
     expansionTileTheme: ExpansionTileThemeData(
       shape: const Border(),
       collapsedShape: const Border(),
-      iconColor: gold,
+      iconColor: primary,
       collapsedIconColor: scheme.onSurfaceVariant,
       tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
     ),
-    progressIndicatorTheme: ProgressIndicatorThemeData(color: gold),
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: primary),
     tooltipTheme: TooltipThemeData(
       textStyle: TextStyle(
         color: isDark ? const Color(0xFFF5F3ED) : Colors.white,

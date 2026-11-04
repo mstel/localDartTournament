@@ -307,9 +307,8 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(2)),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: Scaffold(
@@ -701,6 +700,53 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Tabellen & Zwischenstände'), findsAtLeastNWidgets(1));
     expect(find.text('Kombiniert'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('widget picker offers the combined forecast widget only', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: CreatedTournament(
+              name: 'Widget-Auswahl',
+              players: const [],
+              stages: const [],
+              runStages: const [],
+            ),
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+    await tester.tap(find.text('Widget hinzufügen'));
+    await tester.pump();
+
+    final picker = find.byType(SimpleDialog);
+    expect(
+      find.descendant(
+        of: picker,
+        matching: find.text('Tabellen/Siegprognose mit Umschalter'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: picker,
+        matching: find.text('Siegprognose & Weiterkommen'),
+      ),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 

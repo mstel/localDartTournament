@@ -49,7 +49,12 @@ class _TieBreakerDefaultsPanelState extends State<TieBreakerDefaultsPanel> {
 
   Future<void> _move(int index, int direction) async {
     final nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= _tieBreakers.length || _saving) return;
+    if (nextIndex < 0 ||
+        nextIndex >= _tieBreakers.length ||
+        _loading ||
+        _saving) {
+      return;
+    }
     final previous = List<String>.from(_tieBreakers);
     final updated = List<String>.from(_tieBreakers);
     final value = updated.removeAt(index);
@@ -75,20 +80,13 @@ class _TieBreakerDefaultsPanelState extends State<TieBreakerDefaultsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    return ListView(
-      padding: const EdgeInsets.all(20),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.showTitle) ...[
-          Text(
-            'Tie Breaker Standardwerte',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-        ],
         const Text(
           'Diese Reihenfolge wird bei neuen Turnieren voreingestellt. Mit den Pfeilen lässt sie sich dauerhaft anpassen.',
         ),
+        if (_loading) const LinearProgressIndicator(),
         if (_error case final error?) ...[
           const SizedBox(height: 12),
           Text(
@@ -97,7 +95,7 @@ class _TieBreakerDefaultsPanelState extends State<TieBreakerDefaultsPanel> {
           ),
           TextButton(onPressed: _load, child: const Text('Erneut laden')),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         GroupTieBreakerSetup(
           tieBreakers: _tieBreakers,
           onMoveTieBreaker: _move,
@@ -107,6 +105,14 @@ class _TieBreakerDefaultsPanelState extends State<TieBreakerDefaultsPanel> {
           'Standard: Matchpunkte, Leg-Differenz, gewonnene Legs, direkter Vergleich.',
         ),
       ],
+    );
+    if (!widget.showTitle) return content;
+    return ExpansionTile(
+      leading: const Icon(Icons.rule_folder_outlined),
+      title: const Text('Tie Breaker Standardwerte'),
+      subtitle: const Text('Reihenfolge der Tabellenwertung festlegen.'),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      children: [content],
     );
   }
 }

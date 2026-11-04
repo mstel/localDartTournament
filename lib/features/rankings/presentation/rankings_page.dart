@@ -2625,10 +2625,37 @@ class PlayerEloHistoryPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      player.name,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    Tooltip(
+                      message: 'Spielerprofil von ${player.name} öffnen',
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => LocalPlayerStatisticsPage(
+                              name: player.name,
+                              profileIds: {player.id},
+                            ),
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: colorScheme.onPrimaryContainer,
+                          alignment: Alignment.centerLeft,
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                player.name,
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.open_in_new, size: 18),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),

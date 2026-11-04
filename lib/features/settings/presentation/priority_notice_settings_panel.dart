@@ -101,19 +101,11 @@ class _PriorityNoticeSettingsPanelState
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    return Form(
+    final form = Form(
       key: _form,
-      child: AdaptiveContentList(
-        padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (widget.showTitle) ...[
-            Text(
-              'Hinweiseinstellungen',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-          ],
           const Text(
             'Die Werte gelten für Prioritätshinweise in allen Turnieren.',
           ),
@@ -123,7 +115,7 @@ class _PriorityNoticeSettingsPanelState
             children: [
               TextFormField(
                 controller: _playerThreshold,
-                enabled: !_saving,
+                enabled: !_loading && !_saving,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Prioritätshinweis pro Spieler ab Verzug von',
@@ -134,7 +126,7 @@ class _PriorityNoticeSettingsPanelState
               ),
               TextFormField(
                 controller: _groupThreshold,
-                enabled: !_saving,
+                enabled: !_loading && !_saving,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Prioritätshinweis pro Gruppe ab Verzug von',
@@ -153,18 +145,27 @@ class _PriorityNoticeSettingsPanelState
               'Vergleicht den Fortschritt der Gruppen im Verhältnis zu ihren möglichen Begegnungen.',
             ),
             value: _usePercentage,
-            onChanged: _saving
+            onChanged: _loading || _saving
                 ? null
                 : (value) => setState(() => _usePercentage = value),
           ),
+          if (_loading) const LinearProgressIndicator(),
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: _saving ? null : _save,
+            onPressed: _loading || _saving ? null : _save,
             icon: const Icon(Icons.save_outlined),
             label: Text(_saving ? 'Speichert …' : 'Speichern'),
           ),
         ],
       ),
+    );
+    if (!widget.showTitle) return form;
+    return ExpansionTile(
+      leading: const Icon(Icons.tips_and_updates_outlined),
+      title: const Text('Hinweiseinstellungen'),
+      subtitle: const Text('Prioritätshinweise für Turniere anpassen.'),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      children: [form],
     );
   }
 }
