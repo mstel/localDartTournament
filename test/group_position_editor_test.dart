@@ -50,6 +50,31 @@ void main() {
     expect(stage.groups[1].players[1], a);
   });
 
+  test('reassign can update participant profile identity atomically', () {
+    final stage = fixture();
+    final previous = stage.groups.first.players.first;
+    final linked = TournamentPlayer(
+      profileId: 'profile-1',
+      name: previous.name,
+      isGenerated: false,
+    );
+    final assignments = [
+      [linked, ...stage.groups.first.players.skip(1)],
+      [...stage.groups.last.players],
+    ];
+
+    expect(
+      GroupPositionEditor.reassign(
+        stage,
+        assignments,
+        playerReplacements: {previous: linked},
+      ),
+      isTrue,
+    );
+    expect(stage.groups.first.players.first.profileId, 'profile-1');
+    expect(stage.groups.first.matches.first.homePlayer, linked);
+  });
+
   test('cancelled start with legacy player signature allows swapping', () {
     final stage = fixture();
     final match = stage.groups.first.matches.first;

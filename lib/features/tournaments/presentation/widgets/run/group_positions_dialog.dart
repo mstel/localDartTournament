@@ -1,7 +1,10 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../../../shared/utils/group_assignment_text.dart';
+import '../../../data/app_database.dart';
 import '../../../domain/engines/group_player_allocation_engine.dart';
 import '../../../domain/tournament_models.dart';
 
@@ -10,10 +13,12 @@ class GroupPositionsDialog extends StatefulWidget {
     super.key,
     required this.stage,
     this.ratings = const {},
+    this.loadCatalogProfiles,
   });
 
   final GroupTournamentRunStage stage;
   final Map<String, int> ratings;
+  final Future<List<PlayerProfile>> Function()? loadCatalogProfiles;
 
   @override
   State<GroupPositionsDialog> createState() => _GroupPositionsDialogState();
@@ -23,6 +28,7 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
   late List<List<TournamentPlayer>> _groups;
   GroupPlayerAllocationMode _mode = GroupPlayerAllocationMode.manual;
   _GroupPlayerPosition? _selected;
+  final _playerReplacements = <TournamentPlayer, TournamentPlayer>{};
 
   @override
   void initState() {
@@ -83,6 +89,219 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
     });
   }
 
+  Future<void> _copyAssignment() async {
+    try {
+      await Clipboard.setData(
+        ClipboardData(
+          text: GroupAssignmentText.format(
+            groupNames: [for (final group in widget.stage.groups) group.name],
+            groups: [
+              for (final group in _groups)
+                [for (final player in group) player.name],
+            ],
+          ),
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gruppenliste in die Zwischenablage kopiert.'),
+          ),
+        );
+      }
+    } catch (error) {
+      _showError('Gruppenliste konnte nicht kopiert werden: $error');
+    }
+  }
+
+  Future<void> _importAssignment() async {
+    try {
+      final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
+      if (!mounted) return;
+      final parsed = GroupAssignmentText.parse(clipboard?.text ?? '');
+      if (parsed.groups.length != _groups.length) {
+        throw FormatException(
+          'Die Vorlage enthält ${parsed.groups.length} Gruppen; '
+          'das Turnier hat ${_groups.length}.',
+        );
+      }
+      for (var index = 0; index < _groups.length; index++) {
+        if (parsed.groups[index].length != _groups[index].length) {
+          throw FormatException(
+            '${parsed.groupNames[index]} enthält ${parsed.groups[index].length} '
+            'Spieler; ${widget.stage.groups[index].name} benötigt '
+            '${_groups[index].length}.',
+          );
+        }
+      }
+
+      final currentPlayers = _groups.expand((group) => group).toList();
+      final currentByName = <String, TournamentPlayer>{
+        for (final player in currentPlayers) _nameKey(player.name): player,
+      };
+      final currentKeys = currentPlayers
+          .map((player) => _nameKey(player.name))
+          .toSet();
+      final importedKeys = parsed.players.map(_nameKey).toSet();
+      if (currentKeys.length != currentPlayers.length ||
+          currentKeys.length != importedKeys.length ||
+          !currentKeys.containsAll(importedKeys)) {
+        throw const FormatException(
+          'Gruppenanzahl und Spielernamen müssen exakt zum Turnier passen. '
+          'Die aktuelle Zuweisung wurde nicht verändert.',
+        );
+      }
+
+      final profiles = widget.loadCatalogProfiles == null
+          ? const <PlayerProfile>[]
+          : await widget.loadCatalogProfiles!();
+      if (!mounted) return;
+      final profilesByName = <String, List<PlayerProfile>>{};
+      for (final profile in profiles) {
+        profilesByName
+            .putIfAbsent(_nameKey(profile.displayName), () => [])
+            .add(profile);
+      }
+      final catalogMatches = currentPlayers
+          .where(
+            (player) =>
+                !player.isTeam &&
+                (profilesByName[_nameKey(player.name)]?.isNotEmpty ?? false),
+          )
+          .toList();
+
+      var useCatalog = false;
+      if (catalogMatches.isNotEmpty) {
+        final choice = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Spielerkatalog verwenden?'),
+            content: const Text(
+              'Namen aus der Zwischenablage sind im lokalen Spielerkatalog '
+              'vorhanden. Sollen die passenden Katalogprofile verwendet oder '
+              'lokale Spieler angelegt werden?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Lokalen Spieler anlegen'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Spieler aus dem Spielerkatalog verwenden'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted || choice == null) return;
+        useCatalog = choice;
+      }
+
+      final replacements = <TournamentPlayer, TournamentPlayer>{};
+      for (final player in catalogMatches) {
+        PlayerProfile? profile;
+        if (useCatalog) {
+          final candidates = profilesByName[_nameKey(player.name)]!;
+          if (candidates.length == 1) {
+            profile = candidates.single;
+          } else {
+            profile = await _chooseCatalogProfile(player.name, candidates);
+            if (!mounted || profile == null) return;
+          }
+        }
+        final replacement = useCatalog
+            ? TournamentPlayer(
+                profileId: profile!.id,
+                name: player.name,
+                isGenerated: false,
+                compactName: player.compactName,
+                kratzerStartingScratches: player.kratzerStartingScratches,
+              )
+            : TournamentPlayer(
+                name: player.name,
+                isGenerated: false,
+                compactName: player.compactName,
+                kratzerStartingScratches: player.kratzerStartingScratches,
+              );
+        if (replacement != player) replacements[player] = replacement;
+      }
+
+      final nextGroups = [
+        for (final group in parsed.groups)
+          [
+            for (final name in group)
+              replacements[currentByName[_nameKey(name)]] ??
+                  currentByName[_nameKey(name)]!,
+          ],
+      ];
+      final composedReplacements = <TournamentPlayer, TournamentPlayer>{
+        for (final entry in _playerReplacements.entries)
+          entry.key: replacements[entry.value] ?? entry.value,
+      };
+      for (final entry in replacements.entries) {
+        if (!composedReplacements.values.contains(entry.key)) {
+          composedReplacements[entry.key] = entry.value;
+        }
+      }
+      setState(() {
+        _groups = nextGroups;
+        _playerReplacements
+          ..clear()
+          ..addAll(composedReplacements);
+        _selected = null;
+        _mode = GroupPlayerAllocationMode.manual;
+      });
+    } on FormatException catch (error) {
+      _showError(error.message);
+    } catch (error) {
+      _showError('Zuweisung konnte nicht übernommen werden: $error');
+    }
+  }
+
+  Future<PlayerProfile?> _chooseCatalogProfile(
+    String playerName,
+    List<PlayerProfile> candidates,
+  ) => showDialog<PlayerProfile>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Welches Profil ist $playerName?'),
+      content: SizedBox(
+        width: 420,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final profile in candidates)
+              ListTile(
+                title: Text(profile.displayName),
+                subtitle: Text(
+                  [
+                    profile.city,
+                    profile.country,
+                  ].where((part) => part.trim().isNotEmpty).join(', '),
+                ),
+                onTap: () => Navigator.pop(context, profile),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+      ],
+    ),
+  );
+
+  String _nameKey(String name) => name.trim().toLowerCase();
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.sizeOf(context);
@@ -94,7 +313,7 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
       child: SizedBox(
         width: width,
         height: height,
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -191,20 +410,39 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
                 ),
               ],
               const SizedBox(height: 12),
-              Expanded(
-                child: GridView.extent(
-                  maxCrossAxisExtent: 400,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < widget.stage.groups.length;
-                      index++
-                    )
-                      _groupCard(index, widget.stage.groups[index], theme),
-                  ],
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _copyAssignment,
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Gruppen als Text kopieren'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _importAssignment,
+                    icon: const Icon(Icons.content_paste),
+                    label: const Text(
+                      'Zuweisung aus Zwischenablage übernehmen',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              GridView.extent(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                maxCrossAxisExtent: 400,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                children: [
+                  for (
+                    var index = 0;
+                    index < widget.stage.groups.length;
+                    index++
+                  )
+                    _groupCard(index, widget.stage.groups[index], theme),
+                ],
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -217,10 +455,16 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
                     child: const Text('Abbrechen'),
                   ),
                   FilledButton(
-                    onPressed: () => Navigator.pop(context, [
-                      for (final group in _groups)
-                        List<TournamentPlayer>.of(group),
-                    ]),
+                    onPressed: () => Navigator.pop(
+                      context,
+                      GroupPositionsResult(
+                        assignments: [
+                          for (final group in _groups)
+                            List<TournamentPlayer>.of(group),
+                        ],
+                        playerReplacements: Map.of(_playerReplacements),
+                      ),
+                    ),
                     child: const Text('Übernehmen'),
                   ),
                 ],
@@ -319,6 +563,16 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
           ),
         ),
       );
+}
+
+class GroupPositionsResult {
+  const GroupPositionsResult({
+    required this.assignments,
+    this.playerReplacements = const {},
+  });
+
+  final List<List<TournamentPlayer>> assignments;
+  final Map<TournamentPlayer, TournamentPlayer> playerReplacements;
 }
 
 class _GroupPlayerPosition {

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:dart_tournament_manager/features/random_draw/application/random_draw_image_generator.dart';
 import 'package:dart_tournament_manager/features/random_draw/domain/random_draw_assignment.dart';
+import 'package:dart_tournament_manager/shared/utils/group_assignment_text.dart';
 import 'package:dart_tournament_manager/shared/utils/png_image_export.dart';
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +27,9 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
   int? _selectedPlayer;
   bool _spinning = false;
   String? _inputError;
+  List<String>? _importedGroupNames;
+  List<int>? _importedGroupSizes;
+  List<String>? _importedPlayers;
 
   @override
   void initState() {
@@ -44,11 +48,13 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     super.dispose();
   }
 
-  List<String> get _players => _playersController.text
-      .split(RegExp(r'[\r\n,;]+'))
-      .map((name) => name.trim())
-      .where((name) => name.isNotEmpty)
-      .toList(growable: false);
+  List<String> get _players =>
+      _importedPlayers ??
+      _playersController.text
+          .split(RegExp(r'[\r\n,;]+'))
+          .map((name) => name.trim())
+          .where((name) => name.isNotEmpty)
+          .toList(growable: false);
 
   int? get _groupCount {
     final value = int.tryParse(_groupCountController.text.trim());
@@ -85,6 +91,9 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
   }
 
   void _onGroupCountChanged(String text) {
+    _importedGroupNames = null;
+    _importedGroupSizes = null;
+    _importedPlayers = null;
     final count = int.tryParse(text.trim());
     if (count != null && count >= 1 && count <= 32) {
       _resetDraw();
@@ -96,6 +105,9 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
 
   void _onPlayersChanged(String _) {
     _resetDraw();
+    _importedGroupNames = null;
+    _importedGroupSizes = null;
+    _importedPlayers = null;
     setState(() {});
   }
 
@@ -103,6 +115,9 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     final players = _players;
     if (players.length < 2) return 'Mindestens zwei Namen eingeben.';
     if (_groupCount == null) return 'Bitte 1 bis 32 Gruppen angeben.';
+    if (_groupCount! > players.length) {
+      return 'Es darf nicht mehr Gruppen als Spieler geben.';
+    }
     final normalized = players.map((name) => name.toLowerCase()).toSet();
     if (normalized.length != players.length) {
       return 'Jeder Name muss eindeutig sein.';
@@ -155,19 +170,52 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     drawnPlayers: [for (final index in _drawnPlayers) _players[index]],
     groupCount: _groupCount ?? 1,
     totalPlayerCount: _players.length,
+    groupSizes: _importedGroupSizes,
   );
 
   List<List<String>> _assignedGroups() => [
     for (final group in _groupSlots()) [for (final player in group) ?player],
   ];
 
-  List<String> get _groupNamesForExport => _groupNames(_groupCount ?? 1);
+  List<String> get _groupNamesForExport =>
+      _importedGroupNames ?? _groupNames(_groupCount ?? 1);
+
+  Future<void> _importText() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      if (!mounted) return;
+      final parsed = GroupAssignmentText.parse(data?.text ?? '');
+      _groupCountController.text = '${parsed.groups.length}';
+      _playersController.text = parsed.players.join('\n');
+      setState(() {
+        _importedGroupNames = parsed.groupNames;
+        _importedPlayers = parsed.players;
+        _importedGroupSizes = [for (final group in parsed.groups) group.length];
+        _resetDraw();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gruppen und Spielernamen übernommen.')),
+      );
+    } on FormatException catch (error) {
+      if (mounted) {
+        setState(() => _inputError = error.message);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Zwischenablage konnte nicht gelesen werden: $error'),
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _copyText() async {
     try {
       await Clipboard.setData(
         ClipboardData(
-          text: RandomDrawAssignment.formatText(
+          text: GroupAssignmentText.format(
             groupNames: _groupNamesForExport,
             groups: _assignedGroups(),
           ),
@@ -296,6 +344,17 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
               onChanged: _onGroupCountChanged,
             ),
           ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _spinning || _drawnPlayers.isNotEmpty
+                  ? null
+                  : _importText,
+              icon: const Icon(Icons.content_paste),
+              label: const Text('Zuweisung aus Zwischenablage übernehmen'),
+            ),
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _playersController,
@@ -399,7 +458,7 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
 
   Widget _groupsCard() {
     final slots = _groupSlots();
-    final names = _groupNames(slots.length);
+    final names = _groupNamesForExport;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),

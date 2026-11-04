@@ -1,7 +1,9 @@
 import 'package:dart_tournament_manager/features/random_draw/application/random_draw_image_generator.dart';
 import 'package:dart_tournament_manager/features/random_draw/domain/random_draw_assignment.dart';
 import 'package:dart_tournament_manager/features/random_draw/presentation/random_draw_tool_page.dart';
+import 'package:dart_tournament_manager/shared/utils/group_assignment_text.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -34,14 +36,52 @@ void main() {
 
   test('text export uses provided group names and player order', () {
     expect(
-      RandomDrawAssignment.formatText(
+      GroupAssignmentText.format(
         groupNames: ['Gruppe Rot', 'Gruppe Blau'],
         groups: [
           ['Ada', 'Bert'],
           ['Cem'],
         ],
       ),
-      'Gruppe Rot: Ada, Bert\nGruppe Blau: Cem',
+      'Gruppen: 2\n\nGruppe Rot:\nAda\nBert\n\nGruppe Blau:\nCem',
+    );
+  });
+
+  test('group slots preserve imported uneven group sizes', () {
+    expect(
+      RandomDrawAssignment.groupSlots(
+        drawnPlayers: ['Ada', 'Bert'],
+        groupCount: 2,
+        totalPlayerCount: 5,
+        groupSizes: [2, 3],
+      ),
+      [
+        ['Ada', 'Bert'],
+        [null, null, null],
+      ],
+    );
+  });
+
+  test('group assignment text parses group names and player names', () {
+    final parsed = GroupAssignmentText.parse(
+      'Gruppen: 2\n\nGruppe Rot:\nAda\nBert\n\nGruppe Blau:\nCem',
+    );
+
+    expect(parsed.groupNames, ['Gruppe Rot', 'Gruppe Blau']);
+    expect(parsed.groups, [
+      ['Ada', 'Bert'],
+      ['Cem'],
+    ]);
+  });
+
+  test('group assignment text rejects mismatched or duplicate entries', () {
+    expect(
+      () => GroupAssignmentText.parse('Gruppen: 2\n\nGruppe A:\nAda'),
+      throwsFormatException,
+    );
+    expect(
+      () => GroupAssignmentText.parse('Gruppen: 1\n\nGruppe A:\nAda\nada'),
+      throwsFormatException,
     );
   });
 
@@ -195,6 +235,48 @@ void main() {
     );
     expect(find.text('Text kopieren'), findsOneWidget);
     expect(find.text('Grafik exportieren'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('imports groups and participant names from the clipboard', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.getData') {
+          return {
+            'text':
+                'Gruppen: 2\n\nGruppe Rot:\nAda\nBert\n\nGruppe Blau:\nCem\nDora',
+          };
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await tester.pumpWidget(const MaterialApp(home: RandomDrawToolPage()));
+    await tester.tap(find.text('Zuweisung aus Zwischenablage übernehmen'));
+    await tester.pumpAndSettle();
+
+    final groupCount = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Anzahl der Gruppen'),
+    );
+    final players = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Spielernamen'),
+    );
+    expect(groupCount.controller!.text, '2');
+    expect(players.controller!.text, 'Ada\nBert\nCem\nDora');
+    expect(find.text('Gruppe Rot'), findsOneWidget);
+    expect(find.text('Gruppe Blau'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

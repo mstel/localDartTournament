@@ -1913,12 +1913,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     }
     if (!mounted) return;
-    final assignments = await showDialog<List<List<TournamentPlayer>>>(
+    final result = await showDialog<GroupPositionsResult>(
       context: context,
-      builder: (_) => GroupPositionsDialog(stage: stage, ratings: ratings),
+      builder: (_) => GroupPositionsDialog(
+        stage: stage,
+        ratings: ratings,
+        loadCatalogProfiles: () => LocalAppDatabase().loadPlayerProfiles(),
+      ),
     );
     if (!mounted ||
-        assignments == null ||
+        result == null ||
         !_canEditGroupPositions(stage, _activeStageIndex) ||
         widget.tournament.runStages[_activeStageIndex] != stage ||
         _completedStageIndexes.contains(_activeStageIndex) &&
@@ -1927,8 +1931,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     var changed = false;
     setState(() {
-      changed = GroupPositionEditor.reassign(stage, assignments);
+      changed = GroupPositionEditor.reassign(
+        stage,
+        result.assignments,
+        playerReplacements: result.playerReplacements,
+      );
       if (changed) {
+        _replaceTournamentPlayerReferences(result.playerReplacements);
         widget.tournament.addActivity(
           'groups_changed',
           'Gruppen in Etappe „${stage.name}“ verändert',
@@ -1944,6 +1953,61 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     });
     if (changed) await _saveTournamentProgress();
+  }
+
+  void _replaceTournamentPlayerReferences(
+    Map<TournamentPlayer, TournamentPlayer> replacements,
+  ) {
+    if (replacements.isEmpty) return;
+    TournamentPlayer? replace(TournamentPlayer? player) =>
+        player == null ? null : replacements[player] ?? player;
+    final tournament = widget.tournament;
+    for (var index = 0; index < tournament.players.length; index++) {
+      tournament.players[index] =
+          replacements[tournament.players[index]] ?? tournament.players[index];
+    }
+    for (final stage in tournament.runStages) {
+      if (stage is GroupTournamentRunStage) {
+        for (final group in stage.groups) {
+          for (var index = 0; index < group.players.length; index++) {
+            group.players[index] =
+                replacements[group.players[index]] ?? group.players[index];
+          }
+          for (final match in [
+            ...group.matches,
+            ...group.knockoutRounds.expand((round) => round),
+            ...group.placementMatches,
+          ]) {
+            match.homePlayer = replace(match.homePlayer);
+            match.awayPlayer = replace(match.awayPlayer);
+            match.scratchedPlayer = replace(match.scratchedPlayer);
+            match.players = match.players
+                .map((player) => replacements[player] ?? player)
+                .toList();
+            match.scratchEligiblePlayers = match.scratchEligiblePlayers
+                .map((player) => replacements[player] ?? player)
+                .toList();
+          }
+        }
+      } else if (stage is KnockoutTournamentRunStage) {
+        for (var index = 0; index < stage.participants.length; index++) {
+          stage.participants[index] =
+              replacements[stage.participants[index]] ??
+              stage.participants[index];
+        }
+        for (final match in stage.matches) {
+          match.homePlayer = replace(match.homePlayer);
+          match.awayPlayer = replace(match.awayPlayer);
+          match.scratchedPlayer = replace(match.scratchedPlayer);
+          match.players = match.players
+              .map((player) => replacements[player] ?? player)
+              .toList();
+          match.scratchEligiblePlayers = match.scratchEligiblePlayers
+              .map((player) => replacements[player] ?? player)
+              .toList();
+        }
+      }
+    }
   }
 
   void _persistGroupArrangementInDrawOrder(GroupTournamentRunStage runStage) {

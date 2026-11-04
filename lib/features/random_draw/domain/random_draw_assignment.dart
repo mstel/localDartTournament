@@ -5,6 +5,7 @@ class RandomDrawAssignment {
     required List<String> drawnPlayers,
     required int groupCount,
     required int totalPlayerCount,
+    List<int>? groupSizes,
   }) {
     if (groupCount < 1) {
       throw ArgumentError.value(groupCount, 'groupCount', 'Must be positive.');
@@ -21,14 +22,22 @@ class RandomDrawAssignment {
         'Drawn players cannot exceed the total player count.',
       );
     }
-    final groupSizes = List<int>.generate(
-      groupCount,
-      (index) =>
-          totalPlayerCount ~/ groupCount +
-          (index < totalPlayerCount % groupCount ? 1 : 0),
-    );
+    final resolvedGroupSizes =
+        groupSizes ??
+        List<int>.generate(
+          groupCount,
+          (index) =>
+              totalPlayerCount ~/ groupCount +
+              (index < totalPlayerCount % groupCount ? 1 : 0),
+        );
+    if (resolvedGroupSizes.length != groupCount ||
+        resolvedGroupSizes.any((size) => size < 0) ||
+        resolvedGroupSizes.fold<int>(0, (sum, size) => sum + size) !=
+            totalPlayerCount) {
+      throw ArgumentError.value(groupSizes, 'groupSizes');
+    }
     final groups = [
-      for (final size in groupSizes) List<String?>.filled(size, null),
+      for (final size in resolvedGroupSizes) List<String?>.filled(size, null),
     ];
     var drawnIndex = 0;
     for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
@@ -42,18 +51,5 @@ class RandomDrawAssignment {
       }
     }
     return groups;
-  }
-
-  static String formatText({
-    required List<String> groupNames,
-    required List<List<String>> groups,
-  }) {
-    if (groupNames.length != groups.length || groups.isEmpty) {
-      throw ArgumentError('Each group must have exactly one name.');
-    }
-    return [
-      for (var index = 0; index < groups.length; index++)
-        '${groupNames[index]}: ${groups[index].join(', ')}',
-    ].join('\n');
   }
 }

@@ -50,18 +50,22 @@ class GroupPositionEditor {
 
   static bool reassign(
     GroupTournamentRunStage stage,
-    List<List<TournamentPlayer>> assignments,
-  ) {
+    List<List<TournamentPlayer>> assignments, {
+    Map<TournamentPlayer, TournamentPlayer> playerReplacements = const {},
+  }) {
     if (!canEdit(stage) || assignments.length != stage.groups.length) {
       return false;
     }
     final currentPlayers = stage.groups
         .expand((group) => group.players)
         .toList();
+    final expectedPlayers = currentPlayers
+        .map((player) => playerReplacements[player] ?? player)
+        .toList();
     final assignedPlayers = assignments.expand((group) => group).toList();
-    if (assignedPlayers.length != currentPlayers.length ||
-        assignedPlayers.toSet().length != currentPlayers.length ||
-        currentPlayers.any((player) => !assignedPlayers.contains(player))) {
+    if (assignedPlayers.length != expectedPlayers.length ||
+        assignedPlayers.toSet().length != expectedPlayers.length ||
+        expectedPlayers.any((player) => !assignedPlayers.contains(player))) {
       return false;
     }
     for (var index = 0; index < stage.groups.length; index++) {
@@ -87,6 +91,14 @@ class GroupPositionEditor {
     for (final match in _matches(stage)) {
       match.homePlayer = replacements[match.homePlayer] ?? match.homePlayer;
       match.awayPlayer = replacements[match.awayPlayer] ?? match.awayPlayer;
+      match.scratchedPlayer =
+          replacements[match.scratchedPlayer] ?? match.scratchedPlayer;
+      match.players = match.players
+          .map((player) => replacements[player] ?? player)
+          .toList();
+      match.scratchEligiblePlayers = match.scratchEligiblePlayers
+          .map((player) => replacements[player] ?? player)
+          .toList();
       match
         ..boardNumber = null
         ..startedAt = null
