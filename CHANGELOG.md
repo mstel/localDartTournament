@@ -1,3 +1,10 @@
+# 2.4.10+70
+
+- Wartet bei Windows-Updates bis zu 120 Sekunden auf den Start des
+  Update-Hilfsprogramms statt nach 30 Sekunden abzubrechen.
+- Protokolliert Prozess-ID, Exitcode sowie PowerShell-Ausgaben, wenn das
+  Hilfsprogramm nicht startet oder vor dem Startmarker beendet wird.
+
 # 2.4.9+69
 
 - Behebt die Konvertierung abgeschlossener Challonge-Doppel-K.-o.-Turniere,

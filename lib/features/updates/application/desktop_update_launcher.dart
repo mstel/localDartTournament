@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -259,21 +260,16 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
       );
       late final Process updater;
       try {
-        updater = await Process.start(
-          shell,
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-WindowStyle',
-            'Hidden',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            script.path,
-          ],
-          mode: ProcessStartMode.detached,
-          workingDirectory: p.dirname(script.path),
-        );
+        updater = await Process.start(shell, [
+          '-NoProfile',
+          '-NonInteractive',
+          '-WindowStyle',
+          'Hidden',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          script.path,
+        ], workingDirectory: p.dirname(script.path));
       } catch (error) {
         const message = 'Update-Hilfsprogramm konnte nicht gestartet werden.';
         await logFile.writeAsString(
@@ -287,21 +283,80 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
         );
         throw FileSystemException('$message $error Log: ${logFile.path}');
       }
-      final deadline = DateTime.now().add(const Duration(seconds: 30));
+      final stdout = StringBuffer();
+      final stderr = StringBuffer();
+      void capture(StringBuffer buffer, String text) {
+        buffer.write(text);
+        if (buffer.length > 4000) {
+          final recent = buffer.toString();
+          buffer
+            ..clear()
+            ..write(recent.substring(recent.length - 4000));
+        }
+      }
+
+      updater.stdout
+          .transform(utf8.decoder)
+          .listen(
+            (text) => capture(stdout, text),
+            onError: (Object error) => capture(stdout, '$error'),
+          );
+      updater.stderr
+          .transform(utf8.decoder)
+          .listen(
+            (text) => capture(stderr, text),
+            onError: (Object error) => capture(stderr, '$error'),
+          );
+      var processExited = false;
+      var processExitCode = -1;
+      unawaited(
+        updater.exitCode.then((code) {
+          processExitCode = code;
+          processExited = true;
+        }),
+      );
+
+      final deadline = DateTime.now().add(const Duration(seconds: 120));
       while (DateTime.now().isBefore(deadline)) {
         if (await startedFile.exists()) return;
+        if (processExited) {
+          final details = [
+            if (stdout.isNotEmpty) 'stdout: ${stdout.toString().trim()}',
+            if (stderr.isNotEmpty) 'stderr: ${stderr.toString().trim()}',
+          ].join('\n');
+          const message =
+              'Update-Hilfsprogramm wurde vor dem Startmarker beendet.';
+          final diagnostic =
+              '$message Exitcode: $processExitCode. '
+              'PID: ${updater.pid}.${details.isEmpty ? '' : '\n$details'}';
+          await logFile.writeAsString(
+            '${DateTime.now().toUtc().toIso8601String()} $diagnostic\n',
+            mode: FileMode.append,
+            flush: true,
+          );
+          await failureFile.writeAsString(
+            '$diagnostic\nLog: ${logFile.path}',
+            flush: true,
+          );
+          throw FileSystemException('$diagnostic Log: ${logFile.path}');
+        }
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
       updater.kill();
       const message =
-          'Update-Hilfsprogramm hat den Start innerhalb von 30 Sekunden nicht bestätigt.';
+          'Update-Hilfsprogramm hat den Start innerhalb von 120 Sekunden nicht bestätigt.';
       await logFile.writeAsString(
-        '${DateTime.now().toUtc().toIso8601String()} $message\n',
+        '${DateTime.now().toUtc().toIso8601String()} $message '
+        'PID: ${updater.pid}.'
+        '${stdout.isEmpty ? '' : '\nstdout: ${stdout.toString().trim()}'}'
+        '${stderr.isEmpty ? '' : '\nstderr: ${stderr.toString().trim()}'}\n',
         mode: FileMode.append,
         flush: true,
       );
       await failureFile.writeAsString(
-        '$message\nLog: ${logFile.path}',
+        '$message\nPID: ${updater.pid}'
+        '${stderr.isEmpty ? '' : '\nstderr: ${stderr.toString().trim()}'}'
+        '\nLog: ${logFile.path}',
         flush: true,
       );
       throw FileSystemException('$message Log: ${logFile.path}', script.path);
