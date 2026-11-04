@@ -79,11 +79,19 @@ class TournamentMatchEloService {
             continue;
           }
           final matchIndex = int.tryParse(key.split(':').last);
+          final homeKey = calculator.participantKey(
+            tournament,
+            match.homePlayer!,
+            includeUnassignedPlayers: ranking.countUnassignedPlayers,
+          );
+          final awayKey = calculator.participantKey(
+            tournament,
+            match.awayPlayer!,
+            includeUnassignedPlayers: ranking.countUnassignedPlayers,
+          );
           final homeHistory = matchIndex == null
               ? null
-              : snapshot
-                    .history[match.homePlayer?.profileId ??
-                        match.homePlayer?.name]
+              : snapshot.history[homeKey]
                     ?.where(
                       (item) =>
                           item.tournamentId == tournament.id &&
@@ -92,9 +100,7 @@ class TournamentMatchEloService {
                     .firstOrNull;
           final awayHistory = matchIndex == null
               ? null
-              : snapshot
-                    .history[match.awayPlayer?.profileId ??
-                        match.awayPlayer?.name]
+              : snapshot.history[awayKey]
                     ?.where(
                       (item) =>
                           item.tournamentId == tournament.id &&

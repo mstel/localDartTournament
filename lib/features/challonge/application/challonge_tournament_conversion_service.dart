@@ -123,8 +123,8 @@ class ChallongeTournamentConversionService {
     final profilesBySourceId = <String, String>{};
     final profilesByName = <String, List<String>>{};
     for (final participant in archive.participants) {
-      final profileId = participant['profileId'] as String?;
-      if (profileId == null) continue;
+      final profileId = (participant['profileId'] as String?)?.trim();
+      if (profileId == null || profileId.isEmpty) continue;
       profilesBySourceId['${participant['id']}'] = profileId;
       final key = ChallongeTournament.normalizedName(
         '${participant['name'] ?? ''}',
@@ -144,13 +144,10 @@ class ChallongeTournamentConversionService {
           exact ?? (matchesByName.length == 1 ? matchesByName.single : null);
       if (profileId != null) profiles[id] = profileId;
     }
-    if (profiles.values.toSet().length != profiles.length ||
-        fresh.participants.any(
-          (participant) => profiles['${participant['id']}'] == null,
-        )) {
+    if (profiles.values.toSet().length != profiles.length) {
       throw const FormatException(
-        'Die aktualisierten Challonge-Teilnehmer konnten nicht eindeutig den '
-        'zugewiesenen Spielerprofilen zugeordnet werden. Bitte Zuordnung prüfen.',
+        'Die aktualisierten Challonge-Teilnehmer können nicht eindeutig den '
+        'Spielerprofilen zugeordnet werden. Bitte Zuordnung prüfen.',
       );
     }
 
@@ -158,6 +155,7 @@ class ChallongeTournamentConversionService {
       profiles,
       countsForRanking: archived.countsForRanking,
       rankingIds: archived.rankingIds,
+      allowUnlinkedPlayers: true,
     );
     final oldBestPerformances = {
       for (final match in archive.matches)
@@ -187,19 +185,13 @@ class ChallongeTournamentConversionService {
   void _validatePlayerAssignments(ImportedTournamentArchive archive) {
     final profileIds = <String>[];
     for (final participant in archive.participants) {
-      final profileId = participant['profileId'] as String?;
-      if (profileId == null || profileId.isEmpty) {
-        throw const FormatException(
-          'Bitte zuerst alle Challonge-Teilnehmer einem Spieler im '
-          'Spielerkatalog zuordnen.',
-        );
-      }
-      profileIds.add(profileId);
+      final profileId = (participant['profileId'] as String?)?.trim();
+      if (profileId != null && profileId.isNotEmpty) profileIds.add(profileId);
     }
     if (profileIds.toSet().length != profileIds.length) {
       throw const FormatException(
-        'Jeder Challonge-Teilnehmer muss einem eigenen Spielerprofil '
-        'zugeordnet sein.',
+        'Jedes zugewiesene Challonge-Spielerprofil darf nur einmal verwendet '
+        'werden.',
       );
     }
   }

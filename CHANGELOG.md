@@ -1,3 +1,12 @@
+# 2.4.6+66
+
+- Ergänzt eine optionale Elo-Wertung für nicht zugewiesene lokale Spieler.
+  Gäste starten pro Turnier bei 1000 Elo; ihre Wertung bleibt auf das Turnier
+  begrenzt, während Ranglistenmitglieder ihren fortgeschriebenen Elo behalten.
+- Erlaubt die Konvertierung von Challonge-Turnieren mit nicht zugewiesenen
+  Teilnehmern. Diese werden als lokale Spieler übernommen und standardmäßig
+  nur bei aktivierter Gastwertung in die Elo-Berechnung einbezogen.
+
 # 2.4.5+65
 
 - Macht den manuellen Cloud-Upload verlässlich: Das Website-Datenmodell wird

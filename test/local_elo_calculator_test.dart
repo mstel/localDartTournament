@@ -60,6 +60,9 @@ CreatedTournament tournamentWithMatches(
   rankingIds: const ['season'],
 );
 
+TournamentPlayer localPlayer(String name) =>
+    TournamentPlayer(name: name, isGenerated: false);
+
 void main() {
   const calculator = LocalEloCalculator();
 
@@ -78,6 +81,92 @@ void main() {
     expect(snapshot.entries.every((player) => player.matches == 1), isTrue);
     expect(snapshot.history['a'], hasLength(1));
     expect(snapshot.history['a']!.single.opponentName, 'Ben');
+  });
+
+  test(
+    'does not count catalog players outside the ranking as local guests',
+    () {
+      final snapshot = calculator.calculate(
+        players: const {'a': 'Anna', 'b': 'Ben'},
+        tournaments: [
+          tournament('catalog-outsider', DateTime.utc(2026, 2), 'a', 'guest'),
+        ],
+        rankingId: 'season',
+        countUnassignedPlayers: true,
+      );
+
+      expect(snapshot.entries, isEmpty);
+      expect(snapshot.history, isEmpty);
+    },
+  );
+
+  test('local players start at 1000 per tournament but keep Elo within it', () {
+    final first = tournamentWithMatches('guest-day-1', DateTime.utc(2026, 1), [
+      GroupMatch(
+        round: 1,
+        homePlayer: localPlayer('Gast'),
+        awayPlayer: const TournamentPlayer(
+          profileId: 'a',
+          name: 'Anna',
+          isGenerated: false,
+        ),
+        homeLegs: 2,
+        awayLegs: 0,
+      ),
+      GroupMatch(
+        round: 2,
+        homePlayer: localPlayer('Gast'),
+        awayPlayer: const TournamentPlayer(
+          profileId: 'a',
+          name: 'Anna',
+          isGenerated: false,
+        ),
+        homeLegs: 2,
+        awayLegs: 0,
+      ),
+    ]);
+    final second = tournamentWithMatches('guest-day-2', DateTime.utc(2026, 2), [
+      GroupMatch(
+        round: 1,
+        homePlayer: localPlayer('Gast'),
+        awayPlayer: const TournamentPlayer(
+          profileId: 'a',
+          name: 'Anna',
+          isGenerated: false,
+        ),
+        homeLegs: 2,
+        awayLegs: 0,
+      ),
+    ]);
+
+    final snapshot = calculator.calculate(
+      players: const {'a': 'Anna', 'b': 'Ben'},
+      tournaments: [first, second],
+      rankingId: 'season',
+      countUnassignedPlayers: true,
+    );
+    final firstGuestKey = calculator.participantKey(
+      first,
+      localPlayer('Gast'),
+      includeUnassignedPlayers: true,
+    );
+    final secondGuestKey = calculator.participantKey(
+      second,
+      localPlayer('Gast'),
+      includeUnassignedPlayers: true,
+    );
+    final firstGuestHistory = snapshot.history[firstGuestKey]!;
+    final secondGuestHistory = snapshot.history[secondGuestKey]!;
+
+    expect(snapshot.entries.map((player) => player.id), ['a']);
+    expect(firstGuestHistory, hasLength(2));
+    expect(firstGuestHistory.first.ratingBefore, 1000);
+    expect(firstGuestHistory.last.ratingBefore, greaterThan(1000));
+    expect(secondGuestHistory.single.ratingBefore, 1000);
+    expect(
+      snapshot.entries.singleWhere((player) => player.id == 'a').matches,
+      3,
+    );
   });
 
   test(

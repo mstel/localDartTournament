@@ -105,7 +105,7 @@ void main() {
   );
 
   test(
-    'requires a distinct player catalog assignment for every participant',
+    'converts incomplete assignments while preserving local opponents',
     () async {
       final original = archivedTournament();
       final archive = original.toJson()
@@ -144,16 +144,19 @@ void main() {
         },
       );
 
-      await expectLater(
-        service.convert(CreatedTournament.fromJson(archive)),
-        throwsA(
-          isA<FormatException>().having(
-            (error) => error.message,
-            'message',
-            contains('zuerst alle Challonge-Teilnehmer'),
-          ),
-        ),
+      final converted = await service.convert(
+        CreatedTournament.fromJson(archive),
       );
+
+      expect(converted.runStages.single, isA<GroupTournamentRunStage>());
+      final group =
+          (converted.runStages.single as GroupTournamentRunStage).groups.single;
+      expect(group.players.map((player) => player.profileId), [
+        'p1',
+        'p2',
+        null,
+      ]);
+      expect(group.matches, hasLength(3));
       expect(fetched, isFalse);
     },
   );

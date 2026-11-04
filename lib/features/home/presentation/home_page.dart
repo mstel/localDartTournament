@@ -241,6 +241,38 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
 
   Future<void> _convertChallongeTournament(CreatedTournament tournament) async {
     if (_isConvertingTournament) return;
+    final unassignedCount = tournament.importedArchive!.participants
+        .where(
+          (participant) =>
+              (participant['profileId'] as String?)?.isNotEmpty != true,
+        )
+        .length;
+    if (unassignedCount > 0) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Nicht alle Spieler sind zugeordnet'),
+          content: Text(
+            '$unassignedCount Challonge-Spieler werden als lokale Spieler '
+            'übernommen. Ihre Begegnungen bleiben standardmäßig ohne '
+            'Ranglistenwertung. In den Ranglisteneinstellungen kannst du '
+            '„Begegnungen mit lokalen Spielern Werten“ aktivieren, damit sie '
+            'mit 1000 Elo einfließen.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Trotzdem konvertieren'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
     setState(() => _isConvertingTournament = true);
     try {
       final converted = await ChallongeTournamentConversionService().convert(

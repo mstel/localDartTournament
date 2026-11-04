@@ -101,7 +101,9 @@ class ChallongeTournament {
     final players = {
       for (final p in participants)
         '${p['id']}': TournamentPlayer(
-          profileId: profiles['${p['id']}'],
+          profileId: profiles['${p['id']}']?.trim().isNotEmpty == true
+              ? profiles['${p['id']}']!.trim()
+              : null,
           name: name(p),
           isGenerated: false,
         ),
@@ -173,7 +175,9 @@ class ChallongeTournament {
           {
             'id': '${p['id']}',
             'name': name(p),
-            'profileId': profiles['${p['id']}'],
+            'profileId': profiles['${p['id']}']?.trim().isNotEmpty == true
+                ? profiles['${p['id']}']!.trim()
+                : null,
             'finalRank': p['final_rank'],
             'groupPlayerIds': p['group_player_ids'] ?? const [],
             'groupPlacements': p['group_placements'] ?? const [],

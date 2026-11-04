@@ -84,6 +84,7 @@ class LocalRankingEloService {
       inactivityDecayEnabled: ranking.inactivityDecayEnabled,
       inactivityGraceTournaments: ranking.inactivityGraceTournaments,
       inactivityDecayPoints: ranking.inactivityDecayPoints,
+      countUnassignedPlayers: ranking.countUnassignedPlayers,
       validFromYear: ranking.validFromYear,
       validToYear: ranking.validToYear,
       validFromDate: ranking.validFromDate,

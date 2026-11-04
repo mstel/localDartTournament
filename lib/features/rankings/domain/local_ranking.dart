@@ -36,6 +36,7 @@ class LocalRanking {
     this.inactivityDecayEnabled = false,
     this.inactivityGraceTournaments = 3,
     this.inactivityDecayPoints = 5,
+    this.countUnassignedPlayers = false,
     this.isDefaultForStatistics = false,
     this.customOrder = 0,
   });
@@ -74,6 +75,7 @@ class LocalRanking {
   final bool inactivityDecayEnabled;
   final int inactivityGraceTournaments;
   final int inactivityDecayPoints;
+  final bool countUnassignedPlayers;
   final bool isDefaultForStatistics;
   final int customOrder;
 
@@ -127,6 +129,7 @@ class LocalRanking {
     'inactivityDecayEnabled': inactivityDecayEnabled,
     'inactivityGraceTournaments': inactivityGraceTournaments,
     'inactivityDecayPoints': inactivityDecayPoints,
+    'countUnassignedPlayers': countUnassignedPlayers,
     'isDefaultForStatistics': isDefaultForStatistics,
   };
 
@@ -179,6 +182,7 @@ class LocalRanking {
     inactivityDecayEnabled: json['inactivityDecayEnabled'] as bool? ?? false,
     inactivityGraceTournaments: json['inactivityGraceTournaments'] as int? ?? 3,
     inactivityDecayPoints: json['inactivityDecayPoints'] as int? ?? 5,
+    countUnassignedPlayers: json['countUnassignedPlayers'] as bool? ?? false,
     isDefaultForStatistics: json['isDefaultForStatistics'] as bool? ?? false,
   );
 
@@ -215,6 +219,7 @@ class LocalRanking {
     bool? inactivityDecayEnabled,
     int? inactivityGraceTournaments,
     int? inactivityDecayPoints,
+    bool? countUnassignedPlayers,
     bool? isDefaultForStatistics,
     int? customOrder,
   }) => LocalRanking(
@@ -254,6 +259,8 @@ class LocalRanking {
     inactivityGraceTournaments:
         inactivityGraceTournaments ?? this.inactivityGraceTournaments,
     inactivityDecayPoints: inactivityDecayPoints ?? this.inactivityDecayPoints,
+    countUnassignedPlayers:
+        countUnassignedPlayers ?? this.countUnassignedPlayers,
     isDefaultForStatistics:
         isDefaultForStatistics ?? this.isDefaultForStatistics,
     customOrder: customOrder ?? this.customOrder,

@@ -1358,6 +1358,7 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   bool _allowDecayBelowStartRating = false;
   bool _absenceDecayEnabled = false;
   bool _inactivityDecayEnabled = false;
+  bool _countUnassignedPlayers = false;
   bool _isDefaultForStatistics = false;
   bool _achievementsEnabled = false;
   Map<String, double> _achievementTargets = {};
@@ -1387,6 +1388,7 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     _absenceDecayEnabled = initial.absenceDecayEnabled;
     _absenceDecayPoints.text = '${initial.absenceDecayPoints}';
     _inactivityDecayEnabled = initial.inactivityDecayEnabled;
+    _countUnassignedPlayers = initial.countUnassignedPlayers;
     _inactivityGraceTournaments.text = '${initial.inactivityGraceTournaments}';
     _inactivityDecayPoints.text = '${initial.inactivityDecayPoints}';
     _isDefaultForStatistics = initial.isDefaultForStatistics;
@@ -1539,6 +1541,7 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
             int.tryParse(_inactivityGraceTournaments.text.trim()) ?? 0,
         inactivityDecayPoints:
             int.tryParse(_inactivityDecayPoints.text.trim()) ?? 0,
+        countUnassignedPlayers: _countUnassignedPlayers,
         isDefaultForStatistics: _isDefaultForStatistics,
         achievementsEnabled: _achievementsEnabled,
         achievementTargets: _achievementTargets,
@@ -1788,6 +1791,16 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
               ],
             ),
             if (_type == RankingType.elo) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Begegnungen mit lokalen Spielern Werten'),
+                subtitle: const Text(
+                  'Nicht zugeordnete Spieler starten je Turnier mit 1000 Elo. Ihre Wertung wird nur innerhalb dieses Turniers fortgeschrieben; Mitglieder dieser Rangliste behalten ihre Elo.',
+                ),
+                value: _countUnassignedPlayers,
+                onChanged: (value) =>
+                    setState(() => _countUnassignedPlayers = value),
+              ),
               ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: const EdgeInsets.only(left: 12, top: 8),

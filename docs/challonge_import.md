@@ -14,8 +14,13 @@ Neue Importe werden als reguläre Turniere mit eigenen Gruppen-/Swiss- und K.-o.
 
 Bereits importierte Challonge-Archive lassen sich in der Turnierliste über das
 Dreipunkt-Menü mit **Zu Dart-Turnier konvertieren** in native, abgeschlossene
-Turniere umwandeln. Dafür muss jeder Challonge-Teilnehmer einem eigenen Profil
-im lokalen Spielerkatalog zugewiesen sein. Die Konvertierung baut Gruppen,
+Turniere umwandeln. Nicht zugewiesene Teilnehmer können nach einer
+Bestätigung als lokale Spieler übernommen werden; vorhandene Profilzuweisungen
+müssen eindeutig sein. Begegnungen mit ihnen bleiben standardmäßig ohne
+Ranglistenwertung. Ist in einer Elo-Rangliste **Begegnungen mit lokalen
+Spielern Werten** aktiviert, werden solche Begegnungen mit temporär 1000 Elo
+bewertet. Die Gastwertung wird je Turnier neu begonnen; Ranglistenmitglieder
+behalten ihre Elo. Die Konvertierung baut Gruppen,
 Spielwiederholungen, KO-Etappen und historische Ergebnisse erneut auf; Gruppen-
 und KO-Spiele behalten ihre Quellzeitstempel und werden chronologisch sortiert.
 Falls gespeicherte Archivdaten für die Rekonstruktion nicht ausreichen, versucht

@@ -20,10 +20,18 @@ class ChallongeNativeImport {
         'Eigene Turnierlogik unterstützt diesen Challonge-Modus noch nicht: $mode.',
       );
     }
-    final players = {for (final p in archived.players) p.profileId!: p};
+    final players = {
+      for (final player in archived.players) _playerIdentity(player): player,
+    };
     final bySourceId = <String, TournamentPlayer>{};
     for (final p in source.participants) {
-      final player = players[p['profileId']]!;
+      final identity = _sourcePlayerIdentity(p);
+      final player = players[identity];
+      if (player == null) {
+        throw FormatException(
+          'Challonge-Teilnehmer "${p['name']}" fehlt im Turnierarchiv.',
+        );
+      }
       bySourceId['${p['id']}'] = player;
       for (final id in p['groupPlayerIds'] as List? ?? const []) {
         bySourceId['$id'] = player;
@@ -56,9 +64,11 @@ class ChallongeNativeImport {
       final ids = <String>{
         for (final m in matches)
           for (final key in ['player1_id', 'player2_id'])
-            if (m[key] != null) bySourceId['${m[key]}']!.profileId!,
+            if (m[key] != null) _playerIdentity(bySourceId['${m[key]}']!),
       };
-      return players.values.where((p) => ids.contains(p.profileId)).toList();
+      return players.values
+          .where((p) => ids.contains(_playerIdentity(p)))
+          .toList();
     }
 
     GroupMatch historical(Map<String, dynamic> m) {
@@ -76,8 +86,8 @@ class ChallongeNativeImport {
       if (a == null || b == null) {
         if ((a == null) != (b == null)) {
           if (m['state'] != 'complete' ||
-              bySourceId['${m['winner_id']}']?.profileId !=
-                  (a ?? b)!.profileId) {
+              _optionalPlayerIdentity(bySourceId['${m['winner_id']}']) !=
+                  _playerIdentity((a ?? b)!)) {
             throw FormatException(
               'Freilos ${m['id']} ist nicht eindeutig abgeschlossen.',
             );
@@ -109,8 +119,8 @@ class ChallongeNativeImport {
         finishedAt: DateTime.tryParse('${m['completed_at'] ?? ''}'),
         bestPerformances: bestPerformances,
       );
-      if (result.winner?.profileId !=
-          bySourceId['${m['winner_id']}']?.profileId) {
+      if (_optionalPlayerIdentity(result.winner) !=
+          _optionalPlayerIdentity(bySourceId['${m['winner_id']}'])) {
         throw FormatException('Widersprüchlicher Sieger in Spiel ${m['id']}.');
       }
       return result;
@@ -147,13 +157,16 @@ class ChallongeNativeImport {
           for (final index in [1, 2]) {
             final seed = m['player${index}_seed'];
             if (seed is int && m['player${index}_id'] != null) {
-              seeds[bySourceId['${m['player${index}_id']}']!.profileId!] = seed;
+              seeds[_playerIdentity(bySourceId['${m['player${index}_id']}']!)] =
+                  seed;
             }
           }
         }
         if (seeds.length == groupPlayers.length) {
           groupPlayers.sort(
-            (a, b) => seeds[a.profileId]!.compareTo(seeds[b.profileId]!),
+            (a, b) => seeds[_playerIdentity(a)]!.compareTo(
+              seeds[_playerIdentity(b)]!,
+            ),
           );
         }
         nativeGroups.add(
@@ -210,8 +223,10 @@ class ChallongeNativeImport {
         } else {
           final pairCounts = <String, int>{};
           for (final m in group.matches.where((m) => m.hasPlayers)) {
-            final pair = [m.homePlayer!.profileId!, m.awayPlayer!.profileId!]
-              ..sort();
+            final pair = [
+              _playerIdentity(m.homePlayer!),
+              _playerIdentity(m.awayPlayer!),
+            ]..sort();
             final key = pair.join('\u0000');
             pairCounts[key] = (pairCounts[key] ?? 0) + 1;
           }
@@ -293,9 +308,10 @@ class ChallongeNativeImport {
       for (final group in nativeGroups) {
         final calculated = runtime.standings(group, defaultGroupTieBreakers);
         for (var i = 0; i < calculated.length; i++) {
-          final p = source.participants.singleWhere(
-            (p) => p['profileId'] == calculated[i].player.profileId,
-          );
+          final p = source.participants.singleWhere((p) {
+            return _playerIdentity(calculated[i].player) ==
+                _sourcePlayerIdentity(p);
+          });
           final expected = finals.isEmpty
               ? p['finalRank']
               : (p['groupPlacements'] as List? ?? const [])
@@ -311,9 +327,9 @@ class ChallongeNativeImport {
       if (plan != null) {
         final actual = runtime
             .qualifiers(runs.single)
-            .map((p) => p.profileId)
+            .map(_playerIdentity)
             .toSet();
-        final expected = qualified.map((p) => p.profileId).toSet();
+        final expected = qualified.map(_playerIdentity).toSet();
         if (actual.length != expected.length || !actual.containsAll(expected)) {
           issues.add(
             'Weiterkommen aus der Gruppenphase unterscheidet sich von Challonge. Die historische K.-o.-Besetzung wird als tatsächliche Teilnehmerliste übernommen.',
@@ -408,11 +424,11 @@ class ChallongeNativeImport {
                 (m) =>
                     (m['round'] == 0) == placement &&
                     ({
-                      bySourceId['${m['player1_id']}']!.profileId,
-                      bySourceId['${m['player2_id']}']!.profileId,
+                      _playerIdentity(bySourceId['${m['player1_id']}']!),
+                      _playerIdentity(bySourceId['${m['player2_id']}']!),
                     }.containsAll([
-                      target.homePlayer!.profileId,
-                      target.awayPlayer!.profileId,
+                      _playerIdentity(target.homePlayer!),
+                      _playerIdentity(target.awayPlayer!),
                     ])),
               )
               .toList();
@@ -420,7 +436,8 @@ class ChallongeNativeImport {
           final m = candidates.first;
           final result = historical(m);
           final reversed =
-              result.homePlayer!.profileId != target.homePlayer!.profileId;
+              _playerIdentity(result.homePlayer!) !=
+              _playerIdentity(target.homePlayer!);
           target.homeLegs = reversed ? result.awayLegs : result.homeLegs;
           target.awayLegs = reversed ? result.homeLegs : result.awayLegs;
           target.startedAt = result.startedAt;
@@ -442,9 +459,9 @@ class ChallongeNativeImport {
       for (final p in source.participants.where(
         (p) => p['finalRank'] != null,
       )) {
-        final i = ranking.indexWhere(
-          (player) => player.profileId == p['profileId'],
-        );
+        final i = ranking.indexWhere((player) {
+          return _playerIdentity(player) == _sourcePlayerIdentity(p);
+        });
         if (i < 0) {
           issues.add(
             'Gesamtplatz ${p['name']} (${p['finalRank']}) liegt außerhalb der finalen K.-o.-Etappe und wurde nicht gegen deren Rangfolge geprüft. Die Gruppenwertung bleibt separat erhalten.',
@@ -517,4 +534,24 @@ class ChallongeNativeImport {
     });
     return indexed.map((entry) => entry.$2).toList();
   }
+
+  static String _playerIdentity(TournamentPlayer player) =>
+      player.profileId?.trim().isNotEmpty != true
+      ? _localPlayerIdentity(player.name)
+      : _profileIdentity(player.profileId!.trim());
+
+  static String _optionalPlayerIdentity(TournamentPlayer? player) =>
+      player == null ? '' : _playerIdentity(player);
+
+  static String _sourcePlayerIdentity(Map<String, dynamic> participant) {
+    final profileId = (participant['profileId'] as String?)?.trim();
+    return profileId == null || profileId.isEmpty
+        ? _localPlayerIdentity('${participant['name'] ?? ''}')
+        : _profileIdentity(profileId);
+  }
+
+  static String _profileIdentity(String id) => 'profile:$id';
+
+  static String _localPlayerIdentity(String name) =>
+      'local:${name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ')}';
 }
