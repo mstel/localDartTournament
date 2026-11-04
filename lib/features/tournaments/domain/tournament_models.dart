@@ -108,6 +108,19 @@ List<String> _stringListFromJson(
   ];
 }
 
+Map<int, String> _intStringMapFromJson(Object? value) {
+  if (value is! Map) return const {};
+  final result = <int, String>{};
+  for (final entry in value.entries) {
+    final index = int.tryParse(entry.key.toString());
+    final label = entry.value;
+    if (index != null && label is String && label.trim().isNotEmpty) {
+      result[index] = label.trim();
+    }
+  }
+  return result;
+}
+
 List<T> _mapListFromJson<T>(
   Object? value,
   T Function(Map<String, dynamic> json) fromJson,
@@ -178,6 +191,11 @@ TournamentRunStage _runStageFromJson(Map<String, dynamic> json) {
       kratzerBonusLifeFor180: _boolFromJson(json['kratzerBonusLifeFor180']),
       kratzerBonusLifeForHighFinish: _boolFromJson(
         json['kratzerBonusLifeForHighFinish'],
+      ),
+      kratzerHandicapsEnabled: _boolFromJson(json['kratzerHandicapsEnabled']),
+      kratzerHandicaps: _stringListFromJson(json['kratzerHandicaps']),
+      kratzerHandicapAssignments: _intStringMapFromJson(
+        json['kratzerHandicapAssignments'],
       ),
       participants: _mapListFromJson(
         json['participants'],
@@ -344,6 +362,9 @@ class TournamentStage {
     this.kratzerPlayUntilElimination = false,
     this.kratzerBonusLifeFor180 = false,
     this.kratzerBonusLifeForHighFinish = false,
+    this.kratzerHandicapsEnabled = false,
+    this.kratzerHandicaps = const [],
+    this.kratzerHandicapAssignments = const {},
     this.placementPlaces = const [],
     this.groupCount,
     this.groupSizes = const [],
@@ -391,6 +412,11 @@ class TournamentStage {
       kratzerBonusLifeForHighFinish: _boolFromJson(
         json['kratzerBonusLifeForHighFinish'],
       ),
+      kratzerHandicapsEnabled: _boolFromJson(json['kratzerHandicapsEnabled']),
+      kratzerHandicaps: _stringListFromJson(json['kratzerHandicaps']),
+      kratzerHandicapAssignments: _intStringMapFromJson(
+        json['kratzerHandicapAssignments'],
+      ),
       placementPlaces: _intListFromJson(json['placementPlaces']),
       groupCount: json['groupCount'] as int?,
       groupSizes: _intListFromJson(json['groupSizes']),
@@ -435,6 +461,9 @@ class TournamentStage {
   final bool kratzerPlayUntilElimination;
   final bool kratzerBonusLifeFor180;
   final bool kratzerBonusLifeForHighFinish;
+  final bool kratzerHandicapsEnabled;
+  final List<String> kratzerHandicaps;
+  final Map<int, String> kratzerHandicapAssignments;
   final List<int> placementPlaces;
   int get lossLimit =>
       knockoutLives ??
@@ -486,6 +515,14 @@ class TournamentStage {
       'kratzerPlayUntilElimination': kratzerPlayUntilElimination,
       'kratzerBonusLifeFor180': kratzerBonusLifeFor180,
       'kratzerBonusLifeForHighFinish': kratzerBonusLifeForHighFinish,
+      if (kratzerHandicapsEnabled || kratzerHandicaps.isNotEmpty)
+        'kratzerHandicapsEnabled': kratzerHandicapsEnabled,
+      if (kratzerHandicaps.isNotEmpty) 'kratzerHandicaps': kratzerHandicaps,
+      if (kratzerHandicapAssignments.isNotEmpty)
+        'kratzerHandicapAssignments': {
+          for (final entry in kratzerHandicapAssignments.entries)
+            entry.key.toString(): entry.value,
+        },
       'placementPlaces': placementPlaces,
       'groupCount': groupCount,
       'groupSizes': groupSizes,
@@ -518,6 +555,9 @@ class TournamentStage {
     List<String>? groupTieBreakers,
     List<int?>? groupSlotOrder,
     bool? groupDrawCompleted,
+    bool? kratzerHandicapsEnabled,
+    List<String>? kratzerHandicaps,
+    Map<int, String>? kratzerHandicapAssignments,
   }) => TournamentStage(
     name: name,
     type: type,
@@ -528,6 +568,11 @@ class TournamentStage {
     kratzerPlayUntilElimination: kratzerPlayUntilElimination,
     kratzerBonusLifeFor180: kratzerBonusLifeFor180,
     kratzerBonusLifeForHighFinish: kratzerBonusLifeForHighFinish,
+    kratzerHandicapsEnabled:
+        kratzerHandicapsEnabled ?? this.kratzerHandicapsEnabled,
+    kratzerHandicaps: kratzerHandicaps ?? this.kratzerHandicaps,
+    kratzerHandicapAssignments:
+        kratzerHandicapAssignments ?? this.kratzerHandicapAssignments,
     placementPlaces: placementPlaces,
     groupCount: groupCount,
     groupSizes: groupSizes,
@@ -976,6 +1021,9 @@ class KnockoutTournamentRunStage extends TournamentRunStage {
     this.kratzerPlayUntilElimination = false,
     this.kratzerBonusLifeFor180 = false,
     this.kratzerBonusLifeForHighFinish = false,
+    this.kratzerHandicapsEnabled = false,
+    this.kratzerHandicaps = const [],
+    this.kratzerHandicapAssignments = const {},
     this.participants = const [],
   });
 
@@ -989,6 +1037,9 @@ class KnockoutTournamentRunStage extends TournamentRunStage {
   final bool kratzerPlayUntilElimination;
   final bool kratzerBonusLifeFor180;
   final bool kratzerBonusLifeForHighFinish;
+  final bool kratzerHandicapsEnabled;
+  final List<String> kratzerHandicaps;
+  final Map<int, String> kratzerHandicapAssignments;
   final List<TournamentPlayer> participants;
 
   List<GroupMatch> get matches => [
@@ -1031,6 +1082,14 @@ class KnockoutTournamentRunStage extends TournamentRunStage {
         'kratzerPlayUntilElimination': kratzerPlayUntilElimination,
         'kratzerBonusLifeFor180': kratzerBonusLifeFor180,
         'kratzerBonusLifeForHighFinish': kratzerBonusLifeForHighFinish,
+        if (kratzerHandicapsEnabled || kratzerHandicaps.isNotEmpty)
+          'kratzerHandicapsEnabled': kratzerHandicapsEnabled,
+        if (kratzerHandicaps.isNotEmpty) 'kratzerHandicaps': kratzerHandicaps,
+        if (kratzerHandicapAssignments.isNotEmpty)
+          'kratzerHandicapAssignments': {
+            for (final entry in kratzerHandicapAssignments.entries)
+              entry.key.toString(): entry.value,
+          },
       },
       if (participants.isNotEmpty)
         'participants': participants.map((player) => player.toJson()).toList(),

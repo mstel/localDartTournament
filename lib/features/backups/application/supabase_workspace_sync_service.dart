@@ -290,17 +290,27 @@ class SupabaseWorkspaceSyncService {
           'Lokaler Testmodus · automatische Cloud-Synchronisierung ist deaktiviert';
       return;
     }
-    if (_pausePending) return;
-    if (_busy) return;
+    if (_pausePending) {
+      status.value =
+          'Cloud-Abgleich nicht gestartet · ein lokaler Neustart wird vorbereitet';
+      return;
+    }
+    if (_busy) {
+      status.value =
+          'Cloud-Abgleich nicht gestartet · ein anderer Cloud-Vorgang läuft bereits';
+      return;
+    }
     try {
       if (Supabase.instance.client.auth.currentUser == null) {
         status.value = 'Nicht angemeldet · lokal gespeichert';
         return;
       }
-    } catch (_) {
+    } catch (error) {
+      status.value = 'Supabase-Anmeldung konnte nicht geprüft werden: $error';
       return;
     }
     _busy = true;
+    status.value = 'Prüfe Cloud-Datenstand …';
     try {
       await _pendingLocalChangeWrite;
       final localRevision = _localChangeRevision;
@@ -311,7 +321,7 @@ class SupabaseWorkspaceSyncService {
         return;
       }
       if (!await _repository.hasBackup()) {
-        await _push(state);
+        await _push();
         return;
       }
       final remote = await _repository.download(await BackupService.create());
@@ -324,7 +334,7 @@ class SupabaseWorkspaceSyncService {
               'Cloud und dieses Gerät haben Änderungen · Abgleich erforderlich';
           return;
         }
-        await _push(state);
+        await _push();
         return;
       }
       if (remoteIsNewer) {
@@ -378,14 +388,21 @@ class SupabaseWorkspaceSyncService {
     return left == right;
   }
 
-  Future<void> _push(Map<String, dynamic> state) async {
+  Future<void> _push() async {
     final localRevision = _localChangeRevision;
     status.value = 'Sichere Änderungen in Supabase …';
     final timestamp = await _repository.upload(await BackupService.create());
     await _publishWebsiteReadModel();
     await _pendingLocalChangeWrite;
     if (localRevision != _localChangeRevision) {
-      status.value = 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend';
+      final latestState = await _readState();
+      await _writeState({
+        ...latestState,
+        'dirty': true,
+        'lastSyncedAt': timestamp.toUtc().toIso8601String(),
+      });
+      status.value =
+          'Cloud-Datenstand hochgeladen · neuere lokale Änderungen warten noch auf den nächsten Abgleich';
       return;
     }
     await _writeState({
@@ -395,7 +412,8 @@ class SupabaseWorkspaceSyncService {
     if (localRevision != _localChangeRevision) {
       await _pendingLocalChangeWrite;
       await _setDirty(true);
-      status.value = 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend';
+      status.value =
+          'Cloud-Datenstand hochgeladen · neuere lokale Änderungen warten noch auf den nächsten Abgleich';
       return;
     }
     status.value = 'Mit Supabase synchronisiert';
@@ -413,15 +431,23 @@ class SupabaseWorkspaceSyncService {
 
   /// User-confirmed resolution for simultaneous offline changes.
   Future<void> uploadLocalVersion() async {
-    if (_pausePending) return;
-    if (_busy) return;
+    if (_pausePending) {
+      status.value =
+          'Hochladen nicht gestartet · ein lokaler Neustart wird vorbereitet';
+      return;
+    }
+    if (_busy) {
+      status.value =
+          'Hochladen nicht gestartet · ein anderer Cloud-Vorgang läuft bereits';
+      return;
+    }
     _busy = true;
     try {
       final state = await _readState();
       state.remove('syncPaused');
       state['dirty'] = true;
       await _writeState(state);
-      await _push(state);
+      await _push();
     } finally {
       _busy = false;
     }
@@ -429,8 +455,16 @@ class SupabaseWorkspaceSyncService {
 
   /// User-confirmed resolution that replaces the local account workspace.
   Future<void> downloadRemoteVersion({BackupPreview? preview}) async {
-    if (_pausePending) return;
-    if (_busy) return;
+    if (_pausePending) {
+      status.value =
+          'Cloud-Datenstand nicht geladen · ein lokaler Neustart wird vorbereitet';
+      return;
+    }
+    if (_busy) {
+      status.value =
+          'Cloud-Datenstand nicht geladen · ein anderer Cloud-Vorgang läuft bereits';
+      return;
+    }
     _busy = true;
     try {
       final backups = await BackupService.create();

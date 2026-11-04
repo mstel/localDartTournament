@@ -69,7 +69,7 @@ void main() {
         fail('A future storage version must not be interpreted as supported.');
       } on FormatException catch (error) {
         expect(error.message, contains('Version 38'));
-        expect(error.message, contains('1 bis 37'));
+        expect(error.message, contains('1 bis 38'));
       }
 
       await expectLater(
@@ -115,7 +115,7 @@ void main() {
       );
 
       final saved = jsonDecode(await file.readAsString());
-      expect(saved['schemaVersion'], 37);
+      expect(saved['schemaVersion'], 38);
       expect(saved['playerStatistics'], {'total': 7});
       expect((saved['tournaments'] as List).length, 2);
       expect(

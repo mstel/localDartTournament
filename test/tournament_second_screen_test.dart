@@ -307,8 +307,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(2)),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: Scaffold(
@@ -1227,10 +1228,23 @@ void main() {
           ],
           eliminationLossLimit: 2,
           isKratzer: true,
+          kratzerHandicapsEnabled: true,
+          kratzerHandicaps: const ['Wirf mit der linken Hand'],
+          kratzerHandicapAssignments: const {1: 'Wirf mit der linken Hand'},
           participants: players,
         ),
       ],
     );
+    final restoredKratzer = CreatedTournament.fromJson(
+      kratzerTournament.toJson(),
+    );
+    final restoredStage =
+        restoredKratzer.runStages.single as KnockoutTournamentRunStage;
+    expect(restoredStage.kratzerHandicapsEnabled, isTrue);
+    expect(restoredStage.kratzerHandicaps, ['Wirf mit der linken Hand']);
+    expect(restoredStage.kratzerHandicapAssignments, {
+      1: 'Wirf mit der linken Hand',
+    });
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1274,6 +1288,20 @@ void main() {
       ),
       findsOneWidget,
     );
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+    await tester.tap(find.text('Widget hinzufügen'));
+    await tester.pumpAndSettle();
+    final handicapsOption = find.descendant(
+      of: find.byType(SimpleDialog),
+      matching: find.text('Handicaps'),
+    );
+    expect(handicapsOption, findsOneWidget);
+    await tester.tap(handicapsOption);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('B · Wirf mit der linken Hand'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     kratzerTournament

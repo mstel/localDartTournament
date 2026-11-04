@@ -51,6 +51,7 @@ const Map<String, String> _monitorWidgetTitles = {
   'teamComparison': 'Mannschaftsvergleich',
   'nextStagePreview': 'Vorschau nächste Etappe',
   'kratzerLives': 'Leben-Übersicht',
+  'kratzerHandicaps': 'Handicaps',
 };
 
 enum _StandingsDisplayMode { standings, forecast }
@@ -211,6 +212,14 @@ class _TournamentSecondScreenViewState
     if (placement.widgetId == 'kratzerLives') {
       return widget.tournament.runStages.any(
         (stage) => stage is KnockoutTournamentRunStage && stage.isKratzer,
+      );
+    }
+    if (placement.widgetId == 'kratzerHandicaps') {
+      return widget.tournament.runStages.any(
+        (stage) =>
+            stage is KnockoutTournamentRunStage &&
+            stage.isKratzer &&
+            stage.kratzerHandicapsEnabled,
       );
     }
     return true;
@@ -531,6 +540,15 @@ class _TournamentSecondScreenViewState
   Widget build(BuildContext context) {
     final t = widget.tournament;
     final theme = Theme.of(context);
+    final displayColors = TournamentDisplayColors(
+      background: TournamentDisplayPalette.background,
+      card: TournamentDisplayPalette.card,
+      cardEmphasis: TournamentDisplayPalette.cardEmphasis,
+      border: TournamentDisplayPalette.border,
+      accent: theme.colorScheme.tertiary,
+      text: TournamentDisplayPalette.text,
+      mutedText: TournamentDisplayPalette.mutedText,
+    );
     final timing = TournamentTiming.snapshot(t, DateTime.now());
 
     final activeIndex = t.activeStageIndex.clamp(
@@ -546,9 +564,7 @@ class _TournamentSecondScreenViewState
 
     final viewWidget = Container(
       decoration: BoxDecoration(
-        color: widget.isStandaloneWindow
-            ? const Color(0xFF0D1318)
-            : theme.colorScheme.surfaceContainerHighest,
+        color: displayColors.background,
         borderRadius: BorderRadius.circular(widget.isStandaloneWindow ? 0 : 16),
       ),
       padding: EdgeInsets.all(widget.isStandaloneWindow ? 20 : 16),
@@ -572,26 +588,22 @@ class _TournamentSecondScreenViewState
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF144D34),
-                      border: Border.all(color: const Color(0xFF70E0BA)),
+                      color: displayColors.cardEmphasis,
+                      border: Border.all(color: displayColors.accent),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.tv,
-                          size: 16,
-                          color: Color(0xFF70E0BA),
-                        ),
+                        Icon(Icons.tv, size: 16, color: displayColors.accent),
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             widget.isStandaloneWindow
                                 ? 'TV-LIVE-ÜBERSICHT'
                                 : 'LIVE-TICKER',
-                            style: const TextStyle(
-                              color: Color(0xFF70E0BA),
+                            style: TextStyle(
+                              color: displayColors.accent,
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                               letterSpacing: 1.1,
@@ -605,7 +617,7 @@ class _TournamentSecondScreenViewState
                     t.name,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: displayColors.text,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -618,7 +630,10 @@ class _TournamentSecondScreenViewState
                     minWidth: 48,
                     minHeight: 48,
                   ),
-                  icon: const Icon(Icons.close, color: Colors.white70),
+                  icon: Icon(
+                    Icons.close,
+                    color: displayColors.mutedText,
+                  ),
                   onPressed: () => _closeStandaloneWindow(),
                 ),
             ],
@@ -1686,6 +1701,10 @@ class _TournamentSecondScreenViewState
         return SingleChildScrollView(
           child: _buildKratzerLivesPanel(tournament, activeStage),
         );
+      case 'kratzerHandicaps':
+        return SingleChildScrollView(
+          child: _buildKratzerHandicapsPanel(context, tournament, activeStage),
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -1736,6 +1755,60 @@ class _TournamentSecondScreenViewState
               color: stage.livesRemainingFor(player) == 0
                   ? Colors.white54
                   : const Color(0xFF70E0BA),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildKratzerHandicapsPanel(
+    BuildContext context,
+    CreatedTournament tournament,
+    TournamentRunStage? activeStage,
+  ) {
+    final stages = tournament.runStages
+        .whereType<KnockoutTournamentRunStage>()
+        .where((stage) => stage.isKratzer && stage.kratzerHandicapsEnabled)
+        .toList();
+    final stage =
+        activeStage is KnockoutTournamentRunStage &&
+            activeStage.isKratzer &&
+            activeStage.kratzerHandicapsEnabled
+        ? activeStage
+        : stages.isEmpty
+        ? null
+        : stages.first;
+    if (stage == null) return const SizedBox.shrink();
+
+    final players = stage.participants.isNotEmpty
+        ? stage.participants
+        : tournament.players;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < players.length; index++)
+          ListTile(
+            key: ValueKey(
+              'kratzer-handicap-player-$index-${players[index].name}',
+            ),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: players[index].name),
+                  if (stage.kratzerHandicapAssignments[index] case final label?)
+                    TextSpan(
+                      text: ' · $label',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ).copyWith(color: Theme.of(context).colorScheme.tertiary),
+                    ),
+                ],
+              ),
+              style: const TextStyle(
+                color: TournamentDisplayPalette.text,
+              ),
             ),
           ),
       ],

@@ -44,6 +44,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _backgrounded = false;
   bool _savingRankingSelection = false;
   bool _savingTieBreakerSettings = false;
+  bool _savingKratzerHandicapSettings = false;
   int? _tieBreakerDraftStageIndex;
   List<String> _tieBreakerDraft = const [];
   Future<void> _checkpoint() {
@@ -1584,6 +1585,137 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         ),
       );
     }
+  }
+
+  Future<void> _saveKratzerHandicapSettings({
+    required KnockoutTournamentRunStage runStage,
+    required bool enabled,
+    required List<String> handicaps,
+    required Map<int, String> assignments,
+  }) async {
+    final stageIndex = _activeStageIndex;
+    if (_savingKratzerHandicapSettings ||
+        stageIndex >= widget.tournament.runStages.length ||
+        !identical(widget.tournament.runStages[stageIndex], runStage) ||
+        !runStage.isKratzer) {
+      return;
+    }
+
+    final previousRunStage = runStage;
+    final previousStage = stageIndex < widget.tournament.stages.length
+        ? widget.tournament.stages[stageIndex]
+        : null;
+    final updatedHandicaps = List<String>.unmodifiable(
+      handicaps
+          .map((handicap) => handicap.trim())
+          .where((handicap) => handicap.isNotEmpty),
+    );
+    final updatedAssignments = Map<int, String>.unmodifiable({
+      for (final entry in assignments.entries)
+        if (entry.key >= 0 &&
+            entry.value.trim().isNotEmpty &&
+            updatedHandicaps.contains(entry.value.trim()))
+          entry.key: entry.value.trim(),
+    });
+    final updatedRunStage = KnockoutTournamentRunStage(
+      name: runStage.name,
+      rounds: runStage.rounds,
+      placementMatches: runStage.placementMatches,
+      eliminationLossLimit: runStage.eliminationLossLimit,
+      finalEndsTournament: runStage.finalEndsTournament,
+      isKratzer: runStage.isKratzer,
+      kratzerPlayersPerBoard: runStage.kratzerPlayersPerBoard,
+      kratzerPreferSameScratchCount: runStage.kratzerPreferSameScratchCount,
+      kratzerPlayUntilElimination: runStage.kratzerPlayUntilElimination,
+      kratzerBonusLifeFor180: runStage.kratzerBonusLifeFor180,
+      kratzerBonusLifeForHighFinish: runStage.kratzerBonusLifeForHighFinish,
+      kratzerHandicapsEnabled: enabled,
+      kratzerHandicaps: updatedHandicaps,
+      kratzerHandicapAssignments: updatedAssignments,
+      participants: runStage.participants,
+    );
+    final updatedStage = previousStage?.copyWith(
+      kratzerHandicapsEnabled: enabled,
+      kratzerHandicaps: updatedHandicaps,
+      kratzerHandicapAssignments: updatedAssignments,
+    );
+    setState(() {
+      _savingKratzerHandicapSettings = true;
+      widget.tournament.runStages[stageIndex] = updatedRunStage;
+      if (updatedStage != null) {
+        widget.tournament.stages[stageIndex] = updatedStage;
+      }
+      widget.tournament.addActivity(
+        'kratzer_handicaps_changed',
+        'Handicap-Einstellungen in Etappe „${runStage.name}“ geändert',
+      );
+    });
+    try {
+      await _runController.saveProgress(
+        tournament: widget.tournament,
+        activeStageIndex: _activeStageIndex,
+        completedStageIndexes: _completedStageIndexes,
+      );
+      if (!mounted) return;
+      setState(() => _savingKratzerHandicapSettings = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _savingKratzerHandicapSettings = false;
+        widget.tournament.runStages[stageIndex] = previousRunStage;
+        if (previousStage != null) {
+          widget.tournament.stages[stageIndex] = previousStage;
+        }
+        widget.tournament.activityLog.removeLast();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Handicaps konnten nicht gespeichert werden: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _addKratzerHandicap(KnockoutTournamentRunStage stage) async {
+    var enteredLabel = '';
+    final label = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Handicap hinzufügen'),
+        content: TextField(
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(labelText: 'Bezeichnung'),
+          onChanged: (value) => enteredLabel = value,
+          onSubmitted: (value) => Navigator.pop(context, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, enteredLabel.trim()),
+            child: const Text('Hinzufügen'),
+          ),
+        ],
+      ),
+    );
+    if (label == null || label.isEmpty || !mounted) return;
+    if (stage.kratzerHandicaps.any(
+      (handicap) => handicap.toLowerCase() == label.toLowerCase(),
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dieses Handicap gibt es bereits.')),
+      );
+      return;
+    }
+    await _saveKratzerHandicapSettings(
+      runStage: stage,
+      enabled: stage.kratzerHandicapsEnabled,
+      handicaps: [...stage.kratzerHandicaps, label],
+      assignments: stage.kratzerHandicapAssignments,
+    );
   }
 
   Future<void> _editResult(
@@ -3481,6 +3613,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         kratzerPlayUntilElimination: stage.kratzerPlayUntilElimination,
         kratzerBonusLifeFor180: stage.kratzerBonusLifeFor180,
         kratzerBonusLifeForHighFinish: stage.kratzerBonusLifeForHighFinish,
+        kratzerHandicapsEnabled: stage.kratzerHandicapsEnabled,
+        kratzerHandicaps: stage.kratzerHandicaps,
+        kratzerHandicapAssignments: stage.kratzerHandicapAssignments,
         participants: participants,
       );
     }
@@ -4041,6 +4176,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Widget _buildAuthorized(BuildContext context) {
     final activeStage = _stageForView(_viewStageIndex);
+    final kratzerParticipants = activeStage is KnockoutTournamentRunStage
+        ? activeStage.participants.isNotEmpty
+              ? activeStage.participants
+              : widget.tournament.players
+        : const <TournamentPlayer>[];
     final isViewingActiveStage =
         _stageViewMode == StageViewMode.director ||
         _viewStageIndex == _activeStageIndex;
@@ -4759,6 +4899,211 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          if (isViewingActiveStage &&
+                              activeStage is KnockoutTournamentRunStage &&
+                              activeStage.isKratzer)
+                            Card(
+                              child: ExpansionTile(
+                                key: const ValueKey(
+                                  'kratzer-handicap-settings',
+                                ),
+                                leading: const Icon(Icons.rule_folder_outlined),
+                                title: const Text('Sonderregel Einstellungen'),
+                                subtitle: const Text(
+                                  'Handicaps verwalten und Spielern zuweisen',
+                                ),
+                                childrenPadding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  16,
+                                ),
+                                children: [
+                                  SwitchListTile(
+                                    key: const ValueKey(
+                                      'kratzer-handicaps-enabled',
+                                    ),
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('Handicaps aktivieren'),
+                                    value: activeStage.kratzerHandicapsEnabled,
+                                    onChanged: _savingKratzerHandicapSettings
+                                        ? null
+                                        : (enabled) =>
+                                              _saveKratzerHandicapSettings(
+                                                runStage: activeStage,
+                                                enabled: enabled,
+                                                handicaps: activeStage
+                                                    .kratzerHandicaps,
+                                                assignments: activeStage
+                                                    .kratzerHandicapAssignments,
+                                              ),
+                                  ),
+                                  if (activeStage.kratzerHandicapsEnabled) ...[
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        'Handicaps verwalten',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleSmall,
+                                      ),
+                                    ),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: OutlinedButton.icon(
+                                        onPressed:
+                                            _savingKratzerHandicapSettings
+                                            ? null
+                                            : () => _addKratzerHandicap(
+                                                activeStage,
+                                              ),
+                                        icon: const Icon(Icons.add),
+                                        label: const Text(
+                                          'Handicap hinzufügen',
+                                        ),
+                                      ),
+                                    ),
+                                    if (activeStage.kratzerHandicaps.isEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 8,
+                                        ),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Füge zuerst Handicaps hinzu, zum Beispiel „Wirf mit der linken Hand“. ',
+                                          ),
+                                        ),
+                                      ),
+                                    for (final handicap
+                                        in activeStage.kratzerHandicaps)
+                                      ListTile(
+                                        key: ValueKey(
+                                          'kratzer-handicap-$handicap',
+                                        ),
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(handicap),
+                                        trailing: IconButton(
+                                          tooltip: 'Handicap entfernen',
+                                          onPressed:
+                                              _savingKratzerHandicapSettings
+                                              ? null
+                                              : () {
+                                                  final handicaps = activeStage
+                                                      .kratzerHandicaps
+                                                      .where(
+                                                        (item) =>
+                                                            item != handicap,
+                                                      )
+                                                      .toList();
+                                                  final assignments =
+                                                      Map<int, String>.from(
+                                                        activeStage
+                                                            .kratzerHandicapAssignments,
+                                                      )..removeWhere(
+                                                        (_, assigned) =>
+                                                            assigned ==
+                                                            handicap,
+                                                      );
+                                                  _saveKratzerHandicapSettings(
+                                                    runStage: activeStage,
+                                                    enabled: true,
+                                                    handicaps: handicaps,
+                                                    assignments: assignments,
+                                                  );
+                                                },
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                          ),
+                                        ),
+                                      ),
+                                    if (activeStage
+                                        .kratzerHandicaps
+                                        .isNotEmpty) ...[
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          'Handicaps zuweisen',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleSmall,
+                                        ),
+                                      ),
+                                      for (
+                                        var playerIndex = 0;
+                                        playerIndex <
+                                            kratzerParticipants.length;
+                                        playerIndex++
+                                      )
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 12,
+                                          ),
+                                          child: DropdownButtonFormField<String>(
+                                            key: ValueKey(
+                                              'kratzer-handicap-assignment-$playerIndex',
+                                            ),
+                                            initialValue:
+                                                activeStage.kratzerHandicaps
+                                                    .contains(
+                                                      activeStage
+                                                          .kratzerHandicapAssignments[playerIndex],
+                                                    )
+                                                ? activeStage
+                                                      .kratzerHandicapAssignments[playerIndex]!
+                                                : '',
+                                            isExpanded: true,
+                                            decoration: InputDecoration(
+                                              labelText:
+                                                  'Handicap für ${kratzerParticipants[playerIndex].name}',
+                                            ),
+                                            items: [
+                                              const DropdownMenuItem(
+                                                value: '',
+                                                child: Text('Kein Handicap'),
+                                              ),
+                                              for (final handicap
+                                                  in activeStage
+                                                      .kratzerHandicaps)
+                                                DropdownMenuItem(
+                                                  value: handicap,
+                                                  child: Text(handicap),
+                                                ),
+                                            ],
+                                            onChanged:
+                                                _savingKratzerHandicapSettings
+                                                ? null
+                                                : (handicap) {
+                                                    final assignments =
+                                                        Map<int, String>.from(
+                                                          activeStage
+                                                              .kratzerHandicapAssignments,
+                                                        );
+                                                    if (handicap == null ||
+                                                        handicap.isEmpty) {
+                                                      assignments.remove(
+                                                        playerIndex,
+                                                      );
+                                                    } else {
+                                                      assignments[playerIndex] =
+                                                          handicap;
+                                                    }
+                                                    _saveKratzerHandicapSettings(
+                                                      runStage: activeStage,
+                                                      enabled: true,
+                                                      handicaps: activeStage
+                                                          .kratzerHandicaps,
+                                                      assignments: assignments,
+                                                    );
+                                                  },
+                                          ),
+                                        ),
+                                    ],
+                                  ],
+                                ],
+                              ),
+                            ),
                           const SizedBox(height: 12),
                           // 3. Gruppen verwalten
                           if (widget.tournament.leagueMatch == null &&

@@ -98,6 +98,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   bool _kratzerPlayUntilElimination = false;
   bool _kratzerBonusLifeFor180 = false;
   bool _kratzerBonusLifeForHighFinish = false;
+  bool _kratzerHandicapsEnabled = false;
   bool _stageNameWasEdited = false;
   bool _isOpeningPlayerPicker = false;
   bool _isCreatingTournament = false;
@@ -1618,6 +1619,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       kratzerBonusLifeForHighFinish: _selectedStageType == 'kratzer'
           ? _kratzerBonusLifeForHighFinish
           : false,
+      kratzerHandicapsEnabled: _selectedStageType == 'kratzer'
+          ? _kratzerHandicapsEnabled
+          : false,
       groupCount: _selectedStageType == 'groups'
           ? _calculateGroupSizes().length
           : null,
@@ -1700,6 +1704,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _kratzerPlayUntilElimination = false;
     _kratzerBonusLifeFor180 = false;
     _kratzerBonusLifeForHighFinish = false;
+    _kratzerHandicapsEnabled = false;
     _groupPlayType = 'round_robin';
     _groupPlayTypes.clear();
     _groupRoundRobinRepeats.clear();
@@ -1741,6 +1746,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       _kratzerPlayUntilElimination = stage.kratzerPlayUntilElimination;
       _kratzerBonusLifeFor180 = stage.kratzerBonusLifeFor180;
       _kratzerBonusLifeForHighFinish = stage.kratzerBonusLifeForHighFinish;
+      _kratzerHandicapsEnabled = stage.kratzerHandicapsEnabled;
       _stageNameController.text = stage.name;
       _stageNameController.selection = TextSelection.collapsed(
         offset: _stageNameController.text.length,
@@ -2297,6 +2303,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             kratzerPlayUntilElimination: stage.kratzerPlayUntilElimination,
             kratzerBonusLifeFor180: stage.kratzerBonusLifeFor180,
             kratzerBonusLifeForHighFinish: stage.kratzerBonusLifeForHighFinish,
+            kratzerHandicapsEnabled: stage.kratzerHandicapsEnabled,
+            kratzerHandicaps: stage.kratzerHandicaps,
+            kratzerHandicapAssignments: stage.kratzerHandicapAssignments,
             participants: participants,
           ),
         );
@@ -3132,6 +3141,17 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         onChanged: (value) => setState(
                           () => _kratzerBonusLifeForHighFinish = value,
                         ),
+                      ),
+                      SwitchListTile(
+                        key: const ValueKey('kratzer-handicaps-enabled'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Handicaps aktivieren'),
+                        subtitle: const Text(
+                          'Im Turnier lassen sich Handicaps verwalten und einzelnen Spielern zuweisen.',
+                        ),
+                        value: _kratzerHandicapsEnabled,
+                        onChanged: (value) =>
+                            setState(() => _kratzerHandicapsEnabled = value),
                       ),
                       ExpansionTile(
                         key: const ValueKey('kratzer-starting-scratches'),

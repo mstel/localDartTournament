@@ -82,6 +82,11 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       return ChallongeArchivePage(tournament: tournament);
     }
     final summary = _TournamentResultSummary.fromTournament(tournament);
+    final scheme = Theme.of(context).colorScheme;
+    final completionColors = [
+      Color.lerp(const Color(0xFF142B3A), scheme.primary, .28)!,
+      Color.lerp(const Color(0xFF175C59), scheme.tertiary, .3)!,
+    ];
     final podium = summary.ranking.take(3).toList();
     final performances = [
       for (final entry in _resultMatches(tournament))
@@ -117,9 +122,9 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
             Card(
               clipBehavior: Clip.antiAlias,
               child: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF142B3A), Color(0xFF175C59)],
+                    colors: completionColors,
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),

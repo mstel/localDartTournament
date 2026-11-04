@@ -50,8 +50,16 @@ void main() {
     }
   });
 
+  test('club action labels contrast with the restored gold accent', () {
+    final theme = buildDartTournamentTheme();
+    expect(
+      _contrastRatio(theme.colorScheme.onPrimary, theme.colorScheme.primary),
+      greaterThanOrEqualTo(4.5),
+    );
+  });
+
   test(
-    'blue and Christmas theme styles persist independently of brightness',
+    'club and Christmas theme styles persist independently of brightness',
     () async {
       SharedPreferences.setMockInitialValues({});
       final controller = AppThemeController.instance;
@@ -66,7 +74,15 @@ void main() {
       );
       expect(
         buildDartTournamentDarkTheme().colorScheme.primary,
-        const Color(0xFF70C4E8),
+        const Color(0xFFD49B44),
+      );
+      expect(
+        buildDartTournamentTheme().colorScheme.primary,
+        const Color(0xFFB5811E),
+      );
+      expect(
+        buildDartTournamentDarkTheme(christmas: true).colorScheme.tertiary,
+        const Color(0xFF72D58D),
       );
 
       await controller.setThemeStyle(AppThemeStyle.club);
@@ -75,20 +91,22 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Christmas decorations show a Santa and allow the app to render',
-    (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: ChristmasDecorations(child: Scaffold(body: Text('Inhalt'))),
-        ),
-      );
+  testWidgets('Christmas decorations include festive ornaments and render', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChristmasDecorations(child: Scaffold(body: Text('Inhalt'))),
+      ),
+    );
 
-      expect(find.text('🎅'), findsOneWidget);
-      expect(find.text('Inhalt'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.text('🎅'), findsOneWidget);
+    expect(find.text('🎄 🎁'), findsOneWidget);
+    expect(find.text('🎁 🍪'), findsOneWidget);
+    expect(find.text('🌲 🍬'), findsOneWidget);
+    expect(find.text('Inhalt'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 double _contrastRatio(Color foreground, Color background) {

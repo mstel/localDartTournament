@@ -47,25 +47,28 @@ class _SecondScreenStandaloneAppState extends State<SecondScreenStandaloneApp> {
   }
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<AppThemeStyle>(
-    valueListenable: AppThemeController.instance.themeStyleNotifier,
-    builder: (context, style, _) {
-      final christmas = style == AppThemeStyle.christmas;
-      return MaterialApp(
-        title: 'Dart Turnieranzeige (2. Bildschirm)',
-        debugShowCheckedModeBanner: false,
-        themeMode: ThemeMode.dark,
-        theme: buildDartTournamentTheme(christmas: christmas),
-        darkTheme: buildDartTournamentDarkTheme(christmas: christmas),
-        builder: (context, child) {
-          final app = ArrowKeyDropdownNavigation(
-            child: child ?? const SizedBox.shrink(),
-          );
-          return christmas ? ChristmasDecorations(child: app) : app;
-        },
-        home: _SecondScreenStandalonePage(tournamentId: widget.tournamentId),
-      );
-    },
+  Widget build(BuildContext context) => ValueListenableBuilder<ThemeMode>(
+    valueListenable: AppThemeController.instance.themeModeNotifier,
+    builder: (context, themeMode, _) => ValueListenableBuilder<AppThemeStyle>(
+      valueListenable: AppThemeController.instance.themeStyleNotifier,
+      builder: (context, style, _) {
+        final christmas = style == AppThemeStyle.christmas;
+        return MaterialApp(
+          title: 'Dart Turnieranzeige (2. Bildschirm)',
+          debugShowCheckedModeBanner: false,
+          themeMode: themeMode,
+          theme: buildDartTournamentTheme(christmas: christmas),
+          darkTheme: buildDartTournamentDarkTheme(christmas: christmas),
+          builder: (context, child) {
+            final app = ArrowKeyDropdownNavigation(
+              child: child ?? const SizedBox.shrink(),
+            );
+            return christmas ? ChristmasDecorations(child: app) : app;
+          },
+          home: _SecondScreenStandalonePage(tournamentId: widget.tournamentId),
+        );
+      },
+    ),
   );
 }
 
@@ -124,17 +127,18 @@ class _SecondScreenStandalonePageState
   @override
   Widget build(BuildContext context) {
     if (_loading && _tournament == null) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
+      final scheme = Theme.of(context).colorScheme;
+      return Scaffold(
+        backgroundColor: scheme.surface,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: Color(0xFF70E0BA)),
+              CircularProgressIndicator(color: scheme.tertiary),
               SizedBox(height: 16),
               Text(
                 'Lade 2. Bildschirmanzeige...',
-                style: TextStyle(color: Colors.white70, fontSize: 16),
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16),
               ),
             ],
           ),
@@ -145,26 +149,27 @@ class _SecondScreenStandalonePageState
     if (_tournament == null) {
       final requestedTournament =
           widget.tournamentId != null && widget.tournamentId!.isNotEmpty;
+      final scheme = Theme.of(context).colorScheme;
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: scheme.surface,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.tv_off, color: Colors.white38, size: 48),
+              Icon(Icons.tv_off, color: scheme.onSurfaceVariant, size: 48),
               const SizedBox(height: 16),
               Text(
                 requestedTournament
                     ? 'Das angeforderte Turnier wurde nicht gefunden.'
                     : 'Kein aktives Turnier gefunden.',
-                style: TextStyle(color: Colors.white, fontSize: 18),
+                style: TextStyle(color: scheme.onSurface, fontSize: 18),
               ),
               const SizedBox(height: 8),
               Text(
                 requestedTournament
                     ? 'Bitte öffne die Anzeige erneut aus dem gewünschten Turnier.'
                     : 'Starte oder wähle ein Turnier am Hauptbildschirm.',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 16),
               FilledButton.tonal(
@@ -178,7 +183,7 @@ class _SecondScreenStandalonePageState
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: TournamentSecondScreenView(
           tournament: _tournament!,

@@ -1,3 +1,15 @@
+# 2.4.4+64
+
+- Stellt die Goldakzente des Standarddesigns wieder her und färbt nur die
+  Spieler-Kachel im Elo-Verlauf blau.
+- Ergänzt speicherbare und verwaltbare Handicaps für Kratzer-Turniere sowie
+  ein optionales Handicaps-Widget für den Zweitmonitor.
+- Passt Zweitmonitor und Turnierabschlussgrafik an das ausgewählte Farbschema
+  an und erweitert das Weihnachtsthema um kräftiges Tannengrün und Dekoration.
+- Macht Cloud-Abgleich und Upload-Status eindeutiger, meldet nicht gestartete
+  Vorgänge und erhält einen erfolgreichen Upload-Status, wenn spätere lokale
+  Änderungen noch ausstehen.
+
 # 2.4.2+62
 
 - Aktualisiert Achievement-Beschreibungen passend zu angepassten Zielwerten.

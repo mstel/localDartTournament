@@ -328,6 +328,81 @@ void main() {
   });
 
   testWidgets(
+    'Kratzer handicaps can be enabled, managed, assigned, and saved',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final storage = _RecordingTournamentStorage();
+      final tournament = fixture();
+      tournament.stages.add(
+        const TournamentStage(name: 'Kratzer', type: 'kratzer'),
+      );
+      tournament.runStages[0] = KnockoutTournamentRunStage(
+        name: 'Kratzer',
+        rounds: const [],
+        isKratzer: true,
+        participants: tournament.players,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TournamentRunPage(
+            tournament: tournament,
+            runController: TournamentRunController(storage: storage),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('Einstellungen'));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.ensureVisible(find.text('Sonderregel Einstellungen'));
+      await tester.tap(find.text('Sonderregel Einstellungen'));
+      await tester.pumpAndSettle();
+
+      final enabledSwitch = find.byKey(
+        const ValueKey('kratzer-handicaps-enabled'),
+      );
+      expect(tester.widget<SwitchListTile>(enabledSwitch).value, isFalse);
+      tester.widget<SwitchListTile>(enabledSwitch).onChanged!(true);
+      await tester.pumpAndSettle();
+      expect(
+        (tournament.runStages.single as KnockoutTournamentRunStage)
+            .kratzerHandicapsEnabled,
+        isTrue,
+      );
+
+      final addButton = find.text('Handicap hinzufügen');
+      await tester.ensureVisible(addButton);
+      await tester.tap(addButton);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'Linke Hand');
+      await tester.tap(find.text('Hinzufügen'));
+      await tester.pumpAndSettle();
+
+      final assignment = find.byKey(
+        const ValueKey('kratzer-handicap-assignment-0'),
+      );
+      await tester.ensureVisible(assignment);
+      await tester.tap(assignment);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Linke Hand').last);
+      await tester.pumpAndSettle();
+
+      final updated = tournament.runStages.single as KnockoutTournamentRunStage;
+      expect(updated.kratzerHandicaps, ['Linke Hand']);
+      expect(updated.kratzerHandicapAssignments, {0: 'Linke Hand'});
+      final persisted = (await storage.loadTournaments()).single;
+      final persistedStage =
+          persisted.runStages.single as KnockoutTournamentRunStage;
+      expect(persistedStage.kratzerHandicapsEnabled, isTrue);
+      expect(persistedStage.kratzerHandicapAssignments, {0: 'Linke Hand'});
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
     'running group tie-breakers are applied from a separate settings panel',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 1400);

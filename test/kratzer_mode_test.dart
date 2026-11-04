@@ -93,10 +93,16 @@ void main() {
       type: 'kratzer',
       knockoutLives: 7,
       finalEndsTournament: false,
+      kratzerHandicapsEnabled: true,
+      kratzerHandicaps: const ['Wirf mit der linken Hand'],
+      kratzerHandicapAssignments: const {1: 'Wirf mit der linken Hand'},
     );
     final loaded = TournamentStage.fromJson(configured.toJson());
     expect(loaded.lossLimit, 7);
     expect(loaded.finalEndsTournament, isFalse);
+    expect(loaded.kratzerHandicapsEnabled, isTrue);
+    expect(loaded.kratzerHandicaps, ['Wirf mit der linken Hand']);
+    expect(loaded.kratzerHandicapAssignments, {1: 'Wirf mit der linken Hand'});
   });
 
   test(

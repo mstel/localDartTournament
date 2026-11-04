@@ -2619,7 +2619,9 @@ class PlayerEloHistoryPage extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             Card(
-              color: colorScheme.primaryContainer,
+              color: theme.brightness == Brightness.dark
+                  ? const Color(0xFF19394B)
+                  : const Color(0xFFDCECF5),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(

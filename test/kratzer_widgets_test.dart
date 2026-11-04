@@ -113,6 +113,10 @@ void main() {
       await tester.tap(bonusHighFinish);
       await tester.pumpAndSettle();
       expect(tester.widget<SwitchListTile>(bonusHighFinish).value, isTrue);
+      expect(
+        find.byKey(const ValueKey('kratzer-handicaps-enabled')),
+        findsOneWidget,
+      );
       final startScratches = find.byKey(
         const ValueKey('kratzer-starting-scratches'),
       );

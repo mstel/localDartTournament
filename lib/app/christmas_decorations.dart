@@ -58,12 +58,64 @@ class _ChristmasDecorationsState extends State<ChristmasDecorations>
           child: ExcludeSemantics(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Color(0xB30F1720),
+                color: Color(0xE6234D36),
+                border: Border.fromBorderSide(
+                  BorderSide(color: Color(0xCCFFD166)),
+                ),
                 borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                child: Text('🎅', style: TextStyle(fontSize: 18)),
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('🎅', style: TextStyle(fontSize: 18)),
+                    SizedBox(width: 4),
+                    Text('🎄 🎁', style: TextStyle(fontSize: 18)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      const Positioned(
+        left: 12,
+        bottom: 12,
+        child: IgnorePointer(
+          child: ExcludeSemantics(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(0xD9234D36),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+                border: Border.fromBorderSide(
+                  BorderSide(color: Color(0xAAFFD166)),
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                child: Text('🎁 🍪', style: TextStyle(fontSize: 18)),
+              ),
+            ),
+          ),
+        ),
+      ),
+      const Positioned(
+        right: 14,
+        bottom: 12,
+        child: IgnorePointer(
+          child: ExcludeSemantics(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(0xD9234D36),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+                border: Border.fromBorderSide(
+                  BorderSide(color: Color(0xAAFFD166)),
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                child: Text('🌲 🍬', style: TextStyle(fontSize: 18)),
               ),
             ),
           ),

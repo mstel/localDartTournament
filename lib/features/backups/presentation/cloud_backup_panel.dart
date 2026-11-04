@@ -147,14 +147,11 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
     if (confirmed != true || !mounted) return;
     await _run(() async {
       await SupabaseWorkspaceSyncService.instance.uploadLocalVersion();
-      _status = SupabaseWorkspaceSyncService.status.value;
     });
   }
 
-  Future<void> _synchronize() => _run(() async {
-    await SupabaseWorkspaceSyncService.instance.synchronize();
-    _status = SupabaseWorkspaceSyncService.status.value;
-  });
+  Future<void> _synchronize() =>
+      _run(SupabaseWorkspaceSyncService.instance.synchronize);
 
   Future<void> _restore() => _run(() async {
     final backups = await BackupService.create();
