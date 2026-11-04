@@ -4,13 +4,14 @@ import '../../statistics/domain/best_performance.dart';
 import '../../tournaments/domain/engines/tournament_engine.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/domain/imported_tournament_archive.dart';
+import '../domain/challonge_tournament.dart';
 
 /// Replays historical results through the same runtime used by the run page.
 /// Source ranks remain evidence and never override calculated standings.
 class ChallongeNativeImport {
   static CreatedTournament convert(CreatedTournament archived) {
     final source = archived.importedArchive!;
-    final mode = source.mode;
+    final mode = ChallongeTournament.normalizedTournamentType(source.mode);
     if (![
       'single elimination',
       'double elimination',
@@ -138,6 +139,7 @@ class ChallongeNativeImport {
         final declaredTypes = entry.value
             .map((m) => m['group_type'])
             .whereType<String>()
+            .map(ChallongeTournament.normalizedTournamentType)
             .toSet();
         if (declaredTypes.length > 1 ||
             declaredTypes.any(
@@ -443,6 +445,16 @@ class ChallongeNativeImport {
       final pending = finals
           .where((m) => m['player1_id'] != null && m['player2_id'] != null)
           .toList();
+      String? doubleEliminationLabel(Map<String, dynamic> match) {
+        if (mode != 'double elimination') return null;
+        final round = int.tryParse('${match['round'] ?? ''}') ?? 0;
+        if (round == 0) return 'Spiel um Platz 3';
+        if (round < 0) return 'Losers Runde ${-round}';
+        if (round <= winnerRounds) return 'Winners Runde $round';
+        if (round == winnerRounds + 1) return 'Grand Final';
+        return 'Reset Final';
+      }
+
       for (
         var pass = 0;
         pass < finals.length + 3 && pending.isNotEmpty;
@@ -457,7 +469,7 @@ class ChallongeNativeImport {
           final placement =
               target.placementRank != null ||
               target.label == 'Spiel um Platz 3';
-          final candidates = pending
+          var candidates = pending
               .where(
                 (m) =>
                     (m['round'] == 0) == placement &&
@@ -470,9 +482,43 @@ class ChallongeNativeImport {
                     ])),
               )
               .toList();
+          if (mode == 'double elimination') {
+            final targetLabel = target.label;
+            if (targetLabel != null) {
+              candidates = pending
+                  .where(
+                    (match) => doubleEliminationLabel(match) == targetLabel,
+                  )
+                  .toList();
+              if (candidates.isNotEmpty && target.hasPlayers) {
+                final exact = candidates.where((match) {
+                  final home = _playerIdentity(
+                    bySourceId['${match['player1_id']}']!,
+                  );
+                  final away = _playerIdentity(
+                    bySourceId['${match['player2_id']}']!,
+                  );
+                  return {home, away}.containsAll([
+                    _playerIdentity(target.homePlayer!),
+                    _playerIdentity(target.awayPlayer!),
+                  ]);
+                }).toList();
+                if (exact.isNotEmpty) candidates = exact;
+              }
+            }
+          }
           if (candidates.isEmpty) continue;
           final m = candidates.first;
           final result = historical(m);
+          if (mode == 'double elimination' &&
+              (target.homePlayer != result.homePlayer ||
+                  target.awayPlayer != result.awayPlayer)) {
+            target
+              ..homePlayer = result.homePlayer
+              ..awayPlayer = result.awayPlayer
+              ..allowsBye = false
+              ..isAnnulled = false;
+          }
           final reversed =
               _playerIdentity(result.homePlayer!) !=
               _playerIdentity(target.homePlayer!);
@@ -486,7 +532,6 @@ class ChallongeNativeImport {
         }
         if (!progress) break;
       }
-      replay.advance();
       if (pending.isNotEmpty || replay.hasOpen(replayStage)) {
         throw FormatException(
           'Die eigene K.-o.-Weiterleitung konnte ${pending.length} historische Spiele von ${archived.name} nicht nachspielen. Import vor dem Speichern abgebrochen.',

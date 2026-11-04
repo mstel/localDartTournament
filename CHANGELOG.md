@@ -1,3 +1,11 @@
+# 2.4.9+69
+
+- Behebt die Konvertierung abgeschlossener Challonge-Doppel-K.-o.-Turniere,
+  indem historische Begegnungen anhand ihrer Bracket-Runde und Lane
+  wiedergegeben werden, auch wenn die lokale Paarungsreihenfolge abweicht.
+- Vereinheitlicht Challonge-Modusangaben wie `round_robin` und `round robin`,
+  damit gemischte Schreibweisen keine widerspruechlichen Gruppenmodi ausloesen.
+
 # 2.4.8+68
 
 - Rekonstruiert Challonge-K.-o.-Brackets anhand der gespeicherten Seeds statt

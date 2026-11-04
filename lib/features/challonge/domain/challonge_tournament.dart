@@ -83,6 +83,12 @@ class ChallongeTournament {
       }).toList();
   static String name(Map<String, dynamic> p) =>
       (p['name'] as String? ?? '').trim();
+  static String normalizedTournamentType(dynamic value) => '$value'
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+
   static String normalizedName(String name) =>
       name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   String get tournamentId => 'challonge:local:${Uri.encodeComponent(id)}';
@@ -169,7 +175,7 @@ class ChallongeTournament {
     final archive = ImportedTournamentArchive(
       sourceId: id,
       url: '${data['full_challonge_url'] ?? ''}',
-      mode: '${data['tournament_type'] ?? ''}',
+      mode: normalizedTournamentType(data['tournament_type']),
       participants: [
         for (final p in participants)
           {

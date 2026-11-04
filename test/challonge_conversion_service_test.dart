@@ -177,6 +177,104 @@ void main() {
   );
 
   test(
+    'replays Challonge double-elimination rounds when its pairings differ',
+    () async {
+      Map<String, dynamic> match(
+        int id,
+        int round,
+        int home,
+        int away,
+        int homeScore,
+        int awayScore,
+      ) => {
+        'id': id,
+        'identifier': 'M$id',
+        'round': round,
+        'state': 'complete',
+        'player1_id': home,
+        'player2_id': away,
+        'player1_seed': home,
+        'player2_seed': away,
+        'winner_id': homeScore > awayScore ? home : away,
+        'scores_csv': '$homeScore-$awayScore',
+      };
+
+      final data = {
+        'id': 44,
+        'name': 'Double-Elimination mit Challonge-Paarungen',
+        'state': 'complete',
+        'tournament_type': 'double elimination',
+        'created_at': '2026-04-04T12:00:00Z',
+        'started_at': '2026-04-04T13:00:00Z',
+        'completed_at': '2026-04-04T14:00:00Z',
+        'participants': [
+          for (var id = 1; id <= 4; id++)
+            {'id': id, 'name': 'Spieler $id', 'final_rank': id},
+        ],
+        'matches': [
+          match(1, 1, 1, 2, 2, 0),
+          match(2, 1, 3, 4, 2, 0),
+          match(3, -1, 2, 4, 2, 0),
+          match(4, 2, 1, 3, 2, 0),
+          match(5, -2, 2, 3, 2, 0),
+          match(6, 3, 1, 2, 2, 0),
+        ],
+      };
+      final source = ChallongeTournament(
+        data,
+      ).convert({for (var id = 1; id <= 4; id++) '$id': 'p$id'});
+
+      final converted = await ChallongeTournamentConversionService().convert(
+        source,
+      );
+
+      final stage = converted.runStages.single as KnockoutTournamentRunStage;
+      expect(converted.completedStageIndexes, {0});
+      expect(stage.eliminationLossLimit, 2);
+      expect(stage.matches.where((match) => match.hasResult), hasLength(6));
+      expect(stage.matches.last.label, 'Grand Final');
+      expect(stage.matches.last.winner?.name, 'Spieler 1');
+      expect(converted.importedArchive!.nativeValidation!['issues'], isEmpty);
+    },
+  );
+
+  test(
+    'normalizes Challonge group type aliases for multi-round round robin',
+    () async {
+      final data = challongeData();
+      final matches = List<Map<String, dynamic>>.from(
+        ChallongeTournament.unwrap(data['matches'] as List, 'match'),
+      );
+      data['matches'] = [
+        for (var index = 0; index < matches.length; index++)
+          {
+            ...matches[index],
+            'group_type': index.isEven ? 'round_robin' : 'round robin',
+          },
+        for (var index = 0; index < matches.length; index++)
+          {
+            ...matches[index],
+            'id': 20 + index,
+            'round': 2,
+            'group_type': index.isEven ? 'round robin' : 'round_robin',
+          },
+      ];
+      final source = ChallongeTournament(
+        data,
+      ).convert({'1': 'p1', '2': 'p2', '3': 'p3'});
+
+      final converted = await ChallongeTournamentConversionService().convert(
+        source,
+      );
+
+      final stage = converted.runStages.single as GroupTournamentRunStage;
+      expect(stage.groups.single.playType, 'round_robin');
+      expect(stage.groups.single.matches, hasLength(6));
+      expect(converted.stages.single.groupRoundRobinRepeats, [2]);
+    },
+  );
+
+  test(
     'converts incomplete assignments while preserving local opponents',
     () async {
       final original = archivedTournament();
