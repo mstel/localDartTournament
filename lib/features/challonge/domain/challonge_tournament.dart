@@ -110,7 +110,8 @@ class ChallongeTournament {
         .map((p) => p.profileId)
         .whereType<String>()
         .toList();
-    if ((!allowUnlinkedPlayers && players.values.any((p) => p.profileId == null)) ||
+    if ((!allowUnlinkedPlayers &&
+            players.values.any((p) => p.profileId == null)) ||
         linkedProfileIds.toSet().length != linkedProfileIds.length) {
       throw ArgumentError(
         'Jeder zugewiesene Teilnehmer muss einem eindeutigen Spieler entsprechen.',
@@ -193,6 +194,7 @@ class ChallongeTournament {
               'scores_csv',
               'started_at',
               'completed_at',
+              'bestPerformances',
               'group_id',
               'group_type',
               'player1_seed',
@@ -208,13 +210,12 @@ class ChallongeTournament {
       players: players.values.toList(),
       createdAt: DateTime.tryParse('${data['created_at'] ?? ''}'),
       startedAt: DateTime.tryParse('${data['started_at'] ?? ''}'),
-      finishedAt: DateTime.tryParse('${data['completed_at'] ?? ''}') ??
+      finishedAt:
+          DateTime.tryParse('${data['completed_at'] ?? ''}') ??
           DateTime.tryParse('${data['started_at'] ?? ''}') ??
           DateTime.tryParse('${data['created_at'] ?? ''}'),
       countsForRanking: countsForRanking,
-      rankingIds: countsForRanking
-          ? rankingIds.toSet().toList()
-          : const [],
+      rankingIds: countsForRanking ? rankingIds.toSet().toList() : const [],
       importedArchive: archive,
       stages: const [TournamentStage(name: 'Challonge-Archiv', type: 'groups')],
       runStages: [

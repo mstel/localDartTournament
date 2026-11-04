@@ -6,9 +6,52 @@ import 'package:dart_tournament_manager/features/tournaments/data/app_database.d
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
+import 'package:dart_tournament_manager/shared/persistence/storage_access.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'saving unchanged achievement progress does not mark local data dirty',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'dart_achievement_progress_revision_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final player = await database.createPlayerProfile(displayName: 'Spieler');
+      const ranking = LocalRanking(id: 'ranking', name: 'Rangliste');
+      await database.saveLocalRanking(ranking);
+      final progress = [
+        {
+          'achievement_id': 'first_match',
+          'current_value': 1.0,
+          'target_value': 1.0,
+          'status': 'completed',
+          'unlocked_at': '2026-11-04T10:00:00.000Z',
+          'explanation': 'Erster Erfolg',
+          'is_final': 1,
+          'source_hash': 'source',
+        },
+      ];
+
+      final beforeInsert = StorageAccess.localDataRevision.value;
+      await database.saveRankingAchievementProgress(
+        rankingId: ranking.id,
+        playerProfileId: player.id,
+        progress: progress,
+      );
+      final afterInsert = StorageAccess.localDataRevision.value;
+      expect(afterInsert, beforeInsert + 1);
+
+      await database.saveRankingAchievementProgress(
+        rankingId: ranking.id,
+        playerProfileId: player.id,
+        progress: progress,
+      );
+      expect(StorageAccess.localDataRevision.value, afterInsert);
+    },
+  );
+
   test(
     'monthly performance is loaded and updated by player and month',
     () async {

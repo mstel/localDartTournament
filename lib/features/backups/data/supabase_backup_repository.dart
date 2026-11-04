@@ -52,6 +52,13 @@ class SupabaseBackupRepository {
 
   Future<DateTime> upload(BackupService backups) async {
     final bytes = await backups.exportBytes();
+    return uploadBytes(bytes, backups: backups);
+  }
+
+  Future<DateTime> uploadBytes(
+    Uint8List bytes, {
+    required BackupService backups,
+  }) async {
     final preview = await backups.inspect(bytes);
     await _client.storage
         .from(bucket)

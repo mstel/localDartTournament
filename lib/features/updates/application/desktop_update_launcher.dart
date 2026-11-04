@@ -125,6 +125,7 @@ class DesktopUpdateLauncher {
     String id,
     int parentPid, {
     required String activeFile,
+    required String startedFile,
     required String logFile,
     required String failureFile,
     required String originalExe,
@@ -140,13 +141,13 @@ function Write-UpdateFailure([string]\$message) {
   Write-UpdateLog \$message
   try { Add-Content -LiteralPath \$failureFile -Value "\$(Get-Date -Format o) \$message`nLog: \$logFile" -Encoding UTF8 } catch {}
 }
-try { Remove-Item -LiteralPath \$failureFile -Force -ErrorAction SilentlyContinue } catch {}
-\$parentProcess = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
-if (\$null -ne \$parentProcess -and -not \$parentProcess.WaitForExit(120000)) {
-  Write-UpdateFailure 'Die ursprüngliche App wurde nicht beendet; Update nicht gestartet.'
-  exit 1
-}
 try {
+  Write-UpdateLog 'Update-Hilfsprogramm wurde gestartet.'
+  Set-Content -LiteralPath ${quote(startedFile)} -Value ([DateTime]::UtcNow.ToString('o')) -Encoding UTF8
+  \$parentProcess = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
+  if (\$null -ne \$parentProcess -and -not \$parentProcess.WaitForExit(120000)) {
+    throw 'Die ursprüngliche App wurde nicht beendet; Update nicht gestartet.'
+  }
   \$updatedProcess = Start-Process -FilePath ${quote(exe)} -WorkingDirectory ${quote(p.dirname(exe))} -ArgumentList '--desktop-update-activate=$id' -WindowStyle Normal -PassThru
   \$deadline = [DateTime]::UtcNow.AddSeconds(120)
   \$exitDeadline = \$null
@@ -175,7 +176,7 @@ try {
   }
   Write-UpdateFailure 'Update wurde nicht aktiviert; starte die ursprüngliche App.'
 } catch {
-  Write-UpdateFailure "Update-Start fehlgeschlagen: \$(\$_.Exception.Message)"
+  Write-UpdateFailure "Update-Aktivierung fehlgeschlagen: \$(\$_.Exception.Message)"
 }
 try {
   Start-Process -FilePath ${quote(originalExe)} -WorkingDirectory ${quote(p.dirname(originalExe))} -ArgumentList '--desktop-update-original' -WindowStyle Normal | Out-Null
@@ -214,12 +215,18 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
     final exe = await target(base, id);
     if (exe == null) throw const FileSystemException('Update-Dateien fehlen.');
     final failureFile = File(p.join(base.path, 'update-failure.txt'));
-    if (await failureFile.exists()) await failureFile.delete();
+    final logFile = File(p.join(base.path, id, 'restart.log'));
+    final startedFile = File(p.join(base.path, id, 'restart.started'));
+    if (await startedFile.exists()) await startedFile.delete();
+    await logFile.writeAsString(
+      '${DateTime.now().toUtc().toIso8601String()} Update-Hilfsprogramm wird gestartet.\n',
+      mode: FileMode.append,
+      flush: true,
+    );
     final script = File(
       p.join(base.path, id, Platform.isWindows ? 'restart.ps1' : 'restart.sh'),
     );
     final activeFile = p.join(base.path, 'active.json');
-    final logFile = p.join(base.path, id, 'restart.log');
     final originalExe = Platform.resolvedExecutable;
     final scriptContents = Platform.isWindows
         ? windowsScript(
@@ -227,7 +234,8 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
             id,
             pid,
             activeFile: activeFile,
-            logFile: logFile,
+            startedFile: startedFile.path,
+            logFile: logFile.path,
             failureFile: failureFile.path,
             originalExe: originalExe,
           )
@@ -245,21 +253,57 @@ exec ${quote(exe)} ${forwardedArgs.map(quote).join(' ')} '--desktop-update-activ
         'v1.0',
         'powershell.exe',
       );
-      await Process.start(
-        shell,
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-WindowStyle',
-          'Hidden',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          script.path,
-        ],
-        mode: ProcessStartMode.detached,
-        workingDirectory: p.dirname(script.path),
+      await failureFile.writeAsString(
+        'Desktop-Update gestartet; die Aktivierung ist noch nicht bestätigt.\nLog: ${logFile.path}',
+        flush: true,
       );
+      late final Process updater;
+      try {
+        updater = await Process.start(
+          shell,
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-WindowStyle',
+            'Hidden',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            script.path,
+          ],
+          mode: ProcessStartMode.detached,
+          workingDirectory: p.dirname(script.path),
+        );
+      } catch (error) {
+        const message = 'Update-Hilfsprogramm konnte nicht gestartet werden.';
+        await logFile.writeAsString(
+          '${DateTime.now().toUtc().toIso8601String()} $message $error\n',
+          mode: FileMode.append,
+          flush: true,
+        );
+        await failureFile.writeAsString(
+          '$message\n$error\nLog: ${logFile.path}',
+          flush: true,
+        );
+        throw FileSystemException('$message $error Log: ${logFile.path}');
+      }
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (DateTime.now().isBefore(deadline)) {
+        if (await startedFile.exists()) return;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      updater.kill();
+      const message = 'Update-Hilfsprogramm hat den Start nicht bestätigt.';
+      await logFile.writeAsString(
+        '${DateTime.now().toUtc().toIso8601String()} $message\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+      await failureFile.writeAsString(
+        '$message\nLog: ${logFile.path}',
+        flush: true,
+      );
+      throw FileSystemException('$message Log: ${logFile.path}', script.path);
     } else {
       await Process.start('/bin/sh', [
         script.path,

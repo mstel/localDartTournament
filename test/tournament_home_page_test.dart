@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/challonge/domain/challonge_tournament.dart';
+import 'package:dart_tournament_manager/features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show TournamentHomePage, TournamentRunPage;
 import 'package:flutter/material.dart';
@@ -210,6 +212,65 @@ void main() {
     expect(copy.players, original.players);
     expect(copy.stages, original.stages);
   });
+
+  testWidgets(
+    'converts an imported Challonge archive and allows reopening completed results',
+    (tester) async {
+      final source = ChallongeTournament({
+        'id': 77,
+        'name': 'Challonge Finale',
+        'state': 'complete',
+        'tournament_type': 'round robin',
+        'created_at': '2026-04-04T12:00:00Z',
+        'started_at': '2026-04-04T13:00:00Z',
+        'completed_at': '2026-04-04T14:00:00Z',
+        'participants': [
+          {'id': 1, 'name': 'Anna', 'final_rank': 1},
+          {'id': 2, 'name': 'Ben', 'final_rank': 2},
+        ],
+        'matches': [
+          {
+            'id': 12,
+            'round': 1,
+            'state': 'complete',
+            'group_id': 'Gruppe A',
+            'group_type': 'round robin',
+            'player1_id': 1,
+            'player2_id': 2,
+            'winner_id': 1,
+            'scores_csv': '2-1',
+            'started_at': '2026-04-04T13:10:00Z',
+            'completed_at': '2026-04-04T13:20:00Z',
+          },
+        ],
+      });
+      storage.tournaments.add(
+        source.convert({'1': 'profile-anna', '2': 'profile-ben'}),
+      );
+      await showPage(tester);
+
+      await tester.tap(find.byTooltip('Turnieraktionen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Zu Dart-Turnier konvertieren'));
+      await tester.pumpAndSettle();
+
+      final converted = storage.tournaments.single;
+      expect(converted.importedArchive!.usesNativeLogic, isTrue);
+      expect(converted.completedStageIndexes, {0});
+      expect(find.byType(TournamentResultsPage), findsOneWidget);
+      expect(find.text('Turnier abgeschlossen'), findsOneWidget);
+      expect(find.byTooltip('Einstellungen'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Einstellungen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Turnier erneut öffnen'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TournamentRunPage), findsOneWidget);
+      expect(storage.tournaments.single.finishedAt, isNull);
+      expect(storage.tournaments.single.completedStageIndexes, isEmpty);
+    },
+  );
 
   testWidgets('returning from a renamed tournament shows the saved name', (
     tester,

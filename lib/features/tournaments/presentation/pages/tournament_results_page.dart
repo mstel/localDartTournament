@@ -107,7 +107,8 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               ),
             ),
           if (tournament.stages.isNotEmpty &&
-              tournament.importedArchive == null)
+              (tournament.importedArchive == null ||
+                  tournament.importedArchive!.usesNativeLogic))
             IconButton(
               tooltip: 'Einstellungen',
               icon: const Icon(Icons.settings_outlined),

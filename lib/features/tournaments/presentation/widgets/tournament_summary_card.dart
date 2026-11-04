@@ -11,10 +11,12 @@ class TournamentSummaryCard extends StatelessWidget {
     required this.onOpen,
     required this.onDelete,
     this.onCopy,
+    this.onConvert,
   });
   final CreatedTournament tournament;
   final VoidCallback onOpen, onDelete;
   final VoidCallback? onCopy;
+  final VoidCallback? onConvert;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -62,6 +64,8 @@ class TournamentSummaryCard extends StatelessWidget {
                       switch (action) {
                         case 'copy':
                           onCopy?.call();
+                        case 'convert':
+                          onConvert?.call();
                         case 'delete':
                           onDelete();
                       }
@@ -73,6 +77,16 @@ class TournamentSummaryCard extends StatelessWidget {
                           child: ListTile(
                             leading: Icon(Icons.copy_outlined),
                             title: Text('Turnier kopieren'),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      if (onConvert != null)
+                        const PopupMenuItem(
+                          value: 'convert',
+                          child: ListTile(
+                            leading: Icon(Icons.transform_outlined),
+                            title: Text('Zu Dart-Turnier konvertieren'),
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                           ),

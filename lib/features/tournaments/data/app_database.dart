@@ -98,6 +98,7 @@ class LocalAppDatabase {
   }) => StorageAccess.run(() async {
     final entries = progress.toList();
     final database = await _openDatabase();
+    var changed = false;
     try {
       database.execute('BEGIN');
       try {
@@ -116,7 +117,14 @@ class LocalAppDatabase {
                  unlocked_at = excluded.unlocked_at,
                  explanation = excluded.explanation,
                  is_final = excluded.is_final,
-                 source_hash = excluded.source_hash''',
+                 source_hash = excluded.source_hash
+               WHERE current_value IS NOT excluded.current_value
+                  OR target_value IS NOT excluded.target_value
+                  OR status IS NOT excluded.status
+                  OR unlocked_at IS NOT excluded.unlocked_at
+                  OR explanation IS NOT excluded.explanation
+                  OR is_final IS NOT excluded.is_final
+                  OR source_hash IS NOT excluded.source_hash''',
             [
               rankingId,
               playerProfileId,
@@ -130,9 +138,14 @@ class LocalAppDatabase {
               item['source_hash'],
             ],
           );
+          changed =
+              (database.select('SELECT changes() AS changed').first['changed']
+                      as int) >
+                  0 ||
+              changed;
         }
         database.execute('COMMIT');
-        if (entries.isNotEmpty) StorageAccess.markLocalDataChanged();
+        if (changed) StorageAccess.markLocalDataChanged();
       } catch (_) {
         database.execute('ROLLBACK');
         rethrow;

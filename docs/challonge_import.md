@@ -12,6 +12,20 @@ In der Ziel-Community unter **Turniere → Challonge-Turniere importieren**:
 
 Neue Importe werden als reguläre Turniere mit eigenen Gruppen-/Swiss- und K.-o.-Etappen gespeichert und in den normalen Turnieransichten geöffnet. Der Import übernimmt historische Paarungen und K.-o.-Startplätze. Tabellen und Qualifikation berechnet die produktive Laufzeit; K.-o.-Ergebnisse werden durch ihre normale Weiterleitung nachgespielt. Die Auslosung und historische Swiss-Paarungserzeugung werden dadurch nicht geprüft.
 
+Bereits importierte Challonge-Archive lassen sich in der Turnierliste über das
+Dreipunkt-Menü mit **Zu Dart-Turnier konvertieren** in native, abgeschlossene
+Turniere umwandeln. Dafür muss jeder Challonge-Teilnehmer einem eigenen Profil
+im lokalen Spielerkatalog zugewiesen sein. Die Konvertierung baut Gruppen,
+Spielwiederholungen, KO-Etappen und historische Ergebnisse erneut auf; Gruppen-
+und KO-Spiele behalten ihre Quellzeitstempel und werden chronologisch sortiert.
+Falls gespeicherte Archivdaten für die Rekonstruktion nicht ausreichen, versucht
+die App die fehlenden öffentlichen Daten erneut über den Challonge-Link zu laden
+und ordnet Teilnehmer nur anhand eindeutiger Quellkennungen oder Namen zu.
+Nach erfolgreicher Konvertierung öffnet sich die normale Abschlussansicht; das
+native Turnier kann wie andere abgeschlossene Turniere erneut geöffnet werden.
+Die Challonge-Quelldaten bleiben für den Vergleich erhalten. Platzierungs-
+abweichungen werden dort ausgewiesen und nicht stillschweigend überschrieben.
+
 Originalspielstände, Sieger, Verlierer, Runden und offizielle Endplatzierungen bleiben daneben als Vergleichsquelle erhalten. Gruppenplätze werden getrennt gespeichert. Der Vergleich prüft ausschließlich veröffentlichte Plätze; die eigene Ergebnisansicht kann weitere Plätze berechnen. Abweichungen werden in der Vorschau und unter **Mit Challonge vergleichen** in den Turnierergebnissen angezeigt. Unterschiedliche Tie-Breaker und geteilte Challonge-Plätze können Abweichungen verursachen. Die historischen K.-o.-Teilnehmer bleiben erhalten, wenn die eigene Gruppenqualifikation abweicht; diese Abweichung wird ausdrücklich dokumentiert.
 
 Unterstützt werden Einzelturniere mit Round Robin, Swiss, Einfach-K.-o. und Doppel-K.-o., einschließlich rekonstruierbarer Gruppenphasen und Spiel um Platz 3. Unvollständig rekonstruierbare Ergebnisse oder K.-o.-Weiterleitungen brechen vor Mitgliederanlage und Speicherung ab. Mehrteilige Spielstände und kampflose Spiele ohne eindeutigen Leg-Stand werden derzeit nicht nativ übertragen.

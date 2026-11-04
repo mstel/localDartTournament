@@ -137,6 +137,7 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
   String _tournamentQuery = '';
   TournamentSortOption _sortOption = TournamentSortOption.date;
   bool _isDeletingTournament = false;
+  bool _isConvertingTournament = false;
 
   @override
   void initState() {
@@ -192,7 +193,7 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     final lastStageIndex = tournament.runStages.length - 1;
     if (lastStageIndex >= 0 &&
         tournament.completedStageIndexes.contains(lastStageIndex)) {
-      return TournamentResultsPage(tournament: tournament);
+      return TournamentResultsPage(tournament: tournament, storage: _storage);
     }
     return TournamentRunPage(
       tournament: tournament,
@@ -235,6 +236,48 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
           SnackBar(content: Text('Kopieren nicht möglich: $error')),
         );
       }
+    }
+  }
+
+  Future<void> _convertChallongeTournament(CreatedTournament tournament) async {
+    if (_isConvertingTournament) return;
+    setState(() => _isConvertingTournament = true);
+    try {
+      final converted = await ChallongeTournamentConversionService().convert(
+        tournament,
+      );
+      await _storage.saveTournament(converted);
+      if (!mounted) return;
+      _reloadTournaments();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"${converted.name}" wurde in ein abgeschlossenes Turnier '
+            'konvertiert.',
+          ),
+        ),
+      );
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              TournamentResultsPage(tournament: converted, storage: _storage),
+        ),
+      );
+      if (mounted) _reloadTournaments();
+    } catch (error) {
+      if (mounted) {
+        final message = error is FormatException
+            ? error.message
+            : 'Turnier konnte nicht konvertiert werden: $error';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isConvertingTournament = false);
     }
   }
 
@@ -487,6 +530,14 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                           onOpen: () => _openTournament(tournament),
                           onDelete: () => _deleteTournament(tournament),
                           onCopy: () => _copyTournament(tournament),
+                          onConvert:
+                              tournament.importedArchive != null &&
+                                  !tournament
+                                      .importedArchive!
+                                      .usesNativeLogic &&
+                                  !_isConvertingTournament
+                              ? () => _convertChallongeTournament(tournament)
+                              : null,
                         ),
                     ],
                   ),

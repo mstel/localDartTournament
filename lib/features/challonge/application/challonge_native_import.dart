@@ -1,5 +1,6 @@
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime;
+import '../../statistics/domain/best_performance.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/domain/imported_tournament_archive.dart';
 
@@ -63,6 +64,12 @@ class ChallongeNativeImport {
     GroupMatch historical(Map<String, dynamic> m) {
       final a = bySourceId['${m['player1_id']}'],
           b = bySourceId['${m['player2_id']}'];
+      final bestPerformances = (m['bestPerformances'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => BestPerformance.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList();
       final score = RegExp(
         r'^(\d+)-(\d+)$',
       ).firstMatch('${m['scores_csv'] ?? ''}');
@@ -80,6 +87,7 @@ class ChallongeNativeImport {
             awayPlayer: b,
             round: (m['round'] as int? ?? 1).abs(),
             allowsBye: true,
+            bestPerformances: bestPerformances,
           );
         }
         throw FormatException(
@@ -99,6 +107,7 @@ class ChallongeNativeImport {
         awayLegs: int.parse(score[2]!),
         startedAt: DateTime.tryParse('${m['started_at'] ?? ''}'),
         finishedAt: DateTime.tryParse('${m['completed_at'] ?? ''}'),
+        bestPerformances: bestPerformances,
       );
       if (result.winner?.profileId !=
           bySourceId['${m['winner_id']}']?.profileId) {
@@ -152,7 +161,7 @@ class ChallongeNativeImport {
             name: entry.key,
             playType: groupType,
             players: groupPlayers,
-            matches: entry.value.map(historical).toList(),
+            matches: _chronological(entry.value).map(historical).toList(),
           ),
         );
       }
@@ -416,6 +425,7 @@ class ChallongeNativeImport {
           target.awayLegs = reversed ? result.homeLegs : result.awayLegs;
           target.startedAt = result.startedAt;
           target.finishedAt = result.finishedAt;
+          target.bestPerformances = result.bestPerformances;
           pending.remove(m);
           progress = true;
         }
@@ -480,5 +490,31 @@ class ChallongeNativeImport {
         ..['activeStageIndex'] = runs.length - 1
         ..['importedArchive'] = archive.toJson(),
     );
+  }
+
+  static List<Map<String, dynamic>> _chronological(
+    List<Map<String, dynamic>> matches,
+  ) {
+    final indexed = matches.indexed.toList();
+    DateTime? timestamp(Map<String, dynamic> match) =>
+        DateTime.tryParse('${match['started_at'] ?? ''}') ??
+        DateTime.tryParse('${match['completed_at'] ?? ''}');
+    indexed.sort((left, right) {
+      final leftTime = timestamp(left.$2);
+      final rightTime = timestamp(right.$2);
+      if (leftTime != null && rightTime != null) {
+        final byTime = leftTime.compareTo(rightTime);
+        if (byTime != 0) return byTime;
+      } else if (leftTime != null) {
+        return -1;
+      } else if (rightTime != null) {
+        return 1;
+      }
+      final byRound = (left.$2['round'] as int? ?? 0).abs().compareTo(
+        (right.$2['round'] as int? ?? 0).abs(),
+      );
+      return byRound == 0 ? left.$1.compareTo(right.$1) : byRound;
+    });
+    return indexed.map((entry) => entry.$2).toList();
   }
 }

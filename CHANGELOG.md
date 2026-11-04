@@ -1,3 +1,18 @@
+# 2.4.5+65
+
+- Macht den manuellen Cloud-Upload verlässlich: Das Website-Datenmodell wird
+  vor dem Backup-Snapshot berechnet und mit demselben lokalen Datenstand
+  veröffentlicht. Unveränderte Achievement-Fortschritte lösen keinen
+  zusätzlichen lokalen Änderungsstatus mehr aus.
+- Markiert den Upload nur dann als ausstehend, wenn sich lokale Daten nach dem
+  tatsächlich hochgeladenen Snapshot geändert haben.
+- Ermöglicht, importierte Challonge-Turniere als abgeschlossene native
+  Turniere zu übernehmen und später erneut zu öffnen. Ergebnisse, Zeitstempel,
+  Bestleistungen und eindeutig zugeordnete Spielerprofile bleiben erhalten.
+- Macht den Windows-Updater robuster: Die App schließt sich erst nach einer
+  bestätigten Übernahme durch das Update-Hilfsprogramm. Start- und
+  Aktivierungsfehler werden mit einem auffindbaren Diagnoseprotokoll gemeldet.
+
 # 2.4.4+64
 
 - Stellt die Goldakzente des Standarddesigns wieder her und färbt nur die

@@ -389,12 +389,37 @@ class SupabaseWorkspaceSyncService {
   }
 
   Future<void> _push() async {
-    final localRevision = _localChangeRevision;
     status.value = 'Sichere Änderungen in Supabase …';
-    final timestamp = await _repository.upload(await BackupService.create());
-    await _publishWebsiteReadModel();
+    var preparedRevision = _localChangeRevision;
+    var website = await _createWebsiteReadModel();
+    late ({Uint8List bytes, int revision}) snapshot;
+    late BackupService backups;
+    while (true) {
+      await _pendingLocalChangeWrite;
+      if (preparedRevision != _localChangeRevision) {
+        preparedRevision = _localChangeRevision;
+        website = await _createWebsiteReadModel();
+        continue;
+      }
+      backups = await BackupService.create();
+      snapshot = await StorageAccess.run(() async {
+        final bytes = await backups.exportBytes();
+        return (bytes: bytes, revision: _localChangeRevision);
+      });
+      if (snapshot.revision == preparedRevision) break;
+      preparedRevision = snapshot.revision;
+      website = await _createWebsiteReadModel();
+    }
+    final timestamp = await _repository.uploadBytes(
+      snapshot.bytes,
+      backups: backups,
+    );
+    await _repository.uploadWebsiteReadModel(
+      website.readModel,
+      version2Resources: website.resources,
+    );
     await _pendingLocalChangeWrite;
-    if (localRevision != _localChangeRevision) {
+    if (snapshot.revision != _localChangeRevision) {
       final latestState = await _readState();
       await _writeState({
         ...latestState,
@@ -409,7 +434,7 @@ class SupabaseWorkspaceSyncService {
       'dirty': false,
       'lastSyncedAt': timestamp.toUtc().toIso8601String(),
     });
-    if (localRevision != _localChangeRevision) {
+    if (snapshot.revision != _localChangeRevision) {
       await _pendingLocalChangeWrite;
       await _setDirty(true);
       status.value =
@@ -420,13 +445,24 @@ class SupabaseWorkspaceSyncService {
   }
 
   Future<void> _publishWebsiteReadModel() async {
+    final website = await _createWebsiteReadModel();
+    await _repository.uploadWebsiteReadModel(
+      website.readModel,
+      version2Resources: website.resources,
+    );
+  }
+
+  Future<
+    ({
+      Map<String, dynamic> readModel,
+      Map<String, Map<String, dynamic>> resources,
+    })
+  >
+  _createWebsiteReadModel() async {
     final service = WebsiteReadModelService();
     final readModel = await service.create();
     final resources = await service.createVersion2Resources(readModel);
-    await _repository.uploadWebsiteReadModel(
-      readModel,
-      version2Resources: resources,
-    );
+    return (readModel: readModel, resources: resources);
   }
 
   /// User-confirmed resolution for simultaneous offline changes.
