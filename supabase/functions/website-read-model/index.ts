@@ -1,7 +1,19 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import {
+  isTournamentIndex,
+  pageTournamentIndex,
+  parseTournamentPage,
+  summarizeFullTournament,
+} from './tournament_index.ts';
+import {
+  isWebsiteResourcePayload,
+  parseWebsiteResourceRequest,
+  websiteResourceObjectName,
+} from './versioned_resource.ts';
 
 const bucket = 'dart-app-backups';
 const objectName = 'website-read-model.json';
+const tournamentIndexObjectName = 'website-tournament-index.json';
 const maximumBytes = 32 * 1024 * 1024;
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -51,6 +63,93 @@ Deno.serve(async (request: Request) => {
     return jsonResponse({ error: 'authentication_required' }, 401);
   }
 
+  const searchParams = new URL(request.url).searchParams;
+  const requestedVersion = searchParams.get('version');
+  if (
+    requestedVersion !== null &&
+    requestedVersion !== '2'
+  ) {
+    return jsonResponse({ error: 'unsupported_version' }, 400);
+  }
+  if (requestedVersion === '2' || searchParams.has('resource')) {
+    if (requestedVersion !== '2') {
+      return jsonResponse({ error: 'version_required' }, 400);
+    }
+    const resourceRequest = parseWebsiteResourceRequest(searchParams);
+    if (!resourceRequest) {
+      return jsonResponse({ error: 'invalid_resource_request' }, 400);
+    }
+    const objectPath =
+      `${user.id}/${websiteResourceObjectName(resourceRequest)}`;
+    const { data: resourceFile, error: resourceDownloadError } =
+      await supabase.storage.from(bucket).download(objectPath);
+    if (resourceDownloadError) {
+      if (Number(resourceDownloadError.statusCode) === 404) {
+        return jsonResponse({ error: 'website_resource_not_published' }, 404);
+      }
+      console.error('website-read-model resource download failed', {
+        statusCode: resourceDownloadError.statusCode,
+      });
+      return jsonResponse({ error: 'website_data_unavailable' }, 502);
+    }
+    if (!resourceFile) {
+      return jsonResponse({ error: 'website_data_unavailable' }, 502);
+    }
+    if (resourceFile.size > maximumBytes) {
+      return jsonResponse({ error: 'website_data_too_large' }, 413);
+    }
+    let resourcePayload: unknown;
+    try {
+      resourcePayload = JSON.parse(await resourceFile.text());
+    } catch {
+      return jsonResponse({ error: 'website_data_invalid' }, 502);
+    }
+    if (!isWebsiteResourcePayload(resourcePayload, resourceRequest)) {
+      return jsonResponse({ error: 'website_data_invalid' }, 502);
+    }
+    return jsonResponse(resourcePayload);
+  }
+
+  const tournamentView = searchParams.get('view') === 'tournaments';
+  const tournamentPage = tournamentView
+    ? parseTournamentPage(searchParams)
+    : null;
+  if (tournamentView && tournamentPage === null) {
+    return jsonResponse({ error: 'invalid_page' }, 400);
+  }
+
+  if (tournamentView) {
+    const indexPath = `${user.id}/${tournamentIndexObjectName}`;
+    const { data: indexFile, error: indexDownloadError } = await supabase.storage
+      .from(bucket)
+      .download(indexPath);
+    if (!indexDownloadError && indexFile) {
+      if (indexFile.size > maximumBytes) {
+        return jsonResponse({ error: 'website_data_too_large' }, 413);
+      }
+      let tournamentIndex: unknown;
+      try {
+        tournamentIndex = JSON.parse(await indexFile.text());
+      } catch {
+        return jsonResponse({ error: 'website_data_invalid' }, 502);
+      }
+      if (!isTournamentIndex(tournamentIndex)) {
+        return jsonResponse({ error: 'website_data_invalid' }, 502);
+      }
+      return jsonResponse(pageTournamentIndex(tournamentIndex, tournamentPage!));
+    }
+    if (indexDownloadError && Number(indexDownloadError.statusCode) !== 404) {
+      console.error('website-read-model tournament index download failed', {
+        statusCode: indexDownloadError.statusCode,
+      });
+      return jsonResponse({ error: 'website_data_unavailable' }, 502);
+    }
+    if (!indexDownloadError && !indexFile) {
+      console.error('website-read-model storage returned no index or error');
+      return jsonResponse({ error: 'website_data_unavailable' }, 502);
+    }
+  }
+
   const objectPath = `${user.id}/${objectName}`;
   const { data: file, error: downloadError } = await supabase.storage
     .from(bucket)
@@ -78,7 +177,10 @@ Deno.serve(async (request: Request) => {
   } catch {
     return jsonResponse({ error: 'website_data_invalid' }, 502);
   }
-  if (!isRecord(readModel) || readModel.schemaVersion !== 1) {
+  if (
+    !isRecord(readModel) ||
+    (readModel.schemaVersion !== 1 && readModel.schemaVersion !== 2)
+  ) {
     return jsonResponse({ error: 'website_data_invalid' }, 502);
   }
   const {
@@ -88,6 +190,8 @@ Deno.serve(async (request: Request) => {
     rankingStandings,
     statistics,
     bestPerformances,
+    rankingAchievements,
+    currentForm,
     completedTournaments,
   } = readModel;
   if (
@@ -103,20 +207,54 @@ Deno.serve(async (request: Request) => {
     !statistics.every(isRecord) ||
     !Array.isArray(bestPerformances) ||
     !bestPerformances.every(isRecord) ||
+    (rankingAchievements !== undefined &&
+      (!Array.isArray(rankingAchievements) ||
+        !rankingAchievements.every(isRecord))) ||
     !Array.isArray(completedTournaments) ||
-    !completedTournaments.every(isRecord)
+    !completedTournaments.every(isRecord) ||
+    (readModel.schemaVersion === 2 &&
+      (!Array.isArray(currentForm) || !currentForm.every(isRecord)))
   ) {
     return jsonResponse({ error: 'website_data_invalid' }, 502);
   }
 
+  if (tournamentView) {
+    const summaries = completedTournaments
+      .filter(
+        (tournament) =>
+          typeof tournament.finishedAt === 'string' &&
+          Number.isFinite(Date.parse(tournament.finishedAt)) &&
+          tournament.reopenedForCorrections !== true,
+      )
+      .map(summarizeFullTournament);
+    if (summaries.some((summary) => summary === null)) {
+      return jsonResponse({ error: 'website_data_invalid' }, 502);
+    }
+    const validSummaries = summaries.filter(
+      (summary): summary is NonNullable<typeof summary> => summary !== null,
+    );
+    return jsonResponse(
+      pageTournamentIndex(
+        {
+          schemaVersion: 1,
+          generatedAt,
+          completedTournaments: validSummaries,
+        },
+        tournamentPage!,
+      ),
+    );
+  }
+
   return jsonResponse({
-    schemaVersion: 1,
+    schemaVersion: readModel.schemaVersion,
     generatedAt,
     players,
     rankings,
     rankingStandings,
+    ...(Array.isArray(rankingAchievements) ? { rankingAchievements } : {}),
     statistics,
     bestPerformances,
+    ...(Array.isArray(currentForm) ? { currentForm } : {}),
     completedTournaments: completedTournaments.filter(
       (tournament) =>
         typeof tournament.finishedAt === 'string' &&

@@ -137,6 +137,7 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
   String _tournamentQuery = '';
   TournamentSortOption _sortOption = TournamentSortOption.date;
   bool _isDeletingTournament = false;
+  bool _isConvertingTournament = false;
 
   @override
   void initState() {
@@ -192,7 +193,7 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     final lastStageIndex = tournament.runStages.length - 1;
     if (lastStageIndex >= 0 &&
         tournament.completedStageIndexes.contains(lastStageIndex)) {
-      return TournamentResultsPage(tournament: tournament);
+      return TournamentResultsPage(tournament: tournament, storage: _storage);
     }
     return TournamentRunPage(
       tournament: tournament,
@@ -211,7 +212,9 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     final searchable = <String>[
       tournament.name,
       complete ? 'abgeschlossen archiv fertig' : 'bereit läuft aktiv',
-      tournament.createdAt.toLocal().toIso8601String(),
+      (tournament.tournamentDate ?? tournament.createdAt)
+          .toLocal()
+          .toIso8601String(),
       ...tournament.stages.map((stage) => stage.type),
       ...tournament.players.map((player) => player.name),
     ].join(' ').toLowerCase();
@@ -294,6 +297,82 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     }
   }
 
+  Future<void> _convertChallongeTournament(CreatedTournament tournament) async {
+    if (_isConvertingTournament) return;
+    final archive = tournament.importedArchive;
+    if (archive == null) return;
+    final unassignedCount = archive.participants
+        .where(
+          (participant) =>
+              (participant['profileId'] as String?)?.isNotEmpty != true,
+        )
+        .length;
+    if (unassignedCount > 0) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Nicht alle Spieler sind zugeordnet'),
+          content: Text(
+            '$unassignedCount Challonge-Spieler werden als lokale Spieler '
+            'übernommen. Ihre Begegnungen bleiben standardmäßig ohne '
+            'Ranglistenwertung. In den Ranglisteneinstellungen kannst du '
+            '„Begegnungen mit lokalen Spielern Werten“ aktivieren, damit sie '
+            'mit 1000 Elo einfließen.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Trotzdem konvertieren'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() => _isConvertingTournament = true);
+    try {
+      final converted = await ChallongeTournamentConversionService().convert(
+        tournament,
+      );
+      await _storage.saveTournament(converted);
+      if (!mounted) return;
+      _reloadTournaments();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"${converted.name}" wurde in ein abgeschlossenes Turnier '
+            'konvertiert.',
+          ),
+        ),
+      );
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              TournamentResultsPage(tournament: converted, storage: _storage),
+        ),
+      );
+      if (mounted) _reloadTournaments();
+    } catch (error) {
+      if (mounted) {
+        final message = error is FormatException
+            ? error.message
+            : 'Turnier konnte nicht konvertiert werden: $error';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isConvertingTournament = false);
+    }
+  }
+
   Future<void> _deleteTournament(CreatedTournament tournament) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -354,8 +433,16 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
               switch (_sortOption) {
                 case TournamentSortOption.date:
                   visibleTournaments.sort((a, b) {
-                    final aDate = a.startedAt ?? a.finishedAt ?? a.createdAt;
-                    final bDate = b.startedAt ?? b.finishedAt ?? b.createdAt;
+                    final aDate =
+                        a.tournamentDate ??
+                        a.startedAt ??
+                        a.finishedAt ??
+                        a.createdAt;
+                    final bDate =
+                        b.tournamentDate ??
+                        b.startedAt ??
+                        b.finishedAt ??
+                        b.createdAt;
                     return bDate.compareTo(aDate);
                   });
                   break;
@@ -537,6 +624,14 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                           onEditEndTime: () =>
                               _editTournamentEndTime(tournament),
                           onCopy: () => _copyTournament(tournament),
+                          onConvert:
+                              tournament.importedArchive != null &&
+                                  !tournament
+                                      .importedArchive!
+                                      .usesNativeLogic &&
+                                  !_isConvertingTournament
+                              ? () => _convertChallongeTournament(tournament)
+                              : null,
                         ),
                     ],
                   ),

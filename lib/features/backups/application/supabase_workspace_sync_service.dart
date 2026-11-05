@@ -22,8 +22,7 @@ class SupabaseWorkspaceSyncService {
     defaultValue: false,
   );
 
-  SupabaseWorkspaceSyncService._()
-    : _repository = SupabaseBackupRepository();
+  SupabaseWorkspaceSyncService._() : _repository = SupabaseBackupRepository();
 
   SupabaseWorkspaceSyncService({SupabaseBackupRepository? repository})
     : _repository = repository ?? SupabaseBackupRepository();
@@ -291,17 +290,27 @@ class SupabaseWorkspaceSyncService {
           'Lokaler Testmodus · automatische Cloud-Synchronisierung ist deaktiviert';
       return;
     }
-    if (_pausePending) return;
-    if (_busy) return;
+    if (_pausePending) {
+      status.value =
+          'Cloud-Abgleich nicht gestartet · ein lokaler Neustart wird vorbereitet';
+      return;
+    }
+    if (_busy) {
+      status.value =
+          'Cloud-Abgleich nicht gestartet · ein anderer Cloud-Vorgang läuft bereits';
+      return;
+    }
     try {
       if (Supabase.instance.client.auth.currentUser == null) {
         status.value = 'Nicht angemeldet · lokal gespeichert';
         return;
       }
-    } catch (_) {
+    } catch (error) {
+      status.value = 'Supabase-Anmeldung konnte nicht geprüft werden: $error';
       return;
     }
     _busy = true;
+    status.value = 'Prüfe Cloud-Datenstand …';
     try {
       await _pendingLocalChangeWrite;
       final localRevision = _localChangeRevision;
@@ -312,7 +321,7 @@ class SupabaseWorkspaceSyncService {
         return;
       }
       if (!await _repository.hasBackup()) {
-        await _push(state);
+        await _push();
         return;
       }
       final remote = await _repository.download(await BackupService.create());
@@ -325,7 +334,7 @@ class SupabaseWorkspaceSyncService {
               'Cloud und dieses Gerät haben Änderungen · Abgleich erforderlich';
           return;
         }
-        await _push(state);
+        await _push();
         return;
       }
       if (remoteIsNewer) {
@@ -344,7 +353,9 @@ class SupabaseWorkspaceSyncService {
         });
         status.value = 'Aktueller Datenstand aus Supabase geladen';
       } else {
-        if (!await _repository.hasWebsiteReadModel()) {
+        if (!await _repository.hasWebsiteReadModel() ||
+            !await _repository.hasWebsiteTournamentIndex() ||
+            !await _repository.hasWebsiteResources()) {
           await _publishWebsiteReadModel();
         }
         status.value = 'Mit Supabase synchronisiert';
@@ -377,45 +388,102 @@ class SupabaseWorkspaceSyncService {
     return left == right;
   }
 
-  Future<void> _push(Map<String, dynamic> state) async {
-    final localRevision = _localChangeRevision;
+  Future<void> _push() async {
     status.value = 'Sichere Änderungen in Supabase …';
-    final timestamp = await _repository.upload(await BackupService.create());
-    await _publishWebsiteReadModel();
+    var preparedRevision = _localChangeRevision;
+    var website = await _createWebsiteReadModel();
+    late ({Uint8List bytes, int revision}) snapshot;
+    late BackupService backups;
+    while (true) {
+      await _pendingLocalChangeWrite;
+      if (preparedRevision != _localChangeRevision) {
+        preparedRevision = _localChangeRevision;
+        website = await _createWebsiteReadModel();
+        continue;
+      }
+      backups = await BackupService.create();
+      snapshot = await StorageAccess.run(() async {
+        final bytes = await backups.exportBytes();
+        return (bytes: bytes, revision: _localChangeRevision);
+      });
+      if (snapshot.revision == preparedRevision) break;
+      preparedRevision = snapshot.revision;
+      website = await _createWebsiteReadModel();
+    }
+    final timestamp = await _repository.uploadBytes(
+      snapshot.bytes,
+      backups: backups,
+    );
+    await _repository.uploadWebsiteReadModel(
+      website.readModel,
+      version2Resources: website.resources,
+    );
     await _pendingLocalChangeWrite;
-    if (localRevision != _localChangeRevision) {
-      status.value = 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend';
+    if (snapshot.revision != _localChangeRevision) {
+      final latestState = await _readState();
+      await _writeState({
+        ...latestState,
+        'dirty': true,
+        'lastSyncedAt': timestamp.toUtc().toIso8601String(),
+      });
+      status.value =
+          'Cloud-Datenstand hochgeladen · neuere lokale Änderungen warten noch auf den nächsten Abgleich';
       return;
     }
     await _writeState({
       'dirty': false,
       'lastSyncedAt': timestamp.toUtc().toIso8601String(),
     });
-    if (localRevision != _localChangeRevision) {
+    if (snapshot.revision != _localChangeRevision) {
       await _pendingLocalChangeWrite;
       await _setDirty(true);
-      status.value = 'Lokale Änderungen · Cloud-Abgleich manuell ausstehend';
+      status.value =
+          'Cloud-Datenstand hochgeladen · neuere lokale Änderungen warten noch auf den nächsten Abgleich';
       return;
     }
     status.value = 'Mit Supabase synchronisiert';
   }
 
   Future<void> _publishWebsiteReadModel() async {
-    final readModel = await WebsiteReadModelService().create();
-    await _repository.uploadWebsiteReadModel(readModel);
+    final website = await _createWebsiteReadModel();
+    await _repository.uploadWebsiteReadModel(
+      website.readModel,
+      version2Resources: website.resources,
+    );
+  }
+
+  Future<
+    ({
+      Map<String, dynamic> readModel,
+      Map<String, Map<String, dynamic>> resources,
+    })
+  >
+  _createWebsiteReadModel() async {
+    final service = WebsiteReadModelService();
+    final readModel = await service.create();
+    final resources = await service.createVersion2Resources(readModel);
+    return (readModel: readModel, resources: resources);
   }
 
   /// User-confirmed resolution for simultaneous offline changes.
   Future<void> uploadLocalVersion() async {
-    if (_pausePending) return;
-    if (_busy) return;
+    if (_pausePending) {
+      status.value =
+          'Hochladen nicht gestartet · ein lokaler Neustart wird vorbereitet';
+      return;
+    }
+    if (_busy) {
+      status.value =
+          'Hochladen nicht gestartet · ein anderer Cloud-Vorgang läuft bereits';
+      return;
+    }
     _busy = true;
     try {
       final state = await _readState();
       state.remove('syncPaused');
       state['dirty'] = true;
       await _writeState(state);
-      await _push(state);
+      await _push();
     } finally {
       _busy = false;
     }
@@ -423,8 +491,16 @@ class SupabaseWorkspaceSyncService {
 
   /// User-confirmed resolution that replaces the local account workspace.
   Future<void> downloadRemoteVersion({BackupPreview? preview}) async {
-    if (_pausePending) return;
-    if (_busy) return;
+    if (_pausePending) {
+      status.value =
+          'Cloud-Datenstand nicht geladen · ein lokaler Neustart wird vorbereitet';
+      return;
+    }
+    if (_busy) {
+      status.value =
+          'Cloud-Datenstand nicht geladen · ein anderer Cloud-Vorgang läuft bereits';
+      return;
+    }
     _busy = true;
     try {
       final backups = await BackupService.create();

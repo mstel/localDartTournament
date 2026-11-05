@@ -1,14 +1,17 @@
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime;
+import '../../statistics/domain/best_performance.dart';
+import '../../tournaments/domain/engines/tournament_engine.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/domain/imported_tournament_archive.dart';
+import '../domain/challonge_tournament.dart';
 
 /// Replays historical results through the same runtime used by the run page.
 /// Source ranks remain evidence and never override calculated standings.
 class ChallongeNativeImport {
   static CreatedTournament convert(CreatedTournament archived) {
     final source = archived.importedArchive!;
-    final mode = source.mode;
+    final mode = ChallongeTournament.normalizedTournamentType(source.mode);
     if (![
       'single elimination',
       'double elimination',
@@ -19,10 +22,18 @@ class ChallongeNativeImport {
         'Eigene Turnierlogik unterstützt diesen Challonge-Modus noch nicht: $mode.',
       );
     }
-    final players = {for (final p in archived.players) p.profileId!: p};
+    final players = {
+      for (final player in archived.players) _playerIdentity(player): player,
+    };
     final bySourceId = <String, TournamentPlayer>{};
     for (final p in source.participants) {
-      final player = players[p['profileId']]!;
+      final identity = _sourcePlayerIdentity(p);
+      final player = players[identity];
+      if (player == null) {
+        throw FormatException(
+          'Challonge-Teilnehmer "${p['name']}" fehlt im Turnierarchiv.',
+        );
+      }
       bySourceId['${p['id']}'] = player;
       for (final id in p['groupPlayerIds'] as List? ?? const []) {
         bySourceId['$id'] = player;
@@ -55,22 +66,30 @@ class ChallongeNativeImport {
       final ids = <String>{
         for (final m in matches)
           for (final key in ['player1_id', 'player2_id'])
-            if (m[key] != null) bySourceId['${m[key]}']!.profileId!,
+            if (m[key] != null) _playerIdentity(bySourceId['${m[key]}']!),
       };
-      return players.values.where((p) => ids.contains(p.profileId)).toList();
+      return players.values
+          .where((p) => ids.contains(_playerIdentity(p)))
+          .toList();
     }
 
     GroupMatch historical(Map<String, dynamic> m) {
       final a = bySourceId['${m['player1_id']}'],
           b = bySourceId['${m['player2_id']}'];
+      final bestPerformances = (m['bestPerformances'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => BestPerformance.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList();
       final score = RegExp(
         r'^(\d+)-(\d+)$',
       ).firstMatch('${m['scores_csv'] ?? ''}');
       if (a == null || b == null) {
         if ((a == null) != (b == null)) {
           if (m['state'] != 'complete' ||
-              bySourceId['${m['winner_id']}']?.profileId !=
-                  (a ?? b)!.profileId) {
+              _optionalPlayerIdentity(bySourceId['${m['winner_id']}']) !=
+                  _playerIdentity((a ?? b)!)) {
             throw FormatException(
               'Freilos ${m['id']} ist nicht eindeutig abgeschlossen.',
             );
@@ -80,6 +99,7 @@ class ChallongeNativeImport {
             awayPlayer: b,
             round: (m['round'] as int? ?? 1).abs(),
             allowsBye: true,
+            bestPerformances: bestPerformances,
           );
         }
         throw FormatException(
@@ -99,9 +119,10 @@ class ChallongeNativeImport {
         awayLegs: int.parse(score[2]!),
         startedAt: DateTime.tryParse('${m['started_at'] ?? ''}'),
         finishedAt: DateTime.tryParse('${m['completed_at'] ?? ''}'),
+        bestPerformances: bestPerformances,
       );
-      if (result.winner?.profileId !=
-          bySourceId['${m['winner_id']}']?.profileId) {
+      if (_optionalPlayerIdentity(result.winner) !=
+          _optionalPlayerIdentity(bySourceId['${m['winner_id']}'])) {
         throw FormatException('Widersprüchlicher Sieger in Spiel ${m['id']}.');
       }
       return result;
@@ -118,6 +139,7 @@ class ChallongeNativeImport {
         final declaredTypes = entry.value
             .map((m) => m['group_type'])
             .whereType<String>()
+            .map(ChallongeTournament.normalizedTournamentType)
             .toSet();
         if (declaredTypes.length > 1 ||
             declaredTypes.any(
@@ -138,13 +160,16 @@ class ChallongeNativeImport {
           for (final index in [1, 2]) {
             final seed = m['player${index}_seed'];
             if (seed is int && m['player${index}_id'] != null) {
-              seeds[bySourceId['${m['player${index}_id']}']!.profileId!] = seed;
+              seeds[_playerIdentity(bySourceId['${m['player${index}_id']}']!)] =
+                  seed;
             }
           }
         }
         if (seeds.length == groupPlayers.length) {
           groupPlayers.sort(
-            (a, b) => seeds[a.profileId]!.compareTo(seeds[b.profileId]!),
+            (a, b) => seeds[_playerIdentity(a)]!.compareTo(
+              seeds[_playerIdentity(b)]!,
+            ),
           );
         }
         nativeGroups.add(
@@ -152,7 +177,7 @@ class ChallongeNativeImport {
             name: entry.key,
             playType: groupType,
             players: groupPlayers,
-            matches: entry.value.map(historical).toList(),
+            matches: _chronological(entry.value).map(historical).toList(),
           ),
         );
       }
@@ -201,8 +226,10 @@ class ChallongeNativeImport {
         } else {
           final pairCounts = <String, int>{};
           for (final m in group.matches.where((m) => m.hasPlayers)) {
-            final pair = [m.homePlayer!.profileId!, m.awayPlayer!.profileId!]
-              ..sort();
+            final pair = [
+              _playerIdentity(m.homePlayer!),
+              _playerIdentity(m.awayPlayer!),
+            ]..sort();
             final key = pair.join('\u0000');
             pairCounts[key] = (pairCounts[key] ?? 0) + 1;
           }
@@ -284,9 +311,10 @@ class ChallongeNativeImport {
       for (final group in nativeGroups) {
         final calculated = runtime.standings(group, defaultGroupTieBreakers);
         for (var i = 0; i < calculated.length; i++) {
-          final p = source.participants.singleWhere(
-            (p) => p['profileId'] == calculated[i].player.profileId,
-          );
+          final p = source.participants.singleWhere((p) {
+            return _playerIdentity(calculated[i].player) ==
+                _sourcePlayerIdentity(p);
+          });
           final expected = finals.isEmpty
               ? p['finalRank']
               : (p['groupPlacements'] as List? ?? const [])
@@ -302,9 +330,9 @@ class ChallongeNativeImport {
       if (plan != null) {
         final actual = runtime
             .qualifiers(runs.single)
-            .map((p) => p.profileId)
+            .map(_playerIdentity)
             .toSet();
-        final expected = qualified.map((p) => p.profileId).toSet();
+        final expected = qualified.map(_playerIdentity).toSet();
         if (actual.length != expected.length || !actual.containsAll(expected)) {
           issues.add(
             'Weiterkommen aus der Gruppenphase unterscheidet sich von Challonge. Die historische K.-o.-Besetzung wird als tatsächliche Teilnehmerliste übernommen.',
@@ -321,18 +349,55 @@ class ChallongeNativeImport {
       final firstRound = finals
           .where((m) => (m['round'] as int? ?? 0) == 1)
           .toList();
-      final slots = <TournamentPlayer?>[];
-      for (final m in firstRound) {
-        slots.add(bySourceId['${m['player1_id']}']);
-        slots.add(bySourceId['${m['player2_id']}']);
-      }
-      for (final p in entrants.where((p) => !slots.contains(p))) {
-        slots.add(p);
-        slots.add(null);
-      }
       var size = 2;
       while (size < entrants.length) {
         size *= 2;
+      }
+      final seedByPlayer = <String, int>{};
+      var hasConsistentSeeds = true;
+      for (final match in finals) {
+        for (var index = 1; index <= 2; index++) {
+          final sourceId = match['player${index}_id'];
+          final seed = int.tryParse('${match['player${index}_seed'] ?? ''}');
+          if (sourceId == null || seed == null || seed < 1) continue;
+          final player = bySourceId['$sourceId'];
+          if (player == null) continue;
+          final identity = _playerIdentity(player);
+          final previous = seedByPlayer[identity];
+          if (previous != null && previous != seed) {
+            hasConsistentSeeds = false;
+          } else {
+            seedByPlayer[identity] = seed;
+          }
+        }
+      }
+      final expectedSeeds = List<int>.generate(entrants.length, (i) => i + 1);
+      final seededSlotsAreComplete =
+          hasConsistentSeeds &&
+          seedByPlayer.length == entrants.length &&
+          seedByPlayer.values.toSet().length == entrants.length &&
+          seedByPlayer.values.toSet().containsAll(expectedSeeds);
+      final slots = <TournamentPlayer?>[];
+      if (seededSlotsAreComplete) {
+        final playerBySeed = {
+          for (final player in entrants)
+            seedByPlayer[_playerIdentity(player)]!: player,
+        };
+        slots.addAll(
+          const TournamentEngine()
+              .seedOrderForSize(size)
+              .map((seed) => playerBySeed[seed]),
+        );
+      } else {
+        for (final match in firstRound) {
+          slots.add(bySourceId['${match['player1_id']}']);
+          slots.add(bySourceId['${match['player2_id']}']);
+        }
+        for (final player in entrants.where((p) => !slots.contains(p))) {
+          slots
+            ..add(player)
+            ..add(null);
+        }
       }
       while (slots.length < size) {
         slots.add(null);
@@ -398,7 +463,8 @@ class ChallongeNativeImport {
             ..homeLegs = result.homeLegs
             ..awayLegs = result.awayLegs
             ..startedAt = result.startedAt
-            ..finishedAt = result.finishedAt;
+            ..finishedAt = result.finishedAt
+            ..bestPerformances = result.bestPerformances;
           pending.remove(sourceMatch);
         }
 
@@ -439,7 +505,7 @@ class ChallongeNativeImport {
         }
 
         replay.advance();
-        importRound(1, replayStage.rounds.first);
+        importRound(1, replayStage.rounds.first, allowRewire: true);
         for (var round = 2; round <= winnerRounds; round++) {
           importRound(
             round,
@@ -594,9 +660,9 @@ class ChallongeNativeImport {
       for (final p in source.participants.where(
         (p) => p['finalRank'] != null,
       )) {
-        final i = ranking.indexWhere(
-          (player) => player.profileId == p['profileId'],
-        );
+        final i = ranking.indexWhere((player) {
+          return _playerIdentity(player) == _sourcePlayerIdentity(p);
+        });
         if (i < 0) {
           issues.add(
             'Gesamtplatz ${p['name']} (${p['finalRank']}) liegt außerhalb der finalen K.-o.-Etappe und wurde nicht gegen deren Rangfolge geprüft. Die Gruppenwertung bleibt separat erhalten.',
@@ -643,4 +709,50 @@ class ChallongeNativeImport {
         ..['importedArchive'] = archive.toJson(),
     );
   }
+
+  static List<Map<String, dynamic>> _chronological(
+    List<Map<String, dynamic>> matches,
+  ) {
+    final indexed = matches.indexed.toList();
+    DateTime? timestamp(Map<String, dynamic> match) =>
+        DateTime.tryParse('${match['started_at'] ?? ''}') ??
+        DateTime.tryParse('${match['completed_at'] ?? ''}');
+    indexed.sort((left, right) {
+      final leftTime = timestamp(left.$2);
+      final rightTime = timestamp(right.$2);
+      if (leftTime != null && rightTime != null) {
+        final byTime = leftTime.compareTo(rightTime);
+        if (byTime != 0) return byTime;
+      } else if (leftTime != null) {
+        return -1;
+      } else if (rightTime != null) {
+        return 1;
+      }
+      final byRound = (left.$2['round'] as int? ?? 0).abs().compareTo(
+        (right.$2['round'] as int? ?? 0).abs(),
+      );
+      return byRound == 0 ? left.$1.compareTo(right.$1) : byRound;
+    });
+    return indexed.map((entry) => entry.$2).toList();
+  }
+
+  static String _playerIdentity(TournamentPlayer player) =>
+      player.profileId?.trim().isNotEmpty != true
+      ? _localPlayerIdentity(player.name)
+      : _profileIdentity(player.profileId!.trim());
+
+  static String _optionalPlayerIdentity(TournamentPlayer? player) =>
+      player == null ? '' : _playerIdentity(player);
+
+  static String _sourcePlayerIdentity(Map<String, dynamic> participant) {
+    final profileId = (participant['profileId'] as String?)?.trim();
+    return profileId == null || profileId.isEmpty
+        ? _localPlayerIdentity('${participant['name'] ?? ''}')
+        : _profileIdentity(profileId);
+  }
+
+  static String _profileIdentity(String id) => 'profile:$id';
+
+  static String _localPlayerIdentity(String name) =>
+      'local:${name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ')}';
 }

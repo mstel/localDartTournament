@@ -612,12 +612,12 @@ class _QualificationPlaceBadge extends StatelessWidget {
     final backgroundColor = isQualified
         ? const Color(0xFFC8F7DC)
         : isExtraCandidate
-        ? const Color(0xFFFFE8A3)
+        ? colorScheme.primaryContainer
         : colorScheme.surfaceContainerHighest;
     final borderColor = isQualified
         ? const Color(0xFF14965F)
         : isExtraCandidate
-        ? const Color(0xFFC58A00)
+        ? colorScheme.primary
         : colorScheme.outlineVariant;
 
     return Tooltip(

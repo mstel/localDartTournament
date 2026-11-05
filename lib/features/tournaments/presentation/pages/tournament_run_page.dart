@@ -44,13 +44,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _backgrounded = false;
   bool _savingRankingSelection = false;
   bool _savingTieBreakerSettings = false;
+  bool _savingKratzerHandicapSettings = false;
   int? _tieBreakerDraftStageIndex;
   List<String> _tieBreakerDraft = const [];
-  Future<void> _checkpoint() => _runController.saveProgress(
-    tournament: widget.tournament,
-    activeStageIndex: _activeStageIndex,
-    completedStageIndexes: _completedStageIndexes,
-  );
+  Future<void> _checkpoint() {
+    _leagueRuntime?.writeTo(widget.tournament);
+    return _runController.saveProgress(
+      tournament: widget.tournament,
+      activeStageIndex: _activeStageIndex,
+      completedStageIndexes: _completedStageIndexes,
+    );
+  }
 
   Future<void> _leaveTournament({bool home = false}) async {
     if (_leaving) return;
@@ -84,7 +88,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _backgrounded = state != AppLifecycleState.resumed;
-    if (widget.tournament.leagueMatch != null) return;
     if (_backgrounded) {
       unawaited(
         _checkpoint().catchError((Object error) {
@@ -108,6 +111,36 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   int _viewStageIndex = 0;
   StageViewMode _stageViewMode = StageViewMode.dashboard;
   String? _directorSaveError;
+  GroupMatch? _requestedResultMatch;
+
+  int _stageIndexForMatch(GroupMatch match) {
+    for (var index = 0; index < widget.tournament.runStages.length; index++) {
+      final stage = widget.tournament.runStages[index];
+      if (stage is GroupTournamentRunStage &&
+          stage.groups.any(
+            (group) =>
+                group.matches.contains(match) ||
+                group.placementMatches.contains(match) ||
+                group.knockoutRounds.any((round) => round.contains(match)),
+          )) {
+        return index;
+      }
+      if (stage is KnockoutTournamentRunStage &&
+          (stage.rounds.any((round) => round.contains(match)) ||
+              stage.placementMatches.contains(match))) {
+        return index;
+      }
+    }
+    return _activeStageIndex;
+  }
+
+  void _openPlayedMatch(GroupMatch match) {
+    setState(() {
+      _requestedResultMatch = match;
+      _viewStageIndex = _stageIndexForMatch(match);
+      _stageViewMode = StageViewMode.results;
+    });
+  }
 
   Future<void> _renamePlayer(TournamentPlayer player) async {
     if (player.profileId != null) return;
@@ -137,12 +170,22 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       ),
     );
     if (newName != null && newName.isNotEmpty && newName != player.name) {
+      final oldName = player.name;
       final updatedPlayer = player.copyWith(name: newName);
       setState(() {
         final t = widget.tournament;
         final pIdx = t.players.indexOf(player);
         if (pIdx != -1) {
           t.players[pIdx] = updatedPlayer;
+          final league = t.leagueMatch;
+          if (league != null) {
+            final homeCount = league.homePlayers.length;
+            if (pIdx < homeCount) {
+              league.homePlayers[pIdx] = newName;
+            } else if (pIdx < homeCount + league.awayPlayers.length) {
+              league.awayPlayers[pIdx - homeCount] = newName;
+            }
+          }
         }
         for (final stage in t.runStages) {
           if (stage is GroupTournamentRunStage) {
@@ -169,9 +212,88 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             }
           }
         }
+        t.addActivity(
+          'player_renamed',
+          'Spieler umbenannt: $oldName → $newName',
+        );
       });
       await _saveTournamentProgress();
     }
+  }
+
+  Widget _playerManagementTile(TournamentPlayer player) => ListTile(
+    contentPadding: EdgeInsets.zero,
+    title: Text(player.name),
+    subtitle: Wrap(
+      spacing: 8,
+      runSpacing: 2,
+      children: [
+        if (PlayerWithdrawalService.policy(widget.tournament, player) != null)
+          const Text(
+            'Ausgeschieden / Zurückgezogen',
+            style: TextStyle(color: Colors.red),
+          ),
+        if (player.profileId != null)
+          const Text('Name aus Spielerkartei · Umbenennen gesperrt'),
+      ],
+    ),
+    trailing: Wrap(
+      spacing: 4,
+      children: [
+        if (player.profileId == null)
+          IconButton(
+            tooltip: 'Spieler umbenennen',
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            onPressed: () => _renamePlayer(player),
+          ),
+        if (widget.tournament.finishedAt == null &&
+            PlayerWithdrawalService.policy(widget.tournament, player) == null)
+          IconButton(
+            tooltip: 'Spieler entfernen (Drop)',
+            icon: const Icon(
+              Icons.person_remove_outlined,
+              size: 20,
+              color: Colors.red,
+            ),
+            onPressed: () => _withdrawPlayer(player),
+          ),
+      ],
+    ),
+  );
+
+  Widget _playerManagementCard({
+    required String title,
+    required List<TournamentPlayer> players,
+  }) => Card(
+    child: ExpansionTile(
+      leading: const Icon(Icons.people_alt_outlined),
+      title: Text(title),
+      subtitle: const Text(
+        'Namen anpassen oder Spieler aus dem Turnier entfernen.',
+      ),
+      childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
+      children: [for (final player in players) _playerManagementTile(player)],
+    ),
+  );
+
+  List<Widget> _playerManagementSections() {
+    final league = widget.tournament.leagueMatch;
+    if (league == null) {
+      return [
+        _playerManagementCard(
+          title: 'Spieler (${widget.tournament.players.length})',
+          players: widget.tournament.players,
+        ),
+      ];
+    }
+
+    return [
+      LeagueTournamentPlayerSections(
+        leagueMatch: league,
+        players: widget.tournament.players,
+        playerTileBuilder: _playerManagementTile,
+      ),
+    ];
   }
 
   Future<void> _withdrawPlayer([TournamentPlayer? selectedPlayer]) async {
@@ -566,6 +688,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       } else {
         widget.tournament.blockedBoards.add(board);
       }
+      final activeStage = _activeStageIndex < widget.tournament.runStages.length
+          ? widget.tournament.runStages[_activeStageIndex]
+          : null;
+      if (wasBlocked &&
+          activeStage is KnockoutTournamentRunStage &&
+          activeStage.isKratzer &&
+          activeStage.rounds.isNotEmpty &&
+          activeStage.rounds.last.isEmpty) {
+        _advanceKratzerRound(activeStage);
+      }
     });
     try {
       await _checkpoint();
@@ -580,9 +712,253 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<void> _startRecommendedMatchOnBoard(
+    int board, {
+    GroupMatch? match,
+  }) async {
+    final targetMatch =
+        match ??
+        const OrderOfPlayController()
+            .suggestForBoard(widget.tournament, _activeStageIndex, board)
+            ?.entry
+            .match;
+    if (targetMatch == null || !mounted) return;
+    final previousBoard = targetMatch.boardNumber;
+    final previousStartedAt = targetMatch.startedAt;
+    final previousStartedPlayers = targetMatch.startedPlayers;
+    final previousFinishedAt = targetMatch.finishedAt;
+    final started = const OrderOfPlayController().start(
+      widget.tournament,
+      _activeStageIndex,
+      targetMatch,
+      board,
+    );
+    if (!started) return;
+    setState(() {});
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      targetMatch
+        ..boardNumber = previousBoard
+        ..startedAt = previousStartedAt
+        ..startedPlayers = previousStartedPlayers
+        ..finishedAt = previousFinishedAt;
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Future<void> _resetRunningMatch(GroupMatch match) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Partie zurücksetzen?'),
+        content: const Text(
+          'Das Board wird freigegeben und der noch nicht eingetragene '
+          'Spielstand verworfen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Zurücksetzen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final previousBoard = match.boardNumber;
+    final previousStartedAt = match.startedAt;
+    final previousStartedPlayers = match.startedPlayers;
+    final previousFinishedAt = match.finishedAt;
+    final previousHomeLegs = match.homeLegs;
+    final previousAwayLegs = match.awayLegs;
+    final previousHomeSets = match.homeSets;
+    final previousAwaySets = match.awaySets;
+    final previousBestPerformances = [...match.bestPerformances];
+    if (!const OrderOfPlayController().resetRunningMatch(
+      widget.tournament,
+      _activeStageIndex,
+      match,
+    )) {
+      throw StateError(
+        'Nur eine laufende Partie ohne Ergebnis kann zurückgesetzt werden.',
+      );
+    }
+    setState(() {});
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      match
+        ..boardNumber = previousBoard
+        ..startedAt = previousStartedAt
+        ..startedPlayers = previousStartedPlayers
+        ..finishedAt = previousFinishedAt
+        ..homeLegs = previousHomeLegs
+        ..awayLegs = previousAwayLegs
+        ..homeSets = previousHomeSets
+        ..awaySets = previousAwaySets
+        ..bestPerformances = previousBestPerformances;
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Future<void> _changeDirectorBoardCount(int boardCount) async {
+    final tournament = widget.tournament;
+    if (boardCount < 1 || boardCount > 64) return;
+    if (const OrderOfPlayController()
+        .plan(tournament, _activeStageIndex)
+        .running
+        .any((entry) => (entry.match.boardNumber ?? 0) > boardCount)) {
+      throw StateError('Ein laufendes Board kann nicht entfernt werden.');
+    }
+    final previousCount = tournament.boardCount;
+    final previousBlocked = Set<int>.from(tournament.blockedBoards);
+    final previousNames = Map<int, String>.from(tournament.directorBoardNames);
+    final previousUrls = Map<int, String>.from(
+      tournament.directorBoardLiveUrls,
+    );
+    final previousAssignments = {
+      for (final entry in tournament.directorGroupBoardAssignments.entries)
+        entry.key: List<int>.from(entry.value),
+    };
+    setState(() {
+      tournament.boardCount = boardCount;
+      tournament.blockedBoards.removeWhere((board) => board > boardCount);
+      tournament.directorGroupBoardAssignments.updateAll(
+        (_, boards) => boards.where((board) => board <= boardCount).toList(),
+      );
+      tournament.directorBoardNames.removeWhere(
+        (board, _) => board > boardCount,
+      );
+      tournament.directorBoardLiveUrls.removeWhere(
+        (board, _) => board > boardCount,
+      );
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      tournament.boardCount = previousCount;
+      tournament.blockedBoards
+        ..clear()
+        ..addAll(previousBlocked);
+      tournament.directorGroupBoardAssignments
+        ..clear()
+        ..addAll(previousAssignments);
+      tournament.directorBoardNames
+        ..clear()
+        ..addAll(previousNames);
+      tournament.directorBoardLiveUrls
+        ..clear()
+        ..addAll(previousUrls);
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Future<void> _setDirectorGroupBoard(
+    int stageIndex,
+    String groupName,
+    int board,
+    bool selected,
+  ) async {
+    final assignments = widget.tournament.directorGroupBoardAssignments;
+    final key = GroupBoardAssignment.keyFor(stageIndex, groupName);
+    final previous = assignments.containsKey(key)
+        ? List<int>.from(assignments[key]!)
+        : null;
+    final stage = widget.tournament.runStages[stageIndex];
+    if (stage is! GroupTournamentRunStage) return;
+    final defaults = GroupBoardAssignment.defaults(
+      groupNames: stage.groups
+          .map((group) => GroupBoardAssignment.keyFor(stageIndex, group.name))
+          .toList(),
+      boardCount: widget.tournament.boardCount,
+    );
+    final current = (assignments[key] ?? defaults[key] ?? const <int>{})
+        .toSet();
+    if (selected) {
+      current.add(board);
+    } else {
+      current.remove(board);
+    }
+    setState(() {
+      assignments[key] = current.toList()..sort();
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (previous == null) {
+        assignments.remove(key);
+      } else {
+        assignments[key] = previous;
+      }
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Future<void> _handleDirectorSettings(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Einstellung konnte nicht gespeichert werden: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveDirectorBoardSettings(
+    int board,
+    String name,
+    String liveUrl,
+  ) async {
+    final names = widget.tournament.directorBoardNames;
+    final urls = widget.tournament.directorBoardLiveUrls;
+    final previousName = names[board];
+    final previousUrl = urls[board];
+    setState(() {
+      if (name.isEmpty) {
+        names.remove(board);
+      } else {
+        names[board] = name;
+      }
+      if (liveUrl.isEmpty) {
+        urls.remove(board);
+      } else {
+        urls[board] = liveUrl;
+      }
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (previousName == null) {
+        names.remove(board);
+      } else {
+        names[board] = previousName;
+      }
+      if (previousUrl == null) {
+        urls.remove(board);
+      } else {
+        urls[board] = previousUrl;
+      }
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
   bool _isBracketEditMode = false;
   bool _isApplyingStartDraw = false;
   final Set<int> _completedStageIndexes = {};
+  LeagueBoardRuntime? _leagueRuntime;
+  TournamentAudioAnnouncementService? _audioAnnouncementService;
   TournamentRunController get _runController =>
       widget.runController ?? const TournamentRunController();
   final _tournamentNameController = TextEditingController();
@@ -590,21 +966,31 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       widget.tournamentStorage ?? TournamentStorage();
   late final Future<List<LocalRanking>> _localRankings = LocalAppDatabase()
       .loadLocalRankings();
+  late String _lastAchievementResultSignature;
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tournamentNameController.dispose();
+    final audioAnnouncementService = _audioAnnouncementService;
+    if (audioAnnouncementService != null) {
+      unawaited(audioAnnouncementService.dispose());
+    }
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
-    _stageViewMode = StageViewMode.dashboard;
+    _stageViewMode = widget.tournament.directorModeEnabled
+        ? StageViewMode.director
+        : StageViewMode.dashboard;
     _tournamentNameController.text = widget.tournament.name;
     WidgetsBinding.instance.addObserver(this);
-    if (widget.tournament.leagueMatch != null) return;
+    if (widget.tournament.leagueMatch != null) {
+      _leagueRuntime = LeagueBoardRuntime(widget.tournament)
+        ..installOn(widget.tournament);
+    }
     _activeStageIndex = widget.tournament.activeStageIndex.clamp(
       0,
       widget.tournament.runStages.isEmpty
@@ -616,6 +1002,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     _restoreCompletedGroupDrawForActiveStage();
     _advanceKnockoutWinners();
     _ensureGroupDeciders();
+    _lastAchievementResultSignature = _achievementResultSignature();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _applyPendingStartDrawForActiveStage();
       if (!mounted) return;
@@ -624,14 +1011,176 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _toggleClockPause() async {
+    final wasPaused = widget.tournament.isClockPaused;
     TournamentTiming.togglePause(widget.tournament);
+    widget.tournament.addActivity(
+      wasPaused ? 'clock_resumed' : 'clock_paused',
+      wasPaused ? 'Turnieruhr fortgesetzt' : 'Turnieruhr pausiert',
+    );
     try {
       await _saveTournamentProgress();
       if (mounted) setState(() {});
     } catch (_) {
       TournamentTiming.togglePause(widget.tournament);
+      widget.tournament.activityLog.removeLast();
       rethrow;
     }
+  }
+
+  Future<void> _saveTournamentDate(DateTime date) async {
+    final previous = widget.tournament.tournamentDate;
+    final normalized = DateTime(date.year, date.month, date.day);
+    if (previous != null &&
+        previous.year == normalized.year &&
+        previous.month == normalized.month &&
+        previous.day == normalized.day) {
+      return;
+    }
+    widget.tournament.tournamentDate = normalized;
+    widget.tournament.addActivity(
+      'tournament_date_changed',
+      'Turnierdatum geändert: ${MaterialLocalizations.of(context).formatMediumDate(normalized)}',
+    );
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (_) {
+      widget.tournament
+        ..tournamentDate = previous
+        ..activityLog.removeLast();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Turnierdatum konnte nicht gespeichert werden.'),
+          ),
+        );
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _saveAchievementNotificationSetting(bool enabled) async {
+    final previous = widget.tournament.showAchievementNotifications;
+    widget.tournament.showAchievementNotifications = enabled;
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (_) {
+      widget.tournament.showAchievementNotifications = previous;
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Achievement-Anzeigeeinstellung konnte nicht gespeichert werden.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _savePlayerInsightsSetting(bool enabled) async {
+    final previous = widget.tournament.showPlayerInsights;
+    widget.tournament.showPlayerInsights = enabled;
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (error) {
+      widget.tournament.showPlayerInsights = previous;
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Player-Insights konnten nicht gespeichert werden: $error',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveSoundModeSetting(bool enabled) async {
+    final previous = widget.tournament.soundModeEnabled;
+    widget.tournament.soundModeEnabled = enabled;
+    if (!enabled) _audioAnnouncementService?.cancel();
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+    } catch (error) {
+      widget.tournament.soundModeEnabled = previous;
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ton-Modus konnte nicht gespeichert werden: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _announceRecommendationForBoard(int board) async {
+    try {
+      if (!mounted ||
+          !widget.tournament.soundModeEnabled ||
+          !widget.tournament.directorModeEnabled ||
+          _stageViewMode != StageViewMode.director) {
+        return;
+      }
+      final stageIndex = _activeStageIndex;
+      final snapshot = TournamentDirectorSnapshot(
+        widget.tournament,
+        stageIndex,
+      );
+      final recommendation = snapshot.recommendationForBoard(board);
+      if (recommendation == null) return;
+      final nextMatch = recommendation.next.entry.match;
+      final alternativeMatch = recommendation.alternative?.entry.match;
+      final boardName = widget.tournament.boardDisplayName(board);
+      final settings = await AudioAnnouncementPreferencesStorage().load();
+      final profiles = await LocalAppDatabase().loadPlayerProfiles();
+      if (!mounted || !widget.tournament.soundModeEnabled) return;
+      final profilesById = {
+        for (final profile in profiles) profile.id: profile,
+      };
+      final audioService = _audioAnnouncementService ??=
+          TournamentAudioAnnouncementService();
+      unawaited(
+        audioService.announce(
+          text:
+              'Nächste Partie: ${spokenMatchLabel(nextMatch, settings, profilesById)} an '
+              '${_spokenBoardName(boardName)}.',
+          alternativeText: alternativeMatch == null
+              ? null
+              : 'Alternativ: ${spokenMatchLabel(alternativeMatch, settings, profilesById)} an '
+                    '${_spokenBoardName(boardName)}.',
+          isStillCurrent: () {
+            if (!mounted ||
+                !widget.tournament.soundModeEnabled ||
+                !widget.tournament.directorModeEnabled ||
+                _stageViewMode != StageViewMode.director ||
+                _activeStageIndex != stageIndex) {
+              return false;
+            }
+            final refreshed = TournamentDirectorSnapshot(
+              widget.tournament,
+              stageIndex,
+            ).recommendationForBoard(board);
+            return refreshed != null &&
+                widget.tournament.boardDisplayName(board) == boardName &&
+                identical(refreshed.next.entry.match, nextMatch) &&
+                identical(refreshed.alternative?.entry.match, alternativeMatch);
+          },
+        ),
+      );
+    } catch (error) {
+      debugPrint('Turnierempfehlung konnte nicht angesagt werden: $error');
+    }
+  }
+
+  String _spokenBoardName(String boardName) {
+    final match = RegExp(r'^Board\s+(\d+)$').firstMatch(boardName);
+    return match == null ? boardName : 'Board Nummer ${match.group(1)}';
   }
 
   Future<void> _startTournamentClock() async {
@@ -703,12 +1252,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _saveTournamentProgress({bool propagateError = false}) async {
+    var achievementInputsChanged = false;
     try {
+      _leagueRuntime?.writeTo(widget.tournament);
       await _runController.saveProgress(
         tournament: widget.tournament,
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
       );
+      final signature = _achievementResultSignature();
+      achievementInputsChanged = signature != _lastAchievementResultSignature;
+      _lastAchievementResultSignature = signature;
       if (mounted && _directorSaveError != null) {
         setState(() => _directorSaveError = null);
       }
@@ -729,6 +1283,240 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       );
       if (propagateError) rethrow;
     }
+    if (achievementInputsChanged) {
+      try {
+        await _refreshAchievementsForTournament();
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Achievement-Fortschritt konnte nicht aktualisiert werden: $error',
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  String _achievementResultSignature() {
+    final matches = <GroupMatch>{};
+    for (final stage in widget.tournament.runStages) {
+      matches.addAll(_achievementMatchesForStage(stage));
+    }
+    final source = jsonEncode({
+      'rankingIds': [...widget.tournament.rankingIds]..sort(),
+      'countsForRanking': widget.tournament.countsForRanking,
+      'effectiveDate': widget.tournament.effectiveDate.toIso8601String(),
+      'players': [
+        for (final player in widget.tournament.players)
+          for (final individual in player.individuals)
+            individual.profileId ?? individual.name,
+      ],
+      'stageSettings': [
+        for (final stage in widget.tournament.runStages)
+          if (stage is GroupTournamentRunStage)
+            {
+              'tieBreakers': stage.tieBreakers,
+              'groups': [
+                for (final group in stage.groups)
+                  {
+                    'name': group.name,
+                    'players': [
+                      for (final player in group.players)
+                        for (final individual in player.individuals)
+                          individual.profileId ?? individual.name,
+                    ],
+                  },
+              ],
+            }
+          else if (stage is KnockoutTournamentRunStage)
+            {
+              'participants': [
+                for (final player in stage.participants)
+                  for (final individual in player.individuals)
+                    individual.profileId ?? individual.name,
+              ],
+            },
+      ],
+      'finishedAt': widget.tournament.finishedAt?.toIso8601String(),
+      'completedStages': widget.tournament.completedStageIndexes.toList()
+        ..sort(),
+      'matches': [
+        for (final match in matches)
+          {
+            'participants': [
+              for (final player in [
+                if (match.homePlayer != null) match.homePlayer!,
+                if (match.awayPlayer != null) match.awayPlayer!,
+                ...match.players,
+              ])
+                for (final individual in player.individuals)
+                  individual.profileId ?? individual.name,
+            ],
+            'scratchedPlayer':
+                match.scratchedPlayer?.profileId ?? match.scratchedPlayer?.name,
+            'homeLegs': match.homeLegs,
+            'awayLegs': match.awayLegs,
+            'homeSets': match.homeSets,
+            'awaySets': match.awaySets,
+            'annulled': match.isAnnulled,
+            'withdrawalIgnored': match.withdrawalIgnored,
+            'bestPerformances': [
+              for (final performance in match.bestPerformances)
+                performance.toJson(),
+            ],
+          },
+      ],
+    });
+    var hash = 0x811c9dc5;
+    for (final codeUnit in source.codeUnits) {
+      hash = ((hash ^ codeUnit) * 0x01000193) & 0xffffffff;
+    }
+    return hash.toRadixString(16);
+  }
+
+  Future<void> _refreshAchievementsForTournament() async {
+    final tournament = widget.tournament;
+    if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) return;
+    final rankings = (await _localRankings).where(
+      (ranking) =>
+          ranking.achievementsEnabled &&
+          tournament.rankingIds.contains(ranking.id),
+    );
+    if (rankings.isEmpty) return;
+    final tournaments = await _tournamentStorage.loadTournaments();
+    final database = LocalAppDatabase();
+    final service = RankingAchievementService(
+      database: database,
+      tournamentStorage: _tournamentStorage,
+    );
+    final achievementNotices = <TournamentAchievementNotice>[];
+    for (final ranking in rankings) {
+      final previousProgress = <String, Map<String, Map<String, Object?>>>{};
+      for (final playerId in await database.loadRankingPlayerIds(ranking.id)) {
+        previousProgress[playerId] = await database
+            .loadRankingAchievementProgress(ranking.id, playerId);
+      }
+      final snapshots = await service.refreshRanking(
+        ranking,
+        tournaments: tournaments,
+      );
+      for (final entry in snapshots.entries) {
+        final previous = previousProgress[entry.key] ?? const {};
+        for (final progress in entry.value.evaluation.progress.values) {
+          if (progress.isCompleted &&
+              previous[progress.definition.id]?['status'] != 'completed') {
+            achievementNotices.add(
+              TournamentAchievementNotice(
+                playerProfileId: entry.key,
+                playerName: _tournamentPlayerName(tournament, entry.key),
+                achievementName: progress.definition.name,
+                explanation: service.notificationExplanation(progress),
+                rankingName: ranking.name,
+              ),
+            );
+          }
+        }
+      }
+    }
+    var matchNotices = <TournamentAchievementNotice>[];
+    if (achievementNotices.isNotEmpty) {
+      final recentMatches =
+          <GroupMatch>[
+            for (final stage in tournament.runStages)
+              ..._achievementMatchesForStage(stage),
+          ].where((match) => match.countsForStatistics).toList()..sort((
+            left,
+            right,
+          ) {
+            final leftDate =
+                left.finishedAt ?? left.startedAt ?? tournament.effectiveDate;
+            final rightDate =
+                right.finishedAt ?? right.startedAt ?? tournament.effectiveDate;
+            return rightDate.compareTo(leftDate);
+          });
+      if (recentMatches.isNotEmpty) {
+        final recentMatch = recentMatches.first;
+        final recentParticipantIds = {
+          for (final player in [
+            if (recentMatch.homePlayer != null) recentMatch.homePlayer!,
+            if (recentMatch.awayPlayer != null) recentMatch.awayPlayer!,
+            ...recentMatch.players,
+          ])
+            for (final individual in player.individuals)
+              individual.profileId ?? individual.name,
+        };
+        matchNotices = achievementNotices
+            .where(
+              (item) => recentParticipantIds.contains(item.playerProfileId),
+            )
+            .toList();
+        for (final notice in matchNotices) {
+          if (!recentMatch.achievementNotifications.any(
+            (existing) =>
+                existing.playerProfileId == notice.playerProfileId &&
+                existing.playerName == notice.playerName &&
+                existing.achievementName == notice.achievementName &&
+                existing.rankingName == notice.rankingName,
+          )) {
+            recentMatch.achievementNotifications.add(notice);
+          }
+        }
+        await _runController.saveProgress(
+          tournament: tournament,
+          activeStageIndex: _activeStageIndex,
+          completedStageIndexes: _completedStageIndexes,
+        );
+      }
+    }
+    if (!tournament.showAchievementNotifications ||
+        matchNotices.isEmpty ||
+        !mounted) {
+      return;
+    }
+    final achievementNames = matchNotices
+        .map((notice) => notice.achievementName)
+        .toSet()
+        .toList();
+    final names = achievementNames.take(3).join(', ');
+    final remainder =
+        achievementNames.length - achievementNames.length.clamp(0, 3);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Achievement freigeschaltet: $names'
+          '${remainder > 0 ? ' und $remainder weitere' : ''}',
+        ),
+      ),
+    );
+  }
+
+  String _tournamentPlayerName(CreatedTournament tournament, String profileId) {
+    for (final player in tournament.players) {
+      for (final individual in player.individuals) {
+        if ((individual.profileId ?? individual.name) == profileId) {
+          return individual.name;
+        }
+      }
+    }
+    return profileId;
+  }
+
+  List<GroupMatch> _achievementMatchesForStage(TournamentRunStage stage) {
+    final matches = <GroupMatch>{};
+    if (stage is GroupTournamentRunStage) {
+      for (final group in stage.groups) {
+        matches
+          ..addAll(group.matches)
+          ..addAll(group.knockoutRounds.expand((round) => round))
+          ..addAll(group.placementMatches);
+      }
+    } else if (stage is KnockoutTournamentRunStage) {
+      matches.addAll(stage.matches);
+    }
+    return matches.toList();
   }
 
   String _tournamentTypeLabel() {
@@ -756,6 +1544,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
     final previousName = widget.tournament.name;
     widget.tournament.name = name;
+    if (name != previousName) {
+      widget.tournament.addActivity(
+        'tournament_name_changed',
+        'Turniername geändert: $previousName → $name',
+      );
+    }
     try {
       await _saveTournamentProgress(propagateError: true);
       if (mounted) {
@@ -769,8 +1563,30 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     } catch (_) {
       widget.tournament.name = previousName;
+      if (name != previousName) widget.tournament.activityLog.removeLast();
       _tournamentNameController.text = previousName;
     }
+  }
+
+  Future<void> _editTournamentConfiguration() async {
+    final updatedTournament = await Navigator.of(context)
+        .push<CreatedTournament>(
+          MaterialPageRoute<CreatedTournament>(
+            builder: (_) => TournamentCreationPage(
+              tournamentStorage: _tournamentStorage,
+              existingTournament: widget.tournament,
+            ),
+          ),
+        );
+    if (!mounted || updatedTournament == null) return;
+    Navigator.of(context).pushReplacement<void, void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TournamentRunPage(
+          tournament: updatedTournament,
+          tournamentStorage: _tournamentStorage,
+        ),
+      ),
+    );
   }
 
   Future<void> _pickTournamentName() async {
@@ -780,8 +1596,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               .where((tournament) => tournament.id != widget.tournament.id)
               .toList()
             ..sort((a, b) {
-              final aDate = a.startedAt ?? a.finishedAt ?? a.createdAt;
-              final bDate = b.startedAt ?? b.finishedAt ?? b.createdAt;
+              final aDate = a.effectiveDate;
+              final bDate = b.effectiveDate;
               return bDate.compareTo(aDate);
             });
       if (!mounted) return;
@@ -804,7 +1620,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                       return ListTile(
                         title: Text(tournament.name),
                         subtitle: Text(
-                          tournament.createdAt
+                          tournament.effectiveDate
                               .toLocal()
                               .toString()
                               .split(' ')
@@ -836,6 +1652,37 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<void> _saveDirectorMode({
+    required bool enabled,
+    String strategy = 'group',
+  }) async {
+    final previousEnabled = widget.tournament.directorModeEnabled;
+    final previousStrategy = widget.tournament.directorSchedulingStrategy;
+    final previousViewMode = _stageViewMode;
+    setState(() {
+      widget.tournament.directorModeEnabled = enabled;
+      widget.tournament.directorSchedulingStrategy = enabled
+          ? strategy
+          : previousStrategy;
+      if (_stageViewMode == StageViewMode.director && !enabled) {
+        _stageViewMode = StageViewMode.dashboard;
+      }
+      if (enabled && _stageViewMode == StageViewMode.dashboard) {
+        _stageViewMode = StageViewMode.director;
+      }
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        widget.tournament.directorModeEnabled = previousEnabled;
+        widget.tournament.directorSchedulingStrategy = previousStrategy;
+        _stageViewMode = previousViewMode;
+      });
+    }
+  }
+
   Future<void> _saveRankingSelection({
     required bool countsForRanking,
     required List<String> rankingIds,
@@ -843,12 +1690,23 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (_savingRankingSelection) return;
     final previousCounts = widget.tournament.countsForRanking;
     final previousIds = List<String>.from(widget.tournament.rankingIds);
+    final previousLayouts = {
+      for (final entry in widget.tournament.secondScreenLayouts.entries)
+        entry.key: List<SecondScreenWidgetPlacement>.from(entry.value),
+    };
     setState(() {
       _savingRankingSelection = true;
       widget.tournament.countsForRanking = countsForRanking;
       widget.tournament.rankingIds
         ..clear()
         ..addAll(countsForRanking ? rankingIds : const []);
+      if (!countsForRanking || rankingIds.isEmpty) {
+        for (final placements in widget.tournament.secondScreenLayouts.values) {
+          placements.removeWhere(
+            (placement) => placement.widgetId == 'ranking',
+          );
+        }
+      }
     });
     try {
       await _saveTournamentProgress(propagateError: true);
@@ -859,6 +1717,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         widget.tournament.rankingIds
           ..clear()
           ..addAll(previousIds);
+        widget.tournament.secondScreenLayouts
+          ..clear()
+          ..addAll(previousLayouts);
       });
     } finally {
       if (mounted) {
@@ -942,6 +1803,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _savingTieBreakerSettings = true;
       widget.tournament.stages[stageIndex] = updatedStage;
       widget.tournament.runStages[stageIndex] = updatedRunStage;
+      widget.tournament.addActivity(
+        'tiebreakers_changed',
+        'Tie-Breaker-Einstellungen in Etappe „${previousStage.name}“ geändert',
+      );
     });
     try {
       await _runController.saveProgress(
@@ -966,6 +1831,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         _savingTieBreakerSettings = false;
         widget.tournament.stages[stageIndex] = previousStage;
         widget.tournament.runStages[stageIndex] = previousRunStage;
+        widget.tournament.activityLog.removeLast();
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -975,7 +1841,142 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  Future<void> _editResult(GroupMatch match) async {
+  Future<void> _saveKratzerHandicapSettings({
+    required KnockoutTournamentRunStage runStage,
+    required bool enabled,
+    required List<String> handicaps,
+    required Map<int, String> assignments,
+  }) async {
+    final stageIndex = _activeStageIndex;
+    if (_savingKratzerHandicapSettings ||
+        stageIndex >= widget.tournament.runStages.length ||
+        !identical(widget.tournament.runStages[stageIndex], runStage) ||
+        !runStage.isKratzer) {
+      return;
+    }
+
+    final previousRunStage = runStage;
+    final previousStage = stageIndex < widget.tournament.stages.length
+        ? widget.tournament.stages[stageIndex]
+        : null;
+    final updatedHandicaps = List<String>.unmodifiable(
+      handicaps
+          .map((handicap) => handicap.trim())
+          .where((handicap) => handicap.isNotEmpty),
+    );
+    final updatedAssignments = Map<int, String>.unmodifiable({
+      for (final entry in assignments.entries)
+        if (entry.key >= 0 &&
+            entry.value.trim().isNotEmpty &&
+            updatedHandicaps.contains(entry.value.trim()))
+          entry.key: entry.value.trim(),
+    });
+    final updatedRunStage = KnockoutTournamentRunStage(
+      name: runStage.name,
+      rounds: runStage.rounds,
+      placementMatches: runStage.placementMatches,
+      eliminationLossLimit: runStage.eliminationLossLimit,
+      finalEndsTournament: runStage.finalEndsTournament,
+      isKratzer: runStage.isKratzer,
+      kratzerPlayersPerBoard: runStage.kratzerPlayersPerBoard,
+      kratzerPreferSameScratchCount: runStage.kratzerPreferSameScratchCount,
+      kratzerPlayUntilElimination: runStage.kratzerPlayUntilElimination,
+      kratzerBonusLifeFor180: runStage.kratzerBonusLifeFor180,
+      kratzerBonusLifeForHighFinish: runStage.kratzerBonusLifeForHighFinish,
+      kratzerHandicapsEnabled: enabled,
+      kratzerHandicaps: updatedHandicaps,
+      kratzerHandicapAssignments: updatedAssignments,
+      participants: runStage.participants,
+    );
+    final updatedStage = previousStage?.copyWith(
+      kratzerHandicapsEnabled: enabled,
+      kratzerHandicaps: updatedHandicaps,
+      kratzerHandicapAssignments: updatedAssignments,
+    );
+    setState(() {
+      _savingKratzerHandicapSettings = true;
+      widget.tournament.runStages[stageIndex] = updatedRunStage;
+      if (updatedStage != null) {
+        widget.tournament.stages[stageIndex] = updatedStage;
+      }
+      widget.tournament.addActivity(
+        'kratzer_handicaps_changed',
+        'Handicap-Einstellungen in Etappe „${runStage.name}“ geändert',
+      );
+    });
+    try {
+      await _runController.saveProgress(
+        tournament: widget.tournament,
+        activeStageIndex: _activeStageIndex,
+        completedStageIndexes: _completedStageIndexes,
+      );
+      if (!mounted) return;
+      setState(() => _savingKratzerHandicapSettings = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _savingKratzerHandicapSettings = false;
+        widget.tournament.runStages[stageIndex] = previousRunStage;
+        if (previousStage != null) {
+          widget.tournament.stages[stageIndex] = previousStage;
+        }
+        widget.tournament.activityLog.removeLast();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Handicaps konnten nicht gespeichert werden: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _addKratzerHandicap(KnockoutTournamentRunStage stage) async {
+    var enteredLabel = '';
+    final label = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Handicap hinzufügen'),
+        content: TextField(
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(labelText: 'Bezeichnung'),
+          onChanged: (value) => enteredLabel = value,
+          onSubmitted: (value) => Navigator.pop(context, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, enteredLabel.trim()),
+            child: const Text('Hinzufügen'),
+          ),
+        ],
+      ),
+    );
+    if (label == null || label.isEmpty || !mounted) return;
+    if (stage.kratzerHandicaps.any(
+      (handicap) => handicap.toLowerCase() == label.toLowerCase(),
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dieses Handicap gibt es bereits.')),
+      );
+      return;
+    }
+    await _saveKratzerHandicapSettings(
+      runStage: stage,
+      enabled: stage.kratzerHandicapsEnabled,
+      handicaps: [...stage.kratzerHandicaps, label],
+      assignments: stage.kratzerHandicapAssignments,
+    );
+  }
+
+  Future<void> _editResult(
+    GroupMatch match, {
+    VoidCallback? onLocalUpdate,
+    VoidCallback? onSaved,
+  }) async {
     if (match.withdrawalSignature != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -986,13 +1987,25 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       );
       return;
     }
+    final activeRunStage = widget.tournament.runStages[_activeStageIndex];
+    final bonusTypes =
+        activeRunStage is KnockoutTournamentRunStage && activeRunStage.isKratzer
+        ? [
+            if (activeRunStage.kratzerBonusLifeFor180)
+              KratzerBonusLifeType.score180,
+            if (activeRunStage.kratzerBonusLifeForHighFinish)
+              KratzerBonusLifeType.highFinish,
+          ]
+        : const <KratzerBonusLifeType>[];
     final result = await showDialog<MatchResult>(
       context: context,
-      builder: (context) => ResultDialog(
-        match: match,
-        format: widget.tournament.stages[_activeStageIndex].gameFormat,
-        allowAdministration: true,
-      ),
+      builder: (context) => match.isKratzer
+          ? KratzerResultDialog(match: match, enabledBonusTypes: bonusTypes)
+          : ResultDialog(
+              match: match,
+              format: widget.tournament.stages[_activeStageIndex].gameFormat,
+              allowAdministration: true,
+            ),
     );
 
     if (result == null) {
@@ -1034,7 +2047,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
 
     setState(() {
-      match.finishedAt = result.isAnnulled || result.homeLegs == null
+      match.finishedAt =
+          result.isAnnulled ||
+              (match.isKratzer
+                  ? result.scratchedPlayer == null
+                  : result.homeLegs == null)
           ? null
           : match.finishedAt ?? DateTime.now();
       final stage = widget.tournament.runStages[_activeStageIndex];
@@ -1047,26 +2064,57 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
       match.isAnnulled = result.isAnnulled;
       match.bestPerformances = result.bestPerformances;
-      match.homeSets = result.homeSets;
-      match.awaySets = result.awaySets;
-      if (result.isAnnulled) {
+      if (match.isKratzer) {
+        match.scratchedPlayer = result.isAnnulled
+            ? null
+            : result.scratchedPlayer;
+        match.kratzerBonusLives = result.isAnnulled
+            ? []
+            : result.kratzerBonusLives;
+        match.homeLegs = null;
+        match.awayLegs = null;
+        match.homeSets = null;
+        match.awaySets = null;
+      } else if (result.isAnnulled) {
         match.homeLegs = null;
         match.homeSets = null;
         match.awaySets = null;
         match.awayLegs = null;
       } else {
+        match.homeSets = result.homeSets;
+        match.awaySets = result.awaySets;
         match.homeLegs = result.homeLegs;
         match.awayLegs = result.awayLegs;
+      }
+      if (stage is KnockoutTournamentRunStage && stage.isKratzer) {
+        final roundIndex = stage.rounds.indexWhere(
+          (round) => round.contains(match),
+        );
+        if (roundIndex >= 0 && roundIndex < stage.rounds.length - 1) {
+          stage.rounds.removeRange(roundIndex + 1, stage.rounds.length);
+        }
+        _advanceKratzerRound(stage);
       }
       _advanceKnockoutWinners();
       _ensureGroupDeciders();
       const OrderOfPlayController().resultRecorded(match);
+      final stageName = widget.tournament.runStages[_activeStageIndex].name;
+      final description = match.isKratzer
+          ? 'Verlierer ${result.scratchedPlayer?.name ?? 'ermittelt'}'
+                '${result.kratzerBonusLives.isEmpty ? '' : ' · ${result.kratzerBonusLives.length} Bonusleben'}'
+          : '${match.homePlayer?.name ?? 'Heim'} ${result.homeLegs ?? 0}:${result.awayLegs ?? 0} ${match.awayPlayer?.name ?? 'Gast'}';
+      widget.tournament.addActivity(
+        'result_entered',
+        'Ergebnis eingetragen · $stageName · $description',
+      );
     });
+    onLocalUpdate?.call();
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
       return;
     }
+    onSaved?.call();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1103,12 +2151,32 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         widget.tournament.runStages[_activeStageIndex] != stage) {
       return;
     }
-    final pair = await showDialog<List<TournamentPlayer>>(
+    Map<String, int> ratings = const {};
+    try {
+      ratings = await GroupPlayerRatingService().calculate(
+        tournament: widget.tournament,
+        stage: stage,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ELO-Wertungen konnten nicht geladen werden: $error'),
+          ),
+        );
+      }
+    }
+    if (!mounted) return;
+    final result = await showDialog<GroupPositionsResult>(
       context: context,
-      builder: (_) => GroupPositionsDialog(stage: stage),
+      builder: (_) => GroupPositionsDialog(
+        stage: stage,
+        ratings: ratings,
+        loadCatalogProfiles: () => LocalAppDatabase().loadPlayerProfiles(),
+      ),
     );
     if (!mounted ||
-        pair == null ||
+        result == null ||
         !_canEditGroupPositions(stage, _activeStageIndex) ||
         widget.tournament.runStages[_activeStageIndex] != stage ||
         _completedStageIndexes.contains(_activeStageIndex) &&
@@ -1117,8 +2185,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     var changed = false;
     setState(() {
-      changed = GroupPositionEditor.swap(stage, pair[0], pair[1]);
+      changed = GroupPositionEditor.reassign(
+        stage,
+        result.assignments,
+        playerReplacements: result.playerReplacements,
+      );
       if (changed) {
+        _replaceTournamentPlayerReferences(result.playerReplacements);
+        widget.tournament.addActivity(
+          'groups_changed',
+          'Gruppen in Etappe „${stage.name}“ verändert',
+        );
         _completedStageIndexes.remove(_activeStageIndex);
         widget.tournament.completedStageIndexes.remove(_activeStageIndex);
         if (_activeStageIndex == widget.tournament.runStages.length - 1) {
@@ -1130,6 +2207,61 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     });
     if (changed) await _saveTournamentProgress();
+  }
+
+  void _replaceTournamentPlayerReferences(
+    Map<TournamentPlayer, TournamentPlayer> replacements,
+  ) {
+    if (replacements.isEmpty) return;
+    TournamentPlayer? replace(TournamentPlayer? player) =>
+        player == null ? null : replacements[player] ?? player;
+    final tournament = widget.tournament;
+    for (var index = 0; index < tournament.players.length; index++) {
+      tournament.players[index] =
+          replacements[tournament.players[index]] ?? tournament.players[index];
+    }
+    for (final stage in tournament.runStages) {
+      if (stage is GroupTournamentRunStage) {
+        for (final group in stage.groups) {
+          for (var index = 0; index < group.players.length; index++) {
+            group.players[index] =
+                replacements[group.players[index]] ?? group.players[index];
+          }
+          for (final match in [
+            ...group.matches,
+            ...group.knockoutRounds.expand((round) => round),
+            ...group.placementMatches,
+          ]) {
+            match.homePlayer = replace(match.homePlayer);
+            match.awayPlayer = replace(match.awayPlayer);
+            match.scratchedPlayer = replace(match.scratchedPlayer);
+            match.players = match.players
+                .map((player) => replacements[player] ?? player)
+                .toList();
+            match.scratchEligiblePlayers = match.scratchEligiblePlayers
+                .map((player) => replacements[player] ?? player)
+                .toList();
+          }
+        }
+      } else if (stage is KnockoutTournamentRunStage) {
+        for (var index = 0; index < stage.participants.length; index++) {
+          stage.participants[index] =
+              replacements[stage.participants[index]] ??
+              stage.participants[index];
+        }
+        for (final match in stage.matches) {
+          match.homePlayer = replace(match.homePlayer);
+          match.awayPlayer = replace(match.awayPlayer);
+          match.scratchedPlayer = replace(match.scratchedPlayer);
+          match.players = match.players
+              .map((player) => replacements[player] ?? player)
+              .toList();
+          match.scratchEligiblePlayers = match.scratchEligiblePlayers
+              .map((player) => replacements[player] ?? player)
+              .toList();
+        }
+      }
+    }
   }
 
   void _persistGroupArrangementInDrawOrder(GroupTournamentRunStage runStage) {
@@ -1309,7 +2441,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   void _advanceWithoutWithdrawals() {
     for (final stage in widget.tournament.runStages) {
-      if (stage is KnockoutTournamentRunStage) {
+      if (stage is KnockoutTournamentRunStage && !stage.isKratzer) {
         if (stage.eliminationLossLimit == 2) {
           if (_preserveCompletedImportedDoubleElimination(stage)) continue;
           _advanceDoubleEliminationRounds(
@@ -2205,131 +3337,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   List<PlayerStanding> _standingsFor(
     TournamentGroup group,
     List<String> tieBreakers,
-  ) {
-    if (group.playType == 'swiss') {
-      final rows = SwissEngine.standings(group);
-      return [
-        ...rows.where(
-          (s) =>
-              PlayerWithdrawalService.policy(widget.tournament, s.player) ==
-              null,
-        ),
-        ...rows.where(
-          (s) =>
-              PlayerWithdrawalService.policy(widget.tournament, s.player) !=
-              null,
-        ),
-      ];
-    }
-    final standings = {
-      for (final player in group.players) player.name: PlayerStanding(player),
-    };
-
-    for (final match in group.matches.where(
-      (match) => match.countsForStatistics && !match.isDecider,
-    )) {
-      final homePlayer = match.homePlayer!;
-      final awayPlayer = match.awayPlayer!;
-      final home = standings[homePlayer.name]!;
-      final away = standings[awayPlayer.name]!;
-      final homeLegs = match.homeLegs!;
-      final awayLegs = match.awayLegs!;
-
-      home.played++;
-      home.legsFor += homeLegs;
-      home.legsAgainst += awayLegs;
-      away.played++;
-      away.legsFor += awayLegs;
-      away.legsAgainst += homeLegs;
-
-      if (match.winner == match.homePlayer) {
-        home.wins++;
-        home.points += 3;
-        away.losses++;
-      } else if (match.winner == match.awayPlayer) {
-        away.wins++;
-        away.points += 3;
-        home.losses++;
-      } else {
-        home.draws++;
-        home.points++;
-        away.draws++;
-        away.points++;
-      }
-    }
-
-    final sorted = standings.values.toList();
-    sorted.sort((a, b) {
-      final withdrawn =
-          (PlayerWithdrawalService.policy(widget.tournament, a.player) == null
-                  ? 0
-                  : 1)
-              .compareTo(
-                PlayerWithdrawalService.policy(widget.tournament, b.player) ==
-                        null
-                    ? 0
-                    : 1,
-              );
-      if (withdrawn != 0) return withdrawn;
-      final comparison = _compareStandings(
-        a,
-        b,
-        tieBreakers,
-        matches: group.matches,
-      );
-      if (comparison != 0) {
-        return comparison;
-      }
-      return a.player.name.compareTo(b.player.name);
-    });
-
-    return sorted;
-  }
-
-  int _compareStandings(
-    PlayerStanding a,
-    PlayerStanding b,
-    List<String> tieBreakers, {
-    List<GroupMatch> matches = const [],
-  }) {
-    for (final tieBreaker in tieBreakers) {
-      final comparison = switch (tieBreaker) {
-        'points' => b.points.compareTo(a.points),
-        'legDifference' => b.legDifference.compareTo(a.legDifference),
-        'legsFor' => b.legsFor.compareTo(a.legsFor),
-        'headToHead' => _compareHeadToHead(a, b, matches),
-        _ => 0,
-      };
-
-      if (comparison != 0) {
-        return comparison;
-      }
-    }
-
-    return _compareDecider(a, b, matches);
-  }
-
-  int _compareDecider(
-    PlayerStanding a,
-    PlayerStanding b,
-    List<GroupMatch> matches,
-  ) {
-    for (final match in matches.where(
-      (match) => match.isDecider && match.hasResult,
-    )) {
-      final home = match.homePlayer!;
-      final away = match.awayPlayer!;
-      final isDirectMatch =
-          (home.name == a.player.name && away.name == b.player.name) ||
-          (home.name == b.player.name && away.name == a.player.name);
-      if (!isDirectMatch || match.winner == null) {
-        continue;
-      }
-      return match.winner!.name == a.player.name ? -1 : 1;
-    }
-
-    return 0;
-  }
+  ) => const GroupStandingsEngine().calculate(
+    group,
+    tieBreakers,
+    tournament: widget.tournament,
+  );
 
   int _compareHeadToHead(
     PlayerStanding a,
@@ -2400,6 +3412,21 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   bool _knockoutHasWinner(KnockoutTournamentRunStage stage) {
+    if (stage.isKratzer) {
+      if (stage.participants.length == 1) return true;
+      if (stage.rounds.isEmpty ||
+          !stage.rounds.last.every((m) => m.isResolved)) {
+        return false;
+      }
+      return const KratzerEngine()
+              .activePlayers(
+                players: stage.participants,
+                completedMatches: stage.matches,
+                lives: stage.eliminationLossLimit,
+              )
+              .length <=
+          1;
+    }
     if (stage.finalEndsTournament &&
         stage.rounds.isNotEmpty &&
         stage.rounds.last.length == 1 &&
@@ -2509,6 +3536,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   int _participantCountForRunStage(TournamentRunStage stage) {
     if (stage is KnockoutTournamentRunStage) {
+      if (stage.isKratzer) return stage.participants.length;
       if (stage.rounds.isEmpty) {
         return 0;
       }
@@ -2545,6 +3573,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
 
     if (stage is KnockoutTournamentRunStage) {
+      if (stage.isKratzer) {
+        return const KratzerEngine().activePlayers(
+          players: stage.participants,
+          completedMatches: stage.matches,
+          lives: stage.eliminationLossLimit,
+        );
+      }
       if (stage.eliminationLossLimit > 1) {
         return _multiEliminationRanking(
           stage.rounds,
@@ -2856,6 +3891,62 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     TournamentStage stage,
     List<TournamentPlayer> players,
   ) {
+    if (stage.type == 'kratzer') {
+      final participantCount = stage.knockoutParticipantCount == null
+          ? players.length
+          : stage.knockoutParticipantCount!.clamp(0, players.length).toInt();
+      final participants = List<TournamentPlayer>.unmodifiable(
+        players.take(participantCount),
+      );
+      final availableBoards = [
+        for (var board = 1; board <= widget.tournament.boardCount; board++)
+          if (!widget.tournament.blockedBoards.contains(board)) board,
+      ];
+      final engine = const KratzerEngine();
+      final activeParticipants = engine.activePlayers(
+        players: participants,
+        completedMatches: const [],
+        lives: stage.lossLimit,
+      );
+      final eliminatedParticipants = participants
+          .where((player) => !activeParticipants.contains(player))
+          .toList();
+      final assignments = engine.assignRound(
+        players: activeParticipants,
+        eliminatedFillers: eliminatedParticipants,
+        availableBoards: availableBoards,
+        round: 1,
+        playersPerBoard: stage.kratzerPlayersPerBoard,
+        preferSameScratchCount: stage.kratzerPreferSameScratchCount,
+      );
+      return KnockoutTournamentRunStage(
+        name: stage.name,
+        rounds: [
+          [
+            for (final assignment in assignments)
+              GroupMatch(
+                players: assignment.players,
+                scratchEligiblePlayers: assignment.scratchEligiblePlayers,
+                isKratzer: true,
+                round: 1,
+                boardNumber: assignment.boardNumber,
+              ),
+          ],
+        ],
+        eliminationLossLimit: stage.lossLimit,
+        finalEndsTournament: false,
+        isKratzer: true,
+        kratzerPlayersPerBoard: stage.kratzerPlayersPerBoard,
+        kratzerPreferSameScratchCount: stage.kratzerPreferSameScratchCount,
+        kratzerPlayUntilElimination: stage.kratzerPlayUntilElimination,
+        kratzerBonusLifeFor180: stage.kratzerBonusLifeFor180,
+        kratzerBonusLifeForHighFinish: stage.kratzerBonusLifeForHighFinish,
+        kratzerHandicapsEnabled: stage.kratzerHandicapsEnabled,
+        kratzerHandicaps: stage.kratzerHandicaps,
+        kratzerHandicapAssignments: stage.kratzerHandicapAssignments,
+        participants: participants,
+      );
+    }
     if (_isKnockoutStageType(stage.type)) {
       final participantCount = stage.knockoutParticipantCount == null
           ? players.length
@@ -2954,6 +4045,55 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       qualificationPlan: _qualificationPlanForStage(stage),
       tieBreakers: stage.groupTieBreakers,
     );
+  }
+
+  void _advanceKratzerRound(KnockoutTournamentRunStage stage) {
+    if (!stage.isKratzer || stage.rounds.isEmpty) return;
+    final lastRound = stage.rounds.last;
+    if (lastRound.isNotEmpty && !lastRound.every((match) => match.isResolved)) {
+      return;
+    }
+    final engine = const KratzerEngine();
+    final active = engine.activePlayers(
+      players: stage.participants,
+      completedMatches: stage.matches,
+      lives: stage.eliminationLossLimit,
+    );
+    if (active.length <= 1) return;
+    final eliminated = stage.participants
+        .where((player) => !active.contains(player))
+        .toList();
+    final availableBoards = [
+      for (var board = 1; board <= widget.tournament.boardCount; board++)
+        if (!widget.tournament.blockedBoards.contains(board)) board,
+    ];
+    final assignments = engine.assignNextRound(
+      activePlayers: active,
+      eliminatedPlayers: eliminated,
+      availableBoards: availableBoards,
+      round: stage.rounds.length + 1,
+      previousRound: lastRound,
+      completedMatches: stage.matches,
+      playersPerBoard: stage.kratzerPlayersPerBoard,
+      preferSameScratchCount: stage.kratzerPreferSameScratchCount,
+      playUntilElimination: stage.kratzerPlayUntilElimination,
+    );
+    if (assignments.isEmpty) return;
+    final nextRound = [
+      for (final assignment in assignments)
+        GroupMatch(
+          players: assignment.players,
+          scratchEligiblePlayers: assignment.scratchEligiblePlayers,
+          isKratzer: true,
+          round: stage.rounds.length + 1,
+          boardNumber: assignment.boardNumber,
+        ),
+    ];
+    if (lastRound.isEmpty) {
+      stage.rounds[stage.rounds.length - 1] = nextRound;
+    } else {
+      stage.rounds.add(nextRound);
+    }
   }
 
   QualificationPlan? _qualificationPlanForStage(TournamentStage stage) {
@@ -3178,9 +4318,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
 
       _completedStageIndexes.add(_activeStageIndex);
+      final completedStageName =
+          widget.tournament.runStages[_activeStageIndex].name;
+      widget.tournament.addActivity(
+        'stage_completed',
+        'Etappe beendet: $completedStageName',
+      );
       if (!hasNextStage) {
         widget.tournament.reopenedForCorrections = false;
         widget.tournament.finishedAt ??= DateTime.now();
+        widget.tournament.addActivity(
+          'tournament_completed',
+          'Turnier abgeschlossen',
+        );
       }
       if (hasNextStage) {
         _activeStageIndex++;
@@ -3307,6 +4457,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     );
     if (confirmed != true) return;
 
+    final resetStageName = widget.tournament.runStages[_activeStageIndex].name;
     setState(() {
       final currentStage = widget.tournament.runStages[_activeStageIndex];
       for (final match in _matchesForStage(currentStage)) {
@@ -3315,6 +4466,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         match.homeSets = null;
         match.awaySets = null;
         match.isAnnulled = false;
+      }
+      if (currentStage is GroupTournamentRunStage) {
+        for (final group in currentStage.groups) {
+          group.matches.removeWhere((match) => match.isDecider);
+        }
       }
       if (currentStage is KnockoutTournamentRunStage) {
         for (final round in currentStage.rounds.skip(1)) {
@@ -3331,6 +4487,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
       _completedStageIndexes.remove(_activeStageIndex);
       widget.tournament.completedStageIndexes.remove(_activeStageIndex);
+      widget.tournament.addActivity(
+        'stage_reset',
+        'Etappe zurückgesetzt: $resetStageName',
+      );
     });
     _advanceKnockoutWinners();
     _ensureGroupDeciders();
@@ -3343,10 +4503,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Widget _buildAuthorized(BuildContext context) {
-    if (widget.tournament.leagueMatch != null) {
-      return LeagueMatchPage(tournament: widget.tournament);
-    }
     final activeStage = _stageForView(_viewStageIndex);
+    final kratzerParticipants = activeStage is KnockoutTournamentRunStage
+        ? activeStage.participants.isNotEmpty
+              ? activeStage.participants
+              : widget.tournament.players
+        : const <TournamentPlayer>[];
     final isViewingActiveStage =
         _stageViewMode == StageViewMode.director ||
         _viewStageIndex == _activeStageIndex;
@@ -3413,6 +4575,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                   completedStages: _completedStageIndexes,
                   mode: _stageViewMode,
                   canLead: true,
+                  directorModeEnabled: widget.tournament.directorModeEnabled,
                   onStageChanged: (index) => setState(() {
                     _viewStageIndex = index;
                     _isBracketEditMode = false;
@@ -3449,8 +4612,32 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             !_stageNeedsStartDraw(
                               widget.tournament.stages[_activeStageIndex],
                             ),
-                        onResult: _editResult,
+                        onResult: (match) {
+                          final board = match.boardNumber;
+                          final announce =
+                              _stageViewMode == StageViewMode.director &&
+                              board != null;
+                          return _editResult(
+                            match,
+                            onSaved: announce
+                                ? () => unawaited(
+                                    _announceRecommendationForBoard(board),
+                                  )
+                                : null,
+                          );
+                        },
                         onBlock: _toggleBoardBlock,
+                        directorModeEnabled:
+                            widget.tournament.directorModeEnabled &&
+                            _stageViewMode == StageViewMode.director,
+                        showBoardNumber: widget.tournament.directorModeEnabled,
+                        onStartOnBoard: _startRecommendedMatchOnBoard,
+                        onResetMatch: _resetRunningMatch,
+                        onOpenMatch: _openPlayedMatch,
+                        onStartClock: _startTournamentClock,
+                        onPauseClock: _toggleClockPause,
+                        onEditTimes: _editTournamentTimes,
+                        onResetClock: _resetTournamentClock,
                         onChange: () async {
                           setState(() {});
                           await _saveTournamentProgress(propagateError: true);
@@ -3506,7 +4693,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         icon: const Icon(Icons.save_outlined),
                                         label: const Text('Namen speichern'),
                                       );
-                                      if (constraints.maxWidth < 900) {
+                                      if (constraints.maxWidth < 900 ||
+                                          MediaQuery.textScalerOf(
+                                                context,
+                                              ).scale(16) >
+                                              24) {
                                         return Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
@@ -3536,6 +4727,397 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     },
                                   ),
                                   const Divider(height: 28),
+                                  if (widget.tournament.leagueMatch == null &&
+                                      widget.tournament.importedArchive == null)
+                                    Align(
+                                      alignment:
+                                          AlignmentDirectional.centerStart,
+                                      child: OutlinedButton.icon(
+                                        onPressed: _editTournamentConfiguration,
+                                        icon: const Icon(Icons.edit_outlined),
+                                        label: const Text(
+                                          'Turnierkonfiguration bearbeiten',
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TournamentDatePickerField(
+                            value: DateUtils.dateOnly(
+                              widget.tournament.effectiveDate.toLocal(),
+                            ),
+                            onChanged: _saveTournamentDate,
+                          ),
+                          const SizedBox(height: 12),
+                          Card(
+                            child: SwitchListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              title: const Text(
+                                'Errungenschaften-Infos ein-/ausblenden',
+                              ),
+                              subtitle: const Text(
+                                'Steuert nur die Hinweise während des Turniers. '
+                                'Fortschritte werden unabhängig davon gespeichert.',
+                              ),
+                              value: widget
+                                  .tournament
+                                  .showAchievementNotifications,
+                              onChanged: _saveAchievementNotificationSetting,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  SwitchListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text(
+                                      'Turnierleiter-Modus aktivieren',
+                                    ),
+                                    subtitle: const Text(
+                                      'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.',
+                                    ),
+                                    value:
+                                        widget.tournament.directorModeEnabled,
+                                    onChanged: (enabled) async {
+                                      final strategy = widget
+                                          .tournament
+                                          .directorSchedulingStrategy;
+                                      await _saveDirectorMode(
+                                        enabled: enabled,
+                                        strategy: strategy,
+                                      );
+                                    },
+                                  ),
+                                  if (widget.tournament.directorModeEnabled)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: DropdownButtonFormField<String>(
+                                        initialValue: widget
+                                            .tournament
+                                            .directorSchedulingStrategy,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Board-Strategie',
+                                          border: OutlineInputBorder(),
+                                          suffixIcon: Tooltip(
+                                            message:
+                                                'Gruppenbasiert: Jede Gruppe '
+                                                'spielt nur auf den ihr '
+                                                'zugewiesenen Boards. Global '
+                                                'optimiert: Alle offenen '
+                                                'Partien werden gemeinsam '
+                                                'auf die Boards verteilt.',
+                                            child: Icon(Icons.help_outline),
+                                          ),
+                                        ),
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: 'group',
+                                            child: Text('Gruppenbasiert'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'global',
+                                            child: Text('Global optimiert'),
+                                          ),
+                                        ],
+                                        onChanged: (value) async {
+                                          if (value == null) return;
+                                          final previous = widget
+                                              .tournament
+                                              .directorSchedulingStrategy;
+                                          setState(() {
+                                            widget
+                                                    .tournament
+                                                    .directorSchedulingStrategy =
+                                                value;
+                                          });
+                                          try {
+                                            await _saveTournamentProgress(
+                                              propagateError: true,
+                                            );
+                                          } catch (_) {
+                                            if (!mounted) return;
+                                            setState(() {
+                                              widget
+                                                      .tournament
+                                                      .directorSchedulingStrategy =
+                                                  previous;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  if (widget.tournament.directorModeEnabled)
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text(
+                                        'Player Insights anzeigen',
+                                      ),
+                                      subtitle: const Text(
+                                        'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
+                                      ),
+                                      value:
+                                          widget.tournament.showPlayerInsights,
+                                      onChanged: _savePlayerInsightsSetting,
+                                    ),
+                                  if (widget.tournament.directorModeEnabled)
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Ton-Modus'),
+                                      subtitle: const Text(
+                                        'Spielt nach erfolgreich gespeicherten Leitungsergebnissen einen Signalton und liest die nächste Board-Empfehlung vor.',
+                                      ),
+                                      value: widget.tournament.soundModeEnabled,
+                                      onChanged: _saveSoundModeSetting,
+                                    ),
+                                  if (widget.tournament.directorModeEnabled)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Text(
+                                            'Boards: ${widget.tournament.boardCount}',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              OutlinedButton.icon(
+                                                onPressed:
+                                                    widget
+                                                            .tournament
+                                                            .boardCount <=
+                                                        1
+                                                    ? null
+                                                    : () => _handleDirectorSettings(
+                                                        () => _changeDirectorBoardCount(
+                                                          widget
+                                                                  .tournament
+                                                                  .boardCount -
+                                                              1,
+                                                        ),
+                                                      ),
+                                                icon: const Icon(Icons.remove),
+                                                label: const Text(
+                                                  'Board entfernen',
+                                                ),
+                                              ),
+                                              OutlinedButton.icon(
+                                                onPressed:
+                                                    widget
+                                                            .tournament
+                                                            .boardCount >=
+                                                        64
+                                                    ? null
+                                                    : () => _handleDirectorSettings(
+                                                        () => _changeDirectorBoardCount(
+                                                          widget
+                                                                  .tournament
+                                                                  .boardCount +
+                                                              1,
+                                                        ),
+                                                      ),
+                                                icon: const Icon(Icons.add),
+                                                label: const Text(
+                                                  'Board hinzufügen',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          ExpansionTile(
+                                            key: const ValueKey(
+                                              'advanced-board-settings',
+                                            ),
+                                            leading: const Icon(
+                                              Icons.tune_outlined,
+                                            ),
+                                            title: const Text(
+                                              'Erweiterte Board Einstellungen',
+                                            ),
+                                            subtitle: const Text(
+                                              'Namen und optionale Live-Board-URLs',
+                                            ),
+                                            children: [
+                                              DirectorBoardSettingsEditor(
+                                                tournament: widget.tournament,
+                                                onSave: (board, name, liveUrl) =>
+                                                    _handleDirectorSettings(
+                                                      () =>
+                                                          _saveDirectorBoardSettings(
+                                                            board,
+                                                            name,
+                                                            liveUrl,
+                                                          ),
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (widget
+                                                  .tournament
+                                                  .directorSchedulingStrategy ==
+                                              'group')
+                                            ExpansionTile(
+                                              key: const ValueKey(
+                                                'group-board-assignments',
+                                              ),
+                                              leading: const Icon(
+                                                Icons.grid_view_outlined,
+                                              ),
+                                              title: const Text(
+                                                'Board Zuweisung',
+                                              ),
+                                              subtitle: const Text(
+                                                'Boards für einzelne Gruppen festlegen',
+                                              ),
+                                              children: [
+                                                for (
+                                                  var stageIndex = 0;
+                                                  stageIndex <
+                                                      widget
+                                                          .tournament
+                                                          .runStages
+                                                          .length;
+                                                  stageIndex++
+                                                )
+                                                  if (widget
+                                                          .tournament
+                                                          .runStages[stageIndex]
+                                                      case final GroupTournamentRunStage
+                                                          stage)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            bottom: 12,
+                                                          ),
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .stretch,
+                                                        children: [
+                                                          const Divider(
+                                                            height: 24,
+                                                          ),
+                                                          Text(
+                                                            stage.name,
+                                                            style:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
+                                                                    .titleSmall,
+                                                          ),
+                                                          for (final group
+                                                              in stage.groups)
+                                                            Builder(
+                                                              builder: (context) {
+                                                                final key =
+                                                                    GroupBoardAssignment.keyFor(
+                                                                      stageIndex,
+                                                                      group
+                                                                          .name,
+                                                                    );
+                                                                final defaults = GroupBoardAssignment.defaults(
+                                                                  groupNames: stage
+                                                                      .groups
+                                                                      .map(
+                                                                        (
+                                                                          item,
+                                                                        ) => GroupBoardAssignment.keyFor(
+                                                                          stageIndex,
+                                                                          item.name,
+                                                                        ),
+                                                                      )
+                                                                      .toList(),
+                                                                  boardCount: widget
+                                                                      .tournament
+                                                                      .boardCount,
+                                                                );
+                                                                final selected =
+                                                                    (widget.tournament.directorGroupBoardAssignments[key] ??
+                                                                            defaults[key] ??
+                                                                            const <
+                                                                              int
+                                                                            >{})
+                                                                        .toSet();
+                                                                return Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        vertical:
+                                                                            6,
+                                                                      ),
+                                                                  child: Column(
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment
+                                                                            .start,
+                                                                    children: [
+                                                                      Text(
+                                                                        '${group.name} wird gespielt auf Board:',
+                                                                      ),
+                                                                      Wrap(
+                                                                        spacing:
+                                                                            4,
+                                                                        runSpacing:
+                                                                            2,
+                                                                        children: [
+                                                                          for (
+                                                                            var board =
+                                                                                1;
+                                                                            board <=
+                                                                                widget.tournament.boardCount;
+                                                                            board++
+                                                                          )
+                                                                            FilterChip(
+                                                                              materialTapTargetSize: MaterialTapTargetSize.padded,
+                                                                              label: Text(
+                                                                                widget.tournament.boardDisplayName(
+                                                                                  board,
+                                                                                ),
+                                                                              ),
+                                                                              selected: selected.contains(
+                                                                                board,
+                                                                              ),
+                                                                              onSelected:
+                                                                                  (
+                                                                                    value,
+                                                                                  ) => _handleDirectorSettings(
+                                                                                    () => _setDirectorGroupBoard(
+                                                                                      stageIndex,
+                                                                                      group.name,
+                                                                                      board,
+                                                                                      value,
+                                                                                    ),
+                                                                                  ),
+                                                                            ),
+                                                                        ],
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                );
+                                                              },
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                              ],
+                                            ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -3659,8 +5241,214 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             ),
                           ),
                           const SizedBox(height: 12),
+                          if (isViewingActiveStage &&
+                              activeStage is KnockoutTournamentRunStage &&
+                              activeStage.isKratzer)
+                            Card(
+                              child: ExpansionTile(
+                                key: const ValueKey(
+                                  'kratzer-handicap-settings',
+                                ),
+                                leading: const Icon(Icons.rule_folder_outlined),
+                                title: const Text('Sonderregel Einstellungen'),
+                                subtitle: const Text(
+                                  'Handicaps verwalten und Spielern zuweisen',
+                                ),
+                                childrenPadding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  16,
+                                ),
+                                children: [
+                                  SwitchListTile(
+                                    key: const ValueKey(
+                                      'kratzer-handicaps-enabled',
+                                    ),
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('Handicaps aktivieren'),
+                                    value: activeStage.kratzerHandicapsEnabled,
+                                    onChanged: _savingKratzerHandicapSettings
+                                        ? null
+                                        : (enabled) =>
+                                              _saveKratzerHandicapSettings(
+                                                runStage: activeStage,
+                                                enabled: enabled,
+                                                handicaps: activeStage
+                                                    .kratzerHandicaps,
+                                                assignments: activeStage
+                                                    .kratzerHandicapAssignments,
+                                              ),
+                                  ),
+                                  if (activeStage.kratzerHandicapsEnabled) ...[
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        'Handicaps verwalten',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleSmall,
+                                      ),
+                                    ),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: OutlinedButton.icon(
+                                        onPressed:
+                                            _savingKratzerHandicapSettings
+                                            ? null
+                                            : () => _addKratzerHandicap(
+                                                activeStage,
+                                              ),
+                                        icon: const Icon(Icons.add),
+                                        label: const Text(
+                                          'Handicap hinzufügen',
+                                        ),
+                                      ),
+                                    ),
+                                    if (activeStage.kratzerHandicaps.isEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 8,
+                                        ),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Füge zuerst Handicaps hinzu, zum Beispiel „Wirf mit der linken Hand“. ',
+                                          ),
+                                        ),
+                                      ),
+                                    for (final handicap
+                                        in activeStage.kratzerHandicaps)
+                                      ListTile(
+                                        key: ValueKey(
+                                          'kratzer-handicap-$handicap',
+                                        ),
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(handicap),
+                                        trailing: IconButton(
+                                          tooltip: 'Handicap entfernen',
+                                          onPressed:
+                                              _savingKratzerHandicapSettings
+                                              ? null
+                                              : () {
+                                                  final handicaps = activeStage
+                                                      .kratzerHandicaps
+                                                      .where(
+                                                        (item) =>
+                                                            item != handicap,
+                                                      )
+                                                      .toList();
+                                                  final assignments =
+                                                      Map<int, String>.from(
+                                                        activeStage
+                                                            .kratzerHandicapAssignments,
+                                                      )..removeWhere(
+                                                        (_, assigned) =>
+                                                            assigned ==
+                                                            handicap,
+                                                      );
+                                                  _saveKratzerHandicapSettings(
+                                                    runStage: activeStage,
+                                                    enabled: true,
+                                                    handicaps: handicaps,
+                                                    assignments: assignments,
+                                                  );
+                                                },
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                          ),
+                                        ),
+                                      ),
+                                    if (activeStage
+                                        .kratzerHandicaps
+                                        .isNotEmpty) ...[
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          'Handicaps zuweisen',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleSmall,
+                                        ),
+                                      ),
+                                      for (
+                                        var playerIndex = 0;
+                                        playerIndex <
+                                            kratzerParticipants.length;
+                                        playerIndex++
+                                      )
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 12,
+                                          ),
+                                          child: DropdownButtonFormField<String>(
+                                            key: ValueKey(
+                                              'kratzer-handicap-assignment-$playerIndex',
+                                            ),
+                                            initialValue:
+                                                activeStage.kratzerHandicaps
+                                                    .contains(
+                                                      activeStage
+                                                          .kratzerHandicapAssignments[playerIndex],
+                                                    )
+                                                ? activeStage
+                                                      .kratzerHandicapAssignments[playerIndex]!
+                                                : '',
+                                            isExpanded: true,
+                                            decoration: InputDecoration(
+                                              labelText:
+                                                  'Handicap für ${kratzerParticipants[playerIndex].name}',
+                                            ),
+                                            items: [
+                                              const DropdownMenuItem(
+                                                value: '',
+                                                child: Text('Kein Handicap'),
+                                              ),
+                                              for (final handicap
+                                                  in activeStage
+                                                      .kratzerHandicaps)
+                                                DropdownMenuItem(
+                                                  value: handicap,
+                                                  child: Text(handicap),
+                                                ),
+                                            ],
+                                            onChanged:
+                                                _savingKratzerHandicapSettings
+                                                ? null
+                                                : (handicap) {
+                                                    final assignments =
+                                                        Map<int, String>.from(
+                                                          activeStage
+                                                              .kratzerHandicapAssignments,
+                                                        );
+                                                    if (handicap == null ||
+                                                        handicap.isEmpty) {
+                                                      assignments.remove(
+                                                        playerIndex,
+                                                      );
+                                                    } else {
+                                                      assignments[playerIndex] =
+                                                          handicap;
+                                                    }
+                                                    _saveKratzerHandicapSettings(
+                                                      runStage: activeStage,
+                                                      enabled: true,
+                                                      handicaps: activeStage
+                                                          .kratzerHandicaps,
+                                                      assignments: assignments,
+                                                    );
+                                                  },
+                                          ),
+                                        ),
+                                    ],
+                                  ],
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 12),
                           // 3. Gruppen verwalten
-                          if (activeStage is GroupTournamentRunStage)
+                          if (widget.tournament.leagueMatch == null &&
+                              activeStage is GroupTournamentRunStage)
                             Builder(
                               builder: (context) {
                                 final canEdit =
@@ -3701,7 +5489,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               },
                             ),
                           const SizedBox(height: 12),
-                          if (widget.tournament.leagueMatch == null)
+                          if (widget.tournament.leagueMatch == null &&
+                              !widget.tournament.isKratzerTournament)
                             Card(
                               child: ExpansionTile(
                                 initiallyExpanded: false,
@@ -3860,79 +5649,44 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                           if (widget.tournament.leagueMatch == null)
                             const SizedBox(height: 12),
                           // 4. Spieler verwalten
+                          ..._playerManagementSections(),
+                          if (widget.tournament.leagueMatch == null &&
+                              !widget.tournament.isKratzerTournament)
+                            const GoveeAmbiencePanel(),
+                          const SizedBox(height: 12),
                           Card(
                             child: ExpansionTile(
-                              leading: const Icon(Icons.people_alt_outlined),
-                              title: Text(
-                                'Spieler (${widget.tournament.players.length})',
+                              leading: const Icon(Icons.history),
+                              title: const Text('Turnierlog anzeigen'),
+                              subtitle: Text(
+                                '${widget.tournament.activityLog.length} Einträge',
                               ),
-                              subtitle: const Text(
-                                'Namen anpassen oder Spieler aus dem Turnier entfernen.',
-                              ),
-                              childrenPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              children: [
-                                for (final player in widget.tournament.players)
-                                  ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(player.name),
-                                    subtitle: Wrap(
-                                      spacing: 8,
-                                      runSpacing: 2,
-                                      children: [
-                                        if (PlayerWithdrawalService.policy(
-                                              widget.tournament,
-                                              player,
-                                            ) !=
-                                            null)
-                                          const Text(
-                                            'Ausgeschieden / Zurückgezogen',
-                                            style: TextStyle(color: Colors.red),
+                              children: widget.tournament.activityLog.isEmpty
+                                  ? const [
+                                      Padding(
+                                        padding: EdgeInsets.all(16),
+                                        child: Text(
+                                          'Für dieses Turnier gibt es noch keine Protokolleinträge.',
+                                        ),
+                                      ),
+                                    ]
+                                  : [
+                                      for (final entry
+                                          in widget
+                                              .tournament
+                                              .activityLog
+                                              .reversed)
+                                        ListTile(
+                                          dense: true,
+                                          title: Text(entry.message),
+                                          subtitle: Text(
+                                            '${MaterialLocalizations.of(context).formatMediumDate(entry.timestamp.toLocal())} · '
+                                            '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(entry.timestamp.toLocal()))}',
                                           ),
-                                        if (player.profileId != null)
-                                          const Text(
-                                            'Name aus Spielerkartei · Umbenennen gesperrt',
-                                          ),
-                                      ],
-                                    ),
-                                    trailing: Wrap(
-                                      spacing: 4,
-                                      children: [
-                                        if (player.profileId == null)
-                                          IconButton(
-                                            tooltip: 'Spieler umbenennen',
-                                            icon: const Icon(
-                                              Icons.edit_outlined,
-                                              size: 20,
-                                            ),
-                                            onPressed: () =>
-                                                _renamePlayer(player),
-                                          ),
-                                        if (widget.tournament.finishedAt ==
-                                                null &&
-                                            PlayerWithdrawalService.policy(
-                                                  widget.tournament,
-                                                  player,
-                                                ) ==
-                                                null)
-                                          IconButton(
-                                            tooltip: 'Spieler entfernen (Drop)',
-                                            icon: const Icon(
-                                              Icons.person_remove_outlined,
-                                              size: 20,
-                                              color: Colors.red,
-                                            ),
-                                            onPressed: () =>
-                                                _withdrawPlayer(player),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
+                                        ),
+                                    ],
                             ),
                           ),
-                          const GoveeAmbiencePanel(),
                         ],
                       )
                     else if (_stageViewMode == StageViewMode.players)
@@ -3985,21 +5739,41 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                     else ...[
                       // Modus "Ergebnisse"
                       StageResultsSplitView(
+                        key: ValueKey(
+                          'stage-results-${_requestedResultMatch?.hashCode ?? 'default'}',
+                        ),
                         stage: activeStage,
                         tournament: widget.tournament,
-                        onPreviewBracket: () => showDialog<void>(
-                          context: context,
-                          builder: (context) => Dialog.fullscreen(
-                            child: TournamentSecondScreenView(
-                              tournament: widget.tournament,
-                              isStandaloneWindow: true,
-                              showNextStagePreviewInitially: true,
-                              onClose: () => Navigator.of(context).pop(),
-                            ),
-                          ),
-                        ),
+                        focusMatch: _requestedResultMatch,
+                        initialFilter: _requestedResultMatch == null
+                            ? null
+                            : MatchCategoryFilter.finished,
+                        runningMatches: widget.tournament.directorModeEnabled
+                            ? const OrderOfPlayController()
+                                  .plan(widget.tournament, _activeStageIndex)
+                                  .running
+                                  .map((entry) => entry.match)
+                                  .toSet()
+                            : const <GroupMatch>{},
+                        onOpenMatch: _openPlayedMatch,
+                        onPreviewBracket:
+                            activeStage is KnockoutTournamentRunStage
+                            ? null
+                            : () => showDialog<void>(
+                                context: context,
+                                builder: (context) => Dialog.fullscreen(
+                                  child: TournamentSecondScreenView(
+                                    tournament: widget.tournament,
+                                    isStandaloneWindow: true,
+                                    showNextStagePreviewInitially: true,
+                                    onClose: () => Navigator.of(context).pop(),
+                                  ),
+                                ),
+                              ),
                         standingsFor: _standingsFor,
                         onEditResult: _editResult,
+                        onEditBracketResult: (match, onUpdated) =>
+                            _editResult(match, onLocalUpdate: onUpdated),
                         canEditResults: canEditResults,
                         qualifyingRank: _requiredRankForRunStage(
                           _viewStageIndex,
@@ -4042,8 +5816,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                   ],
                 ),
               ),
-              if (_stageViewMode == StageViewMode.dashboard ||
-                  _stageViewMode == StageViewMode.director) ...[
+              if (_stageViewMode == StageViewMode.dashboard) ...[
                 SliverToBoxAdapter(
                   child: StageFooter(
                     canCompleteStage: canCompleteStage,

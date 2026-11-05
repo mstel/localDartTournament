@@ -133,11 +133,7 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
 
     final patchedPlayers = [
       for (final p in updatedTournament.players)
-        TournamentPlayer(
-          profileId: nameToProfileId[p.name] ?? p.profileId,
-          name: p.name,
-          isGenerated: p.isGenerated,
-        ),
+        p.copyWith(profileId: nameToProfileId[p.name]),
     ];
 
     final finalJson = updatedTournament.toJson();

@@ -168,10 +168,24 @@ class ExpandedFormatPlanner {
             if (sample.totalMatches > 0 && hasScheduledStage) {
               minutes += parameters.boardIdleMinutes;
             }
+            final stage = stages[i];
+            final isRoundRobin =
+                stage.type == 'groups' &&
+                (stage.groupPlayTypes.isEmpty
+                    ? stage.groupPlayType == 'round_robin'
+                    : stage.groupPlayTypes.every(
+                        (playType) => playType == 'round_robin',
+                      ));
+            final baseMatchMinutes = isRoundRobin
+                ? planner.estimatedMatchMinutes(stage.gameFormat)
+                : planner.estimatedWorstCaseMatchMinutes(stage.gameFormat);
+            final matchMinutes = isRoundRobin
+                ? planner.estimatedMatchMinutes(formats[i])
+                : planner.estimatedWorstCaseMatchMinutes(formats[i]);
             minutes +=
                 (sample.minutes - sample.waitMinutes) /
-                    planner.estimatedMatchMinutes(stages[i].gameFormat) *
-                    planner.estimatedMatchMinutes(formats[i]) +
+                    baseMatchMinutes *
+                    matchMinutes +
                 sample.waitMinutes;
             hasScheduledStage = hasScheduledStage || sample.totalMatches > 0;
           }
@@ -266,6 +280,7 @@ class ExpandedFormatPlanner {
           request.maximumLives,
           prefix.isEmpty ? request.manualQualifiers : null,
         )) {
+          if (stage.type == 'kratzer' && prefix.isNotEmpty) continue;
           final mode = stage.type == 'groups'
               ? (stage.groupRoundRobinRepeats.isNotEmpty &&
                         stage.groupRoundRobinRepeats.first == 2)
@@ -321,7 +336,11 @@ class ExpandedFormatPlanner {
       frontier = next.take(48).map((e) => e.$1).toList();
     }
     final fitting = finalists.where((s) => !s.isClosestAlternative).toList();
-    final ranked = fitting.isEmpty ? finalists : fitting;
+    final ranked = request.considerBestWorstCase
+        ? fitting
+        : fitting.isEmpty
+        ? finalists
+        : fitting;
     ranked.sort((a, b) {
       if (request.targetMinutes != null) {
         final distance = (a.estimatedMinutes - request.targetMinutes!)
@@ -373,23 +392,25 @@ class ExpandedFormatPlanner {
                       : 3,
                 ]) {
         for (final target in targets) {
-          yield TournamentStage(
-            name: type == 'single_knockout'
-                ? 'Einfaches KO'
-                : type == 'double_knockout'
-                ? 'Doppel-KO'
-                : type == 'triple_knockout'
-                ? 'Triple-KO'
-                : 'Kratzer ($lives Leben)',
-            type: type,
-            knockoutParticipantCount: n,
-            knockoutBracketSize: bracket,
-            knockoutByeCount: bracket - n,
-            knockoutLives: lives,
-            finalEndsTournament: type != 'kratzer',
-            qualifiedParticipantCount: target,
-            gameFormat: const TournamentGameFormat(bestOfLegs: 1),
-          );
+          if (type != 'kratzer' || target == 1) {
+            yield TournamentStage(
+              name: type == 'single_knockout'
+                  ? 'Einfaches KO'
+                  : type == 'double_knockout'
+                  ? 'Doppel-KO'
+                  : type == 'triple_knockout'
+                  ? 'Triple-KO'
+                  : 'Kratzer ($lives Leben)',
+              type: type,
+              knockoutParticipantCount: n,
+              knockoutBracketSize: bracket,
+              knockoutByeCount: bracket - n,
+              knockoutLives: lives,
+              finalEndsTournament: true,
+              qualifiedParticipantCount: target,
+              gameFormat: const TournamentGameFormat(bestOfLegs: 1),
+            );
+          }
         }
       }
     }

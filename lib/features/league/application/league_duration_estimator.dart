@@ -37,8 +37,9 @@ class LeagueDurationEstimator {
     final slots = schedule.planned.isEmpty
         ? 0
         : schedule.planned.last.block + 1;
-    final matchMinutes = TournamentFormatPlanner(parameters: parameters)
-        .estimatedMatchMinutes(const TournamentGameFormat(bestOfLegs: 5));
+    final matchMinutes = TournamentFormatPlanner(
+      parameters: parameters,
+    ).estimatedMatchMinutes(league.gameFormat);
     return LeagueDurationEstimate(
       minutes: (slots * matchMinutes).ceil(),
       matches: league.games.length,

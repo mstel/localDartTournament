@@ -1,4 +1,5 @@
 import '../../../statistics/domain/best_performance.dart';
+import '../../domain/tournament_models.dart';
 
 class MatchResult {
   const MatchResult({
@@ -8,6 +9,8 @@ class MatchResult {
     this.homeSets,
     this.awaySets,
     this.bestPerformances = const [],
+    this.scratchedPlayer,
+    this.kratzerBonusLives = const [],
   });
 
   const MatchResult.annulled()
@@ -16,7 +19,9 @@ class MatchResult {
       awaySets = null,
       awayLegs = null,
       isAnnulled = true,
-      bestPerformances = const [];
+      bestPerformances = const [],
+      scratchedPlayer = null,
+      kratzerBonusLives = const [];
 
   const MatchResult.cleared()
     : homeLegs = null,
@@ -24,7 +29,19 @@ class MatchResult {
       awaySets = null,
       awayLegs = null,
       isAnnulled = false,
-      bestPerformances = const [];
+      bestPerformances = const [],
+      scratchedPlayer = null,
+      kratzerBonusLives = const [];
+
+  const MatchResult.kratzer(
+    this.scratchedPlayer, {
+    this.kratzerBonusLives = const [],
+  }) : homeLegs = null,
+       awayLegs = null,
+       homeSets = null,
+       awaySets = null,
+       isAnnulled = false,
+       bestPerformances = const [];
 
   final int? homeLegs;
   final int? awayLegs;
@@ -32,4 +49,6 @@ class MatchResult {
   final int? awaySets;
   final bool isAnnulled;
   final List<BestPerformance> bestPerformances;
+  final TournamentPlayer? scratchedPlayer;
+  final List<KratzerBonusLife> kratzerBonusLives;
 }

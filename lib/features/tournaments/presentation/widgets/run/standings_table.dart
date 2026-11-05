@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../domain/tournament_models.dart';
@@ -13,6 +15,7 @@ class StandingsTable extends StatefulWidget {
     required this.qualificationPlan,
     required this.tieBreakers,
     this.onPlayerTap,
+    this.compact = false,
   });
 
   final List<PlayerStanding> standings;
@@ -21,6 +24,7 @@ class StandingsTable extends StatefulWidget {
   final QualificationPlan? qualificationPlan;
   final List<String> tieBreakers;
   final ValueChanged<TournamentPlayer>? onPlayerTap;
+  final bool compact;
 
   @override
   State<StandingsTable> createState() => _StandingsTableState();
@@ -77,61 +81,94 @@ class _StandingsTableState extends State<StandingsTable> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = colorScheme.brightness == Brightness.dark;
     final sureColor = isDarkMode
         ? const Color(0xFF144D34)
         : const Color(0xFF0B6B45);
     final possibleColor = isDarkMode
         ? const Color(0xFF163828)
         : const Color(0xFFD6F5E3);
-    final bestOfColor = isDarkMode
-        ? const Color(0xFF3B3216)
-        : const Color(0xFFFFF1C2);
+    final bestOfColor = colorScheme.primaryContainer;
 
-    return Scrollbar(
-      controller: _horizontalController,
-      thumbVisibility: true,
-      child: SingleChildScrollView(
-        controller: _horizontalController,
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columnSpacing: 16,
-          horizontalMargin: 12,
-          headingRowHeight: 36,
-          dataRowMinHeight: 40,
-          dataRowMaxHeight: 44,
-          columns: [
-            const DataColumn(label: Text('#')),
-            const DataColumn(label: Text('Spieler')),
-            const DataColumn(label: Text('Sp')),
-            const DataColumn(label: Text('S')),
-            const DataColumn(label: Text('U')),
-            const DataColumn(label: Text('N')),
-            const DataColumn(label: Text('Legs')),
-            const DataColumn(label: Text('Diff')),
-            const DataColumn(label: Text('Pkt')),
-            if (widget.group.playType == 'swiss')
-              const DataColumn(
-                label: Tooltip(
-                  message:
-                      'Summe der Punkte der gespielten Gegner; Freilose zählen nicht mit.',
-                  child: Text('Buchholz'),
-                ),
-              ),
-          ],
-          rows: [
-            for (var index = 0; index < widget.standings.length; index++)
-              _buildRow(
-                context: context,
-                index: index,
-                isDarkMode: isDarkMode,
-                sureColor: sureColor,
-                possibleColor: possibleColor,
-                bestOfColor: bestOfColor,
-              ),
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columnCount = 9 + (widget.group.playType == 'swiss' ? 1 : 0);
+        final baseSpacing = widget.compact ? 8.0 : 16.0;
+        final widestName = widget.standings.fold<double>(
+          72,
+          (width, standing) => math.max(
+            width,
+            (widget.compact
+                        ? standing.player.shortDisplayName
+                        : standing.player.name)
+                    .length *
+                (widget.compact ? 7 : 8),
+          ),
+        );
+        final minimumContentWidth =
+            (widget.compact ? 12 : 24) +
+            widestName +
+            (columnCount - 2) * (widget.compact ? 30 : 38);
+        final columnSpacing = math.max(
+          baseSpacing,
+          constraints.hasBoundedWidth
+              ? (constraints.maxWidth - minimumContentWidth) / (columnCount - 1)
+              : baseSpacing,
+        );
+        return Scrollbar(
+          controller: _horizontalController,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalController,
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: columnSpacing,
+              horizontalMargin: widget.compact ? 6 : 12,
+              headingRowHeight: widget.compact ? 32 : 36,
+              dataRowMinHeight: widget.compact ? 34 : 40,
+              dataRowMaxHeight: widget.compact ? 38 : 44,
+              headingTextStyle: widget.compact
+                  ? Theme.of(context).textTheme.labelSmall
+                  : null,
+              dataTextStyle: widget.compact
+                  ? Theme.of(context).textTheme.bodySmall
+                  : null,
+              columns: [
+                const DataColumn(numeric: true, label: Text('#')),
+                const DataColumn(label: Text('Spieler')),
+                const DataColumn(numeric: true, label: Text('Sp')),
+                const DataColumn(numeric: true, label: Text('S')),
+                const DataColumn(numeric: true, label: Text('U')),
+                const DataColumn(numeric: true, label: Text('N')),
+                const DataColumn(numeric: true, label: Text('Legs')),
+                const DataColumn(numeric: true, label: Text('Diff')),
+                const DataColumn(numeric: true, label: Text('Pkt')),
+                if (widget.group.playType == 'swiss')
+                  const DataColumn(
+                    numeric: true,
+                    label: Tooltip(
+                      message:
+                          'Summe der Punkte der gespielten Gegner; Freilose zählen nicht mit.',
+                      child: Text('Buchholz'),
+                    ),
+                  ),
+              ],
+              rows: [
+                for (var index = 0; index < widget.standings.length; index++)
+                  _buildRow(
+                    context: context,
+                    index: index,
+                    isDarkMode: isDarkMode,
+                    sureColor: sureColor,
+                    possibleColor: possibleColor,
+                    bestOfColor: bestOfColor,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -166,9 +203,7 @@ class _StandingsTableState extends State<StandingsTable> {
       fontWeight = FontWeight.w500;
     } else if (isBestOf) {
       rowColor = bestOfColor;
-      cellTextColor = isDarkMode
-          ? const Color(0xFFFDE68A)
-          : const Color(0xFF78350F);
+      cellTextColor = Theme.of(context).colorScheme.onPrimaryContainer;
       fontWeight = FontWeight.w500;
     }
 
@@ -184,7 +219,9 @@ class _StandingsTableState extends State<StandingsTable> {
         ),
         DataCell(
           _StandingText(
-            standing.player.name,
+            widget.compact
+                ? standing.player.shortDisplayName
+                : standing.player.name,
             textColor: cellTextColor,
             fontWeight: fontWeight,
           ),

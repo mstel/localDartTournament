@@ -30,7 +30,7 @@ class OrderOfPlayController {
                 match,
                 index,
                 '${stage.name} · ${group.name} · ${stageMatchName(stage, match)}',
-                groupKey: tournamentGroupBoardKey(index, group.name),
+                tournamentGroupBoardKey(index, group.name),
               ),
             );
           }
@@ -101,8 +101,20 @@ class OrderOfPlayController {
       running: running,
       finished: finished,
       boardCount: tournament.boardCount,
-      blockedBoards: tournament.blockedBoards,
+      blockedBoards: tournament.directorModeEnabled
+          ? tournament.blockedBoards
+          : const {},
       preferredBoardsByGroup: tournament.groupBoardAssignments,
+      strategy: tournament.directorModeEnabled
+          ? tournament.directorSchedulingStrategy
+          : 'group',
+      assignGroupsToBoards:
+          tournament.directorModeEnabled &&
+          tournament.directorSchedulingStrategy == 'group',
+      groupBoardAssignments: {
+        for (final entry in tournament.directorGroupBoardAssignments.entries)
+          entry.key: entry.value.toSet(),
+      },
     );
     return BoardSchedule(planned, running, finished, waiting);
   }
@@ -122,28 +134,46 @@ class OrderOfPlayController {
     final occupied = {
       for (final entry in schedule.running) entry.match.boardNumber,
     };
-    final availableBoards = [
-      for (var b = 1; b <= tournament.boardCount; b++)
-        if (!occupied.contains(b) && !tournament.blockedBoards.contains(b)) b,
-    ];
-    PlayEntry? entry;
     for (final assignment in schedule.planned) {
       final candidate = assignment.entry;
       if (candidate.players.any(identities.contains) &&
-          !candidate.players.any(busy.contains)) {
-        entry = candidate;
-        break;
+          !candidate.players.any(busy.contains) &&
+          !occupied.contains(assignment.board) &&
+          !tournament.blockedBoards.contains(assignment.board)) {
+        return assignment;
       }
     }
-    if (entry == null) return null;
-    final preferred = entry.groupKey == null
-        ? const <int>[]
-        : tournament.groupBoardAssignments[entry.groupKey] ?? const <int>[];
-    final board =
-        availableBoards.where(preferred.contains).firstOrNull ??
-        availableBoards.firstOrNull;
-    if (board == null) return null;
-    return BoardAssignment(entry, 0, board);
+    return null;
+  }
+
+  BoardAssignment? suggestForBoard(
+    CreatedTournament tournament,
+    int stage,
+    int board,
+  ) {
+    if (board < 1 || board > tournament.boardCount) return null;
+    if (tournament.blockedBoards.contains(board)) return null;
+    final schedule = plan(tournament, stage);
+    if (schedule.running.any((entry) => entry.match.boardNumber == board)) {
+      return null;
+    }
+
+    final busy = {for (final entry in schedule.running) ...entry.players};
+    for (final assignment in schedule.planned) {
+      final entry = assignment.entry;
+      if (assignment.board != board || entry.players.any(busy.contains)) {
+        continue;
+      }
+      if (schedule.running.any(
+        (runningEntry) =>
+            runningEntry.match.boardNumber == board ||
+            runningEntry.players.any(entry.players.contains),
+      )) {
+        continue;
+      }
+      return BoardAssignment(entry, assignment.block, board);
+    }
+    return null;
   }
 
   bool start(
@@ -174,6 +204,53 @@ class OrderOfPlayController {
     match.startedAt = DateTime.now();
     match.startedPlayers = entry.playerSignature;
     match.finishedAt = null;
+    return true;
+  }
+
+  bool resetRunningMatch(
+    CreatedTournament tournament,
+    int stage,
+    GroupMatch match,
+  ) {
+    if (match.hasResult ||
+        !plan(tournament, stage).running.any((entry) => entry.match == match)) {
+      return false;
+    }
+    match
+      ..boardNumber = null
+      ..startedAt = null
+      ..startedPlayers = null
+      ..finishedAt = null
+      ..homeLegs = null
+      ..awayLegs = null
+      ..homeSets = null
+      ..awaySets = null
+      ..bestPerformances = [];
+    return true;
+  }
+
+  bool moveRunningMatch(
+    CreatedTournament tournament,
+    int stage,
+    GroupMatch match,
+    int board,
+  ) {
+    if (board < 1 ||
+        board > tournament.boardCount ||
+        tournament.blockedBoards.contains(board) ||
+        tournament.completedStageIndexes.contains(stage)) {
+      return false;
+    }
+    final running = plan(tournament, stage);
+    final matchIsRunning = running.running.any(
+      (entry) => identical(entry.match, match),
+    );
+    if (!matchIsRunning) return false;
+    if (match.boardNumber == board) return true;
+    if (running.running.any((entry) => entry.match.boardNumber == board)) {
+      return false;
+    }
+    match.boardNumber = board;
     return true;
   }
 

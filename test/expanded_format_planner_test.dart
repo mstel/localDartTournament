@@ -38,7 +38,8 @@ void main() {
         expect(result.minimumMatchesPerPlayer, greaterThanOrEqualTo(2));
         expect(result.configurations.length, lessThanOrEqualTo(4));
         for (final stage in result.configurations) {
-          if (stage.type != 'groups' || !['round_robin', 'swiss'].contains(stage.groupPlayType)) {
+          if (stage.type != 'groups' ||
+              !['round_robin', 'swiss'].contains(stage.groupPlayType)) {
             expect(stage.gameFormat.allowsDraws, isFalse);
           }
         }
@@ -100,6 +101,100 @@ void main() {
         expect(result.estimatedMinutes, estimate.minutes);
       }
     },
+  );
+  test('Kratzer is never recommended as a follow-up stage', () async {
+    final results = await ExpandedFormatPlanner(
+      parameters: parameters,
+    ).suggest(request(stages: 3), allResults: true);
+
+    expect(results, isNotEmpty);
+    for (final suggestion in results) {
+      expect(
+        suggestion.configurations
+            .skip(1)
+            .any((stage) => stage.type == 'kratzer'),
+        isFalse,
+      );
+    }
+  });
+  test('Swiss recommendations use the synchronous-round worst case', () async {
+    final swissParameters = TournamentPlanningParameters.fromValues({
+      PlanningParameter.maximumSuggestions: 64,
+      PlanningParameter.minutes501DoubleOut: 10,
+      PlanningParameter.boardIdleMinutes: 4,
+      PlanningParameter.swissRoundWaitMinutes: 0,
+    });
+    final results = await ExpandedFormatPlanner(parameters: swissParameters)
+        .suggest(
+          const TournamentPlanningRequest(
+            players: 10,
+            boards: 4,
+            minimumMatchesPerPlayer: 1,
+            minimumMinutes: 0,
+            maximumMinutes: 1000,
+            targetMinutes: 1,
+            x01Selection: '501',
+            checkoutType: 'double_out',
+            maximumGroups: 1,
+            maximumStages: 1,
+            requireGroupPhase: true,
+            enabledModes: {'groups:swiss'},
+            bestOfLegs: 3,
+            lockLegsFormat: true,
+          ),
+        );
+
+    expect(results, hasLength(1));
+    final swiss = results.single;
+    expect(swiss.configurations.single.groupPlayType, 'swiss');
+    expect(swiss.estimatedMinutes, 284);
+    expect(
+      const ConfigurationDurationEstimator()
+          .preview(swiss.configurations, 4, swissParameters)!
+          .minutes,
+      swiss.estimatedMinutes,
+    );
+  });
+
+  test(
+    'worst-case duration filtering omits out-of-range closest alternatives',
+    () async {
+      TournamentPlanningRequest request({
+        required bool considerBestWorstCase,
+      }) => TournamentPlanningRequest(
+        players: 12,
+        boards: 4,
+        minimumMatchesPerPlayer: 0,
+        minimumMinutes: 120,
+        maximumMinutes: 180,
+        x01Selection: '501',
+        checkoutType: 'double_out',
+        maximumGroups: 2,
+        maximumStages: 1,
+        maximumLives: 5,
+        considerBestWorstCase: considerBestWorstCase,
+      );
+      final planner = ExpandedFormatPlanner(parameters: parameters);
+      final closestAlternatives = await planner.suggest(
+        request(considerBestWorstCase: false),
+        allResults: true,
+      );
+      expect(closestAlternatives, isNotEmpty);
+      expect(
+        closestAlternatives.any(
+          (result) => result.durationSpan.maximumMinutes > 180,
+        ),
+        isTrue,
+      );
+
+      final results = await planner.suggest(
+        request(considerBestWorstCase: true),
+        allResults: true,
+      );
+
+      expect(results, isEmpty);
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
   );
   test(
     'multi-stage group requirement, qualification and distance progression',
@@ -163,7 +258,13 @@ void main() {
               .qualifiers(run)
               .take(stage.qualifiedParticipantCount!)
               .toList();
-          expect(players.length, stage.qualifiedParticipantCount);
+          expect(
+            players.length,
+            stage.qualifiedParticipantCount,
+            reason:
+                'Stage ${stage.toJson()} produced ${players.length} '
+                'qualifiers from ${runtime.matches(run).length} matches.',
+          );
         }
       }
     },
@@ -192,7 +293,9 @@ void main() {
       );
       expect(results, isNotEmpty);
       final top6Plan = results.firstWhere(
-        (s) => s.configurations.length == 2 && s.configurations.first.type == 'groups',
+        (s) =>
+            s.configurations.length == 2 &&
+            s.configurations.first.type == 'groups',
       );
       final groupStage = top6Plan.configurations.first;
       final koStage = top6Plan.configurations.last;
@@ -200,7 +303,10 @@ void main() {
       expect(groupStage.qualifiedParticipantCount, 6);
       expect(koStage.knockoutParticipantCount, 6);
       expect(koStage.knockoutBracketSize, 8);
-      expect(koStage.knockoutByeCount, 2); // 2 group winners get byes into semifinals!
+      expect(
+        koStage.knockoutByeCount,
+        2,
+      ); // 2 group winners get byes into semifinals!
     },
   );
 

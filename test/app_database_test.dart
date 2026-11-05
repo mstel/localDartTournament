@@ -5,9 +5,153 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
+import 'package:dart_tournament_manager/shared/persistence/storage_access.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'saving unchanged achievement progress does not mark local data dirty',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'dart_achievement_progress_revision_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final player = await database.createPlayerProfile(displayName: 'Spieler');
+      const ranking = LocalRanking(id: 'ranking', name: 'Rangliste');
+      await database.saveLocalRanking(ranking);
+      final progress = [
+        {
+          'achievement_id': 'first_match',
+          'current_value': 1.0,
+          'target_value': 1.0,
+          'status': 'completed',
+          'unlocked_at': '2026-11-04T10:00:00.000Z',
+          'explanation': 'Erster Erfolg',
+          'is_final': 1,
+          'source_hash': 'source',
+        },
+      ];
+
+      final beforeInsert = StorageAccess.localDataRevision.value;
+      await database.saveRankingAchievementProgress(
+        rankingId: ranking.id,
+        playerProfileId: player.id,
+        progress: progress,
+      );
+      final afterInsert = StorageAccess.localDataRevision.value;
+      expect(afterInsert, beforeInsert + 1);
+
+      await database.saveRankingAchievementProgress(
+        rankingId: ranking.id,
+        playerProfileId: player.id,
+        progress: progress,
+      );
+      expect(StorageAccess.localDataRevision.value, afterInsert);
+    },
+  );
+
+  test(
+    'monthly performance is loaded and updated by player and month',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'dart_player_monthly_performance_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final player = await database.createPlayerProfile(
+        displayName: 'Monatsspieler',
+      );
+      final entry = PlayerMonthlyPerformance(
+        playerId: player.id,
+        year: 2026,
+        month: 5,
+        weightedLegs: 18,
+        scoring: 57.4,
+        average: 62.1,
+        checkoutRate: 31.5,
+      );
+
+      await database.savePlayerMonthlyPerformance(entry);
+      var entries = await database.loadPlayerMonthlyPerformance(
+        player.id,
+        year: 2026,
+      );
+      expect(entries, hasLength(1));
+      expect(entries.single.periodKey, entry.periodKey);
+      expect(entries.single.weightedLegs, entry.weightedLegs);
+      expect(entries.single.scoring, entry.scoring);
+      expect(entries.single.average, entry.average);
+      expect(entries.single.checkoutRate, entry.checkoutRate);
+
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: player.id,
+          year: 2026,
+          month: 5,
+          weightedLegs: 24,
+          scoring: null,
+          average: 65,
+          checkoutRate: 35,
+        ),
+      );
+      entries = await database.loadPlayerMonthlyPerformance(player.id);
+      expect(entries, hasLength(1));
+      expect(entries.single.weightedLegs, 24);
+      expect(entries.single.scoring, isNull);
+      expect(entries.single.average, 65);
+    },
+  );
+
+  test(
+    'monthly performance can be loaded for multiple players and a year',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'dart_player_monthly_performance_batch_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final firstPlayer = await database.createPlayerProfile(
+        displayName: 'Spieler Eins',
+      );
+      final secondPlayer = await database.createPlayerProfile(
+        displayName: 'Spieler Zwei',
+      );
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: firstPlayer.id,
+          year: 2026,
+          month: 3,
+          weightedLegs: 10,
+          average: 88,
+        ),
+      );
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: secondPlayer.id,
+          year: 2025,
+          month: 8,
+          weightedLegs: 12,
+          average: 92,
+        ),
+      );
+
+      final currentYear = await database.loadPlayerMonthlyPerformanceForPlayers(
+        {firstPlayer.id, secondPlayer.id},
+        year: 2026,
+      );
+      final allYears = await database.loadPlayerMonthlyPerformanceForPlayers({
+        firstPlayer.id,
+        secondPlayer.id,
+      });
+
+      expect(currentYear, hasLength(1));
+      expect(currentYear.single.playerId, firstPlayer.id);
+      expect(allYears, hasLength(2));
+    },
+  );
+
   test('starts with an empty player catalog', () async {
     final directory = await Directory.systemTemp.createTemp(
       'dart_tournament_manager_database_test_',
@@ -214,17 +358,15 @@ void main() {
     expect(rankings.map((ranking) => ranking.customOrder), [0, 1]);
   });
 
-  test(
-    'adds surname column to schema 10 without changing player data',
-    () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'dart_player_surname_migration_test_',
-      );
-      addTearDown(() => directory.delete(recursive: true));
+  test('adds surname column to schema 10 without changing player data', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'dart_player_surname_migration_test_',
+    );
+    addTearDown(() => directory.delete(recursive: true));
 
-      final file = File('${directory.path}/app_database.sqlite');
-      final oldDatabase = sqlite3.open(file.path);
-      oldDatabase.execute('''
+    final file = File('${directory.path}/app_database.sqlite');
+    final oldDatabase = sqlite3.open(file.path);
+    oldDatabase.execute('''
       CREATE TABLE player_profiles (
         id TEXT PRIMARY KEY,
         display_name TEXT NOT NULL,
@@ -235,37 +377,44 @@ void main() {
         is_active INTEGER NOT NULL DEFAULT 1
       )
     ''');
-      oldDatabase.execute(
-        "INSERT INTO player_profiles (id, display_name, created_at) "
-        "VALUES ('legacy', 'Max Mustermann', '2026-01-01T00:00:00.000')",
-      );
-      oldDatabase.execute('PRAGMA user_version = 10');
-      oldDatabase.close();
+    oldDatabase.execute(
+      "INSERT INTO player_profiles (id, display_name, created_at) "
+      "VALUES ('legacy', 'Max Mustermann', '2026-01-01T00:00:00.000')",
+    );
+    oldDatabase.execute('PRAGMA user_version = 10');
+    oldDatabase.close();
 
-      final profiles = await LocalAppDatabase(
-        baseDirectory: directory,
-      ).loadPlayerProfiles();
+    final profiles = await LocalAppDatabase(
+      baseDirectory: directory,
+    ).loadPlayerProfiles();
 
-      expect(profiles.single.displayName, 'Max Mustermann');
-      expect(profiles.single.lastName, isEmpty);
-      expect(
-        directory.listSync().whereType<File>().any(
-          (candidate) => candidate.path.contains('.v10.'),
-        ),
-        isTrue,
-      );
-      final migrated = sqlite3.open(file.path, mode: OpenMode.readOnly);
-      expect(migrated.select('PRAGMA user_version').single.values.single, 12);
-      expect(
-        migrated.select(
-          "SELECT name FROM sqlite_master WHERE type = 'table' "
-          "AND name = 'monthly_player_statistics'",
-        ),
-        hasLength(1),
-      );
-      migrated.close();
-    },
-  );
+    expect(profiles.single.displayName, 'Max Mustermann');
+    expect(profiles.single.lastName, isEmpty);
+    expect(
+      directory.listSync().whereType<File>().any(
+        (candidate) => candidate.path.contains('.v10.'),
+      ),
+      isTrue,
+    );
+    final migrated = sqlite3.open(file.path, mode: OpenMode.readOnly);
+    expect(
+      migrated.select('PRAGMA user_version').single.values.single,
+      LocalAppDatabase.schemaVersion,
+    );
+    expect(
+      migrated.select(
+        "SELECT name FROM sqlite_master WHERE name = 'monthly_player_statistics'",
+      ),
+      hasLength(1),
+    );
+    expect(
+      migrated.select(
+        "SELECT name FROM sqlite_master WHERE name = 'player_monthly_performance'",
+      ),
+      hasLength(1),
+    );
+    migrated.close();
+  });
 
   test('adds monthly player statistics to schema 11', () async {
     final directory = await Directory.systemTemp.createTemp(
@@ -297,7 +446,10 @@ void main() {
     final database = LocalAppDatabase(baseDirectory: directory);
     expect(await database.loadMonthlyPlayerPerformances({'player-1'}), isEmpty);
     final migrated = sqlite3.open(file.path, mode: OpenMode.readOnly);
-    expect(migrated.select('PRAGMA user_version').single.values.single, 12);
+    expect(
+      migrated.select('PRAGMA user_version').single.values.single,
+      LocalAppDatabase.schemaVersion,
+    );
     expect(
       migrated.select(
         "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -305,8 +457,87 @@ void main() {
       ),
       hasLength(1),
     );
+    expect(
+      migrated.select(
+        "SELECT name FROM sqlite_master WHERE type = 'table' "
+        "AND name = 'player_monthly_performance'",
+      ),
+      hasLength(1),
+    );
     migrated.close();
   });
+
+  test(
+    'schema 13 migration preserves prior monthly performance data',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'dart_monthly_statistics_schema_13_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final file = File('${directory.path}/app_database.sqlite');
+      final oldDatabase = sqlite3.open(file.path);
+      oldDatabase.execute('''
+      CREATE TABLE player_profiles (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        last_name TEXT NOT NULL DEFAULT '',
+        country TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        darts_setup_json TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1
+      );
+      CREATE TABLE player_monthly_performance (
+        player_profile_id TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL,
+        weighted_legs INTEGER NOT NULL,
+        scoring REAL,
+        average REAL,
+        checkout_rate REAL,
+        PRIMARY KEY(player_profile_id, year, month)
+      );
+      INSERT INTO player_profiles(id, display_name, created_at)
+        VALUES ('player-1', 'Testspieler', '2026-01-01T00:00:00.000');
+      INSERT INTO player_monthly_performance(
+        player_profile_id, year, month, weighted_legs, scoring, average
+      ) VALUES ('player-1', 2026, 1, 12, 42.5, 65.2);
+      PRAGMA user_version = 13;
+    ''');
+      oldDatabase.close();
+
+      final database = LocalAppDatabase(baseDirectory: directory);
+      expect(
+        await database.loadMonthlyPlayerPerformances({'player-1'}),
+        isEmpty,
+      );
+
+      final migrated = sqlite3.open(file.path, mode: OpenMode.readOnly);
+      expect(
+        migrated.select('PRAGMA user_version').single.values.single,
+        LocalAppDatabase.schemaVersion,
+      );
+      expect(
+        migrated
+            .select('''SELECT weighted_legs, scoring, average
+               FROM player_monthly_performance
+               WHERE player_profile_id = 'player-1' AND year = 2026 AND month = 1''')
+            .single
+            .values
+            .toList(),
+        [12, 42.5, 65.2],
+      );
+      expect(
+        migrated.select(
+          "SELECT name FROM sqlite_master WHERE type = 'table' "
+          "AND name = 'monthly_player_statistics'",
+        ),
+        hasLength(1),
+      );
+      migrated.close();
+    },
+  );
 
   test('rejects unknown old SQLite schema without changing its data', () async {
     final directory = await Directory.systemTemp.createTemp(

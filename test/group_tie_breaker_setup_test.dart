@@ -4,6 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('uses the requested new-tournament tie-breaker defaults', () {
+    expect(defaultGroupTieBreakers, [
+      'points',
+      'legDifference',
+      'legsFor',
+      'headToHead',
+    ]);
+  });
+
   for (final size in [
     const Size(360, 800),
     const Size(800, 600),
@@ -50,15 +59,10 @@ void main() {
         contains('Sieg = 3 Punkte, Unentschieden = 1 Punkt, Niederlage = 0'),
       );
       expect(messages[0], contains('nicht die Anzahl einzelner Legs'));
-      expect(messages[1], contains('Direkter Vergleich'));
-      expect(messages[1], contains('Matchpunkte aus den direkten Duellen'));
-      expect(messages[2], contains('Leg-Differenz'));
-      expect(
-        messages[2],
-        contains('gewonnenen Legs minus Summe der verlorenen Legs'),
-      );
-      expect(messages[2], contains('Die höhere Differenz gewinnt'));
-      expect(messages[3], contains('Gewonnene Legs'));
+      expect(messages[1], contains('Leg-Differenz'));
+      expect(messages[2], contains('Gewonnene Legs'));
+      expect(messages[3], contains('Direkter Vergleich'));
+      expect(messages[3], contains('Matchpunkte aus den direkten Duellen'));
       expect(find.text('Matchpunkte'), findsOneWidget);
       expect(
         tester.getSize(tooltips.first).shortestSide,

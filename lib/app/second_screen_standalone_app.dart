@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_theme.dart';
+import 'christmas_decorations.dart';
+import 'theme_controller.dart';
 import '../features/tournaments/data/tournament_storage.dart';
 import '../features/tournaments/domain/tournament_models.dart';
 import '../features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
+import '../shared/widgets/arrow_key_dropdown_navigation.dart';
 
 CreatedTournament? resolveSecondScreenTournament(
   List<CreatedTournament> tournaments, {
@@ -31,22 +34,47 @@ bool secondScreenTournamentChanged(
   CreatedTournament? latest,
 ) => current?.id != latest?.id || current?.updatedAt != latest?.updatedAt;
 
-class SecondScreenStandaloneApp extends StatelessWidget {
+class SecondScreenStandaloneApp extends StatefulWidget {
   const SecondScreenStandaloneApp({super.key, this.tournamentId});
 
   final String? tournamentId;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Dart Turnieranzeige (2. Bildschirm)',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
-      theme: buildDartTournamentTheme(),
-      darkTheme: buildDartTournamentDarkTheme(),
-      home: _SecondScreenStandalonePage(tournamentId: tournamentId),
-    );
+  State<SecondScreenStandaloneApp> createState() =>
+      _SecondScreenStandaloneAppState();
+}
+
+class _SecondScreenStandaloneAppState extends State<SecondScreenStandaloneApp> {
+  @override
+  void initState() {
+    super.initState();
+    AppThemeController.instance.load();
   }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<ThemeMode>(
+    valueListenable: AppThemeController.instance.themeModeNotifier,
+    builder: (context, themeMode, _) => ValueListenableBuilder<AppThemeStyle>(
+      valueListenable: AppThemeController.instance.themeStyleNotifier,
+      builder: (context, style, _) {
+        final christmas = style == AppThemeStyle.christmas;
+        return MaterialApp(
+          title: 'Dart Turnieranzeige (2. Bildschirm)',
+          debugShowCheckedModeBanner: false,
+          themeMode: themeMode,
+          theme: buildDartTournamentTheme(christmas: christmas),
+          darkTheme: buildDartTournamentDarkTheme(christmas: christmas),
+          builder: (context, child) {
+            final app = ArrowKeyDropdownNavigation(
+              child: child ?? const SizedBox.shrink(),
+            );
+            return christmas ? ChristmasDecorations(child: app) : app;
+          },
+          home: _SecondScreenStandalonePage(tournamentId: widget.tournamentId),
+        );
+      },
+    ),
+  );
 }
 
 class _SecondScreenStandalonePage extends StatefulWidget {
@@ -120,17 +148,18 @@ class _SecondScreenStandalonePageState
   @override
   Widget build(BuildContext context) {
     if (_loading && _tournament == null) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
+      final scheme = Theme.of(context).colorScheme;
+      return Scaffold(
+        backgroundColor: scheme.surface,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: Color(0xFF70E0BA)),
+              CircularProgressIndicator(color: scheme.tertiary),
               SizedBox(height: 16),
               Text(
                 'Lade 2. Bildschirmanzeige...',
-                style: TextStyle(color: Colors.white70, fontSize: 16),
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16),
               ),
             ],
           ),
@@ -141,13 +170,14 @@ class _SecondScreenStandalonePageState
     if (_tournament == null) {
       final requestedTournament =
           widget.tournamentId != null && widget.tournamentId!.isNotEmpty;
+      final scheme = Theme.of(context).colorScheme;
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: scheme.surface,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.tv_off, color: Colors.white38, size: 48),
+              Icon(Icons.tv_off, color: scheme.onSurfaceVariant, size: 48),
               const SizedBox(height: 16),
               Text(
                 _loadError != null
@@ -155,7 +185,7 @@ class _SecondScreenStandalonePageState
                     : requestedTournament
                     ? 'Das angeforderte Turnier wurde nicht gefunden.'
                     : 'Kein aktives Turnier gefunden.',
-                style: TextStyle(color: Colors.white, fontSize: 18),
+                style: TextStyle(color: scheme.onSurface, fontSize: 18),
               ),
               const SizedBox(height: 8),
               Text(
@@ -164,7 +194,7 @@ class _SecondScreenStandalonePageState
                     : requestedTournament
                     ? 'Bitte öffne die Anzeige erneut aus dem gewünschten Turnier.'
                     : 'Starte oder wähle ein Turnier am Hauptbildschirm.',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: scheme.onSurfaceVariant),
               ),
               if (_loadError != null)
                 Padding(
@@ -189,7 +219,7 @@ class _SecondScreenStandalonePageState
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Stack(
           fit: StackFit.expand,

@@ -127,6 +127,7 @@ class TournamentRankingChangesService {
           after.entries[index].id: index + 1,
       };
       for (final entry in after.history.entries) {
+        if (!after.entries.any((player) => player.id == entry.key)) continue;
         final items = entry.value
             .where((item) => item.tournamentId == tournament.id)
             .toList();

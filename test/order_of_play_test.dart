@@ -264,6 +264,28 @@ void main() {
       expect(CreatedTournament.fromJson(legacy).boardCount, 1);
     },
   );
+  test('resetting a running match frees its board without adding a result', () {
+    final tournament = fixture();
+    final match = controller.plan(tournament, 0).planned.first.entry.match;
+    expect(controller.start(tournament, 0, match, 1), isTrue);
+    match.homeLegs = 2;
+
+    expect(controller.resetRunningMatch(tournament, 0, match), isTrue);
+    expect(match.boardNumber, isNull);
+    expect(match.startedAt, isNull);
+    expect(match.startedPlayers, isNull);
+    expect(match.finishedAt, isNull);
+    expect(match.homeLegs, isNull);
+    expect(match.hasResult, isFalse);
+    expect(controller.plan(tournament, 0).running, isEmpty);
+    expect(
+      controller
+          .plan(tournament, 0)
+          .planned
+          .any((assignment) => assignment.entry.match == match),
+      isTrue,
+    );
+  });
   test('removing a result releases stale scheduling metadata', () {
     final match = GroupMatch(
       round: 1,

@@ -1,3 +1,308 @@
+# 2.5.0+72
+
+- Basiert auf dem stabilen Datenformat von 2.4.10+70: Turnierschema 38 und
+  lokale Datenbankversion 13 bleiben kompatibel; Monatsstatistiken werden als
+  Schema 14 ergänzt, ohne vorhandene Monatswerte zu überschreiben.
+- Importiert historische Monatsaggregate aus Excel getrennt von tatsächlichen
+  Einzelspielen; fehlende Checkout-Werte bleiben leer.
+- Verbessert Board-Zuweisung und Spielreihenfolge, Spieler-Seeding,
+  Zweitbildschirm-Anzeige und Challonge-Doppel-K.-o.-Konvertierung.
+
+# 2.4.10+70
+
+- Wartet bei Windows-Updates bis zu 120 Sekunden auf den Start des
+  Update-Hilfsprogramms statt nach 30 Sekunden abzubrechen.
+- Protokolliert Prozess-ID, Exitcode sowie PowerShell-Ausgaben, wenn das
+  Hilfsprogramm nicht startet oder vor dem Startmarker beendet wird.
+
+# 2.4.9+69
+
+- Behebt die Konvertierung abgeschlossener Challonge-Doppel-K.-o.-Turniere,
+  indem historische Begegnungen anhand ihrer Bracket-Runde und Lane
+  wiedergegeben werden, auch wenn die lokale Paarungsreihenfolge abweicht.
+- Vereinheitlicht Challonge-Modusangaben wie `round_robin` und `round robin`,
+  damit gemischte Schreibweisen keine widerspruechlichen Gruppenmodi ausloesen.
+
+# 2.4.8+68
+
+- Rekonstruiert Challonge-K.-o.-Brackets anhand der gespeicherten Seeds statt
+  der Reihenfolge, in der Challonge Spieldatensätze liefert. Dadurch bleiben
+  auch bei unsortierten historischen KO-Spielen die Weiterleitungen erhalten.
+- Verlängert auf Windows die Wartezeit auf die Startbestätigung des Update-
+  Hilfsprogramms von 10 auf 30 Sekunden, damit verzögerter PowerShell-Start
+  nicht vorschnell als fehlgeschlagen gilt.
+
+# 2.4.7+67
+
+- Ermöglicht den Austausch von Gruppeneinteilungen zwischen der
+  Turnier-Gruppenverwaltung und dem Auslosungsrad über ein gemeinsames
+  Textformat. Gruppenzahl, Gruppennamen, Spielernamen und Gruppengrößen bleiben
+  beim Import erhalten.
+- Validiert die vollständige Spieler- und Gruppenstruktur vor dem Anwenden;
+  bei Abweichungen bleibt die bestehende Einteilung unverändert.
+- Fragt bei Treffern im Spielerkatalog, ob ein Profil verwendet oder ein
+  lokaler Turnierspieler angelegt werden soll. Mehrdeutige Katalognamen können
+  gezielt zugeordnet werden.
+
+# 2.4.6+66
+
+- Ergänzt eine optionale Elo-Wertung für nicht zugewiesene lokale Spieler.
+  Gäste starten pro Turnier bei 1000 Elo; ihre Wertung bleibt auf das Turnier
+  begrenzt, während Ranglistenmitglieder ihren fortgeschriebenen Elo behalten.
+- Erlaubt die Konvertierung von Challonge-Turnieren mit nicht zugewiesenen
+  Teilnehmern. Diese werden als lokale Spieler übernommen und standardmäßig
+  nur bei aktivierter Gastwertung in die Elo-Berechnung einbezogen.
+
+# 2.4.5+65
+
+- Macht den manuellen Cloud-Upload verlässlich: Das Website-Datenmodell wird
+  vor dem Backup-Snapshot berechnet und mit demselben lokalen Datenstand
+  veröffentlicht. Unveränderte Achievement-Fortschritte lösen keinen
+  zusätzlichen lokalen Änderungsstatus mehr aus.
+- Markiert den Upload nur dann als ausstehend, wenn sich lokale Daten nach dem
+  tatsächlich hochgeladenen Snapshot geändert haben.
+- Ermöglicht, importierte Challonge-Turniere als abgeschlossene native
+  Turniere zu übernehmen und später erneut zu öffnen. Ergebnisse, Zeitstempel,
+  Bestleistungen und eindeutig zugeordnete Spielerprofile bleiben erhalten.
+- Macht den Windows-Updater robuster: Die App schließt sich erst nach einer
+  bestätigten Übernahme durch das Update-Hilfsprogramm. Start- und
+  Aktivierungsfehler werden mit einem auffindbaren Diagnoseprotokoll gemeldet.
+
+# 2.4.4+64
+
+- Stellt die Goldakzente des Standarddesigns wieder her und färbt nur die
+  Spieler-Kachel im Elo-Verlauf blau.
+- Ergänzt speicherbare und verwaltbare Handicaps für Kratzer-Turniere sowie
+  ein optionales Handicaps-Widget für den Zweitmonitor.
+- Passt Zweitmonitor und Turnierabschlussgrafik an das ausgewählte Farbschema
+  an und erweitert das Weihnachtsthema um kräftiges Tannengrün und Dekoration.
+- Macht Cloud-Abgleich und Upload-Status eindeutiger, meldet nicht gestartete
+  Vorgänge und erhält einen erfolgreichen Upload-Status, wenn spätere lokale
+  Änderungen noch ausstehen.
+
+# 2.4.2+62
+
+- Aktualisiert Achievement-Beschreibungen passend zu angepassten Zielwerten.
+- Fasst die vier gegenseitig ausschließenden Ranglisten-Achievements als
+  gemeinsamen Fortschritt von 0/1 bzw. 1/1 zusammen.
+- Ergänzt globale Tonmodus-Standards für vollständige Namen oder Vorname mit
+  Nachnamensinitial sowie eine optionale Spitznamen-Priorität.
+
+# 2.4.1+61
+
+- Führt konfigurierbare globale Insights-Standardwerte ein und fasst gleiche
+  Insight-Kategorien pro Partie mit den beteiligten Spielernamen zusammen.
+  Unstoppable ersetzt bei längeren Siegesserien Momentum und Hot Streak;
+  höchstens drei Kategorien werden als Badges gezeigt.
+- Sortiert die Achievement-Abschnitte in Spielerprofilen wie die Ranglisten.
+- Berücksichtigt manuell ergänzte Bestleistungen aus Challonge-Archiven
+  rückwirkend für Achievement-Fortschritte.
+- Ergänzt das Read Model um Achievement-Fortschritte je Rangliste und stellt
+  sie als eigenständige API-Ressource `achievements` bereit.
+
+# 2.4.0+60
+
+- Verbessert die Zeitvorschau für KO-Runden mit voller Spieldistanz und
+  berücksichtigt Boardwechsel konsistent bei Liga-, Freundschafts- und
+  Kratzer-Turnieren.
+- Beschränkt Achievements auf aktive Spielerkatalog-Profile, die der
+  jeweiligen Rangliste zugewiesen sind, und ranglistenabhängige Player Insights
+  auf Mitglieder der dem Turnier zugeordneten Ranglisten.
+- Ermöglicht ranglistenspezifische Achievement-Schwellwerte mit Formular zum
+  Anpassen und Wiederherstellen der Standardwerte.
+- Verbessert die Audioansage im Ton-Modus, inklusive flüssigerer
+  Boardnummern-Aussprache und Pause vor Alternativpartien.
+- Benennt den Achievement-Dialog für individuelle Zielwerte klarer und ergänzt
+  responsive Tests für die Oberfläche.
+
+# 2.3.9+59
+
+- Ergänzt Player Insights mit kompakten Badges, ausführlichen Tooltips und
+  optionaler Anzeige im Zweitmonitor.
+- Ergänzt den pro Turnier speicherbaren Ton-Modus: Nach erfolgreich erfassten
+  Leitungsergebnissen werden die nächste Board-Partie und eine verfügbare
+  Alternative lokal akustisch angekündigt.
+
+# 2.3.8+58
+
+- Ergänzt ranglistenspezifische Errungenschaften mit XP, Leveln,
+  Fortschrittsanzeige, Profil- und Spielervergleich sowie dauerhaften finalen
+  Ranglisten-Auszeichnungen.
+- Zeigt bei abgeschlossenen Turniermatches neu freigeschaltete Errungenschaften
+  mit dynamischen Erklärungen an; die Anzeige lässt sich je Turnier ausblenden.
+- Berücksichtigt Gruppen-KO-Runden und Platzierungsspiele in der Achievement-
+  Auswertung und erhält Gruppenspiele beim Wiederherstellen gespeicherter
+  Turniere.
+
+# 2.3.7+57
+
+- Korrigiert die Auswahl passender Spielpläne bei der Planung erweiterter
+  Turnierformate mit Best-/Worst-Case-Betrachtung.
+- Ermittelt Sieger und Platzierungen in Kratzer-Turnieren korrekt und zeigt
+  empfohlene Kratzer-Partien sowie die Zweitmonitor-Vorschau passend an.
+- Hält Kratzer-Partien aus Einzel- und Leg-Statistiken heraus, zählt sie aber
+  weiterhin als Matches.
+
+# 2.3.6+56
+
+- Ergänzt aktuelle Form aus den letzten 100 gewerteten Legs in den
+  Spielerstatistiken und im Website-API-Modell.
+- Erweitert Bestleistungen um Big Fish (170), 171+ und Bullseye-Finishes;
+  vorhandene 170+-Einträge werden als 171 übernommen.
+- Ergänzt die monatliche Vereinsentwicklung im Ranglisten-Jahresrückblick.
+- Unterstützt Ligaspiele und Freundschaftsspiele mit angepassten Formaten,
+  getrennten Mannschafts-Spielern und aktualisierter Dauerschätzung.
+- Zeigt Turniertyp und Sieger in der Turnierübersicht und protokolliert
+  Turnieraktivitäten mit Zeitstempeln. Das Turnierdatum ist bei Erstellung
+  und nachträglich festlegbar.
+- Erweitert den Kratzer-Modus um dynamische Mehrpersonen-Partien,
+  Spielerverteilung auf Boards, Startkratzer, Bonusleben und die
+  Leben-Übersicht im separaten Monitor.
+- Verbessert das Zweitmonitor-Layout mit viertelbreiten Widgets und einer
+  hinzufügbaren Vorschau der nächsten Etappe.
+- Ermöglicht die appweite Bedienung von Dropdownlisten mit den Pfeiltasten.
+
+# 2.3.5+55
+
+- Öffnet Tie-Breaker- und Hinweiseinstellungen zuverlässig als eigene Seiten
+  direkt aus „Werkzeuge & Verwaltung“.
+- Begrenzt den Spielervergleich bei ausgewähltem Monat auf Turniere aus genau
+  diesem Monat.
+- Ergänzt im Ranglisten-Widget die ELO-Veränderung und Rangplatzbewegung des
+  aktuellen Turniers sowie einen Umschalter für Teilnehmer oder alle Mitglieder.
+- Integriert angepasste Liga- und Freundschaftsspiele mit Spielformat,
+  Ergebniseingabe, Turnierleitung und Mannschaftsvergleich in die reguläre
+  Turnierlaufzeit.
+- Verbessert die Kratzer-Spielplanung für 3 bis 6 Personen je Board und
+  beschränkt Kratzer-Turniere auf eine Etappe.
+- Ergänzt im separaten Monitor ein hinzufügbares Leben-Übersicht-Widget für
+  Kratzer-Turniere.
+- Ermöglicht das appweite Weiterschalten in Dropdownlisten mit den
+  Pfeiltasten.
+- Ermöglicht viertelbreite Zweitmonitor-Widgets nebeneinander und entfernt
+  Ranglisten-Widgets, wenn keine passende Rangliste mehr ausgewählt ist.
+
+# 2.3.4+54
+
+- Korrigiert die aufsummierten gewerteten Legs im Spielerprofil sowie den
+  Gesamtfortschritt über Gruppen- und KO-Etappen.
+- Zeigt im Zweitmonitor nur ausgewählte ELO-Ranglisten und deren Spielerwerte;
+  verbessert außerdem das Platzieren halbbreiter Widgets per Drag-and-drop.
+- Entfernt die automatische Verliererauswahl im Kratzer-Modus und verbessert
+  die Verlaufsschätzung bis zum Turnierende.
+
+# 2.3.3+53
+
+- Entfernt im geladenen Zweitmonitor-Layout doppelte Widget-Überschriften und
+  zusätzliche Kartenhintergründe außerhalb des Layout-Editors.
+- Schützt das Standardlayout vor dem Löschen.
+
+# 2.3.2+52
+
+- Verschiebt gruppenbasierte Board-Zuweisungen in einen eigenen, standardmäßig
+  geschlossenen Bereich der erweiterten Board-Einstellungen.
+- Stapelt Widgets im Zweitmonitor unabhängig in linker und rechter Spalte und
+  übernimmt passende gespeicherte Layouts rückwärtskompatibel.
+- Korrigiert den MIME-Type der Website-Daten beim Supabase-Upload passend zur
+  privaten Bucket-Konfiguration und zeigt Storage-Fehler konkreter an.
+
+# 2.3.1+51
+
+- Ergänzt im Jahresrückblick nach Rangliste die höchsten Average-, Scoring-
+  und Checkout-Quotenwerte inklusive Spieler-Ranglisten und Grafikexport.
+- Korrigiert den Zweitmonitor-Umschalter auf genau zwei Ansichten und erhält
+  Uhr sowie Standardlayout beim unveränderten Öffnen und Anwenden des Editors.
+- Macht Widget-Zeilen im Zweitmonitor-Layout per Drag-and-drop gezielt
+  platzierbar und speichert die Zeilenumbrüche rückwärtskompatibel.
+
+# 2.3.0+50
+
+- Ergänzt im Zweitmonitor-Layout einen eigenen Editiermodus mit „Layout
+  anwenden“, halben Höhenstufen und scrollbaren Widget-Inhalten.
+- Kombiniert Tabellen und Siegprognose als zusätzliche Ansicht und verbessert
+  die Platzierung der Widgets im Standardlayout.
+- Stabilisiert Drag-and-drop mit stabilen Widget-IDs und sichtbarem
+  Einfügeindikator.
+- Ermöglicht das bestätigte Löschen gespeicherter Layouts und bewahrt
+  Layoutänderungen auch bei parallelen Turnierspeicherungen.
+
+# 2.2.0+44
+
+- Ergänzt den optionalen Turnierleiter-Modus mit Board-Sperren, Vorschlägen,
+  manueller Partiezuweisung, Spielersuche und gezieltem Start auf einem Board.
+- Ermöglicht den Wechsel eines laufenden Matches auf ein freies Board sowie
+  Ergebnisaufnahme und Turnieruhr-Steuerung direkt im Dashboard.
+- Verbessert die Spielplanpriorisierung nach Gruppenfortschritt und
+  Spielerbelastung; Turnierleiter-Einstellungen bleiben gespeichert.
+
+# 2.1.9+43
+
+- Begrenzt den sichtbaren Bereich der letzten Ergebnisse auf zwei Matches und
+  macht den vollständigen chronologischen Verlauf scrollbar.
+- Teilt Spielpläne bei wenigen Gruppen auf bis zu vier Spalten auf und
+  verteilt offene Begegnungen auf wiederholte Gruppenspalten.
+- Zeigt Gruppen-Ergebnisse auf breiten Bildschirmen in bis zu vier Spalten und
+  mit kompakteren Match-Zeilen an.
+
+# 2.1.8+42
+
+- Behebt abgeschnittene KO-Baum-Vorschauen und verteilt Gruppen-Spielpläne
+  besser über die verfügbare Breite.
+- Verdichtet die Ergebniseingabe zu kompakten Spielplanzeilen mit zentralem,
+  anklickbarem Ergebnisfeld.
+- Ersetzt die letzten Ergebnisse im Dashboard und Zweitmonitor durch ein
+  chronologisches Match-Protokoll mit optionalen Elo-Änderungen.
+- Sortiert Partien gegen bereits deutlich weitergespielte Teilnehmer innerhalb
+  der priorisierten Vorschläge nach hinten.
+- Richtet Statistikspalten rechtsbündig aus und nutzt Tabellenbreite besser.
+
+# 2.1.7+41
+
+- Platziert kompakte letzte Ergebnisse im separaten Monitor am unteren Rand
+  neben der Etappenvorschau und zeigt dort bis zu vier Partien.
+- Vereinheitlicht die letzten Ergebnisse im Dashboard und Monitor mit
+  Gewinner-/Verliererfarben, Setzungs- und Ausscheidungshinweisen,
+  Elo-Änderungen und Bestleistungs-Badges.
+- Aktualisiert den KO-Baum unmittelbar nach der Ergebniseingabe einschließlich
+  der weitergegebenen Spieler.
+- Entfernt automatisch erzeugte Decider beim Zurücksetzen einer Gruppenetappe,
+  damit keine veralteten offenen Entscheidungsspiele stehen bleiben.
+
+# 2.1.6+40
+
+- Verdichtet die Zweitmonitoransicht: Spielplan für bis zu vier Gruppen,
+  zwei letzte Ergebnisse mit Elo-Änderungen und Leistungs-Badges sowie
+  kompakte Tabellen.
+- Zeigt den Gesamtfortschritt neben der Turnieruhr und die Spielzahlen an den
+  Gruppen; in aktiven K.-o.-Etappen nutzt der lesbare Turnierbaum die volle
+  Monitorbreite.
+- Entfernt Ergebniseingaben und Bestleistungs-Badges aus dem Dashboard-
+  Spielplan beziehungsweise den Dashboard-Ergebnissen und ergänzt dort
+  stattdessen Elo-Änderungen.
+- Öffnet den K.-o.-Baum in der Ergebnisse-Ansicht mit direktem Zugriff auf
+  die Ergebniseingabe.
+
+# 2.1.3+37
+
+- Ergänzt Hinweise für Setzung, Freilose, Match-Ergebnisse, Bestleistungen und
+  Ausscheiden beziehungsweise verbleibende Leben im Spielplan und K.-o.-Baum.
+- Ergänzt die Bearbeitung bestehender Turniere mit Aktualisieren- oder
+  Kopieren-Option und schützt gespeicherte Ergebnisse vor versehentlichem
+  Überschreiben.
+- Ergänzt vier Gruppenverteilungen einschließlich manueller Gruppeneinteilung
+  sowie Einstellungen für Turnierhinweise und Tie-Breaker.
+- Protokolliert Supabase-Anmeldefehler datensparsam mit App-/Windows-Version,
+  Projekt-Host sowie DNS- und HTTPS-Tests und bietet den Export der Diagnose
+  an. Das Protokoll enthält keine Zugangsdaten oder Sitzungstoken.
+- Prüft im Windows-Release-Build, ob der konfigurierte Supabase-Projekt-Key
+  akzeptiert wird.
+- Reduziert den Datenverkehr der Turnierliste auf der Website durch einen
+  kompakten Turnierindex und paginierte Ergebnisse; ältere Konten ohne Index
+  bleiben kompatibel.
+- Stabilisiert die Warteschlange für lokale Speicherzugriffe, damit weitere
+  Speicherungen auch nach abgeschlossenen asynchronen Abläufen fortgesetzt
+  werden.
+
 # 2.1.0+34
 
 - Deaktiviert den automatischen Supabase-Workspace-Abgleich. Lokale Änderungen

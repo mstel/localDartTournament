@@ -62,17 +62,17 @@ class TournamentTiming {
         .where((item) => identical(item.match, match))
         .firstOrNull;
     final format =
-        entry != null &&
-            entry.stageIndex >= 0 &&
-            entry.stageIndex < tournament.stages.length
-        ? tournament.stages[entry.stageIndex].gameFormat
-        : const TournamentGameFormat();
+        tournament.leagueMatch?.gameFormat ??
+        (entry != null &&
+                entry.stageIndex >= 0 &&
+                entry.stageIndex < tournament.stages.length
+            ? tournament.stages[entry.stageIndex].gameFormat
+            : const TournamentGameFormat());
     final matchMinutes = TournamentFormatPlanner(
       parameters: parameters,
     ).estimatedMatchMinutes(format);
-    final leadMinutes = parameters.boardIdleMinutes + matchMinutes;
     tournament.startedAt = match.finishedAt!.subtract(
-      Duration(seconds: (leadMinutes * 60).round()),
+      Duration(seconds: (matchMinutes * 60).round()),
     );
     return true;
   }
@@ -101,22 +101,20 @@ class TournamentTiming {
           final slots = schedule.planned.isEmpty
               ? 0
               : schedule.planned.last.block + 1;
-          tournament.plannedMinutes =
-              (slots *
-                      TournamentFormatPlanner(
-                        parameters: parameters,
-                      ).estimatedMatchMinutes(
-                        const TournamentGameFormat(bestOfLegs: 5),
-                      ))
-                  .ceil();
-          tournament.plannedMinimumMinutes = tournament.plannedMinutes;
-          tournament.plannedMatches = games.where((m) => m.hasPlayers).length;
           final matchMinutes = TournamentFormatPlanner(
             parameters: parameters,
-          ).estimatedMatchMinutes(const TournamentGameFormat(bestOfLegs: 5));
+          ).estimatedMatchMinutes(copy.leagueMatch!.gameFormat);
+          final boardWait =
+              (slots > 0 ? slots - 1 : 0) * parameters.boardIdleMinutes;
+          tournament.plannedMinutes = (slots * matchMinutes + boardWait).ceil();
+          tournament.plannedMinimumMinutes = tournament.plannedMinutes;
+          tournament.plannedMatches = games.where((m) => m.hasPlayers).length;
           tournament.plannedMatchEndSeconds = [
             for (final entry in schedule.planned)
-              ((entry.block + 1) * matchMinutes * 60).round(),
+              (((entry.block + 1) * matchMinutes +
+                          entry.block * parameters.boardIdleMinutes) *
+                      60)
+                  .round(),
           ]..sort();
         } else {
           final estimate = const ConfigurationDurationEstimator().preview(

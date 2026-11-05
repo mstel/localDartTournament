@@ -412,6 +412,7 @@ void main() {
       );
       final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
       final fallbackExe = p.join(systemRoot, 'System32', 'where.exe');
+      final startedFile = p.join(temp.path, 'restart.started');
       final logFile = p.join(temp.path, 'restart.log');
       final failureFile = p.join(temp.path, 'update-failure.txt');
       await File(failureFile).writeAsString('stale failure');
@@ -420,6 +421,7 @@ void main() {
         stagedId,
         2147483647,
         activeFile: activeFile,
+        startedFile: startedFile,
         logFile: logFile,
         failureFile: failureFile,
         originalExe: fallbackExe,
@@ -447,6 +449,7 @@ void main() {
         await File(logFile).readAsString(),
         contains('Update wurde erfolgreich aktiviert'),
       );
+      expect(await File(startedFile).exists(), isTrue);
       expect(
         await File(logFile).readAsString(),
         isNot(contains('Fallback gestartet')),
@@ -492,6 +495,7 @@ void main() {
       'build-12-123',
       4321,
       activeFile: r"C:\App Data\updates\active.json",
+      startedFile: r"C:\App Data\updates\restart.started",
       logFile: r"C:\App Data\updates\restart.log",
       failureFile: r"C:\App Data\updates\update-failure.txt",
       originalExe: r"C:\O'Brien\old\dart.exe",
@@ -501,6 +505,7 @@ void main() {
     expect(windows, contains('Update wurde erfolgreich aktiviert.'));
     expect(windows, contains("'--desktop-update-original'"));
     expect(windows, contains(r"'C:\App Data\updates\active.json'"));
+    expect(windows, contains(r"'C:\App Data\updates\restart.started'"));
     final linux = DesktopUpdateLauncher.linuxScript(
       r"/home/O'Brien/$app/dart",
       'build-12-123',
@@ -518,6 +523,7 @@ void main() {
       final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
       final where = p.join(systemRoot, 'System32', 'where.exe');
       final activeFile = p.join(temp.path, 'active.json');
+      final startedFile = p.join(temp.path, 'restart.started');
       final logFile = p.join(temp.path, 'restart.log');
       final failureFile = p.join(temp.path, 'update-failure.txt');
       final command = DesktopUpdateLauncher.windowsScript(
@@ -525,6 +531,7 @@ void main() {
         'build-12-123',
         2147483647,
         activeFile: activeFile,
+        startedFile: startedFile,
         logFile: logFile,
         failureFile: failureFile,
         originalExe: where,
@@ -532,6 +539,7 @@ void main() {
       final result = await runWindowsScript(command);
 
       expect(result.exitCode, 0, reason: '${result.stderr}\n${result.stdout}');
+      expect(await File(startedFile).exists(), isTrue);
       final log = await File(logFile).readAsString();
       expect(log, contains('Update wurde nicht aktiviert'));
       expect(log, contains('Ursprüngliche App wurde als Fallback gestartet'));
@@ -550,6 +558,7 @@ void main() {
       final where = p.join(systemRoot, 'System32', 'where.exe');
       final fakeUpdate = File(p.join(temp.path, 'fake update.cmd'));
       final activeFile = p.join(temp.path, 'active.json');
+      final startedFile = p.join(temp.path, 'restart.started');
       final logFile = p.join(temp.path, 'restart.log');
       final failureFile = p.join(temp.path, 'update-failure.txt');
       await fakeUpdate.writeAsString(
@@ -564,6 +573,7 @@ void main() {
         'build-12-123',
         2147483647,
         activeFile: activeFile,
+        startedFile: startedFile,
         logFile: logFile,
         failureFile: failureFile,
         originalExe: where,
@@ -580,6 +590,7 @@ void main() {
         await File(activeFile).readAsString(),
         contains('"id":"build-12-123"'),
       );
+      expect(await File(startedFile).exists(), isTrue);
       final log = await File(logFile).readAsString();
       expect(log, contains('Update wurde erfolgreich aktiviert'));
       expect(log, isNot(contains('Fallback gestartet')));

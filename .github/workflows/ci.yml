@@ -80,6 +80,19 @@ jobs:
             throw "SUPABASE_PUBLISHABLE_KEY is required for the Windows release build."
           }
 
+      - name: Verify Supabase project accepts the publishable key
+        shell: pwsh
+        run: |
+          $uri = "https://rbcsrqisbuutnnxpmcvp.supabase.co/auth/v1/settings"
+          try {
+            $null = Invoke-RestMethod -Uri $uri -Method Get -Headers @{
+              apikey = $env:SUPABASE_PUBLISHABLE_KEY
+            }
+          } catch {
+            $statusCode = $_.Exception.Response.StatusCode
+            throw "Supabase rejected the Windows release key for the configured project (HTTP $statusCode). Check SUPABASE_PUBLISHABLE_KEY."
+          }
+
       - name: Verify manually selected release
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh
@@ -419,6 +432,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
+          draft: ${{ github.ref_name == 'v2.5.0+72' }}
           prerelease: ${{ github.ref_name == 'v1.0.8+9' || github.ref_name == 'v1.0.8+10' || github.ref_name == 'v1.0.8+11' }}
           body_path: docs/releases/${{ github.ref_name }}.md
           files: |

@@ -1,42 +1,53 @@
 import 'package:flutter/material.dart';
 
 /// Club-inspired color palette for DC Unzenberg/Heinzenbach.
-ThemeData buildDartTournamentTheme() => _buildTheme(isDark: false);
+ThemeData buildDartTournamentTheme({bool christmas = false}) =>
+    _buildTheme(isDark: false, christmas: christmas);
 
-ThemeData buildDartTournamentDarkTheme() => _buildTheme(isDark: true);
+ThemeData buildDartTournamentDarkTheme({bool christmas = false}) =>
+    _buildTheme(isDark: true, christmas: christmas);
 
-ThemeData _buildTheme({required bool isDark}) {
+ThemeData _buildTheme({required bool isDark, required bool christmas}) {
   final ink = isDark ? const Color(0xFFF5F3ED) : const Color(0xFF191B20);
-  final gold = isDark ? const Color(0xFFD49B44) : const Color(0xFFB5811E);
+  final primary = christmas
+      ? (isDark ? const Color(0xFFF0808B) : const Color(0xFFB52D43))
+      : (isDark ? const Color(0xFFD49B44) : const Color(0xFFB5811E));
   final bg = isDark ? const Color(0xFF121316) : const Color(0xFFF7F5F0);
   final surface = isDark ? const Color(0xFF1B1D24) : const Color(0xFFFFFFFF);
   final surfaceSecondary = isDark
       ? const Color(0xFF242731)
       : const Color(0xFFF1EFEA);
+  final primaryContainer = christmas
+      ? (isDark ? const Color(0xFF3A1D29) : const Color(0xFFFBE8EC))
+      : (isDark ? const Color(0xFF382B14) : const Color(0xFFFCEECF));
+  final onPrimaryContainer = christmas
+      ? (isDark ? const Color(0xFFFFE7EA) : const Color(0xFF45101B))
+      : (isDark ? const Color(0xFFFDE8B5) : const Color(0xFF281C03));
 
   final scheme =
       (isDark
               ? ColorScheme.fromSeed(
-                  seedColor: gold,
+                  seedColor: primary,
                   brightness: Brightness.dark,
                 )
               : ColorScheme.fromSeed(
-                  seedColor: gold,
+                  seedColor: primary,
                   brightness: Brightness.light,
                 ))
           .copyWith(
-            primary: gold,
-            onPrimary: isDark ? const Color(0xFF121316) : Colors.white,
-            primaryContainer: isDark
-                ? const Color(0xFF382B14)
-                : const Color(0xFFFCEECF),
-            onPrimaryContainer: isDark
-                ? const Color(0xFFFDE8B5)
-                : const Color(0xFF281C03),
-            secondary: isDark
-                ? const Color(0xFFB0B4C0)
-                : const Color(0xFF2D323E),
+            primary: primary,
+            onPrimary: isDark || !christmas
+                ? const Color(0xFF121316)
+                : Colors.white,
+            primaryContainer: primaryContainer,
+            onPrimaryContainer: onPrimaryContainer,
+            secondary: christmas
+                ? (isDark ? const Color(0xFF72D58D) : const Color(0xFF176B39))
+                : (isDark ? const Color(0xFFB0B4C0) : const Color(0xFF2D323E)),
             onSecondary: isDark ? const Color(0xFF121316) : Colors.white,
+            tertiary: christmas
+                ? (isDark ? const Color(0xFF72D58D) : const Color(0xFF176B39))
+                : primary,
             secondaryContainer: surfaceSecondary,
             surface: surface,
             onSurface: ink,
@@ -111,7 +122,7 @@ ThemeData _buildTheme({required bool isDark}) {
       border: border,
       enabledBorder: border,
       focusedBorder: border.copyWith(
-        borderSide: BorderSide(color: gold, width: 2),
+        borderSide: BorderSide(color: primary, width: 2),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -142,7 +153,7 @@ ThemeData _buildTheme({required bool isDark}) {
     ),
     listTileTheme: ListTileThemeData(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      iconColor: gold,
+      iconColor: primary,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     chipTheme: base.chipTheme.copyWith(
@@ -193,7 +204,7 @@ ThemeData _buildTheme({required bool isDark}) {
       columnSpacing: 28,
     ),
     tabBarTheme: TabBarThemeData(
-      labelColor: gold,
+      labelColor: primary,
       unselectedLabelColor: scheme.onSurfaceVariant,
       indicatorSize: TabBarIndicatorSize.label,
       dividerColor: scheme.outlineVariant,
@@ -211,11 +222,11 @@ ThemeData _buildTheme({required bool isDark}) {
     expansionTileTheme: ExpansionTileThemeData(
       shape: const Border(),
       collapsedShape: const Border(),
-      iconColor: gold,
+      iconColor: primary,
       collapsedIconColor: scheme.onSurfaceVariant,
       tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
     ),
-    progressIndicatorTheme: ProgressIndicatorThemeData(color: gold),
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: primary),
     tooltipTheme: TooltipThemeData(
       textStyle: TextStyle(
         color: isDark ? const Color(0xFFF5F3ED) : Colors.white,

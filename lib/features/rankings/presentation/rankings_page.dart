@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../application/ranking_year_review_image_generator.dart';
 import '../application/ranking_standings_image_generator.dart';
 
@@ -10,17 +9,23 @@ import '../domain/local_elo_calculator.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
+import '../../tournaments/application/tournament_activity_logger.dart';
 import '../application/local_ranking_elo_service.dart';
 import '../application/local_ranking_series_service.dart';
 import '../application/ranking_year_review_service.dart';
+import '../../achievements/application/ranking_achievement_service.dart';
+import '../../achievements/presentation/achievement_target_dialog.dart';
 import '../domain/local_ranking.dart';
 import '../domain/elo_tier.dart';
 import 'widgets/elo_trajectory_chart.dart';
+import 'widgets/ranking_monthly_club_performance_section.dart';
 
 import '../../statistics/domain/best_performance.dart';
 import '../../statistics/domain/local_statistics.dart';
 import '../../statistics/presentation/local_player_statistics_page.dart';
 import '../../statistics/presentation/widgets/structured_best_performances_view.dart';
+import '../../statistics/domain/player_monthly_performance.dart';
+import '../../statistics/presentation/widgets/player_performance_trend_chart.dart';
 
 class RankingsPage extends StatefulWidget {
   const RankingsPage({super.key, LocalAppDatabase? database})
@@ -64,6 +69,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
   int? _year = DateTime.now().year;
   Future<RankingYearReview>? _rankingReview;
   Future<LocalPlayerStatistics>? _playerReview;
+  Future<List<PlayerMonthlyPerformance>>? _playerPerformance;
   bool _exporting = false;
 
   void _selectRanking(LocalRanking? ranking) {
@@ -94,6 +100,9 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
               database: _database,
               storage: _tournamentStorage,
             ).forPlayers({player.id}, year: _year);
+      _playerPerformance = player == null
+          ? null
+          : _database.loadPlayerMonthlyPerformance(player.id, year: _year);
     });
   }
 
@@ -107,9 +116,14 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
         );
       }
       if (_selectedPlayer != null) {
-        _playerReview = const LocalStatisticsService().forPlayers({
+        _playerReview = LocalStatisticsService(
+          database: _database,
+          storage: _tournamentStorage,
+        ).forPlayers({_selectedPlayer!.id}, year: year);
+        _playerPerformance = _database.loadPlayerMonthlyPerformance(
           _selectedPlayer!.id,
-        }, year: year);
+          year: year,
+        );
       }
     });
   }
@@ -282,7 +296,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                         children: [
                           const SizedBox(height: 8),
                           Text(
-                            '${review.tournaments} Turniere · ${review.totalLegs} Legs · ${review.totalBestPerformances} Bestleistungen · ${review.total180} × 180+ · ${review.total170} × 170+ · ${review.totalShortLegs} Shortlegs · ${review.totalHighFinishes} High Finishes',
+                            '${review.tournaments} Turniere · ${review.totalLegs} Legs · ${review.totalBestPerformances} Bestleistungen · ${review.total180} × 180+ · ${review.total170} × Big Fish · ${review.total171Plus} × 171+ · ${review.totalShortLegs} Shortlegs · ${review.totalHighFinishes} High Finishes · ${review.totalBullseyeFinishes} Bullseye Finishes',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 12),
@@ -339,6 +353,10 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                   (a, b) => a > b ? a : b,
                                 ),
                               ),
+                            const SizedBox(height: 16),
+                            RankingMonthlyClubPerformanceSection(
+                              monthlyPerformance: review.monthlyClubPerformance,
+                            ),
                           ] else ...[
                             Text(
                               'Turniere pro Jahr',
@@ -409,9 +427,23 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                             year: _year,
                           ),
                           _ReviewLeaders(
-                            title: 'Meiste 170+',
+                            title: 'Meiste 170 (Big Fish)',
                             rows: rows,
                             metric: (s) => s.scores170,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Meiste 171+',
+                            rows: rows,
+                            metric: (s) => s.scores171Plus,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Meiste Bullseye Finishes',
+                            rows: rows,
+                            metric: (s) => s.bullseyeFinishes,
                             profileIds: review.profileIds,
                             year: _year,
                           ),
@@ -426,6 +458,34 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                             title: 'Meiste High Finishes',
                             rows: rows,
                             metric: (s) => s.highFinishes,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Höchster Average',
+                            rows: rows,
+                            metric: (s) => s.highestAverage,
+                            formatMetric: (value) => value.toStringAsFixed(1),
+                            includeZero: true,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Höchstes Scoring',
+                            rows: rows,
+                            metric: (s) => s.highestScoring,
+                            formatMetric: (value) => value.toStringAsFixed(1),
+                            includeZero: true,
+                            profileIds: review.profileIds,
+                            year: _year,
+                          ),
+                          _ReviewLeaders(
+                            title: 'Höchste Checkout-Quote',
+                            rows: rows,
+                            metric: (s) => s.highestCheckoutRate,
+                            formatMetric: (value) =>
+                                '${value.toStringAsFixed(1)} %',
+                            includeZero: true,
                             profileIds: review.profileIds,
                             year: _year,
                           ),
@@ -493,9 +553,11 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                       final stats = data.data!;
                       final p = _selectedPlayer!;
                       final performanceCounts = {
-                        for (final type in BestPerformanceType.values)
+                        for (final type in BestPerformanceType.values.where(
+                          (type) => type != BestPerformanceType.score170,
+                        ))
                           type: stats.bestPerformances
-                              .where((item) => item.type == type)
+                              .where((item) => item.normalizedType == type)
                               .length,
                       };
                       return Column(
@@ -544,9 +606,24 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                     '${performanceCounts[BestPerformanceType.score180]}',
                               ),
                               _StatMiniCard(
+                                label: '170 (Big Fish)',
+                                value:
+                                    '${performanceCounts[BestPerformanceType.bigFish170]}',
+                              ),
+                              _StatMiniCard(
+                                label: '171+ Aufnahmen',
+                                value:
+                                    '${performanceCounts[BestPerformanceType.score171Plus]}',
+                              ),
+                              _StatMiniCard(
                                 label: 'High Finishes (100+)',
                                 value:
                                     '${performanceCounts[BestPerformanceType.highFinish]}',
+                              ),
+                              _StatMiniCard(
+                                label: 'Bullseye Finishes',
+                                value:
+                                    '${performanceCounts[BestPerformanceType.bullseyeFinish]}',
                               ),
                               _StatMiniCard(
                                 label: 'Shortlegs (≤18)',
@@ -558,6 +635,82 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                           StructuredBestPerformancesView(
                             bestPerformances: stats.bestPerformances,
                           ),
+                          if (_playerPerformance case final performance?)
+                            FutureBuilder<List<PlayerMonthlyPerformance>>(
+                              future: performance,
+                              builder: (context, performanceSnapshot) {
+                                if (performanceSnapshot.hasError) {
+                                  return const Text(
+                                    'Performance-Entwicklung konnte nicht geladen werden.',
+                                  );
+                                }
+                                if (!performanceSnapshot.hasData) {
+                                  return const SizedBox.shrink();
+                                }
+                                final entries = performanceSnapshot.data!;
+                                final highestAverage = _maximumPerformanceValue(
+                                  entries.map((entry) => entry.average),
+                                );
+                                final highestScoring = _maximumPerformanceValue(
+                                  entries.map((entry) => entry.scoring),
+                                );
+                                final highestCheckoutRate =
+                                    _maximumPerformanceValue(
+                                      entries.map(
+                                        (entry) => entry.checkoutRate,
+                                      ),
+                                    );
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      'Monatsbestwerte',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      children: [
+                                        _StatMiniCard(
+                                          label: 'Höchster Average',
+                                          value:
+                                              highestAverage?.toStringAsFixed(
+                                                1,
+                                              ) ??
+                                              '–',
+                                        ),
+                                        _StatMiniCard(
+                                          label: 'Höchstes Scoring',
+                                          value:
+                                              highestScoring?.toStringAsFixed(
+                                                1,
+                                              ) ??
+                                              '–',
+                                        ),
+                                        _StatMiniCard(
+                                          label: 'Höchste Checkout-Quote',
+                                          value: highestCheckoutRate == null
+                                              ? '–'
+                                              : '${highestCheckoutRate.toStringAsFixed(1)} %',
+                                        ),
+                                      ],
+                                    ),
+                                    if (entries.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 20),
+                                        child: PlayerPerformanceTrendChart(
+                                          entries: entries,
+                                          year: _year,
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
                           if (stats.tournaments == 0 && stats.matches == 0) ...[
                             const SizedBox(height: 16),
                             Card(
@@ -610,6 +763,12 @@ class _StatMiniCard extends StatelessWidget {
   );
 }
 
+double? _maximumPerformanceValue(Iterable<double?> values) {
+  final present = values.whereType<double>();
+  if (present.isEmpty) return null;
+  return present.reduce((left, right) => left > right ? left : right);
+}
+
 class _ReviewLeaders extends StatefulWidget {
   const _ReviewLeaders({
     required this.title,
@@ -617,10 +776,14 @@ class _ReviewLeaders extends StatefulWidget {
     required this.metric,
     required this.profileIds,
     this.year,
+    this.formatMetric,
+    this.includeZero = false,
   });
   final String title;
   final List<MapEntry<String, RankingYearPlayerStats>> rows;
-  final int Function(RankingYearPlayerStats) metric;
+  final num? Function(RankingYearPlayerStats) metric;
+  final String Function(num)? formatMetric;
+  final bool includeZero;
   final Map<String, String> profileIds;
   final int? year;
 
@@ -634,10 +797,13 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ranked = widget.rows.where((r) => widget.metric(r.value) > 0).toList()
-      ..sort(
-        (a, b) => widget.metric(b.value).compareTo(widget.metric(a.value)),
-      );
+    final ranked =
+        widget.rows.where((row) {
+          final value = widget.metric(row.value);
+          return value != null && (widget.includeZero ? value >= 0 : value > 0);
+        }).toList()..sort(
+          (a, b) => widget.metric(b.value)!.compareTo(widget.metric(a.value)!),
+        );
     final visible = ranked.take(_showAll ? ranked.length : 5).toList();
 
     return Card(
@@ -669,7 +835,8 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '${ranked.first.key} (${widget.metric(ranked.first.value)})',
+                    '${ranked.first.key} '
+                    '(${_formattedMetric(widget.metric(ranked.first.value)!)})',
                     style: TextStyle(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w600,
@@ -710,7 +877,7 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${widget.metric(ranked[i].value)}',
+                          _formattedMetric(widget.metric(ranked[i].value)!),
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -754,6 +921,9 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
       ),
     );
   }
+
+  String _formattedMetric(num value) =>
+      widget.formatMetric?.call(value) ?? '$value';
 }
 
 class _MonthBar extends StatelessWidget {
@@ -830,25 +1000,14 @@ class _RankingsPageState extends State<RankingsPage> {
   }
 
   Future<void> _restoreSortMode() async {
-    final preferences = await SharedPreferences.getInstance();
-    final stored = preferences.getString('ranking_sort_mode');
-    RankingSortMode? mode;
-    for (final value in RankingSortMode.values) {
-      if (value.name == stored) mode = value;
-    }
-    if (mode != null && mounted) setState(() => _sortMode = mode!);
+    final mode = await loadRankingSortMode();
+    if (mounted) setState(() => _sortMode = mode);
   }
 
   Future<void> _setSortMode(RankingSortMode mode) async {
     setState(() => _sortMode = mode);
     try {
-      final saved = await (await SharedPreferences.getInstance()).setString(
-        'ranking_sort_mode',
-        mode.name,
-      );
-      if (!saved) {
-        throw StateError('Die Sortierung konnte nicht gespeichert werden.');
-      }
+      await saveRankingSortMode(mode);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -889,8 +1048,46 @@ class _RankingsPageState extends State<RankingsPage> {
       builder: (_) => _RankingEditorDialog(initial: ranking),
     );
     if (updated == null) return;
-    await _database.saveLocalRanking(updated);
-    if (mounted) setState(() => _rankings = _database.loadLocalRankings());
+    var rankingSaved = false;
+    final achievementTargetsChanged =
+        updated.achievementTargets.length !=
+            ranking.achievementTargets.length ||
+        updated.achievementTargets.entries.any(
+          (entry) => ranking.achievementTargets[entry.key] != entry.value,
+        );
+    try {
+      await _database.saveLocalRanking(updated);
+      rankingSaved = true;
+      if (updated.achievementsEnabled &&
+          (!ranking.achievementsEnabled ||
+              updated.isCompleted != ranking.isCompleted ||
+              achievementTargetsChanged)) {
+        await RankingAchievementService(
+          database: _database,
+          tournamentStorage: TournamentStorage(),
+        ).refreshRanking(updated);
+      }
+      if (updated.name != ranking.name) {
+        await const TournamentActivityLogger().recordRankingRename(
+          rankingId: ranking.id,
+          oldName: ranking.name,
+          newName: updated.name,
+        );
+      }
+      if (mounted) setState(() => _rankings = _database.loadLocalRankings());
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              rankingSaved
+                  ? 'Rangliste gespeichert, aber verbundene Daten konnten nicht aktualisiert werden: $error'
+                  : 'Rangliste konnte nicht gespeichert werden: $error',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _moveRanking(
@@ -1161,7 +1358,11 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   bool _allowDecayBelowStartRating = false;
   bool _absenceDecayEnabled = false;
   bool _inactivityDecayEnabled = false;
+  bool _countUnassignedPlayers = false;
   bool _isDefaultForStatistics = false;
+  bool _achievementsEnabled = false;
+  Map<String, double> _achievementTargets = {};
+  bool _isCompleted = false;
   List<TextEditingController> _tierNames = [];
   List<TextEditingController> _tierMinimums = [];
 
@@ -1187,9 +1388,13 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     _absenceDecayEnabled = initial.absenceDecayEnabled;
     _absenceDecayPoints.text = '${initial.absenceDecayPoints}';
     _inactivityDecayEnabled = initial.inactivityDecayEnabled;
+    _countUnassignedPlayers = initial.countUnassignedPlayers;
     _inactivityGraceTournaments.text = '${initial.inactivityGraceTournaments}';
     _inactivityDecayPoints.text = '${initial.inactivityDecayPoints}';
     _isDefaultForStatistics = initial.isDefaultForStatistics;
+    _achievementsEnabled = initial.achievementsEnabled;
+    _achievementTargets = Map.of(initial.achievementTargets);
+    _isCompleted = initial.isCompleted;
     _fromDate =
         initial.validFromDate ??
         (initial.validFromYear == null
@@ -1273,6 +1478,16 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     });
   }
 
+  Future<void> _adjustAchievementTargets() async {
+    final targets = await showDialog<Map<String, double>>(
+      context: context,
+      builder: (_) => AchievementTargetDialog(targets: _achievementTargets),
+    );
+    if (targets != null && mounted) {
+      setState(() => _achievementTargets = targets);
+    }
+  }
+
   void _submit() {
     setState(() {
       if (_fromDate != null &&
@@ -1326,7 +1541,11 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
             int.tryParse(_inactivityGraceTournaments.text.trim()) ?? 0,
         inactivityDecayPoints:
             int.tryParse(_inactivityDecayPoints.text.trim()) ?? 0,
+        countUnassignedPlayers: _countUnassignedPlayers,
         isDefaultForStatistics: _isDefaultForStatistics,
+        achievementsEnabled: _achievementsEnabled,
+        achievementTargets: _achievementTargets,
+        isCompleted: _isCompleted,
       ),
     );
   }
@@ -1536,147 +1755,140 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
                   setState(() => _type = value ?? RankingType.elo),
             ),
             const SizedBox(height: 20),
-            Text(
-              _type == RankingType.elo ? 'Elo-Parameter' : 'Punkte-Parameter',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            for (final entry in _numbers.entries)
-              if (_type == RankingType.elo
-                  ? entry.key.startsWith('Start') ||
-                        entry.key.startsWith('K-Faktor') ||
-                        entry.key.startsWith('Spiele') ||
-                        entry.key.startsWith('Pro-Spieler')
-                  : entry.key.startsWith('Punkte'))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: entry.value,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: entry.key,
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: (value) =>
-                        int.tryParse((value ?? '').trim()) == null
-                        ? 'Bitte eine ganze Zahl eingeben.'
-                        : null,
-                  ),
-                ),
-            if (_type == RankingType.elo) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Automatischer Verfall',
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(left: 12, top: 8),
+              title: Text(
+                _type == RankingType.elo ? 'ELO-Parameter' : 'Punkte-Parameter',
                 style: Theme.of(
                   context,
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Verfall unter der Startwertung erlauben'),
-                subtitle: const Text(
-                  'Wenn deaktiviert, kann Inaktivitätsverfall die Wertung nicht unter den Startwert senken.',
-                ),
-                value: _allowDecayBelowStartRating,
-                onChanged: (value) =>
-                    setState(() => _allowDecayBelowStartRating = value),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Punkteverlust bei verpassten Turnieren'),
-                subtitle: const Text(
-                  'Der Verlust wird unter den teilnehmenden Mitgliedern dieser Rangliste verteilt.',
-                ),
-                value: _absenceDecayEnabled,
-                onChanged: (value) =>
-                    setState(() => _absenceDecayEnabled = value),
-              ),
-              if (_absenceDecayEnabled)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: _absenceDecayPoints,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Punkte je verpasstem Turnier',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+              children: [
+                for (final entry in _numbers.entries)
+                  if (_type == RankingType.elo
+                      ? entry.key.startsWith('Start') ||
+                            entry.key.startsWith('K-Faktor') ||
+                            entry.key.startsWith('Spiele') ||
+                            entry.key.startsWith('Pro-Spieler')
+                      : entry.key.startsWith('Punkte'))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: entry.value,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: entry.key,
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        validator: (value) =>
+                            int.tryParse((value ?? '').trim()) == null
+                            ? 'Bitte eine ganze Zahl eingeben.'
+                            : null,
+                      ),
                     ),
-                    validator: _nonNegativeIntegerValidator,
-                  ),
-                ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Zusätzlicher Verlust bei längerer Inaktivität',
-                ),
-                subtitle: const Text(
-                  'Nach der Schonfrist wird für jedes weitere verpasste Turnier ein zusätzlicher Verlust verteilt.',
-                ),
-                value: _inactivityDecayEnabled,
-                onChanged: (value) =>
-                    setState(() => _inactivityDecayEnabled = value),
-              ),
-              if (_inactivityDecayEnabled) ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: _inactivityGraceTournaments,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Schonfrist: verpasste Turniere',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: _nonNegativeIntegerValidator,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: _inactivityDecayPoints,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Zusätzliche Punkte je Turnier danach',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: _nonNegativeIntegerValidator,
-                  ),
-                ),
               ],
+            ),
+            if (_type == RankingType.elo) ...[
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Spieler erst ab X Turnierteilnahmen werten'),
+                title: const Text('Begegnungen mit lokalen Spielern Werten'),
                 subtitle: const Text(
-                  'Begegnungen eines Spielers werden erst berücksichtigt, wenn er die Mindestanzahl erreicht hat.',
+                  'Nicht zugeordnete Spieler starten je Turnier mit 1000 Elo. Ihre Wertung wird nur innerhalb dieses Turniers fortgeschrieben; Mitglieder dieser Rangliste behalten ihre Elo.',
                 ),
-                value: _requireMinimumParticipations,
+                value: _countUnassignedPlayers,
                 onChanged: (value) =>
-                    setState(() => _requireMinimumParticipations = value),
+                    setState(() => _countUnassignedPlayers = value),
               ),
-              if (_requireMinimumParticipations)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    controller: _minimumParticipations,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Mindestens teilgenommene Turniere',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: (value) {
-                      final count = int.tryParse((value ?? '').trim());
-                      return count == null || count < 1
-                          ? 'Bitte mindestens 1 Turnier eingeben.'
-                          : null;
-                    },
-                  ),
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(left: 12, top: 8),
+                title: Text(
+                  'Automatischer Verfall',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Verfall unter der Startwertung erlauben',
+                    ),
+                    subtitle: const Text(
+                      'Wenn deaktiviert, kann Inaktivitätsverfall die Wertung nicht unter den Startwert senken.',
+                    ),
+                    value: _allowDecayBelowStartRating,
+                    onChanged: (value) =>
+                        setState(() => _allowDecayBelowStartRating = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Punkteverlust bei verpassten Turnieren'),
+                    subtitle: const Text(
+                      'Der Verlust wird unter den teilnehmenden Mitgliedern dieser Rangliste verteilt.',
+                    ),
+                    value: _absenceDecayEnabled,
+                    onChanged: (value) =>
+                        setState(() => _absenceDecayEnabled = value),
+                  ),
+                  if (_absenceDecayEnabled)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _absenceDecayPoints,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Punkte je verpasstem Turnier',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        validator: _nonNegativeIntegerValidator,
+                      ),
+                    ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Zusätzlicher Verlust bei längerer Inaktivität',
+                    ),
+                    subtitle: const Text(
+                      'Nach der Schonfrist wird für jedes weitere verpasste Turnier ein zusätzlicher Verlust verteilt.',
+                    ),
+                    value: _inactivityDecayEnabled,
+                    onChanged: (value) =>
+                        setState(() => _inactivityDecayEnabled = value),
+                  ),
+                  if (_inactivityDecayEnabled) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _inactivityGraceTournaments,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Schonfrist: verpasste Turniere',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        validator: _nonNegativeIntegerValidator,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _inactivityDecayPoints,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Zusätzliche Punkte je Turnier danach',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        validator: _nonNegativeIntegerValidator,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -1751,6 +1963,74 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
                 ),
               ],
             ],
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Errungenschaften für diese Rangliste aktivieren',
+              ),
+              value: _achievementsEnabled,
+              onChanged: (value) =>
+                  setState(() => _achievementsEnabled = value),
+            ),
+            if (_achievementsEnabled)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('adjust-achievement-targets'),
+                      onPressed: _adjustAchievementTargets,
+                      icon: const Icon(Icons.tune),
+                      label: const Text('Werte anpassen'),
+                    ),
+                    Text(
+                      _achievementTargets.isEmpty
+                          ? 'Es gelten die Standardwerte.'
+                          : '${_achievementTargets.length} eigene Werte; '
+                                'Änderungen werden mit der Rangliste gespeichert.',
+                    ),
+                  ],
+                ),
+              ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Rangliste als abgeschlossen markieren'),
+              subtitle: const Text(
+                'Erst dann werden finale Ranglisten-Auszeichnungen vergeben.',
+              ),
+              value: _isCompleted,
+              onChanged: (value) => setState(() => _isCompleted = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Spieler erst ab X Turnierteilnahmen werten'),
+              subtitle: const Text(
+                'Begegnungen eines Spielers werden erst berücksichtigt, wenn er die Mindestanzahl erreicht hat.',
+              ),
+              value: _requireMinimumParticipations,
+              onChanged: (value) =>
+                  setState(() => _requireMinimumParticipations = value),
+            ),
+            if (_requireMinimumParticipations)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: TextFormField(
+                  controller: _minimumParticipations,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Mindestens teilgenommene Turniere',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  validator: (value) {
+                    final count = int.tryParse((value ?? '').trim());
+                    return count == null || count < 1
+                        ? 'Bitte mindestens 1 Turnier eingeben.'
+                        : null;
+                  },
+                ),
+              ),
           ],
         ),
       ),
@@ -1859,7 +2139,9 @@ class _RankingTournamentsPageState extends State<_RankingTournamentsPage> {
                 value: _selected.contains(tournament.id),
                 title: Text(tournament.name),
                 subtitle: Text(
-                  (tournament.finishedAt ?? tournament.createdAt)
+                  (tournament.tournamentDate ??
+                          tournament.finishedAt ??
+                          tournament.createdAt)
                       .toLocal()
                       .toString()
                       .split(' ')
@@ -2350,16 +2632,45 @@ class PlayerEloHistoryPage extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             Card(
-              color: colorScheme.primaryContainer,
+              color: theme.brightness == Brightness.dark
+                  ? const Color(0xFF19394B)
+                  : const Color(0xFFDCECF5),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      player.name,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    Tooltip(
+                      message: 'Spielerprofil von ${player.name} öffnen',
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => LocalPlayerStatisticsPage(
+                              name: player.name,
+                              profileIds: {player.id},
+                            ),
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: colorScheme.onPrimaryContainer,
+                          alignment: Alignment.centerLeft,
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                player.name,
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.open_in_new, size: 18),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -2762,10 +3073,8 @@ class _TournamentEloGroup {
   final List<LocalEloHistoryItem> matches = [];
 
   int get totalDelta => matches.fold<int>(0, (sum, m) => sum + m.delta);
-  int get ratingBefore =>
-      matches.isNotEmpty ? matches.first.ratingBefore : 0;
-  int get ratingAfter =>
-      matches.isNotEmpty ? matches.last.ratingAfter : 0;
+  int get ratingBefore => matches.isNotEmpty ? matches.first.ratingBefore : 0;
+  int get ratingAfter => matches.isNotEmpty ? matches.last.ratingAfter : 0;
   int get wins => matches.where((m) => m.matchIndex >= 0 && m.delta > 0).length;
   int get losses =>
       matches.where((m) => m.matchIndex >= 0 && m.delta < 0).length;

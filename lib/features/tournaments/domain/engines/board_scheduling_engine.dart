@@ -1,12 +1,17 @@
 import '../tournament_models.dart';
+import 'group_board_assignment.dart';
 
 class PlayEntry {
-  const PlayEntry(this.match, this.stageIndex, this.origin, {this.groupKey});
+  const PlayEntry(this.match, this.stageIndex, this.origin, [this.groupKey]);
   final GroupMatch match;
   final int stageIndex;
   final String origin;
   final String? groupKey;
   Set<String> get players => {
+    if (match.isKratzer)
+      ...match.players.expand(
+        (player) => player.individuals.map((p) => p.profileId ?? p.name),
+      ),
     if (match.homePlayer != null)
       ...match.homePlayer!.individuals.map((p) => p.profileId ?? p.name),
     if (match.awayPlayer != null)
@@ -34,6 +39,7 @@ class BoardSchedulingEngine {
   static const preferredPlayerRestBlocks = 2;
 
   const BoardSchedulingEngine();
+
   List<BoardAssignment> schedule({
     required List<PlayEntry> all,
     required List<PlayEntry> ready,
@@ -42,11 +48,15 @@ class BoardSchedulingEngine {
     required int boardCount,
     Set<int> blockedBoards = const {},
     Map<String, List<int>> preferredBoardsByGroup = const {},
+    String strategy = 'group',
+    bool assignGroupsToBoards = false,
+    Map<String, Set<int>> groupBoardAssignments = const {},
   }) {
     if (boardCount < 1) throw ArgumentError.value(boardCount, 'boardCount');
     if (List.generate(boardCount, (i) => i + 1).every(blockedBoards.contains)) {
       return [];
     }
+    final normalizedStrategy = strategy.trim().toLowerCase();
     final pending = List<PlayEntry>.from(ready);
     final lastPlayed = <String, int>{};
     for (var i = 0; i < finished.length; i++) {
@@ -55,7 +65,46 @@ class BoardSchedulingEngine {
         lastPlayed[player] = i - finished.length;
       }
     }
+
     final planned = <BoardAssignment>[];
+    final groupBoards = <String, Set<int>>{
+      for (final entry in preferredBoardsByGroup.entries)
+        entry.key: entry.value.toSet(),
+    };
+    final useGroupAssignments =
+        assignGroupsToBoards &&
+        normalizedStrategy == 'group' &&
+        ready.isNotEmpty &&
+        ready.every((entry) => entry.groupKey != null);
+    if (useGroupAssignments) {
+      final groupKeys = all
+          .where((entry) => entry.stageIndex == ready.first.stageIndex)
+          .map((entry) => entry.groupKey)
+          .whereType<String>()
+          .toSet()
+          .toList();
+      final defaults = GroupBoardAssignment.defaults(
+        groupNames: groupKeys,
+        boardCount: boardCount,
+      );
+      for (final groupKey in groupKeys) {
+        final assigned = groupBoardAssignments[groupKey];
+        final preferred = groupBoards[groupKey];
+        groupBoards[groupKey] =
+            (assigned?.isNotEmpty == true
+                    ? assigned!
+                    : preferred?.isNotEmpty == true
+                    ? preferred!
+                    : defaults[groupKey] ?? const <int>{})
+                .where(
+                  (board) =>
+                      board >= 1 &&
+                      board <= boardCount &&
+                      !blockedBoards.contains(board),
+                )
+                .toSet();
+      }
+    }
     var block = 0;
     while (pending.isNotEmpty) {
       final busy = block == 0
@@ -67,12 +116,14 @@ class BoardSchedulingEngine {
               (block != 0 || !running.any((e) => e.match.boardNumber == b)))
             b,
       ];
+
       final remainingCount = <String, int>{};
       for (final e in pending) {
         for (final p in e.players) {
           remainingCount[p] = (remainingCount[p] ?? 0) + 1;
         }
       }
+
       int rest(PlayEntry e) => e.players
           .map((p) => lastPlayed[p] ?? -100000)
           .reduce((a, b) => a > b ? a : b);
@@ -87,24 +138,58 @@ class BoardSchedulingEngine {
           .map((p) => remainingCount[p] ?? 0)
           .fold<int>(0, (a, b) => a > b ? a : b);
 
+      final playedCounts = <String, int>{};
+      for (final finishedEntry in finished) {
+        if (!finishedEntry.match.hasResult) continue;
+        for (final player in finishedEntry.players) {
+          playedCounts[player] = (playedCounts[player] ?? 0) + 1;
+        }
+      }
+      for (final runningEntry in running) {
+        for (final player in runningEntry.players) {
+          playedCounts[player] = (playedCounts[player] ?? 0) + 1;
+        }
+      }
+
+      int fairnessSpread(PlayEntry e) {
+        final counts = Map<String, int>.from(playedCounts);
+        for (final player in e.players) {
+          counts[player] = (counts[player] ?? 0) + 1;
+        }
+        final values = e.players.map((player) => counts[player] ?? 0).toList();
+        if (values.length < 2) return 0;
+        final min = values.reduce((a, b) => a < b ? a : b);
+        final max = values.reduce((a, b) => a > b ? a : b);
+        return max - min;
+      }
+
       final available =
           pending.where((e) => !e.players.any(busy.contains)).toList()..sort((
             a,
             b,
           ) {
+            if (normalizedStrategy == 'group') {
+              final groupCompare = (a.groupKey ?? '').compareTo(
+                b.groupKey ?? '',
+              );
+              if (groupCompare != 0) return groupCompare;
+            }
+
+            final fairness = fairnessSpread(a).compareTo(fairnessSpread(b));
+            if (fairness != 0) return fairness;
+
             final preferredGap = minimumRestGap(b).compareTo(minimumRestGap(a));
             if ((minimumRestGap(a) < preferredPlayerRestBlocks) !=
                 (minimumRestGap(b) < preferredPlayerRestBlocks)) {
               return preferredGap;
             }
+
             final r = rest(a).compareTo(rest(b));
             if (r != 0) return r;
             final rem = maxRemaining(b).compareTo(maxRemaining(a));
             return rem != 0 ? rem : all.indexOf(a).compareTo(all.indexOf(b));
           });
-      // Try alternative first matches to avoid a greedy choice leaving boards idle.
-      final selected = <(PlayEntry, int)>[];
-      var bestBatch = <PlayEntry>[];
+      var selectedEntries = <PlayEntry>[];
       var bestPreferenceScore = -1;
       for (final first in available.take(64)) {
         final batch = <PlayEntry>[];
@@ -115,51 +200,81 @@ class BoardSchedulingEngine {
           batch.add(entry);
           used.addAll(entry.players);
         }
+
         var preferenceScore = 0;
         final unassigned = List<PlayEntry>.from(batch);
         for (final board in boards) {
-          final preferredIndex = unassigned.indexWhere((entry) {
-            final groupKey = entry.groupKey;
-            return groupKey != null &&
-                preferredBoardsByGroup[groupKey]?.contains(board) == true;
-          });
+          final preferredIndex = unassigned.indexWhere(
+            (entry) => groupBoards[entry.groupKey]?.contains(board) == true,
+          );
           if (preferredIndex >= 0) preferenceScore++;
           if (unassigned.isNotEmpty) {
             unassigned.removeAt(preferredIndex < 0 ? 0 : preferredIndex);
           }
         }
-        if (batch.length > bestBatch.length ||
-            (batch.length == bestBatch.length &&
+        if (batch.length > selectedEntries.length ||
+            (batch.length == selectedEntries.length &&
                 preferenceScore > bestPreferenceScore)) {
-          bestBatch = batch;
+          selectedEntries = batch;
           bestPreferenceScore = preferenceScore;
         }
-        if (bestBatch.length == boards.length &&
-            preferredBoardsByGroup.isEmpty) {
+        if (selectedEntries.length == boards.length &&
+            (groupBoards.isEmpty || preferenceScore == boards.length)) {
           break;
         }
       }
-      final remaining = List<PlayEntry>.from(bestBatch);
-      for (final board in boards.take(remaining.length)) {
-        var selectedIndex = -1;
-        for (var index = 0; index < remaining.length; index++) {
-          final groupKey = remaining[index].groupKey;
-          if (groupKey != null &&
-              preferredBoardsByGroup[groupKey]?.contains(board) == true) {
-            selectedIndex = index;
+
+      final selected = <({PlayEntry entry, int board})>[];
+      final remaining = List<PlayEntry>.from(selectedEntries);
+      final selectedBoards = <int>{};
+      for (final board in boards) {
+        final preferredIndex = remaining.indexWhere(
+          (entry) => groupBoards[entry.groupKey]?.contains(board) == true,
+        );
+        if (preferredIndex < 0) continue;
+        selected.add((entry: remaining.removeAt(preferredIndex), board: board));
+        selectedBoards.add(board);
+      }
+      final reservedBoards = {
+        for (final entry in available) ...?groupBoards[entry.groupKey],
+      };
+      for (final board in boards) {
+        if (remaining.isEmpty) break;
+        if (selectedBoards.contains(board) ||
+            (useGroupAssignments && reservedBoards.contains(board))) {
+          continue;
+        }
+        selected.add((entry: remaining.removeAt(0), board: board));
+        selectedBoards.add(board);
+      }
+
+      if (selected.isEmpty) {
+        if (block == 0) {
+          if (useGroupAssignments &&
+              groupBoards.values.every((boards) => boards.isEmpty)) {
             break;
           }
+          block++;
+          continue;
         }
-        final entry = remaining.removeAt(selectedIndex < 0 ? 0 : selectedIndex);
-        selected.add((entry, board));
+        if (useGroupAssignments) break;
+        if (block > 0) {
+          throw StateError(
+            'Unable to assign a ready match to an available board.',
+          );
+        }
+        break;
       }
-      for (final (entry, board) in selected) {
-        planned.add(BoardAssignment(entry, block, board));
+
+      for (final assignment in selected) {
+        final entry = assignment.entry;
+        planned.add(BoardAssignment(entry, block, assignment.board));
         pending.remove(entry);
         for (final player in entry.players) {
           lastPlayed[player] = block;
         }
       }
+
       if (block == 0) {
         for (final entry in running) {
           for (final player in entry.players) {

@@ -13,11 +13,12 @@ import 'package:sqlite3/sqlite3.dart';
 import '../domain/tournament_models.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../statistics/domain/monthly_player_performance.dart';
+import '../../statistics/domain/player_monthly_performance.dart';
 
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 12;
+  static const schemaVersion = 14;
 
   final Directory? _baseDirectory;
 
@@ -174,6 +175,193 @@ class LocalAppDatabase {
             ),
           ).copyWith(customOrder: row['custom_order'] as int? ?? 0),
       ];
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<Map<String, Map<String, Object?>>> loadRankingAchievementProgress(
+    String rankingId,
+    String playerProfileId,
+  ) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      final rows = database.select(
+        '''SELECT achievement_id, current_value, target_value, status,
+                  unlocked_at, explanation, is_final, source_hash
+           FROM ranking_achievement_progress
+           WHERE ranking_id = ? AND player_profile_id = ?''',
+        [rankingId, playerProfileId],
+      );
+      return {
+        for (final row in rows)
+          row['achievement_id'] as String: Map<String, Object?>.from(row),
+      };
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<void> saveRankingAchievementProgress({
+    required String rankingId,
+    required String playerProfileId,
+    required Iterable<Map<String, Object?>> progress,
+  }) => StorageAccess.run(() async {
+    final entries = progress.toList();
+    final database = await _openDatabase();
+    var changed = false;
+    try {
+      database.execute('BEGIN');
+      try {
+        for (final item in entries) {
+          database.execute(
+            '''INSERT INTO ranking_achievement_progress(
+                 ranking_id, player_profile_id, achievement_id,
+                 current_value, target_value, status, unlocked_at,
+                 explanation, is_final, source_hash
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(ranking_id, player_profile_id, achievement_id)
+               DO UPDATE SET
+                 current_value = excluded.current_value,
+                 target_value = excluded.target_value,
+                 status = excluded.status,
+                 unlocked_at = excluded.unlocked_at,
+                 explanation = excluded.explanation,
+                 is_final = excluded.is_final,
+                 source_hash = excluded.source_hash
+               WHERE current_value IS NOT excluded.current_value
+                  OR target_value IS NOT excluded.target_value
+                  OR status IS NOT excluded.status
+                  OR unlocked_at IS NOT excluded.unlocked_at
+                  OR explanation IS NOT excluded.explanation
+                  OR is_final IS NOT excluded.is_final
+                  OR source_hash IS NOT excluded.source_hash''',
+            [
+              rankingId,
+              playerProfileId,
+              item['achievement_id'],
+              item['current_value'],
+              item['target_value'],
+              item['status'],
+              item['unlocked_at'],
+              item['explanation'],
+              item['is_final'],
+              item['source_hash'],
+            ],
+          );
+          changed =
+              (database.select('SELECT changes() AS changed').first['changed']
+                      as int) >
+                  0 ||
+              changed;
+        }
+        database.execute('COMMIT');
+        if (changed) StorageAccess.markLocalDataChanged();
+      } catch (_) {
+        database.execute('ROLLBACK');
+        rethrow;
+      }
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<List<PlayerMonthlyPerformance>> loadPlayerMonthlyPerformance(
+    String playerId, {
+    int? year,
+  }) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      final rows = database.select(
+        '''SELECT player_profile_id, year, month, weighted_legs,
+                  scoring, average, checkout_rate
+           FROM player_monthly_performance
+           WHERE player_profile_id = ?${year == null ? '' : ' AND year = ?'}
+           ORDER BY year, month''',
+        year == null ? [playerId] : [playerId, year],
+      );
+      return [
+        for (final row in rows)
+          PlayerMonthlyPerformance.fromRow(Map<String, Object?>.from(row)),
+      ];
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<List<PlayerMonthlyPerformance>> loadPlayerMonthlyPerformanceForPlayers(
+    Set<String> playerIds, {
+    int? year,
+  }) => StorageAccess.run(() async {
+    if (playerIds.isEmpty) return const [];
+    final database = await _openDatabase();
+    try {
+      final ids = playerIds.toList()..sort();
+      final performances = <PlayerMonthlyPerformance>[];
+      for (var start = 0; start < ids.length; start += 900) {
+        final batch = ids.skip(start).take(900).toList();
+        final rows = database.select(
+          '''SELECT player_profile_id, year, month, weighted_legs,
+                    scoring, average, checkout_rate
+             FROM player_monthly_performance
+             WHERE player_profile_id IN (${List.filled(batch.length, '?').join(',')})
+             ${year == null ? '' : 'AND year = ?'}
+             ORDER BY year, month, player_profile_id''',
+          [...batch, ?year],
+        );
+        performances.addAll(
+          rows.map(
+            (row) => PlayerMonthlyPerformance.fromRow(
+              Map<String, Object?>.from(row),
+            ),
+          ),
+        );
+      }
+      return performances;
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<void> savePlayerMonthlyPerformance(
+    PlayerMonthlyPerformance performance,
+  ) => StorageAccess.run(() async {
+    if (performance.month < 1 ||
+        performance.month > 12 ||
+        performance.weightedLegs < 0 ||
+        performance.scoring != null &&
+            (!performance.scoring!.isFinite || performance.scoring! < 0) ||
+        performance.average != null &&
+            (!performance.average!.isFinite || performance.average! < 0) ||
+        performance.checkoutRate != null &&
+            (!performance.checkoutRate!.isFinite ||
+                performance.checkoutRate! < 0 ||
+                performance.checkoutRate! > 100)) {
+      throw ArgumentError('Performance-Daten sind ungültig.');
+    }
+    final database = await _openDatabase();
+    try {
+      database.execute(
+        '''INSERT INTO player_monthly_performance(
+             player_profile_id, year, month, weighted_legs,
+             scoring, average, checkout_rate
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(player_profile_id, year, month) DO UPDATE SET
+             weighted_legs = excluded.weighted_legs,
+             scoring = excluded.scoring,
+             average = excluded.average,
+             checkout_rate = excluded.checkout_rate''',
+        [
+          performance.playerId,
+          performance.year,
+          performance.month,
+          performance.weightedLegs,
+          performance.scoring,
+          performance.average,
+          performance.checkoutRate,
+        ],
+      );
+      StorageAccess.markLocalDataChanged();
     } finally {
       database.close();
     }
@@ -546,7 +734,7 @@ class LocalAppDatabase {
           'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
         );
       }
-      if (version > 0 && version < schemaVersion - 3) {
+      if (version > 0 && version < 9) {
         throw StateError(
           'Lokale Datenbank-Version $version kann nicht sicher migriert werden. '
           'Die Datei wurde nicht verändert. Bitte erstelle eine Kopie der '
@@ -575,14 +763,23 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion == schemaVersion - 1) {
+      if (currentVersion == 13) {
         _createMonthlyPlayerStatisticsTable(database);
-      } else if (currentVersion == schemaVersion - 2) {
+      } else if (currentVersion == 12) {
+        _createRankingAchievementProgressTable(database);
+        _createMonthlyPlayerStatisticsTable(database);
+      } else if (currentVersion == 11) {
+        _createPlayerMonthlyPerformanceTable(database);
+        _createRankingAchievementProgressTable(database);
+        _createMonthlyPlayerStatisticsTable(database);
+      } else if (currentVersion == 10) {
         database.execute(
           "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
         );
+        _createPlayerMonthlyPerformanceTable(database);
+        _createRankingAchievementProgressTable(database);
         _createMonthlyPlayerStatisticsTable(database);
-      } else if (currentVersion == schemaVersion - 3) {
+      } else if (currentVersion == 9) {
         database.execute(
           'ALTER TABLE local_rankings ADD COLUMN custom_order INTEGER NOT NULL DEFAULT 0',
         );
@@ -598,6 +795,8 @@ class LocalAppDatabase {
         database.execute(
           "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
         );
+        _createPlayerMonthlyPerformanceTable(database);
+        _createRankingAchievementProgressTable(database);
         _createMonthlyPlayerStatisticsTable(database);
       } else {
         if (currentVersion > 0) {
@@ -667,6 +866,8 @@ class LocalAppDatabase {
       CREATE INDEX idx_player_profiles_display_name
         ON player_profiles(display_name);
     ''');
+    _createPlayerMonthlyPerformanceTable(database);
+    _createRankingAchievementProgressTable(database);
     _createMonthlyPlayerStatisticsTable(database);
   }
 
@@ -697,6 +898,24 @@ class LocalAppDatabase {
     ''');
   }
 
+  void _createPlayerMonthlyPerformanceTable(Database database) {
+    database.execute('''
+      CREATE TABLE player_monthly_performance (
+        player_profile_id TEXT NOT NULL
+          REFERENCES player_profiles(id) ON DELETE CASCADE,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+        weighted_legs INTEGER NOT NULL CHECK (weighted_legs >= 0),
+        scoring REAL,
+        average REAL,
+        checkout_rate REAL CHECK (
+          checkout_rate IS NULL OR checkout_rate BETWEEN 0 AND 100
+        ),
+        PRIMARY KEY (player_profile_id, year, month)
+      )
+    ''');
+  }
+
   Future<File> _databaseFile() async {
     final directory = _baseDirectory ?? await _defaultBaseDirectory();
     return File(path.join(directory.path, 'app_database.sqlite'));
@@ -708,6 +927,30 @@ class LocalAppDatabase {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     final randomPart = Random().nextInt(1 << 32).toRadixString(16);
     return '$timestamp-$randomPart';
+  }
+
+  void _createRankingAchievementProgressTable(Database database) {
+    database.execute('''
+      CREATE TABLE IF NOT EXISTS ranking_achievement_progress (
+        ranking_id TEXT NOT NULL
+          REFERENCES local_rankings(id) ON DELETE CASCADE,
+        player_profile_id TEXT NOT NULL
+          REFERENCES player_profiles(id) ON DELETE CASCADE,
+        achievement_id TEXT NOT NULL,
+        current_value REAL NOT NULL CHECK (current_value >= 0),
+        target_value REAL NOT NULL CHECK (target_value >= 0),
+        status TEXT NOT NULL
+          CHECK (status IN ('locked', 'inProgress', 'completed')),
+        unlocked_at TEXT,
+        explanation TEXT NOT NULL DEFAULT '',
+        is_final INTEGER NOT NULL DEFAULT 0 CHECK (is_final IN (0, 1)),
+        source_hash TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (ranking_id, player_profile_id, achievement_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ranking_achievement_player
+        ON ranking_achievement_progress(player_profile_id, ranking_id);
+    ''');
   }
 }
 

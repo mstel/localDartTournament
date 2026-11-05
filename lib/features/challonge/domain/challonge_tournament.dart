@@ -83,6 +83,12 @@ class ChallongeTournament {
       }).toList();
   static String name(Map<String, dynamic> p) =>
       (p['name'] as String? ?? '').trim();
+  static String normalizedTournamentType(dynamic value) => '$value'
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+
   static String normalizedName(String name) =>
       name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   String get tournamentId => 'challonge:local:${Uri.encodeComponent(id)}';
@@ -101,7 +107,9 @@ class ChallongeTournament {
     final players = {
       for (final p in participants)
         '${p['id']}': TournamentPlayer(
-          profileId: profiles['${p['id']}'],
+          profileId: profiles['${p['id']}']?.trim().isNotEmpty == true
+              ? profiles['${p['id']}']!.trim()
+              : null,
           name: name(p),
           isGenerated: false,
         ),
@@ -110,7 +118,8 @@ class ChallongeTournament {
         .map((p) => p.profileId)
         .whereType<String>()
         .toList();
-    if ((!allowUnlinkedPlayers && players.values.any((p) => p.profileId == null)) ||
+    if ((!allowUnlinkedPlayers &&
+            players.values.any((p) => p.profileId == null)) ||
         linkedProfileIds.toSet().length != linkedProfileIds.length) {
       throw ArgumentError(
         'Jeder zugewiesene Teilnehmer muss einem eindeutigen Spieler entsprechen.',
@@ -166,13 +175,15 @@ class ChallongeTournament {
     final archive = ImportedTournamentArchive(
       sourceId: id,
       url: '${data['full_challonge_url'] ?? ''}',
-      mode: '${data['tournament_type'] ?? ''}',
+      mode: normalizedTournamentType(data['tournament_type']),
       participants: [
         for (final p in participants)
           {
             'id': '${p['id']}',
             'name': name(p),
-            'profileId': profiles['${p['id']}'],
+            'profileId': profiles['${p['id']}']?.trim().isNotEmpty == true
+                ? profiles['${p['id']}']!.trim()
+                : null,
             'finalRank': p['final_rank'],
             'groupPlayerIds': p['group_player_ids'] ?? const [],
             'groupPlacements': p['group_placements'] ?? const [],
@@ -193,6 +204,7 @@ class ChallongeTournament {
               'scores_csv',
               'started_at',
               'completed_at',
+              'bestPerformances',
               'group_id',
               'group_type',
               'player1_seed',
@@ -208,13 +220,12 @@ class ChallongeTournament {
       players: players.values.toList(),
       createdAt: DateTime.tryParse('${data['created_at'] ?? ''}'),
       startedAt: DateTime.tryParse('${data['started_at'] ?? ''}'),
-      finishedAt: DateTime.tryParse('${data['completed_at'] ?? ''}') ??
+      finishedAt:
+          DateTime.tryParse('${data['completed_at'] ?? ''}') ??
           DateTime.tryParse('${data['started_at'] ?? ''}') ??
           DateTime.tryParse('${data['created_at'] ?? ''}'),
       countsForRanking: countsForRanking,
-      rankingIds: countsForRanking
-          ? rankingIds.toSet().toList()
-          : const [],
+      rankingIds: countsForRanking ? rankingIds.toSet().toList() : const [],
       importedArchive: archive,
       stages: const [TournamentStage(name: 'Challonge-Archiv', type: 'groups')],
       runStages: [

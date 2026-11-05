@@ -31,9 +31,13 @@ class LocalRankingEloService {
   }) async {
     final tournaments = await (_tournamentStorage ?? TournamentStorage())
         .loadTournaments();
-    final targetDate = target.startedAt ?? target.createdAt;
+    final targetDate =
+        target.tournamentDate ?? target.startedAt ?? target.createdAt;
     final relevant = tournaments.where((tournament) {
-      final date = tournament.startedAt ?? tournament.createdAt;
+      final date =
+          tournament.tournamentDate ??
+          tournament.startedAt ??
+          tournament.createdAt;
       final comparison = date.compareTo(targetDate);
       final orderComparison = comparison == 0
           ? tournament.id.compareTo(target.id)
@@ -80,6 +84,7 @@ class LocalRankingEloService {
       inactivityDecayEnabled: ranking.inactivityDecayEnabled,
       inactivityGraceTournaments: ranking.inactivityGraceTournaments,
       inactivityDecayPoints: ranking.inactivityDecayPoints,
+      countUnassignedPlayers: ranking.countUnassignedPlayers,
       validFromYear: ranking.validFromYear,
       validToYear: ranking.validToYear,
       validFromDate: ranking.validFromDate,

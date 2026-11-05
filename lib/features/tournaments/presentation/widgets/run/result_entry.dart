@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../../shared/theme/tournament_display_palette.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/set_result_validation.dart';
 import '../../models/match_result.dart';
@@ -21,6 +22,8 @@ class MatchResultTile extends StatelessWidget {
     this.showRoundLabel = true,
     this.compact = false,
     this.onPlayerTap,
+    this.isRunning = false,
+    this.isFocused = false,
   });
 
   final GroupMatch match;
@@ -32,12 +35,13 @@ class MatchResultTile extends StatelessWidget {
   final bool showRoundLabel;
   final bool compact;
   final ValueChanged<TournamentPlayer>? onPlayerTap;
+  final bool isRunning;
+  final bool isFocused;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final canEdit = canEditResult && match.hasPlayers;
-    final roundLabel = leadingLabel ?? 'Runde ${match.round}';
     String playerLabel(bool home) {
       return (home ? match.homePlayer : match.awayPlayer)?.name ??
           (match.allowsBye ? 'Freilos' : 'offen');
@@ -46,26 +50,38 @@ class MatchResultTile extends StatelessWidget {
     Widget playerName(bool home, {TextAlign textAlign = TextAlign.start}) {
       final player = home ? match.homePlayer : match.awayPlayer;
       final label = playerLabel(home);
-      final text = Text(
-        label,
-        textAlign: textAlign,
-        style: Theme.of(context).textTheme.titleMedium,
+      final winner = match.winner;
+      final isWinner = match.hasResult && player != null && winner == player;
+      final isLoser =
+          match.hasResult && player != null && winner != null && !isWinner;
+      final text = Align(
+        alignment: textAlign == TextAlign.right
+            ? Alignment.centerRight
+            : Alignment.centerLeft,
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: textAlign,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: isWinner
+                ? const Color(0xFF4ED9A4)
+                : isLoser
+                ? const Color(0xFFFF7777)
+                : null,
+            fontWeight: isWinner ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
       );
-      if (player == null || onPlayerTap == null) return text;
+      if (player == null || onPlayerTap == null) {
+        return SizedBox(height: 48, child: text);
+      }
       return Tooltip(
         message: 'Spiele von ${player.name} anzeigen',
         child: InkWell(
           onTap: () => onPlayerTap!(player),
           borderRadius: BorderRadius.circular(4),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Align(
-              alignment: textAlign == TextAlign.right
-                  ? Alignment.centerRight
-                  : Alignment.centerLeft,
-              child: text,
-            ),
-          ),
+          child: SizedBox(height: 48, child: text),
         ),
       );
     }
@@ -74,123 +90,366 @@ class MatchResultTile extends StatelessWidget {
       match: match,
       tournament: tournament,
       child: Container(
-        margin: EdgeInsets.only(bottom: compact ? 4 : 8),
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 8 : 12,
-          vertical: compact ? 5 : 10,
+        key: ValueKey(
+          'match-result-tile-${match.round}-${match.homePlayer?.name}-'
+          '${match.awayPlayer?.name}',
         ),
         decoration: BoxDecoration(
-          color: colorScheme.surface,
-          border: Border.all(color: colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(16),
+          color: TournamentDisplayPalette.card,
+          border: Border.all(
+            color: isRunning
+                ? const Color(0xFF4ED9A4)
+                : isFocused
+                ? colorScheme.primary
+                : colorScheme.outlineVariant.withAlpha(150),
+            width: isRunning || isFocused ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth < (compact ? 420 : 620) ||
-                MediaQuery.textScalerOf(context).scale(16) > 24) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (showRoundLabel || originLabel != null) ...[
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (showRoundLabel)
-                          Text(
-                            roundLabel,
-                            style: Theme.of(context).textTheme.labelMedium,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 8,
+            vertical: compact ? 0 : 2,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isRunning)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF123D2D),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'Läuft',
+                      style: TextStyle(
+                        color: Color(0xFF4ED9A4),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+              if (leadingLabel != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 2, top: 2),
+                  child: Text(
+                    leadingLabel!,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.secondary,
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: EdgeInsets.only(bottom: compact ? 0 : 4),
+                child: match.isKratzer
+                    ? _KratzerPlayersRow(
+                        match: match,
+                        compact: compact,
+                        onPlayerTap: onPlayerTap,
+                        onResultTap: canEdit ? () => onEditResult(match) : null,
+                      )
+                    : Row(
+                        children: [
+                          Expanded(child: playerName(true)),
+                          _ScoreBadge(
+                            match: match,
+                            compact: compact,
+                            onTap: canEdit
+                                ? () => onEditResult(match)
+                                : match.hasResult
+                                ? () => MatchStatisticsTapTarget.open(
+                                    context,
+                                    match,
+                                    tournament: tournament,
+                                  )
+                                : null,
                           ),
-                        if (originLabel != null)
-                          _MatchOriginChip(label: originLabel!),
-                      ],
-                    ),
-                    SizedBox(height: compact ? 4 : 8),
-                  ],
-                  playerName(true),
-                  const SizedBox(height: 4),
-                  playerName(false),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: _ScoreBadge(
-                          match: match,
-                          onTap: match.hasResult
-                              ? () => MatchStatisticsTapTarget.open(
-                                  context,
-                                  match,
-                                  tournament: tournament,
-                                )
-                              : canEdit
-                              ? () => onEditResult(match)
-                              : null,
-                        ),
+                          Expanded(
+                            child: playerName(
+                              false,
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
                       ),
-                      const Spacer(),
-                      IconButton.filledTonal(
-                        onPressed: canEdit ? () => onEditResult(match) : null,
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Ergebnis',
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(48, 48),
-                          padding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            }
-
-            return Row(
-              children: [
-                if (showRoundLabel) ...[
-                  SizedBox(
-                    width: leadingLabel == null ? 74 : 148,
-                    child: Text(
-                      roundLabel,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                if (originLabel != null) ...[
-                  _MatchOriginChip(label: originLabel!),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(child: playerName(true)),
-                _ScoreBadge(
-                  match: match,
-                  onTap: match.hasResult
-                      ? () => MatchStatisticsTapTarget.open(
-                          context,
-                          match,
-                          tournament: tournament,
-                        )
-                      : canEdit
-                      ? () => onEditResult(match)
-                      : null,
-                ),
-                Expanded(child: playerName(false, textAlign: TextAlign.right)),
-                const SizedBox(width: 12),
-                IconButton.filledTonal(
-                  onPressed: canEdit ? () => onEditResult(match) : null,
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  tooltip: 'Ergebnis',
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
-            );
-          },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _KratzerPlayersRow extends StatelessWidget {
+  const _KratzerPlayersRow({
+    required this.match,
+    required this.compact,
+    required this.onPlayerTap,
+    required this.onResultTap,
+  });
+
+  final GroupMatch match;
+  final bool compact;
+  final ValueChanged<TournamentPlayer>? onPlayerTap;
+  final VoidCallback? onResultTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scratched = match.scratchedPlayer;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final player in match.players)
+              ActionChip(
+                visualDensity: compact
+                    ? VisualDensity.compact
+                    : VisualDensity.standard,
+                label: Text(
+                  player.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                backgroundColor: player == scratched
+                    ? Theme.of(context).colorScheme.errorContainer
+                    : null,
+                labelStyle: player == scratched
+                    ? TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.bold,
+                      )
+                    : null,
+                onPressed: onPlayerTap == null
+                    ? null
+                    : () => onPlayerTap!(player),
+              ),
+          ],
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onResultTap,
+            icon: Icon(
+              scratched == null ? Icons.edit_outlined : Icons.warning_amber,
+              size: 18,
+            ),
+            label: Text(
+              scratched == null
+                  ? 'Kratzer eintragen'
+                  : 'Kratzer: ${scratched.name}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class KratzerResultDialog extends StatefulWidget {
+  const KratzerResultDialog({
+    super.key,
+    required this.match,
+    this.enabledBonusTypes = const [],
+  });
+
+  final GroupMatch match;
+  final List<KratzerBonusLifeType> enabledBonusTypes;
+
+  @override
+  State<KratzerResultDialog> createState() => _KratzerResultDialogState();
+}
+
+class _KratzerResultDialogState extends State<KratzerResultDialog> {
+  late TournamentPlayer? _selected = widget.match.scratchedPlayer;
+  late final List<KratzerBonusLife> _bonuses = [
+    ...widget.match.kratzerBonusLives,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final eligible = widget.match.scratchEligiblePlayers.isEmpty
+        ? widget.match.players
+        : widget.match.scratchEligiblePlayers;
+    final bonusTypes = {
+      ...widget.enabledBonusTypes,
+      for (final bonus in _bonuses) bonus.type,
+    }.toList();
+    return AlertDialog(
+      title: const Text('Kratzer eintragen'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Es gibt keinen Matchsieger. Wähle nur die Person aus, die ein Leben verliert.',
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<TournamentPlayer>(
+              groupValue: _selected,
+              onChanged: (value) => setState(() => _selected = value),
+              child: Column(
+                children: [
+                  for (final player in eligible)
+                    RadioListTile<TournamentPlayer>(
+                      value: player,
+                      title: Text(player.name),
+                    ),
+                ],
+              ),
+            ),
+            if (bonusTypes.isNotEmpty) ...[
+              const Divider(height: 24),
+              Text('Bonusleben', style: Theme.of(context).textTheme.titleSmall),
+              for (var index = 0; index < _bonuses.length; index++)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DropdownButtonFormField<KratzerBonusLifeType>(
+                        key: ValueKey(
+                          'kratzer-bonus-type-$index-${_bonuses[index].type.name}',
+                        ),
+                        initialValue: _bonuses[index].type,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Auslöser',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final type in bonusTypes)
+                            DropdownMenuItem(
+                              value: type,
+                              child: Text(_bonusTypeLabel(type)),
+                            ),
+                        ],
+                        onChanged: (type) {
+                          if (type == null) return;
+                          setState(() {
+                            _bonuses[index] = KratzerBonusLife(
+                              player: _bonuses[index].player,
+                              type: type,
+                            );
+                          });
+                        },
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<TournamentPlayer>(
+                              key: ValueKey(
+                                'kratzer-bonus-player-$index-${_bonuses[index].player.profileId ?? _bonuses[index].player.name}',
+                              ),
+                              initialValue: _bonuses[index].player,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Spieler',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                for (final player in eligible)
+                                  DropdownMenuItem(
+                                    value: player,
+                                    child: Text(
+                                      player.name,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (player) {
+                                if (player == null) return;
+                                setState(() {
+                                  _bonuses[index] = KratzerBonusLife(
+                                    player: player,
+                                    type: _bonuses[index].type,
+                                  );
+                                });
+                              },
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Bonusleben entfernen',
+                            onPressed: () =>
+                                setState(() => _bonuses.removeAt(index)),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed:
+                      eligible.isEmpty || widget.enabledBonusTypes.isEmpty
+                      ? null
+                      : () => setState(() {
+                          _bonuses.add(
+                            KratzerBonusLife(
+                              player: eligible.first,
+                              type: widget.enabledBonusTypes.first,
+                            ),
+                          );
+                        }),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Bonusleben hinzufügen'),
+                ),
+              ),
+              const Text(
+                'Jeder Eintrag vergibt ein zusätzliches Leben. Mehrere Bonusleben pro Partie sind möglich.',
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+        if (widget.match.scratchedPlayer != null)
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, const MatchResult.cleared()),
+            child: const Text('Eintrag entfernen'),
+          ),
+        FilledButton(
+          onPressed: _selected == null
+              ? null
+              : () => Navigator.pop(
+                  context,
+                  MatchResult.kratzer(
+                    _selected,
+                    kratzerBonusLives: List.unmodifiable(_bonuses),
+                  ),
+                ),
+          child: const Text('Kratzer speichern'),
+        ),
+      ],
+    );
+  }
+
+  String _bonusTypeLabel(KratzerBonusLifeType type) => switch (type) {
+    KratzerBonusLifeType.score180 => '180',
+    KratzerBonusLifeType.highFinish => 'High Finish',
+  };
 }
 
 class ResultDialog extends StatefulWidget {
@@ -483,38 +742,11 @@ class _ScoreLimitInputFormatter extends TextInputFormatter {
   }
 }
 
-class _MatchOriginChip extends StatelessWidget {
-  const _MatchOriginChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      constraints: const BoxConstraints(minWidth: 76),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: colorScheme.onSecondaryContainer,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
 class _ScoreBadge extends StatelessWidget {
-  const _ScoreBadge({required this.match, this.onTap});
+  const _ScoreBadge({required this.match, required this.compact, this.onTap});
 
   final GroupMatch match;
+  final bool compact;
   final VoidCallback? onTap;
 
   @override
@@ -522,12 +754,14 @@ class _ScoreBadge extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     final badge = Container(
-      constraints: BoxConstraints(
-        minWidth: match.isAnnulled || match.hasSetScore ? 100 : 64,
-        minHeight: 48,
-      ),
+      width: match.isAnnulled
+          ? 72
+          : compact
+          ? 40
+          : 48,
+      height: compact ? 32 : 36,
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
         color: match.isAnnulled
             ? colorScheme.errorContainer
@@ -542,20 +776,25 @@ class _ScoreBadge extends StatelessWidget {
             : match.hasResult
             ? match.scoreLabel
             : '-:-',
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: compact ? 11 : 12,
+        ),
       ),
     );
 
     if (onTap == null) {
-      return badge;
+      return SizedBox(width: 48, height: 48, child: Center(child: badge));
     }
 
     return Tooltip(
-      message: match.hasResult ? 'Spielstatistik öffnen' : 'Ergebnis eingeben',
+      message: match.hasResult ? 'Ergebnis bearbeiten' : 'Ergebnis eingeben',
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: onTap,
-        child: badge,
+        child: SizedBox(width: 48, height: 48, child: Center(child: badge)),
       ),
     );
   }

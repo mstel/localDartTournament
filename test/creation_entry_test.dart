@@ -65,6 +65,8 @@ void main() {
           scrollable: find.byType(Scrollable).first,
         );
         expect(find.byType(TextField), findsWidgets);
+        expect(find.text('Name eines anderen Turniers öffnen'), findsOneWidget);
+        expect(find.text('Namen speichern'), findsOneWidget);
         if (previewFont.isNotEmpty) {
           await tester.runAsync(() async {
             final boundary =

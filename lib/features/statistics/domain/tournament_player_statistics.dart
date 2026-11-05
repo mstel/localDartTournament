@@ -30,7 +30,8 @@ class TournamentStatisticsCalculator {
       for (final tournament in tournaments) tournament.id: tournament,
     };
     for (final tournament in unique.values) {
-      if (period == null || period.contains(tournament.createdAt)) {
+      if (period == null ||
+          period.contains(tournament.tournamentDate ?? tournament.createdAt)) {
         for (final entry in leagueStatisticsEntries(tournament)) {
           final id = aliases[entry.id] ?? entry.id;
           final row = rows.putIfAbsent(
@@ -60,10 +61,17 @@ class TournamentStatisticsCalculator {
         }
         for (final match in matches) {
           if (period != null &&
-              !period.contains(match.finishedAt ?? match.startedAt)) {
+              !period.contains(
+                tournament.tournamentDate ??
+                    match.finishedAt ??
+                    match.startedAt ??
+                    tournament.createdAt,
+              )) {
             continue;
           }
-          if (!match.countsForStatistics || match.isAnnulled || !match.hasPlayers) {
+          if (!match.countsForStatistics ||
+              match.isAnnulled ||
+              !match.hasPlayers) {
             continue;
           }
           final players = [match.homePlayer!, match.awayPlayer!];

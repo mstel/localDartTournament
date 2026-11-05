@@ -124,6 +124,7 @@ class LocalEloCalculator {
     bool inactivityDecayEnabled = false,
     int inactivityGraceTournaments = 0,
     int inactivityDecayPoints = 0,
+    bool countUnassignedPlayers = false,
     int? validFromYear,
     int? validToYear,
     DateTime? validFromDate,
@@ -138,6 +139,7 @@ class LocalEloCalculator {
           rating: startRating,
         ),
     };
+    final rankingPlayerIds = players.keys.toSet();
     final history = <String, List<LocalEloHistoryItem>>{};
     final matchDeltas = <String, LocalEloMatchDelta>{};
     final ordered = tournaments.toList()
@@ -182,29 +184,55 @@ class LocalEloCalculator {
       if (tid != 0) return tid;
       return a.match.round.compareTo(b.match.round);
     });
+    if (countUnassignedPlayers) {
+      for (final row in rankedMatches) {
+        for (final player in [row.match.homePlayer!, row.match.awayPlayer!]) {
+          if (player.isGenerated || player.profileId != null) {
+            continue;
+          }
+          final id = participantKey(
+            row.tournament,
+            player,
+            includeUnassignedPlayers: true,
+          );
+          entries.putIfAbsent(
+            id,
+            () => LocalEloPlayer(id: id, name: player.name, rating: 1000),
+          );
+        }
+      }
+    }
     final tournamentParticipants = <String, Set<String>>{};
     final tournamentsPlayed = <String, Set<String>>{};
     for (final row in rankedMatches) {
-      final homeId =
-          row.match.homePlayer!.profileId ?? row.match.homePlayer!.name;
-      final awayId =
-          row.match.awayPlayer!.profileId ?? row.match.awayPlayer!.name;
+      final homePlayer = row.match.homePlayer!;
+      final awayPlayer = row.match.awayPlayer!;
+      final homeId = participantKey(
+        row.tournament,
+        homePlayer,
+        includeUnassignedPlayers: countUnassignedPlayers,
+      );
+      final awayId = participantKey(
+        row.tournament,
+        awayPlayer,
+        includeUnassignedPlayers: countUnassignedPlayers,
+      );
       if (homeId == awayId) continue;
       final homeRule = PlayerWithdrawalService.policy(
         row.tournament,
-        row.match.homePlayer!,
+        homePlayer,
       );
       final awayRule = PlayerWithdrawalService.policy(
         row.tournament,
-        row.match.awayPlayer!,
+        awayPlayer,
       );
-      if (entries.containsKey(homeId) &&
+      if (rankingPlayerIds.contains(homePlayer.profileId) &&
           (homeRule?.countForRanking ?? true) &&
           (awayRule?.countOpponentsForRanking ?? true)) {
         (tournamentParticipants[row.tournament.id] ??= <String>{}).add(homeId);
         (tournamentsPlayed[homeId] ??= <String>{}).add(row.tournament.id);
       }
-      if (entries.containsKey(awayId) &&
+      if (rankingPlayerIds.contains(awayPlayer.profileId) &&
           (awayRule?.countForRanking ?? true) &&
           (homeRule?.countOpponentsForRanking ?? true)) {
         (tournamentParticipants[row.tournament.id] ??= <String>{}).add(awayId);
@@ -221,12 +249,32 @@ class LocalEloCalculator {
               .map((entry) => entry.key)
               .toSet();
     final pending = rankedMatches.where((row) {
-      final homeId =
-          row.match.homePlayer!.profileId ?? row.match.homePlayer!.name;
-      final awayId =
-          row.match.awayPlayer!.profileId ?? row.match.awayPlayer!.name;
-      return eligiblePlayers.contains(homeId) &&
-          eligiblePlayers.contains(awayId);
+      final home = row.match.homePlayer!;
+      final away = row.match.awayPlayer!;
+      final homeId = participantKey(
+        row.tournament,
+        home,
+        includeUnassignedPlayers: countUnassignedPlayers,
+      );
+      final awayId = participantKey(
+        row.tournament,
+        away,
+        includeUnassignedPlayers: countUnassignedPlayers,
+      );
+      return _eligible(
+            home,
+            homeId,
+            eligiblePlayers,
+            rankingPlayerIds,
+            countUnassignedPlayers,
+          ) &&
+          _eligible(
+            away,
+            awayId,
+            eligiblePlayers,
+            rankingPlayerIds,
+            countUnassignedPlayers,
+          );
     }).toList();
     final replayEvents = <_EloReplayEvent>[];
     for (final tournamentId in tournamentParticipants.keys) {
@@ -270,8 +318,9 @@ class LocalEloCalculator {
       final participants = (tournamentParticipants[tournament.id] ?? const {})
           .intersection(eligiblePlayers);
       if (event.match == null) {
-        for (final player in entries.values) {
-          if (!eligiblePlayers.contains(player.id)) continue;
+        for (final playerId in rankingPlayerIds) {
+          final player = entries[playerId]!;
+          if (!eligiblePlayers.contains(playerId)) continue;
           if (participants.contains(player.id)) {
             missedTournamentStreaks[player.id] = 0;
             continue;
@@ -287,7 +336,12 @@ class LocalEloCalculator {
               : 0;
           final recipients =
               participants
-                  .where((id) => id != player.id && entries.containsKey(id))
+                  .where(
+                    (id) =>
+                        id != player.id &&
+                        rankingPlayerIds.contains(id) &&
+                        entries.containsKey(id),
+                  )
                   .toList()
                 ..sort();
           final requestedLoss = requestedAbsenceLoss + requestedInactivityLoss;
@@ -389,8 +443,16 @@ class LocalEloCalculator {
       final row = event.match!;
       final match = row.match;
       final date = event.date;
-      final homeId = match.homePlayer!.profileId ?? match.homePlayer!.name;
-      final awayId = match.awayPlayer!.profileId ?? match.awayPlayer!.name;
+      final homeId = participantKey(
+        tournament,
+        match.homePlayer!,
+        includeUnassignedPlayers: countUnassignedPlayers,
+      );
+      final awayId = participantKey(
+        tournament,
+        match.awayPlayer!,
+        includeUnassignedPlayers: countUnassignedPlayers,
+      );
       if (homeId == awayId) continue;
       final home = entries[homeId], away = entries[awayId];
       if (home == null || away == null) continue;
@@ -506,7 +568,11 @@ class LocalEloCalculator {
     }
     final result =
         entries.values
-            .where((e) => e.matches > 0 || e.rating != startRating)
+            .where(
+              (e) =>
+                  rankingPlayerIds.contains(e.id) &&
+                  (e.matches > 0 || e.rating != startRating),
+            )
             .toList()
           ..sort((a, b) => b.rating.compareTo(a.rating));
     return LocalEloSnapshot(result, history, matchDeltas: matchDeltas);
@@ -519,12 +585,41 @@ class LocalEloCalculator {
     return index < 0 ? null : _matchKey(tournament, index);
   }
 
+  String participantKey(
+    CreatedTournament tournament,
+    TournamentPlayer player, {
+    required bool includeUnassignedPlayers,
+  }) {
+    final id = player.profileId ?? player.name;
+    if (player.profileId != null) return id;
+    if (!includeUnassignedPlayers || player.isGenerated) return id;
+    return 'local:${Uri.encodeComponent(tournament.id)}:'
+        '${Uri.encodeComponent(id)}';
+  }
+
+  bool _eligible(
+    TournamentPlayer player,
+    String id,
+    Set<String> eligiblePlayers,
+    Set<String> rankingPlayerIds,
+    bool countUnassignedPlayers,
+  ) {
+    if (player.profileId != null &&
+        rankingPlayerIds.contains(player.profileId)) {
+      return eligiblePlayers.contains(id);
+    }
+    return player.profileId == null &&
+        countUnassignedPlayers &&
+        !player.isGenerated;
+  }
+
   String _matchKey(CreatedTournament tournament, int matchIndex) =>
       '${tournament.id}:$matchIndex';
 
-  DateTime _date(CreatedTournament t) => t.startedAt ?? t.createdAt;
+  DateTime _date(CreatedTournament t) =>
+      t.tournamentDate ?? t.startedAt ?? t.createdAt;
   DateTime _matchDate(CreatedTournament t, GroupMatch m) =>
-      m.finishedAt ?? m.startedAt ?? _date(t);
+      t.tournamentDate ?? m.finishedAt ?? m.startedAt ?? _date(t);
   DateTime _dateOnly(DateTime date) =>
       DateTime(date.year, date.month, date.day);
   Iterable<GroupMatch> _matches(CreatedTournament t) sync* {

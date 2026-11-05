@@ -24,6 +24,9 @@ class LocalRanking {
     this.validFromDate,
     this.validToDate,
     this.enableTiers = false,
+    this.achievementsEnabled = false,
+    this.achievementTargets = const {},
+    this.isCompleted = false,
     this.tierBands,
     this.requireMinimumParticipations = false,
     this.minimumParticipations = 1,
@@ -33,6 +36,7 @@ class LocalRanking {
     this.inactivityDecayEnabled = false,
     this.inactivityGraceTournaments = 3,
     this.inactivityDecayPoints = 5,
+    this.countUnassignedPlayers = false,
     this.isDefaultForStatistics = false,
     this.customOrder = 0,
   });
@@ -57,6 +61,9 @@ class LocalRanking {
   final DateTime? validFromDate;
   final DateTime? validToDate;
   final bool enableTiers;
+  final bool achievementsEnabled;
+  final Map<String, double> achievementTargets;
+  final bool isCompleted;
   final List<EloTier>? tierBands;
   List<EloTier> get effectiveTierBands =>
       tierBands == null || tierBands!.isEmpty ? EloTier.values : tierBands!;
@@ -68,6 +75,7 @@ class LocalRanking {
   final bool inactivityDecayEnabled;
   final int inactivityGraceTournaments;
   final int inactivityDecayPoints;
+  final bool countUnassignedPlayers;
   final bool isDefaultForStatistics;
   final int customOrder;
 
@@ -108,6 +116,9 @@ class LocalRanking {
     'validFromDate': validFromDate?.toIso8601String(),
     'validToDate': validToDate?.toIso8601String(),
     'enableTiers': enableTiers,
+    'achievementsEnabled': achievementsEnabled,
+    'achievementTargets': achievementTargets,
+    'isCompleted': isCompleted,
     if (tierBands != null)
       'tierBands': [for (final tier in tierBands!) tier.toJson()],
     'requireMinimumParticipations': requireMinimumParticipations,
@@ -118,6 +129,7 @@ class LocalRanking {
     'inactivityDecayEnabled': inactivityDecayEnabled,
     'inactivityGraceTournaments': inactivityGraceTournaments,
     'inactivityDecayPoints': inactivityDecayPoints,
+    'countUnassignedPlayers': countUnassignedPlayers,
     'isDefaultForStatistics': isDefaultForStatistics,
   };
 
@@ -145,6 +157,13 @@ class LocalRanking {
     validFromDate: DateTime.tryParse(json['validFromDate'] as String? ?? ''),
     validToDate: DateTime.tryParse(json['validToDate'] as String? ?? ''),
     enableTiers: json['enableTiers'] as bool? ?? false,
+    achievementsEnabled: json['achievementsEnabled'] as bool? ?? false,
+    achievementTargets: {
+      for (final entry in (json['achievementTargets'] as Map? ?? {}).entries)
+        if (entry.key is String && entry.value is num)
+          entry.key as String: (entry.value as num).toDouble(),
+    },
+    isCompleted: json['isCompleted'] as bool? ?? false,
     tierBands: (json['tierBands'] as List?)?.indexed
         .map(
           (entry) => EloTier.fromJson(
@@ -163,6 +182,7 @@ class LocalRanking {
     inactivityDecayEnabled: json['inactivityDecayEnabled'] as bool? ?? false,
     inactivityGraceTournaments: json['inactivityGraceTournaments'] as int? ?? 3,
     inactivityDecayPoints: json['inactivityDecayPoints'] as int? ?? 5,
+    countUnassignedPlayers: json['countUnassignedPlayers'] as bool? ?? false,
     isDefaultForStatistics: json['isDefaultForStatistics'] as bool? ?? false,
   );
 
@@ -187,6 +207,9 @@ class LocalRanking {
     DateTime? validFromDate,
     DateTime? validToDate,
     bool? enableTiers,
+    bool? achievementsEnabled,
+    Map<String, double>? achievementTargets,
+    bool? isCompleted,
     List<EloTier>? tierBands,
     bool? requireMinimumParticipations,
     int? minimumParticipations,
@@ -196,6 +219,7 @@ class LocalRanking {
     bool? inactivityDecayEnabled,
     int? inactivityGraceTournaments,
     int? inactivityDecayPoints,
+    bool? countUnassignedPlayers,
     bool? isDefaultForStatistics,
     int? customOrder,
   }) => LocalRanking(
@@ -219,6 +243,9 @@ class LocalRanking {
     validFromDate: validFromDate ?? this.validFromDate,
     validToDate: validToDate ?? this.validToDate,
     enableTiers: enableTiers ?? this.enableTiers,
+    achievementsEnabled: achievementsEnabled ?? this.achievementsEnabled,
+    achievementTargets: achievementTargets ?? this.achievementTargets,
+    isCompleted: isCompleted ?? this.isCompleted,
     tierBands: tierBands ?? this.tierBands,
     requireMinimumParticipations:
         requireMinimumParticipations ?? this.requireMinimumParticipations,
@@ -232,6 +259,8 @@ class LocalRanking {
     inactivityGraceTournaments:
         inactivityGraceTournaments ?? this.inactivityGraceTournaments,
     inactivityDecayPoints: inactivityDecayPoints ?? this.inactivityDecayPoints,
+    countUnassignedPlayers:
+        countUnassignedPlayers ?? this.countUnassignedPlayers,
     isDefaultForStatistics:
         isDefaultForStatistics ?? this.isDefaultForStatistics,
     customOrder: customOrder ?? this.customOrder,

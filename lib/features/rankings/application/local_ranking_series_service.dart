@@ -60,7 +60,10 @@ class LocalRankingSeriesService {
       if (!tournament.countsForRanking ||
           !tournament.rankingIds.contains(ranking.id) ||
           !ranking.includesTournamentDate(
-            (tournament.finishedAt ?? tournament.createdAt).toLocal(),
+            (tournament.tournamentDate ??
+                    tournament.finishedAt ??
+                    tournament.createdAt)
+                .toLocal(),
           )) {
         continue;
       }

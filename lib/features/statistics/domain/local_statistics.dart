@@ -111,7 +111,8 @@ class LocalStatisticsService {
           DirectEncounter(
             tournamentName: tournament.name,
             date:
-                (match.finishedAt ??
+                (tournament.tournamentDate ??
+                        match.finishedAt ??
                         tournament.finishedAt ??
                         tournament.createdAt)
                     .toLocal(),
@@ -188,7 +189,11 @@ class LocalStatisticsService {
     final performances = <BestPerformance>[];
     for (final tournament in tournaments) {
       if (year != null) {
-        final tDate = (tournament.finishedAt ?? tournament.createdAt).toLocal();
+        final tDate =
+            (tournament.tournamentDate ??
+                    tournament.finishedAt ??
+                    tournament.createdAt)
+                .toLocal();
         if (tDate.year != year) continue;
       }
       if (tournament.players.any(

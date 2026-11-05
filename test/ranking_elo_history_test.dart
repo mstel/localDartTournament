@@ -1,11 +1,33 @@
 import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
 import 'package:dart_tournament_manager/features/rankings/presentation/rankings_page.dart';
 import 'package:dart_tournament_manager/features/rankings/presentation/widgets/elo_trajectory_chart.dart';
+import 'package:dart_tournament_manager/features/statistics/presentation/local_player_statistics_page.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Elo history player name opens the player profile', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerEloHistoryPage(
+          player: LocalEloPlayer(id: 'profile-1', name: 'Anna'),
+          rankingName: 'Vereinsrangliste',
+          history: const [],
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.tap(find.byTooltip('Spielerprofil von Anna öffnen'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.byType(LocalPlayerStatisticsPage), findsOneWidget);
+  });
+
   testWidgets('Elo trajectory shows its initial 1000 rating', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -275,7 +297,10 @@ void main() {
 
     // Group total is +45, rating went from 1000 to 1045
     expect(find.text('+45 Elo'), findsOneWidget);
-    expect(find.text('1000 → 1045 Elo'), findsNWidgets(2)); // in trajectory summary and in card trailing
+    expect(
+      find.text('1000 → 1045 Elo'),
+      findsNWidgets(2),
+    ); // in trajectory summary and in card trailing
 
     // Expand the card
     final tile = find.widgetWithText(ExpansionTile, 'Turnier 1');
@@ -289,5 +314,4 @@ void main() {
     expect(find.textContaining('Elo: 1000 → 1025'), findsOneWidget);
     expect(find.textContaining('Elo: 1025 → 1045'), findsOneWidget);
   });
-
 }

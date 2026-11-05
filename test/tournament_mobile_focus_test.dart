@@ -129,7 +129,7 @@ void main() {
         }
         await tester.pumpAndSettle();
         expect(find.text('Turnieruhr starten'), findsNothing);
-        expect(find.byTooltip('Ergebnis'), findsWidgets);
+        expect(find.byTooltip('Ergebnis eingeben'), findsWidgets);
         if (font.isNotEmpty) {
           await tester.runAsync(() async {
             final render =
@@ -151,7 +151,7 @@ void main() {
         await tester.pumpAndSettle();
         tester.view.physicalSize = size;
         await tester.pumpAndSettle();
-        expect(find.byTooltip('Ergebnis'), findsWidgets);
+        expect(find.byTooltip('Ergebnis eingeben'), findsWidgets);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         await tester.runAsync(() => StorageAccess.run(() async {}));
@@ -229,7 +229,7 @@ void main() {
           );
           if (compact) {
             expect(find.text('Gesamter Turnierbaum'), findsNothing);
-            await tester.tap(find.byTooltip('Ergebnis'));
+            await tester.tap(find.byTooltip('Ergebnis eingeben'));
             expect(edited, same(stage.rounds.first.first));
             await tester.scrollUntilVisible(
               find.text('Turnierbaum & Setzung').hitTestable(),
@@ -283,7 +283,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Gruppenbaum-Vorschau'), findsNothing);
-    await tester.tap(find.byTooltip('Ergebnis'));
+    await tester.tap(find.byTooltip('Ergebnis eingeben'));
     expect(edited, same(match));
     await tester.tap(find.text('Gruppenbaum'));
     await tester.pumpAndSettle();
@@ -373,7 +373,7 @@ void main() {
         await tester.tap(find.text('Ergebnisse').last);
         await tester.pumpAndSettle();
         expect(find.byType(TournamentRunPage), findsOneWidget);
-        expect(find.byTooltip('Ergebnis'), findsWidgets);
+        expect(find.byTooltip('Ergebnis eingeben'), findsWidgets);
         expect(tester.takeException(), isNull);
 
         for (final size in [
@@ -387,7 +387,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull, reason: 'Rotation to $size');
           expect(find.byType(TournamentRunPage), findsOneWidget);
-          expect(find.byTooltip('Ergebnis'), findsWidgets);
+          expect(find.byTooltip('Ergebnis eingeben'), findsWidgets);
         }
         if (font.isNotEmpty) {
           await tester.runAsync(() async {
