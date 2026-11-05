@@ -1,3 +1,11 @@
+# 2.5.1+73
+
+- Bezieht importierte historische Monatsaggregate in Spielerprofile,
+  Jahresrückblicke, aktuelle Form und Vereinsentwicklung ein, ohne sie als
+  zusätzliche Einzelspiele zu zählen.
+- Verhindert, dass bei konvertierten Challonge-Turnieren archivierte
+  Bestleistungen zusätzlich zu den nativen Turnierdaten gewertet werden.
+
 # 2.5.0+72
 
 - Basiert auf dem stabilen Datenformat von 2.4.10+70: Turnierschema 38 und

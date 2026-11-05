@@ -376,7 +376,8 @@ class RankingAchievementService {
       if (placement == 3) thirdPlaces++;
       if (placement == 4) fourthPlaces++;
 
-      for (final match in _matches(tournament)) {
+      final matches = _matches(tournament);
+      for (final match in matches) {
         if (!match.countsForStatistics) continue;
         final matchDate = match.finishedAt ?? date;
         final sides = _matchSides(match);
@@ -423,8 +424,10 @@ class RankingAchievementService {
           recordPerformance(performance);
         }
       }
-      for (final archived in _archivedBestPerformances(tournament)) {
-        if (archived.$2 == profileId) recordPerformance(archived.$1);
+      if (!matches.any((match) => match.bestPerformances.isNotEmpty)) {
+        for (final archived in _archivedBestPerformances(tournament)) {
+          if (archived.$2 == profileId) recordPerformance(archived.$1);
+        }
       }
     }
 

@@ -1,17 +1,24 @@
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/rankings/presentation/rankings_page.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/monthly_player_performance.dart';
+import 'package:dart_tournament_manager/features/rankings/application/ranking_year_review_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/imported_tournament_archive.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _YearReviewDatabase extends LocalAppDatabase {
-  _YearReviewDatabase({this.performance = const []});
+  _YearReviewDatabase({
+    this.performance = const [],
+    this.importedPerformance = const [],
+  });
 
   final List<PlayerMonthlyPerformance> performance;
+  final List<MonthlyPlayerPerformance> importedPerformance;
 
   @override
   Future<List<LocalRanking>> loadLocalRankings() async => const [
@@ -85,12 +92,102 @@ class _YearReviewDatabase extends LocalAppDatabase {
   Future<List<MonthlyPlayerPerformance>> loadMonthlyPlayerPerformances(
     Set<String> playerProfileIds, {
     int? year,
-  }) async => const [];
+  }) async => [
+    for (final entry in importedPerformance)
+      if (playerProfileIds.contains(entry.playerProfileId) &&
+          (year == null || int.parse(entry.month.substring(0, 4)) == year))
+        entry,
+  ];
 }
 
 class _YearReviewStorage extends TournamentStorage {
+  _YearReviewStorage({this.tournaments = const []});
+
+  final List<CreatedTournament> tournaments;
+
   @override
-  Future<List<CreatedTournament>> loadTournaments() async => const [];
+  Future<List<CreatedTournament>> loadTournaments() async => tournaments;
+}
+
+CreatedTournament _convertedChallongeWithBestPerformance() {
+  final player = TournamentPlayer(
+    profileId: 'player',
+    name: 'Robin Spieler',
+    isGenerated: false,
+  );
+  final opponent = TournamentPlayer(
+    profileId: 'empty-player',
+    name: 'Spieler ohne Messwerte',
+    isGenerated: false,
+  );
+  const performance = {
+    'type': 'score180',
+    'playerName': 'Robin Spieler',
+    'playerProfileId': 'player',
+    'value': 180,
+  };
+  final match = GroupMatch(
+    homePlayer: player,
+    awayPlayer: opponent,
+    round: 1,
+    homeLegs: 3,
+    awayLegs: 1,
+    finishedAt: DateTime(2026, 2),
+    bestPerformances: const [
+      BestPerformance(
+        type: BestPerformanceType.score180,
+        playerName: 'Robin Spieler',
+        playerProfileId: 'player',
+        value: 180,
+      ),
+    ],
+  );
+  return CreatedTournament(
+    id: 'challonge-converted',
+    name: 'Challonge converted',
+    createdAt: DateTime(2026, 2),
+    finishedAt: DateTime(2026, 2),
+    players: [player, opponent],
+    stages: const [],
+    runStages: [
+      GroupTournamentRunStage(
+        name: 'Gruppe',
+        groupPlayType: 'round_robin',
+        groups: [
+          TournamentGroup(
+            name: 'A',
+            playType: 'round_robin',
+            players: [player, opponent],
+            matches: [match],
+          ),
+        ],
+        qualificationPlan: null,
+        tieBreakers: const [],
+      ),
+    ],
+    rankingIds: const ['default'],
+    importedArchive: ImportedTournamentArchive(
+      sourceId: 'source',
+      url: 'https://challonge.com/example',
+      mode: 'round robin',
+      participants: const [
+        {'id': '1', 'name': 'Robin Spieler', 'profileId': 'player'},
+        {
+          'id': '2',
+          'name': 'Spieler ohne Messwerte',
+          'profileId': 'empty-player',
+        },
+      ],
+      matches: const [
+        {
+          'player1_id': '1',
+          'player2_id': '2',
+          'bestPerformances': [performance],
+        },
+      ],
+      nativeValidation: const {'status': 'valid'},
+    ),
+  );
 }
 
 void main() {
@@ -123,6 +220,17 @@ void main() {
     tester,
   ) async {
     final database = _YearReviewDatabase(
+      importedPerformance: const [
+        MonthlyPlayerPerformance(
+          playerProfileId: 'monthly-player',
+          sourcePlayerName: 'Spieler mit Vereinswerten',
+          month: '2026-01',
+          threeDartAverage: 100,
+          firstNineAverage: 60,
+          legs: 20,
+          matches: 7,
+        ),
+      ],
       performance: const [
         PlayerMonthlyPerformance(
           playerId: 'player',
@@ -167,14 +275,20 @@ void main() {
     expect(find.text('Höchster Average'), findsOneWidget);
     expect(find.text('Höchstes Scoring'), findsOneWidget);
     expect(find.text('Höchste Checkout-Quote'), findsOneWidget);
-    expect(find.textContaining('Robin Spieler (94.2)'), findsOneWidget);
-    expect(find.textContaining('Robin Spieler (57.8)'), findsOneWidget);
+    expect(
+      find.textContaining('Spieler mit Vereinswerten (100.0)'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Spieler mit Vereinswerten (60.0)'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Robin Spieler (66.7 %)'), findsOneWidget);
     expect(find.text('Vereinsentwicklung pro Monat'), findsOneWidget);
-    expect(find.text('40 Legs'), findsOneWidget);
-    expect(find.text('Scoring: 49.0'), findsOneWidget);
-    expect(find.text('Average: 87.1'), findsOneWidget);
-    expect(find.text('Checkout-Quote: 43.4 %'), findsOneWidget);
+    expect(find.text('30 Legs'), findsOneWidget);
+    expect(find.text('Scoring: 59.3'), findsOneWidget);
+    expect(find.text('Average: 98.1'), findsOneWidget);
+    expect(find.text('Checkout-Quote: 66.7 %'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -182,6 +296,26 @@ void main() {
     tester,
   ) async {
     final database = _YearReviewDatabase(
+      importedPerformance: const [
+        MonthlyPlayerPerformance(
+          playerProfileId: 'player',
+          sourcePlayerName: 'Robin Spieler',
+          month: '2025-03',
+          threeDartAverage: 100,
+          firstNineAverage: 63.5,
+          legs: 30,
+          matches: 8,
+        ),
+        MonthlyPlayerPerformance(
+          playerProfileId: 'player',
+          sourcePlayerName: 'Robin Spieler',
+          month: '2024-11',
+          threeDartAverage: 130,
+          firstNineAverage: 105,
+          legs: 20,
+          matches: 6,
+        ),
+      ],
       performance: const [
         PlayerMonthlyPerformance(
           playerId: 'player',
@@ -237,16 +371,16 @@ void main() {
     expect(find.text('Höchster Average'), findsOneWidget);
     expect(find.text('Höchstes Scoring'), findsOneWidget);
     expect(find.text('Höchste Checkout-Quote'), findsOneWidget);
-    expect(find.text('91.3'), findsWidgets);
-    expect(find.text('58.6'), findsWidgets);
+    expect(find.text('100.0'), findsWidgets);
+    expect(find.text('63.5'), findsWidgets);
     expect(find.text('42.8 %'), findsWidgets);
 
     await tester.tap(yearField);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Gesamter Zeitraum').last);
     await tester.pumpAndSettle();
-    expect(find.text('120.5'), findsWidgets);
-    expect(find.text('99.9'), findsWidgets);
+    expect(find.text('130.0'), findsWidgets);
+    expect(find.text('105.0'), findsWidgets);
     expect(find.text('85.7 %'), findsWidgets);
 
     final playerField = find.byType(DropdownButtonFormField<PlayerProfile>);
@@ -257,4 +391,26 @@ void main() {
     expect(find.text('–'), findsNWidgets(3));
     expect(tester.takeException(), isNull);
   });
+
+  test(
+    'native Challonge and retained archive count best performances once',
+    () async {
+      final review =
+          await RankingYearReviewService(
+            database: _YearReviewDatabase(),
+            tournamentStorage: _YearReviewStorage(
+              tournaments: [_convertedChallongeWithBestPerformance()],
+            ),
+          ).calculate(
+            const LocalRanking(id: 'default', name: 'DC Unzenberg 2026'),
+            2026,
+          );
+
+      final player = review.players['Robin Spieler']!;
+      expect(player.bestPerformances, 1);
+      expect(player.scores180, 1);
+      expect(review.totalBestPerformances, 1);
+      expect(review.total180, 1);
+    },
+  );
 }

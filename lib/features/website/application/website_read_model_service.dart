@@ -59,7 +59,10 @@ class WebsiteReadModelService {
         profile.id,
       }, completed);
       final currentForm = calculateCurrentFormPerformance(
-        await _database.loadPlayerMonthlyPerformance(profile.id),
+        combineMonthlyPlayerPerformances(
+          recorded: await _database.loadPlayerMonthlyPerformance(profile.id),
+          imported: await _database.loadMonthlyPlayerPerformances({profile.id}),
+        ),
         now: _clock(),
       );
       final currentFormJson = currentForm.toJson();

@@ -7,17 +7,9 @@ class PlayerPerformanceSection extends StatelessWidget {
 
   final List<PlayerMonthlyPerformance> performance;
 
-  double? _mean(Iterable<double?> values) {
-    final present = values.whereType<double>().toList();
-    if (present.isEmpty) return null;
-    return present.reduce((left, right) => left + right) / present.length;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final meanScoring = _mean(performance.map((entry) => entry.scoring));
-    final meanAverage = _mean(performance.map((entry) => entry.average));
-    final meanCheckout = _mean(performance.map((entry) => entry.checkoutRate));
+    final overall = summarizeMonthlyPerformance(performance);
     final currentForm = calculateCurrentFormPerformance(performance);
 
     return Column(
@@ -34,21 +26,21 @@ class PlayerPerformanceSection extends StatelessWidget {
           children: [
             _PerformanceStatCard(
               label: 'Gewertete Legs',
-              value: '${totalWeightedLegs(performance)}',
+              value: '${overall.weightedLegs}',
             ),
             _PerformanceStatCard(
               label: 'Scoring',
-              value: meanScoring?.toStringAsFixed(1) ?? '–',
+              value: overall.scoring?.toStringAsFixed(1) ?? '–',
             ),
             _PerformanceStatCard(
               label: 'Average',
-              value: meanAverage?.toStringAsFixed(1) ?? '–',
+              value: overall.average?.toStringAsFixed(1) ?? '–',
             ),
             _PerformanceStatCard(
               label: 'Checkout Quote',
-              value: meanCheckout == null
+              value: overall.checkoutRate == null
                   ? '–'
-                  : '${meanCheckout.toStringAsFixed(1)} %',
+                  : '${overall.checkoutRate!.toStringAsFixed(1)} %',
             ),
           ],
         ),

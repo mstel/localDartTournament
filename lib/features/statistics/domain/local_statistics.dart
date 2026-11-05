@@ -89,7 +89,8 @@ class LocalStatisticsService {
     var rightWins = 0;
     var draws = 0;
     for (final tournament in tournaments) {
-      for (final match in _matches(tournament)) {
+      final tournamentMatches = _matches(tournament).toSet().toList();
+      for (final match in tournamentMatches) {
         if (!match.hasResult || match.withdrawalIgnored) continue;
         final homeIds = _profileIds(match.homePlayer, profileByName);
         final awayIds = _profileIds(match.awayPlayer, profileByName);
@@ -205,7 +206,8 @@ class LocalStatisticsService {
       if (winnerId != null && ids.contains(winnerId)) {
         tournamentWins++;
       }
-      for (final match in _matches(tournament)) {
+      final tournamentMatches = _matches(tournament).toSet().toList();
+      for (final match in tournamentMatches) {
         if (!match.hasResult || match.withdrawalIgnored) continue;
         final home = match.homePlayer?.profileId;
         final away = match.awayPlayer?.profileId;
@@ -241,7 +243,10 @@ class LocalStatisticsService {
         );
       }
       final archive = tournament.importedArchive;
-      if (archive != null) {
+      final hasNativeBestPerformances = tournamentMatches.any(
+        (match) => match.bestPerformances.isNotEmpty,
+      );
+      if (archive != null && !hasNativeBestPerformances) {
         final profileByChallongeId = <String, String>{
           for (final participant in archive.participants)
             if (participant['profileId'] is String)

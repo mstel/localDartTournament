@@ -88,9 +88,12 @@ class RankingYearReviewService {
         entry.value.trim().toLowerCase(): entry.key,
     };
     final stats = {for (final id in roster) id: RankingYearPlayerStats()};
-    final monthlyPerformance = await db.loadPlayerMonthlyPerformanceForPlayers(
-      roster,
-      year: year,
+    final monthlyPerformance = combineMonthlyPlayerPerformances(
+      recorded: await db.loadPlayerMonthlyPerformanceForPlayers(
+        roster,
+        year: year,
+      ),
+      imported: await db.loadMonthlyPlayerPerformances(roster, year: year),
     );
     final monthlyClubPerformance = _monthlyClubPerformance(monthlyPerformance);
     for (final performance in monthlyPerformance) {
@@ -136,7 +139,8 @@ class RankingYearReviewService {
       for (final id in participants) {
         stats[id]!.participations++;
       }
-      for (final match in _matches(tournament).toSet()) {
+      final matches = _matches(tournament).toSet().toList();
+      for (final match in matches) {
         if (!match.hasResult || match.withdrawalIgnored) continue;
         final home = match.homePlayer?.profileId,
             away = match.awayPlayer?.profileId;
@@ -173,7 +177,10 @@ class RankingYearReviewService {
         }
       }
       final archive = tournament.importedArchive;
-      if (archive != null) {
+      final hasNativeBestPerformances = matches.any(
+        (match) => match.bestPerformances.isNotEmpty,
+      );
+      if (archive != null && !hasNativeBestPerformances) {
         final byName = <String, String>{};
         for (final participant in archive.participants) {
           final id = participant['profileId'];
@@ -253,10 +260,19 @@ class RankingYearReviewService {
       byMonth.putIfAbsent(performance.month, () => []).add(performance);
     }
 
-    double? mean(Iterable<double?> values) {
-      final present = values.whereType<double>().toList();
-      if (present.isEmpty) return null;
-      return present.reduce((left, right) => left + right) / present.length;
+    double? weightedMean(
+      Iterable<PlayerMonthlyPerformance> entries,
+      double? Function(PlayerMonthlyPerformance) valueOf,
+    ) {
+      var weightedTotal = 0.0;
+      var totalWeight = 0;
+      for (final entry in entries) {
+        final value = valueOf(entry);
+        if (value == null || entry.weightedLegs <= 0) continue;
+        weightedTotal += value * entry.weightedLegs;
+        totalWeight += entry.weightedLegs;
+      }
+      return totalWeight == 0 ? null : weightedTotal / totalWeight;
     }
 
     return [
@@ -268,9 +284,12 @@ class RankingYearReviewService {
               0,
               (total, entry) => total + entry.weightedLegs,
             ),
-            scoring: mean(monthEntries.map((entry) => entry.scoring)),
-            average: mean(monthEntries.map((entry) => entry.average)),
-            checkoutRate: mean(monthEntries.map((entry) => entry.checkoutRate)),
+            scoring: weightedMean(monthEntries, (entry) => entry.scoring),
+            average: weightedMean(monthEntries, (entry) => entry.average),
+            checkoutRate: weightedMean(
+              monthEntries,
+              (entry) => entry.checkoutRate,
+            ),
           ),
     ];
   }

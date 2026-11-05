@@ -75,10 +75,21 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       widget.profileIds,
       rankings,
     );
-    final performance = [
+    final recordedPerformance = [
       for (final profileId in widget.profileIds)
-        ...await _database.loadPlayerMonthlyPerformance(profileId),
+        ...await _database.loadPlayerMonthlyPerformance(
+          profileId,
+          year: widget.year,
+        ),
     ];
+    final importedPerformance = await _database.loadMonthlyPlayerPerformances(
+      widget.profileIds,
+      year: widget.year,
+    );
+    final performance = combineMonthlyPlayerPerformances(
+      recorded: recordedPerformance,
+      imported: importedPerformance,
+    );
     final achievementViews = <RankingAchievementView>[];
     final achievementRankings = sortRankings(
       rankings.where((ranking) => ranking.achievementsEnabled),

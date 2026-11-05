@@ -102,9 +102,22 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
             ).forPlayers({player.id}, year: _year);
       _playerPerformance = player == null
           ? null
-          : _database.loadPlayerMonthlyPerformance(player.id, year: _year);
+          : _loadPlayerPerformance(player.id, _year);
     });
   }
+
+  Future<List<PlayerMonthlyPerformance>> _loadPlayerPerformance(
+    String playerId,
+    int? year,
+  ) async => combineMonthlyPlayerPerformances(
+    recorded: await _database.loadPlayerMonthlyPerformance(
+      playerId,
+      year: year,
+    ),
+    imported: await _database.loadMonthlyPlayerPerformances({
+      playerId,
+    }, year: year),
+  );
 
   void _setYear(int? year) {
     setState(() {
@@ -120,10 +133,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
           database: _database,
           storage: _tournamentStorage,
         ).forPlayers({_selectedPlayer!.id}, year: year);
-        _playerPerformance = _database.loadPlayerMonthlyPerformance(
-          _selectedPlayer!.id,
-          year: year,
-        );
+        _playerPerformance = _loadPlayerPerformance(_selectedPlayer!.id, year);
       }
     });
   }

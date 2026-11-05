@@ -1,3 +1,5 @@
+import 'monthly_player_performance.dart';
+
 class PlayerMonthlyPerformance {
   const PlayerMonthlyPerformance({
     required this.playerId,
@@ -29,6 +31,37 @@ class PlayerMonthlyPerformance {
   final double? checkoutRate;
 
   String get periodKey => '$year-${month.toString().padLeft(2, '0')}';
+}
+
+List<PlayerMonthlyPerformance> combineMonthlyPlayerPerformances({
+  Iterable<PlayerMonthlyPerformance> recorded = const [],
+  Iterable<MonthlyPlayerPerformance> imported = const [],
+}) {
+  final byPeriod = <(String, int, int), PlayerMonthlyPerformance>{
+    for (final entry in recorded)
+      (entry.playerId, entry.year, entry.month): entry,
+  };
+  for (final entry in imported) {
+    final year = int.parse(entry.month.substring(0, 4));
+    final month = int.parse(entry.month.substring(5, 7));
+    // Imported history is authoritative for a matching player-month; never
+    // count the same month twice when both storage paths contain a value.
+    byPeriod[(entry.playerProfileId, year, month)] = PlayerMonthlyPerformance(
+      playerId: entry.playerProfileId,
+      year: year,
+      month: month,
+      weightedLegs: entry.legs,
+      scoring: entry.firstNineAverage,
+      average: entry.threeDartAverage,
+      checkoutRate: entry.checkoutPercentage,
+    );
+  }
+  final result = byPeriod.values.toList()
+    ..sort((left, right) {
+      final yearOrder = left.year.compareTo(right.year);
+      return yearOrder != 0 ? yearOrder : left.month.compareTo(right.month);
+    });
+  return List.unmodifiable(result);
 }
 
 class CurrentFormPerformance {
@@ -111,6 +144,21 @@ CurrentFormPerformance calculateCurrentFormPerformance(
 
 int totalWeightedLegs(Iterable<PlayerMonthlyPerformance> entries) =>
     entries.fold(0, (total, entry) => total + entry.weightedLegs);
+
+CurrentFormPerformance summarizeMonthlyPerformance(
+  Iterable<PlayerMonthlyPerformance> entries,
+) {
+  final totals = _MonthlyPerformanceTotals();
+  for (final entry in entries) {
+    if (entry.weightedLegs > 0) totals.add(entry);
+  }
+  return CurrentFormPerformance(
+    weightedLegs: totals.weightedLegs,
+    scoring: totals.scoring.value,
+    average: totals.average.value,
+    checkoutRate: totals.checkoutRate.value,
+  );
+}
 
 class _MonthlyPerformanceTotals {
   int weightedLegs = 0;
