@@ -80,12 +80,34 @@ class TournamentRankingChangesService {
           ranking.type == RankingType.elo &&
           tournament.rankingIds.contains(ranking.id),
     );
+    final profiles = await _database.loadPlayerProfiles();
+    final profileIdByName = {
+      for (final profile in profiles)
+        profile.displayName.trim().toLowerCase(): profile.id,
+    };
+    final tournamentPlayerIds = <String>{};
+    for (final player in tournament.players.expand(
+      (player) => player.individuals,
+    )) {
+      final id =
+          player.profileId ?? profileIdByName[player.name.trim().toLowerCase()];
+      if (id != null) tournamentPlayerIds.add(id);
+    }
+    final eligibleRankings = <LocalRanking>[];
+    for (final ranking in selected) {
+      final rankingPlayerIds = await _database.loadRankingPlayerIds(ranking.id);
+      if (rankingPlayerIds.any(tournamentPlayerIds.contains)) {
+        eligibleRankings.add(ranking);
+      }
+    }
+    if (eligibleRankings.isEmpty) return const [];
+
     final result = <TournamentRankingPlayerChange>[];
     final eloService = LocalRankingEloService(
       database: _database,
       tournamentStorage: _storage,
     );
-    for (final ranking in selected) {
+    for (final ranking in eligibleRankings) {
       final before = await eloService.calculateThroughTournament(
         ranking,
         tournament,

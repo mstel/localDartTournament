@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/rankings/application/tournament_match_elo_service.dart';
+import 'package:dart_tournament_manager/features/rankings/application/tournament_ranking_changes_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -67,6 +68,19 @@ void main() {
       ),
       rankings: const [
         LocalRanking(id: 'ranking-2026', name: 'Vereinsrangliste 2026'),
+      ],
+      playerIds: const ['profile-first', 'profile-second'],
+      profiles: [
+        for (final player in tournament.players)
+          PlayerProfile(
+            id: player.profileId!,
+            displayName: player.name,
+            country: '',
+            city: '',
+            dartsSetupJson: '',
+            createdAt: DateTime.utc(2020),
+            isActive: true,
+          ),
       ],
     );
   });
@@ -162,6 +176,53 @@ void main() {
     },
   );
 
+  testWidgets(
+    'ranking assignment is removed when no tournament player matches',
+    (tester) async {
+      tournament
+        ..countsForRanking = true
+        ..rankingIds = ['ranking-2026'];
+      final database = _RankingDatabase(
+        baseDirectory: Directory(
+          '${directory.path}${Platform.pathSeparator}no-ranking-members',
+        ),
+        rankings: const [
+          LocalRanking(id: 'ranking-2026', name: 'Vereinsrangliste 2026'),
+        ],
+        profiles: [
+          for (final player in tournament.players)
+            PlayerProfile(
+              id: player.profileId!,
+              displayName: player.name,
+              country: '',
+              city: '',
+              dartsSetupJson: '',
+              createdAt: DateTime.utc(2020),
+              isActive: true,
+            ),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentRankingAssignment(
+              tournament: tournament,
+              database: database,
+              storage: immediateStorage,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tournament.countsForRanking, isFalse);
+      expect(tournament.rankingIds, isEmpty);
+      expect(immediateStorage.lastSaved?.rankingIds, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   test('explicit assignment roundtrips through tournament storage', () async {
     tournament
       ..countsForRanking = true
@@ -226,6 +287,30 @@ void main() {
 
       tournament.countsForRanking = false;
       expect(await service.calculate(tournament), isEmpty);
+    },
+  );
+
+  test(
+    'unrepresented rankings do not produce a ranking changes widget',
+    () async {
+      tournament
+        ..countsForRanking = true
+        ..rankingIds = ['ranking-2026'];
+      final database = _RankingDatabase(
+        baseDirectory: Directory(
+          '${directory.path}${Platform.pathSeparator}unrepresented-db',
+        ),
+        rankings: const [
+          LocalRanking(id: 'ranking-2026', name: 'Rangliste 2026'),
+        ],
+      );
+
+      final changes = await TournamentRankingChangesService(
+        database: database,
+        storage: storage,
+      ).calculate(tournament);
+
+      expect(changes, isEmpty);
     },
   );
 }

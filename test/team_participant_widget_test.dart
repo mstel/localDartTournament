@@ -24,6 +24,7 @@ void main() {
             onRemove: (_) {},
             onSplit: (_) {},
             onMerge: (_, _) {},
+            onReorder: (_, _) {},
           ),
         ),
       ),
@@ -63,6 +64,7 @@ void main() {
             onRemove: (_) {},
             onSplit: (_) {},
             onMerge: (source, target) => merged = [source, target],
+            onReorder: (_, _) {},
           ),
         ),
       ),
@@ -78,6 +80,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(merged, [0, 1]);
   });
+
+  testWidgets('seeding order can be changed independently of team merging', (
+    tester,
+  ) async {
+    final players = List.generate(3, (i) => TournamentPlayer.generated(i + 1));
+    List<int>? reordered;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TeamParticipantList(
+            players: players,
+            onRename: (_) {},
+            onRemove: (_) {},
+            onSplit: (_) {},
+            onMerge: (_, _) {},
+            onReorder: (oldIndex, newIndex) => reordered = [oldIndex, newIndex],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Reihenfolge ändern'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReorderableListView), findsOneWidget);
+    final list = tester.widget<ReorderableListView>(
+      find.byType(ReorderableListView),
+    );
+    list.onReorderItem!(0, 2);
+    expect(reordered, [0, 2]);
+  });
+
   for (final size in [
     const Size(360, 800),
     const Size(800, 600),
@@ -113,6 +146,11 @@ void main() {
                       ]);
                       players.removeAt(source);
                     }),
+                    onReorder: (oldIndex, newIndex) => setState(() {
+                      if (newIndex > oldIndex) newIndex--;
+                      final player = players.removeAt(oldIndex);
+                      players.insert(newIndex, player);
+                    }),
                     onSplit: (i) => setState(() {
                       final members = players.removeAt(i).members;
                       players.insertAll(i, members);
@@ -134,6 +172,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(players.length, 2);
       expect(players.first.isTeam, isTrue);
+      await tester.ensureVisible(find.byTooltip('Reihenfolge ändern'));
+      await tester.tap(find.byTooltip('Reihenfolge ändern'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ReorderableListView), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

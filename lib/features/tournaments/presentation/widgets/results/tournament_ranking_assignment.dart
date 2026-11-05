@@ -35,6 +35,85 @@ class _TournamentRankingAssignmentState
   bool _saving = false;
   String? _saveError;
 
+  @override
+  void initState() {
+    super.initState();
+    _pruneIneligibleAssignments();
+  }
+
+  Future<Set<String>> _eligibleRankingIds(Iterable<String> candidates) async {
+    final candidateIds = candidates.toSet();
+    if (candidateIds.isEmpty) return const {};
+    final profiles = await _database.loadPlayerProfiles();
+    final profileIdByName = {
+      for (final profile in profiles)
+        profile.displayName.trim().toLowerCase(): profile.id,
+    };
+    final tournamentPlayerIds = <String>{};
+    for (final player in widget.tournament.players.expand(
+      (player) => player.individuals,
+    )) {
+      final id =
+          player.profileId ?? profileIdByName[player.name.trim().toLowerCase()];
+      if (id != null) tournamentPlayerIds.add(id);
+    }
+    if (tournamentPlayerIds.isEmpty) return const {};
+
+    final rankings = await _database.loadLocalRankings();
+    final eligible = <String>{};
+    for (final ranking in rankings.where(
+      (ranking) => candidateIds.contains(ranking.id),
+    )) {
+      final playerIds = await _database.loadRankingPlayerIds(ranking.id);
+      if (playerIds.any(tournamentPlayerIds.contains)) {
+        eligible.add(ranking.id);
+      }
+    }
+    return eligible;
+  }
+
+  Future<void> _pruneIneligibleAssignments() async {
+    if (!widget.tournament.countsForRanking ||
+        widget.tournament.rankingIds.isEmpty) {
+      return;
+    }
+    final previousCountsForRanking = widget.tournament.countsForRanking;
+    final previousRankingIds = List<String>.from(widget.tournament.rankingIds);
+    try {
+      final eligibleIds = await _eligibleRankingIds(previousRankingIds);
+      if (eligibleIds.length == previousRankingIds.length) return;
+      final rankingIds = eligibleIds.toList()..sort();
+      setState(() {
+        _saving = true;
+        _saveError = null;
+        _selectedIds
+          ..clear()
+          ..addAll(eligibleIds);
+        widget.tournament
+          ..countsForRanking = eligibleIds.isNotEmpty
+          ..rankingIds = rankingIds;
+      });
+      await _storage.saveTournament(widget.tournament);
+      widget.onSaved?.call();
+    } catch (error) {
+      widget.tournament
+        ..countsForRanking = previousCountsForRanking
+        ..rankingIds = previousRankingIds;
+      _selectedIds
+        ..clear()
+        ..addAll(previousRankingIds);
+      if (mounted) {
+        setState(
+          () => _saveError =
+              'Ranglisten-Zuweisung konnte nicht geprüft oder bereinigt '
+              'werden: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   bool get _hasChanges {
     final savedIds = widget.tournament.countsForRanking
         ? widget.tournament.rankingIds.toSet()
@@ -51,13 +130,27 @@ class _TournamentRankingAssignmentState
     });
     final oldCountsForRanking = widget.tournament.countsForRanking;
     final oldRankingIds = List<String>.from(widget.tournament.rankingIds);
-    final rankingIds = _selectedIds.toList()..sort();
     try {
+      final requestedCount = _selectedIds.length;
+      final eligibleIds = await _eligibleRankingIds(_selectedIds);
+      final rankingIds = eligibleIds.toList()..sort();
       widget.tournament
-        ..countsForRanking = _selectedIds.isNotEmpty
+        ..countsForRanking = eligibleIds.isNotEmpty
         ..rankingIds = rankingIds;
       await _storage.saveTournament(widget.tournament);
+      _selectedIds
+        ..clear()
+        ..addAll(eligibleIds);
       widget.onSaved?.call();
+      if (eligibleIds.length < requestedCount && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Ranglisten ohne teilnehmende Spieler wurden nicht zugewiesen.',
+            ),
+          ),
+        );
+      }
     } catch (error) {
       widget.tournament
         ..countsForRanking = oldCountsForRanking

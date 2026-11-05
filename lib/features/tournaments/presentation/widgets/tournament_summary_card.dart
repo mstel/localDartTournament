@@ -8,10 +8,12 @@ class TournamentSummaryCard extends StatelessWidget {
     required this.tournament,
     required this.onOpen,
     required this.onDelete,
+    this.onEditEndTime,
     this.onCopy,
   });
   final CreatedTournament tournament;
   final VoidCallback onOpen, onDelete;
+  final VoidCallback? onEditEndTime;
   final VoidCallback? onCopy;
   @override
   Widget build(BuildContext context) {
@@ -51,6 +53,8 @@ class TournamentSummaryCard extends StatelessWidget {
                       switch (action) {
                         case 'copy':
                           onCopy?.call();
+                        case 'endTime':
+                          onEditEndTime?.call();
                         case 'delete':
                           onDelete();
                       }
@@ -62,6 +66,16 @@ class TournamentSummaryCard extends StatelessWidget {
                           child: ListTile(
                             leading: Icon(Icons.copy_outlined),
                             title: Text('Turnier kopieren'),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      if (complete && onEditEndTime != null)
+                        const PopupMenuItem(
+                          value: 'endTime',
+                          child: ListTile(
+                            leading: Icon(Icons.edit_calendar_outlined),
+                            title: Text('Enddatum festlegen'),
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                           ),

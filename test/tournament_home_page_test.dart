@@ -79,6 +79,35 @@ void main() {
     expect(find.text('Turniere konnten nicht geladen werden.'), findsNothing);
   });
 
+  testWidgets('completed tournament end date can be updated from overview', (
+    tester,
+  ) async {
+    final tournament = CreatedTournament(
+      id: 'historic',
+      name: 'Historisches Turnier',
+      players: const [],
+      stages: const [],
+      runStages: const [],
+    )..finishedAt = DateTime(2026, 8, 15, 18);
+    storage.tournaments.add(tournament);
+    await showPage(tester);
+
+    await tester.tap(find.byTooltip('Turnieraktionen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enddatum festlegen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Turnier-Enddatum auswählen'), findsOneWidget);
+
+    await tester.tap(find.text('20'));
+    await tester.tap(find.text('Weiter'));
+    await tester.pumpAndSettle();
+    expect(find.text('Endzeit auswählen'), findsOneWidget);
+    await tester.tap(find.text('Speichern'));
+    await tester.pumpAndSettle();
+    expect(tournament.finishedAt, DateTime(2026, 8, 20, 18));
+    expect(storage.tournaments.single.finishedAt, DateTime(2026, 8, 20, 18));
+  });
+
   testWidgets('deleting a tournament requires name-specific confirmation', (
     tester,
   ) async {

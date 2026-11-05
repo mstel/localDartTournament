@@ -1,10 +1,11 @@
 import '../tournament_models.dart';
 
 class PlayEntry {
-  const PlayEntry(this.match, this.stageIndex, this.origin);
+  const PlayEntry(this.match, this.stageIndex, this.origin, {this.groupKey});
   final GroupMatch match;
   final int stageIndex;
   final String origin;
+  final String? groupKey;
   Set<String> get players => {
     if (match.homePlayer != null)
       ...match.homePlayer!.individuals.map((p) => p.profileId ?? p.name),
@@ -40,9 +41,12 @@ class BoardSchedulingEngine {
     List<PlayEntry> finished = const [],
     required int boardCount,
     Set<int> blockedBoards = const {},
+    Map<String, List<int>> preferredBoardsByGroup = const {},
   }) {
     if (boardCount < 1) throw ArgumentError.value(boardCount, 'boardCount');
-    if (List.generate(boardCount, (i) => i + 1).every(blockedBoards.contains)) return [];
+    if (List.generate(boardCount, (i) => i + 1).every(blockedBoards.contains)) {
+      return [];
+    }
     final pending = List<PlayEntry>.from(ready);
     final lastPlayed = <String, int>{};
     for (var i = 0; i < finished.length; i++) {
@@ -59,7 +63,9 @@ class BoardSchedulingEngine {
           : <String>{};
       final boards = [
         for (var b = 1; b <= boardCount; b++)
-          if (!blockedBoards.contains(b) && (block != 0 || !running.any((e) => e.match.boardNumber == b))) b,
+          if (!blockedBoards.contains(b) &&
+              (block != 0 || !running.any((e) => e.match.boardNumber == b)))
+            b,
       ];
       final remainingCount = <String, int>{};
       for (final e in pending) {
@@ -82,22 +88,24 @@ class BoardSchedulingEngine {
           .fold<int>(0, (a, b) => a > b ? a : b);
 
       final available =
-          pending.where((e) => !e.players.any(busy.contains)).toList()
-            ..sort((a, b) {
-                final preferredGap = minimumRestGap(b).compareTo(
-                  minimumRestGap(a),
-                );
-                if ((minimumRestGap(a) < preferredPlayerRestBlocks) !=
-                    (minimumRestGap(b) < preferredPlayerRestBlocks)) {
-                  return preferredGap;
-                }
-                final r = rest(a).compareTo(rest(b));
-              if (r != 0) return r;
-              final rem = maxRemaining(b).compareTo(maxRemaining(a));
-              return rem != 0 ? rem : all.indexOf(a).compareTo(all.indexOf(b));
-            });
+          pending.where((e) => !e.players.any(busy.contains)).toList()..sort((
+            a,
+            b,
+          ) {
+            final preferredGap = minimumRestGap(b).compareTo(minimumRestGap(a));
+            if ((minimumRestGap(a) < preferredPlayerRestBlocks) !=
+                (minimumRestGap(b) < preferredPlayerRestBlocks)) {
+              return preferredGap;
+            }
+            final r = rest(a).compareTo(rest(b));
+            if (r != 0) return r;
+            final rem = maxRemaining(b).compareTo(maxRemaining(a));
+            return rem != 0 ? rem : all.indexOf(a).compareTo(all.indexOf(b));
+          });
       // Try alternative first matches to avoid a greedy choice leaving boards idle.
-      var selected = <PlayEntry>[];
+      final selected = <(PlayEntry, int)>[];
+      var bestBatch = <PlayEntry>[];
+      var bestPreferenceScore = -1;
       for (final first in available.take(64)) {
         final batch = <PlayEntry>[];
         final used = <String>{...busy};
@@ -107,12 +115,46 @@ class BoardSchedulingEngine {
           batch.add(entry);
           used.addAll(entry.players);
         }
-        if (batch.length > selected.length) selected = batch;
-        if (selected.length == boards.length) break;
+        var preferenceScore = 0;
+        final unassigned = List<PlayEntry>.from(batch);
+        for (final board in boards) {
+          final preferredIndex = unassigned.indexWhere((entry) {
+            final groupKey = entry.groupKey;
+            return groupKey != null &&
+                preferredBoardsByGroup[groupKey]?.contains(board) == true;
+          });
+          if (preferredIndex >= 0) preferenceScore++;
+          if (unassigned.isNotEmpty) {
+            unassigned.removeAt(preferredIndex < 0 ? 0 : preferredIndex);
+          }
+        }
+        if (batch.length > bestBatch.length ||
+            (batch.length == bestBatch.length &&
+                preferenceScore > bestPreferenceScore)) {
+          bestBatch = batch;
+          bestPreferenceScore = preferenceScore;
+        }
+        if (bestBatch.length == boards.length &&
+            preferredBoardsByGroup.isEmpty) {
+          break;
+        }
       }
-      for (var i = 0; i < selected.length; i++) {
-        final entry = selected[i];
-        planned.add(BoardAssignment(entry, block, boards[i]));
+      final remaining = List<PlayEntry>.from(bestBatch);
+      for (final board in boards.take(remaining.length)) {
+        var selectedIndex = -1;
+        for (var index = 0; index < remaining.length; index++) {
+          final groupKey = remaining[index].groupKey;
+          if (groupKey != null &&
+              preferredBoardsByGroup[groupKey]?.contains(board) == true) {
+            selectedIndex = index;
+            break;
+          }
+        }
+        final entry = remaining.removeAt(selectedIndex < 0 ? 0 : selectedIndex);
+        selected.add((entry, board));
+      }
+      for (final (entry, board) in selected) {
+        planned.add(BoardAssignment(entry, block, board));
         pending.remove(entry);
         for (final player in entry.players) {
           lastPlayed[player] = block;

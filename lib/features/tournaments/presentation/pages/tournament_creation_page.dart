@@ -1135,6 +1135,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     });
   }
 
+  void _reorderPlayer(int oldIndex, int newIndex) {
+    setState(() {
+      final player = _players.removeAt(oldIndex);
+      _players.insert(newIndex, player);
+    });
+  }
+
   void _mergePlayers(int source, int target) {
     try {
       final team = TournamentPlayer.team([_players[target], _players[source]]);
@@ -2289,6 +2296,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   onRemove: _removePlayer,
                   onMerge: _mergePlayers,
                   onSplit: _splitTeam,
+                  onReorder: _reorderPlayer,
                 ),
                 const SizedBox(height: 32),
               ],

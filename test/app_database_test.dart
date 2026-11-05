@@ -207,8 +207,9 @@ void main() {
     expect(rankings.map((ranking) => ranking.startRating), [1150, 1250]);
 
     await database.saveLocalRankingOrder(['z', 'a']);
-    rankings = await LocalAppDatabase(baseDirectory: directory)
-        .loadLocalRankings();
+    rankings = await LocalAppDatabase(
+      baseDirectory: directory,
+    ).loadLocalRankings();
     expect(rankings.map((ranking) => ranking.id), ['z', 'a']);
     expect(rankings.map((ranking) => ranking.customOrder), [0, 1]);
   });
@@ -241,8 +242,9 @@ void main() {
       oldDatabase.execute('PRAGMA user_version = 10');
       oldDatabase.close();
 
-      final profiles = await LocalAppDatabase(baseDirectory: directory)
-          .loadPlayerProfiles();
+      final profiles = await LocalAppDatabase(
+        baseDirectory: directory,
+      ).loadPlayerProfiles();
 
       expect(profiles.single.displayName, 'Max Mustermann');
       expect(profiles.single.lastName, isEmpty);
@@ -253,10 +255,58 @@ void main() {
         isTrue,
       );
       final migrated = sqlite3.open(file.path, mode: OpenMode.readOnly);
-      expect(migrated.select('PRAGMA user_version').single.values.single, 11);
+      expect(migrated.select('PRAGMA user_version').single.values.single, 12);
+      expect(
+        migrated.select(
+          "SELECT name FROM sqlite_master WHERE type = 'table' "
+          "AND name = 'monthly_player_statistics'",
+        ),
+        hasLength(1),
+      );
       migrated.close();
     },
   );
+
+  test('adds monthly player statistics to schema 11', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'dart_monthly_statistics_migration_test_',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+
+    final file = File('${directory.path}/app_database.sqlite');
+    final oldDatabase = sqlite3.open(file.path);
+    oldDatabase.execute('''
+      CREATE TABLE player_profiles (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        last_name TEXT NOT NULL DEFAULT '',
+        country TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        darts_setup_json TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+    oldDatabase.execute(
+      "INSERT INTO player_profiles(id, display_name, created_at) "
+      "VALUES ('player-1', 'Testspieler', '2026-01-01T00:00:00.000')",
+    );
+    oldDatabase.execute('PRAGMA user_version = 11');
+    oldDatabase.close();
+
+    final database = LocalAppDatabase(baseDirectory: directory);
+    expect(await database.loadMonthlyPlayerPerformances({'player-1'}), isEmpty);
+    final migrated = sqlite3.open(file.path, mode: OpenMode.readOnly);
+    expect(migrated.select('PRAGMA user_version').single.values.single, 12);
+    expect(
+      migrated.select(
+        "SELECT name FROM sqlite_master WHERE type = 'table' "
+        "AND name = 'monthly_player_statistics'",
+      ),
+      hasLength(1),
+    );
+    migrated.close();
+  });
 
   test('rejects unknown old SQLite schema without changing its data', () async {
     final directory = await Directory.systemTemp.createTemp(

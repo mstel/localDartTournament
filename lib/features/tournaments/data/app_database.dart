@@ -12,11 +12,12 @@ import 'package:sqlite3/sqlite3.dart';
 
 import '../domain/tournament_models.dart';
 import '../../rankings/domain/local_ranking.dart';
+import '../../statistics/domain/monthly_player_performance.dart';
 
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 11;
+  static const schemaVersion = 12;
 
   final Directory? _baseDirectory;
 
@@ -43,6 +44,116 @@ class LocalAppDatabase {
         ORDER BY display_name COLLATE NOCASE
       ''');
         return [for (final row in rows) PlayerProfile.fromRow(row)];
+      } finally {
+        database.close();
+      }
+    });
+  }
+
+  Future<List<MonthlyPlayerPerformance>> loadMonthlyPlayerPerformances(
+    Set<String> playerProfileIds, {
+    int? year,
+  }) async {
+    if (playerProfileIds.isEmpty) return const [];
+    return StorageAccess.run(() async {
+      final database = await _openDatabase();
+      try {
+        final ids = playerProfileIds.toList()..sort();
+        final placeholders = List.filled(ids.length, '?').join(', ');
+        final rows = database.select(
+          '''SELECT player_profile_id, source_player_name, month,
+                    three_dart_average, first_nine_average,
+                    checkout_percentage, legs, matches
+             FROM monthly_player_statistics
+             WHERE player_profile_id IN ($placeholders)
+             ${year == null ? '' : 'AND substr(month, 1, 4) = ?'}
+             ORDER BY month DESC, source_player_name COLLATE NOCASE''',
+          [...ids, if (year != null) year.toString()],
+        );
+        return [
+          for (final row in rows)
+            MonthlyPlayerPerformance.fromRow(Map<String, Object?>.from(row)),
+        ];
+      } finally {
+        database.close();
+      }
+    });
+  }
+
+  Future<void> saveMonthlyPlayerPerformances(
+    List<MonthlyPlayerPerformance> records,
+  ) async {
+    if (records.isEmpty) return;
+    final keys = <String>{};
+    for (final record in records) {
+      if (!RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(record.month) ||
+          record.playerProfileId.isEmpty ||
+          record.sourcePlayerName.trim().isEmpty ||
+          !record.threeDartAverage.isFinite ||
+          record.threeDartAverage < 0 ||
+          !record.firstNineAverage.isFinite ||
+          record.firstNineAverage < 0 ||
+          (record.checkoutPercentage != null &&
+              (!record.checkoutPercentage!.isFinite ||
+                  record.checkoutPercentage! < 0 ||
+                  record.checkoutPercentage! > 100)) ||
+          record.legs < 0 ||
+          record.matches < 0) {
+        throw ArgumentError('Ungültiger Monatsstatistik-Datensatz.');
+      }
+      if (!keys.add('${record.playerProfileId}|${record.month}')) {
+        throw ArgumentError(
+          'Spieler und Monat dürfen im Import nur einmal vorkommen.',
+        );
+      }
+    }
+
+    await StorageAccess.run(() async {
+      final database = await _openDatabase();
+      try {
+        database.execute('BEGIN');
+        try {
+          for (final record in records) {
+            final profile = database.select(
+              'SELECT is_active FROM player_profiles WHERE id = ?',
+              [record.playerProfileId],
+            );
+            if (profile.isEmpty || profile.single['is_active'] != 1) {
+              throw StateError(
+                'Ein zugeordneter Spieler ist nicht mehr aktiv.',
+              );
+            }
+            database.execute(
+              '''INSERT INTO monthly_player_statistics(
+                   player_profile_id, source_player_name, month,
+                   three_dart_average, first_nine_average,
+                   checkout_percentage, legs, matches
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(player_profile_id, month) DO UPDATE SET
+                   source_player_name = excluded.source_player_name,
+                   three_dart_average = excluded.three_dart_average,
+                   first_nine_average = excluded.first_nine_average,
+                   checkout_percentage = excluded.checkout_percentage,
+                   legs = excluded.legs,
+                   matches = excluded.matches''',
+              [
+                record.playerProfileId,
+                record.sourcePlayerName.trim(),
+                record.month,
+                record.threeDartAverage,
+                record.firstNineAverage,
+                record.checkoutPercentage,
+                record.legs,
+                record.matches,
+              ],
+            );
+          }
+          database.execute('COMMIT');
+        } catch (_) {
+          database.execute('ROLLBACK');
+          rethrow;
+        }
+        StorageAccess.markLocalDataChanged();
       } finally {
         database.close();
       }
@@ -435,7 +546,7 @@ class LocalAppDatabase {
           'Bitte mit einer App-Version öffnen, die dieses Format unterstützt.',
         );
       }
-      if (version > 0 && version < schemaVersion - 2) {
+      if (version > 0 && version < schemaVersion - 3) {
         throw StateError(
           'Lokale Datenbank-Version $version kann nicht sicher migriert werden. '
           'Die Datei wurde nicht verändert. Bitte erstelle eine Kopie der '
@@ -465,10 +576,13 @@ class LocalAppDatabase {
     database.execute('BEGIN');
     try {
       if (currentVersion == schemaVersion - 1) {
+        _createMonthlyPlayerStatisticsTable(database);
+      } else if (currentVersion == schemaVersion - 2) {
         database.execute(
           "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
         );
-      } else if (currentVersion == schemaVersion - 2) {
+        _createMonthlyPlayerStatisticsTable(database);
+      } else if (currentVersion == schemaVersion - 3) {
         database.execute(
           'ALTER TABLE local_rankings ADD COLUMN custom_order INTEGER NOT NULL DEFAULT 0',
         );
@@ -484,6 +598,7 @@ class LocalAppDatabase {
         database.execute(
           "ALTER TABLE player_profiles ADD COLUMN last_name TEXT NOT NULL DEFAULT ''",
         );
+        _createMonthlyPlayerStatisticsTable(database);
       } else {
         if (currentVersion > 0) {
           final oldTables = database.select(
@@ -551,6 +666,34 @@ class LocalAppDatabase {
 
       CREATE INDEX idx_player_profiles_display_name
         ON player_profiles(display_name);
+    ''');
+    _createMonthlyPlayerStatisticsTable(database);
+  }
+
+  void _createMonthlyPlayerStatisticsTable(Database database) {
+    database.execute('''
+      CREATE TABLE IF NOT EXISTS monthly_player_statistics (
+        player_profile_id TEXT NOT NULL
+          REFERENCES player_profiles(id) ON DELETE CASCADE,
+        source_player_name TEXT NOT NULL,
+        month TEXT NOT NULL CHECK (
+          length(month) = 7 AND
+          substr(month, 1, 4) GLOB '[0-9][0-9][0-9][0-9]' AND
+          substr(month, 6, 2) GLOB '[0-9][0-9]' AND
+          CAST(substr(month, 6, 2) AS INTEGER) BETWEEN 1 AND 12
+        ),
+        three_dart_average REAL NOT NULL CHECK (three_dart_average >= 0),
+        first_nine_average REAL NOT NULL CHECK (first_nine_average >= 0),
+        checkout_percentage REAL CHECK (
+          checkout_percentage IS NULL OR
+          checkout_percentage BETWEEN 0 AND 100
+        ),
+        legs INTEGER NOT NULL CHECK (legs >= 0),
+        matches INTEGER NOT NULL CHECK (matches >= 0),
+        PRIMARY KEY (player_profile_id, month)
+      );
+      CREATE INDEX IF NOT EXISTS idx_monthly_player_statistics_month
+        ON monthly_player_statistics(month);
     ''');
   }
 

@@ -72,6 +72,108 @@ void main() {
       }
     }
   });
+  test('one group can use several boards in the same play block', () {
+    final schedule = controller.plan(fixture(boards: 4), 0);
+    final firstBlock = schedule.planned.where((entry) => entry.block == 0);
+
+    expect(firstBlock.length, greaterThan(1));
+    expect(firstBlock.map((entry) => entry.board).toSet(), {1, 2, 3});
+    expect(firstBlock.map((entry) => entry.entry.origin).toSet(), hasLength(1));
+  });
+  test(
+    'group board preferences use assigned boards and release idle boards',
+    () {
+      final players = [
+        for (var index = 1; index <= 8; index++)
+          TournamentPlayer.generated(index),
+      ];
+      List<GroupMatch> matches(List<TournamentPlayer> group) => [
+        for (var home = 0; home < group.length; home++)
+          for (var away = home + 1; away < group.length; away++)
+            GroupMatch(
+              homePlayer: group[home],
+              awayPlayer: group[away],
+              round: 1,
+            ),
+      ];
+      CreatedTournament tournament(List<GroupMatch> aMatches) =>
+          CreatedTournament(
+            name: 'Board-Zuordnung',
+            players: players,
+            stages: [],
+            boardCount: 2,
+            groupBoardAssignments: const {
+              '0:A': [2],
+              '0:B': [1],
+            },
+            runStages: [
+              GroupTournamentRunStage(
+                name: 'Gruppenphase',
+                groupPlayType: 'round_robin',
+                qualificationPlan: null,
+                tieBreakers: defaultGroupTieBreakers,
+                groups: [
+                  TournamentGroup(
+                    name: 'A',
+                    playType: 'round_robin',
+                    players: players.take(4).toList(),
+                    matches: aMatches,
+                  ),
+                  TournamentGroup(
+                    name: 'B',
+                    playType: 'round_robin',
+                    players: players.skip(4).toList(),
+                    matches: matches(players.skip(4).toList()),
+                  ),
+                ],
+              ),
+            ],
+          );
+
+      final aMatches = matches(players.take(4).toList());
+      final configured = tournament(aMatches);
+      final restored = CreatedTournament.fromJson(configured.toJson());
+      expect(restored.groupBoardAssignments, {
+        '0:A': [2],
+        '0:B': [1],
+      });
+      final assigned = controller
+          .plan(configured, 0)
+          .planned
+          .where((entry) => entry.block == 0)
+          .toList();
+      expect(
+        {
+          for (final entry in assigned)
+            entry.entry.groupKey!.endsWith(':A')
+                ? entry.board == 2
+                : entry.board == 1,
+        },
+        {true},
+      );
+      expect(assigned.map((entry) => entry.entry.groupKey).toSet(), {
+        '0:A',
+        '0:B',
+      });
+      expect(
+        controller.suggestForPlayer(configured, 0, players.first)?.board,
+        2,
+      );
+
+      for (final match in aMatches) {
+        match
+          ..homeLegs = 2
+          ..awayLegs = 0;
+      }
+      final catchUp = controller.plan(tournament(aMatches), 0).planned;
+      expect(
+        catchUp.any(
+          (entry) => entry.entry.groupKey == '0:B' && entry.board == 2,
+        ),
+        isTrue,
+      );
+    },
+  );
   test('queue prefers a two-block rest before reusing a recent player', () {
     final players = [
       TournamentPlayer.generated(101),

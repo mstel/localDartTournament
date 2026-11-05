@@ -63,7 +63,14 @@ void main() {
       await tester.tap(find.text('Kratzer-Modus').last);
       await tester.pumpAndSettle();
       final lives = find.byKey(const ValueKey('kratzer-lives-3'));
-      await tester.ensureVisible(lives);
+      for (
+        var attempt = 0;
+        attempt < 8 && lives.hitTestable().evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).last, const Offset(0, -300));
+        await tester.pumpAndSettle();
+      }
       await tester.tap(lives);
       await tester.pumpAndSettle();
       await tester.tap(find.text('5 Leben').last);

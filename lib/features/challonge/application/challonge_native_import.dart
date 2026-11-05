@@ -375,56 +375,218 @@ class ChallongeNativeImport {
       final replayModel = shell();
       final replay = ProductionTournamentRuntime(replayModel)
         ..activate(runs.length - 1);
-      final replayStage =
+      var replayStage =
           replayModel.runStages.last as KnockoutTournamentRunStage;
       final pending = finals
           .where((m) => m['player1_id'] != null && m['player2_id'] != null)
           .toList();
-      for (
-        var pass = 0;
-        pass < finals.length + 3 && pending.isNotEmpty;
-        pass++
-      ) {
-        replay.advance();
-        var progress = false;
-        for (final target
-            in replay
-                .matches(replayStage)
-                .where((m) => m.hasPlayers && !m.hasResult)) {
-          final placement =
-              target.placementRank != null ||
-              target.label == 'Spiel um Platz 3';
-          final candidates = pending
-              .where(
-                (m) =>
-                    (m['round'] == 0) == placement &&
-                    ({
-                      bySourceId['${m['player1_id']}']!.profileId,
-                      bySourceId['${m['player2_id']}']!.profileId,
-                    }.containsAll([
-                      target.homePlayer!.profileId,
-                      target.awayPlayer!.profileId,
-                    ])),
-              )
-              .toList();
-          if (candidates.isEmpty) continue;
-          final m = candidates.first;
-          final result = historical(m);
-          final reversed =
-              result.homePlayer!.profileId != target.homePlayer!.profileId;
-          target.homeLegs = reversed ? result.awayLegs : result.homeLegs;
-          target.awayLegs = reversed ? result.homeLegs : result.awayLegs;
-          target.startedAt = result.startedAt;
-          target.finishedAt = result.finishedAt;
-          pending.remove(m);
-          progress = true;
+      if (mode == 'double elimination') {
+        List<Map<String, dynamic>> matchesAtRound(int round) => finals
+            .where((match) => (match['round'] as int? ?? 1) == round)
+            .toList();
+
+        List<GroupMatch> targetsFor(String label) => replayStage.rounds
+            .expand((round) => round)
+            .where((match) => match.label == label)
+            .toList();
+
+        void applyResult(GroupMatch target, Map<String, dynamic> sourceMatch) {
+          final result = historical(sourceMatch);
+          target
+            ..homePlayer = result.homePlayer
+            ..awayPlayer = result.awayPlayer
+            ..homeLegs = result.homeLegs
+            ..awayLegs = result.awayLegs
+            ..startedAt = result.startedAt
+            ..finishedAt = result.finishedAt;
+          pending.remove(sourceMatch);
         }
-        if (!progress) break;
+
+        void importRound(
+          int roundNumber,
+          List<GroupMatch> targets, {
+          bool allowRewire = false,
+        }) {
+          final available = [...targets];
+          for (final match in matchesAtRound(roundNumber)) {
+            final home = bySourceId['${match['player1_id']}'];
+            final away = bySourceId['${match['player2_id']}'];
+            final target = available.cast<GroupMatch?>().firstWhere(
+              (candidate) =>
+                  candidate != null &&
+                      candidate.homePlayer?.profileId == home?.profileId &&
+                      candidate.awayPlayer?.profileId == away?.profileId ||
+                  (candidate != null &&
+                      candidate.homePlayer?.profileId == away?.profileId &&
+                      candidate.awayPlayer?.profileId == home?.profileId),
+              orElse: () => null,
+            );
+            final selected =
+                target ??
+                (allowRewire
+                    ? available
+                          .where((candidate) => !candidate.hasResult)
+                          .firstOrNull
+                    : null);
+            if (selected == null) {
+              throw FormatException(
+                '${archived.name}: Challonge-Spiel ${match['id']} in Runde $roundNumber (${home?.name} gegen ${away?.name}) passt nicht in das rekonstruierte Doppel-K.-o.-Bracket. Zielspiele: ${available.map((target) => '${target.homePlayer?.name ?? 'offen'} gegen ${target.awayPlayer?.name ?? 'offen'}').join('; ')}.',
+              );
+            }
+            applyResult(selected, match);
+            available.remove(selected);
+          }
+        }
+
+        replay.advance();
+        importRound(1, replayStage.rounds.first);
+        for (var round = 2; round <= winnerRounds; round++) {
+          importRound(
+            round,
+            targetsFor('Winners Runde $round'),
+            allowRewire: true,
+          );
+        }
+        final losersRoundCount = replayStage.rounds
+            .expand((round) => round)
+            .map((match) {
+              final label = match.label ?? '';
+              final marker = 'Losers Runde ';
+              return label.startsWith(marker)
+                  ? int.tryParse(label.substring(marker.length)) ?? 0
+                  : 0;
+            })
+            .fold<int>(0, (a, b) => a > b ? a : b);
+        for (var round = 1; round <= losersRoundCount; round++) {
+          importRound(
+            -round,
+            targetsFor('Losers Runde $round'),
+            allowRewire: true,
+          );
+        }
+
+        final positiveFinalRounds = finals
+            .map((match) => match['round'] as int? ?? 0)
+            .where((round) => round > winnerRounds)
+            .toList();
+        if (positiveFinalRounds.isNotEmpty) {
+          final sourceGrandFinalRound = positiveFinalRounds.reduce(
+            (a, b) => a > b ? a : b,
+          );
+          final hasReset = sourceGrandFinalRound > winnerRounds + 1;
+          final grandFinalRound = hasReset
+              ? sourceGrandFinalRound - 1
+              : sourceGrandFinalRound;
+          importRound(
+            grandFinalRound,
+            targetsFor('Grand Final'),
+            allowRewire: true,
+          );
+          if (hasReset) {
+            if (targetsFor('Reset Final').isEmpty) {
+              replayStage.rounds.add([
+                GroupMatch(
+                  round: replayStage.rounds.length + 1,
+                  label: 'Reset Final',
+                ),
+              ]);
+            }
+            importRound(
+              sourceGrandFinalRound,
+              targetsFor('Reset Final'),
+              allowRewire: true,
+            );
+          }
+        }
+        final placementResults = matchesAtRound(0)
+            .where(
+              (match) =>
+                  match['player1_id'] != null && match['player2_id'] != null,
+            )
+            .map((match) {
+              final result = historical(match);
+              pending.remove(match);
+              return GroupMatch(
+                homePlayer: result.homePlayer,
+                awayPlayer: result.awayPlayer,
+                round: 0,
+                homeLegs: result.homeLegs,
+                awayLegs: result.awayLegs,
+                placementRank: 3,
+                label: 'Spiel um Platz 3',
+                startedAt: result.startedAt,
+                finishedAt: result.finishedAt,
+              );
+            })
+            .toList();
+        if (placementResults.isNotEmpty) {
+          replayStage = KnockoutTournamentRunStage(
+            name: replayStage.name,
+            rounds: replayStage.rounds,
+            placementMatches: [
+              ...replayStage.placementMatches,
+              ...placementResults,
+            ],
+            eliminationLossLimit: replayStage.eliminationLossLimit,
+            finalEndsTournament: replayStage.finalEndsTournament,
+          );
+          replayModel.runStages[runs.length - 1] = replayStage;
+        }
+      } else {
+        for (
+          var pass = 0;
+          pass < finals.length + 3 && pending.isNotEmpty;
+          pass++
+        ) {
+          replay.advance();
+          var progress = false;
+          for (final target
+              in replay
+                  .matches(replayStage)
+                  .where((m) => m.hasPlayers && !m.hasResult)) {
+            final placement =
+                target.placementRank != null ||
+                target.label == 'Spiel um Platz 3';
+            final candidates = pending
+                .where(
+                  (m) =>
+                      (m['round'] == 0) == placement &&
+                      ({
+                        bySourceId['${m['player1_id']}']!.profileId,
+                        bySourceId['${m['player2_id']}']!.profileId,
+                      }.containsAll([
+                        target.homePlayer!.profileId,
+                        target.awayPlayer!.profileId,
+                      ])),
+                )
+                .toList();
+            if (candidates.isEmpty) continue;
+            final m = candidates.first;
+            final result = historical(m);
+            final reversed =
+                result.homePlayer!.profileId != target.homePlayer!.profileId;
+            target.homeLegs = reversed ? result.awayLegs : result.homeLegs;
+            target.awayLegs = reversed ? result.homeLegs : result.awayLegs;
+            target.startedAt = result.startedAt;
+            target.finishedAt = result.finishedAt;
+            pending.remove(m);
+            progress = true;
+          }
+          if (!progress) break;
+        }
+        replay.advance();
       }
-      replay.advance();
       if (pending.isNotEmpty || replay.hasOpen(replayStage)) {
+        final unresolvedTargets = replay
+            .matches(replayStage)
+            .where((match) => match.hasPlayers && !match.hasResult)
+            .map(
+              (match) =>
+                  '${match.homePlayer!.name} gegen ${match.awayPlayer!.name}',
+            )
+            .join('; ');
         throw FormatException(
-          'Die eigene K.-o.-Weiterleitung konnte ${pending.length} historische Spiele von ${archived.name} nicht nachspielen. Import vor dem Speichern abgebrochen.',
+          'Die eigene K.-o.-Weiterleitung konnte ${pending.length} historische Spiele von ${archived.name} nicht nachspielen: ${pending.map((m) => '${m['id']} (${bySourceId['${m['player1_id']}']?.name ?? 'Freilos'} gegen ${bySourceId['${m['player2_id']}']?.name ?? 'Freilos'})').join('; ')}. Offene Zielspiele: $unresolvedTargets. Import vor dem Speichern abgebrochen.',
         );
       }
       runs[runs.length - 1] = replayStage;

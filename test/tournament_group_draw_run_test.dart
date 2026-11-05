@@ -82,6 +82,69 @@ void main() {
   );
 
   testWidgets(
+    'participant adjustment opens the planner without changing the saved draft',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final tournament = _tournament()
+        ..plannedMinutes = 180
+        ..boardCount = 4;
+      tournament.stages[0] = TournamentStage.fromJson({
+        ...tournament.stages.single.toJson(),
+        'groupDrawOnStart': false,
+      });
+      final storage = _MemoryTournamentStorage();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TournamentRunPage(
+            tournament: tournament,
+            runController: _RecordingRunController(storage),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      final savedBefore = storage.savedTournament;
+      expect(savedBefore, isNotNull);
+
+      await tester.tap(find.byTooltip('Turnier'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Spieler hinzufügen & Format anpassen'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Neue Person');
+      await tester.tap(find.text('Weiter'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Passende Turnierform finden'), findsOneWidget);
+      final fieldValues = tester
+          .widgetList<TextField>(find.byType(TextField))
+          .map((field) => field.controller?.text)
+          .toList();
+      expect(fieldValues, containsAll(['9', '4', '3']));
+      await tester.ensureVisible(find.text('Turnierformen'));
+      await tester.tap(find.text('Turnierformen'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('planner-mode-groups:round_robin')),
+            )
+            .value,
+        isTrue,
+      );
+      expect(tournament.players, hasLength(8));
+      expect(tournament.stages.single.groupSizes, [4, 4]);
+      expect(storage.savedTournament, equals(savedBefore));
+
+      await tester.tap(find.text('Abbrechen'));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
     'accepted wheel draw controls group settings and is not shown again',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 900);

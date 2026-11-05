@@ -174,6 +174,71 @@ class OrderOfPlaySection extends StatelessWidget {
                 await onChange();
               },
             ),
+            if (activeStageData is GroupTournamentRunStage) ...[
+              const SizedBox(height: 8),
+              SportSettingsSection(
+                title: 'Board-Zuordnung je Gruppe',
+                summary: 'Boards pro Gruppe priorisieren',
+                icon: Icons.dashboard_customize_outlined,
+                children: [
+                  const Text(
+                    'Zugewiesene Boards werden für die Gruppe bevorzugt. Sind dort keine Partien spielbereit, dürfen andere Gruppen freie Boards zum Aufholen nutzen.',
+                  ),
+                  for (final group in activeStageData.groups) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      group.name,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (
+                          var board = 1;
+                          board <= tournament.boardCount;
+                          board++
+                        )
+                          FilterChip(
+                            label: Text('Board $board'),
+                            selected:
+                                tournament
+                                    .groupBoardAssignments[tournamentGroupBoardKey(
+                                      activeStage,
+                                      group.name,
+                                    )]
+                                    ?.contains(board) ==
+                                true,
+                            materialTapTargetSize: MaterialTapTargetSize.padded,
+                            onSelected: (selected) async {
+                              final key = tournamentGroupBoardKey(
+                                activeStage,
+                                group.name,
+                              );
+                              final boards = [
+                                ...?tournament.groupBoardAssignments[key],
+                              ];
+                              if (selected) {
+                                boards.add(board);
+                              } else {
+                                boards.remove(board);
+                              }
+                              boards.sort();
+                              if (boards.isEmpty) {
+                                tournament.groupBoardAssignments.remove(key);
+                              } else {
+                                tournament.groupBoardAssignments[key] = boards;
+                              }
+                              await onChange();
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             ParticipantMatchPicker(
               tournament: tournament,

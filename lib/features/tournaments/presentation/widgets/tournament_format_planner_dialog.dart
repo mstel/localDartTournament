@@ -1,7 +1,29 @@
 part of '../../../../tournament_workspace.dart';
 
 class TournamentFormatPlannerDialog extends StatefulWidget {
-  const TournamentFormatPlannerDialog({super.key});
+  const TournamentFormatPlannerDialog({
+    super.key,
+    this.initialPlayerCount,
+    this.initialBoardCount,
+    this.initialMinimumMatches,
+    this.initialTargetMinutes,
+    this.initialEnabledModes,
+    this.initialMaximumStages,
+    this.initialRequireGroupPhase = false,
+    this.lockBoardCount = false,
+    this.initialGameFormat,
+  });
+
+  final int? initialPlayerCount;
+  final int? initialBoardCount;
+  final int? initialMinimumMatches;
+  final int? initialTargetMinutes;
+  final Set<String>? initialEnabledModes;
+  final int? initialMaximumStages;
+  final bool initialRequireGroupPhase;
+  final bool lockBoardCount;
+  final TournamentGameFormat? initialGameFormat;
+
   @override
   State<TournamentFormatPlannerDialog> createState() =>
       _TournamentFormatPlannerDialogState();
@@ -174,6 +196,44 @@ class _TournamentFormatPlannerDialogState
   @override
   void initState() {
     super.initState();
+    final widget = this.widget;
+    if (widget.initialPlayerCount != null) {
+      _players.text = '${widget.initialPlayerCount}';
+    }
+    if (widget.initialBoardCount != null) {
+      _boards.text = '${widget.initialBoardCount}';
+    }
+    if (widget.initialMinimumMatches != null) {
+      _minimumMatches.text = '${widget.initialMinimumMatches}';
+    }
+    final targetMinutes = widget.initialTargetMinutes;
+    if (targetMinutes != null && targetMinutes > 0) {
+      _targetHours.text = '${targetMinutes ~/ 60}';
+      _targetMinutes.text = '${targetMinutes % 60}';
+      _useTargetDuration = true;
+    }
+    if (widget.initialEnabledModes != null &&
+        widget.initialEnabledModes!.isNotEmpty) {
+      _enabledModes
+        ..clear()
+        ..addAll(widget.initialEnabledModes!);
+    }
+    _maximumStages = (widget.initialMaximumStages ?? _maximumStages).clamp(
+      1,
+      4,
+    );
+    _requireGroupPhase = widget.initialRequireGroupPhase;
+    final gameFormat = widget.initialGameFormat;
+    if (gameFormat != null) {
+      _bestOfLegs = gameFormat.bestOfLegs;
+      _lockLegsFormat = true;
+      _x01Selection = '${gameFormat.x01Score}';
+      _checkoutType = gameFormat.doubleIn
+          ? 'double_in_out'
+          : gameFormat.checkoutType;
+      _allowSets = gameFormat.bestOfSets > 1;
+      _allowDraws = gameFormat.allowsDraws;
+    }
     for (final controller in [
       _players,
       _boards,
@@ -397,7 +457,11 @@ class _TournamentFormatPlannerDialogState
                 minTileWidth: 220,
                 children: [
                   _numberField(_players, 'Anzahl Spieler'),
-                  _numberField(_boards, 'Anzahl Boards'),
+                  _numberField(
+                    _boards,
+                    'Anzahl Boards',
+                    enabled: !_calculating && !widget.lockBoardCount,
+                  ),
                   _numberField(_minimumMatches, 'Mindestens Spiele/Spieler'),
                 ],
               ),
@@ -953,15 +1017,19 @@ class _TournamentFormatPlannerDialogState
     ),
   );
 
-  Widget _numberField(TextEditingController controller, String label) =>
-      TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
-      );
+  Widget _numberField(
+    TextEditingController controller,
+    String label, {
+    bool enabled = true,
+  }) => TextField(
+    controller: controller,
+    keyboardType: TextInputType.number,
+    enabled: enabled,
+    decoration: InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+    ),
+  );
 }
 
 class _StageGameFormatSetup extends StatelessWidget {

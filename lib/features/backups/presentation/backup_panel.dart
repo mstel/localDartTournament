@@ -6,6 +6,7 @@ import '../data/backup_service.dart';
 import 'android_backup_export.dart';
 import 'backup_file_dialogs.dart';
 import 'cloud_backup_panel.dart';
+import '../../statistics/presentation/monthly_statistics_import_panel.dart';
 
 class BackupPanel extends StatefulWidget {
   const BackupPanel({
@@ -24,7 +25,7 @@ class BackupPanel extends StatefulWidget {
 class _BackupPanelState extends State<BackupPanel> {
   static const _areaNames = {
     'tournaments.json': 'Turniere und Ergebnisse',
-    'app_database.sqlite': 'Spielerprofile und Ranglisten',
+    'app_database.sqlite': 'Spielerprofile, Ranglisten und Monatsstatistiken',
     'planning_settings.json': 'Turnierplanung',
   };
   bool _busy = false;
@@ -142,9 +143,11 @@ class _BackupPanelState extends State<BackupPanel> {
         const SizedBox(height: 12),
         const CloudBackupPanel(),
         const SizedBox(height: 12),
+        const MonthlyStatisticsImportPanel(),
+        const SizedBox(height: 12),
         const Text(
           'Sichere Turniere mit Ergebnissen, lokale Spielerprofile, '
-          'Ranglisten und Einstellungen in einer Datei. Das Supabase-Backup '
+          'Ranglisten, Monatsstatistiken und Einstellungen in einer Datei. Das Supabase-Backup '
           'wird separat mit dem Betreiberkonto gespeichert und wiederhergestellt.',
         ),
         const SizedBox(height: 12),

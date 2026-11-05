@@ -68,6 +68,40 @@ void main() {
     expect(find.text('Account erstellen'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'certificate failures show safe Windows troubleshooting guidance',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AccountMenuCard(store: _CertificateFailureStore()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Anmelden'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), 'user@example.com');
+      await tester.enterText(find.byType(TextField).at(1), 'password123');
+      await tester.tap(find.widgetWithText(FilledButton, 'Anmelden'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Serverzertifikat auf diesem Gerät nicht prüfen'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Zertifikatsprüfung darf nicht deaktiviert werden'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Kein Account mit dieser E-Mail gefunden.'),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _SignedOutStore implements AccountSessionStore {
@@ -98,4 +132,17 @@ class _SignedOutStore implements AccountSessionStore {
 
   @override
   Future<void> signOutCurrentAccount() async {}
+}
+
+class _CertificateFailureStore extends _SignedOutStore {
+  @override
+  Future<AccountUser?> signInAccount({
+    required String email,
+    required String password,
+  }) async {
+    throw Exception(
+      'HandshakeException: CERTIFICATE_VERIFY_FAILED: '
+      'unable to get local issuer certificate',
+    );
+  }
 }

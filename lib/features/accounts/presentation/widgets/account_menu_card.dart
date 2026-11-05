@@ -62,10 +62,16 @@ class _AccountMenuCardState extends State<AccountMenuCard> {
       return;
     }
 
-    final account = await _runAccountAction<AccountUser?>(
-      () =>
-          _store.signInAccount(email: result.email, password: result.password),
-    );
+    AccountUser? account;
+    try {
+      account = await _store.signInAccount(
+        email: result.email,
+        password: result.password,
+      );
+    } catch (error) {
+      if (mounted) _showError(_accountErrorMessage(error));
+      return;
+    }
     if (!mounted) {
       return;
     }
@@ -152,6 +158,19 @@ class _AccountMenuCardState extends State<AccountMenuCard> {
   }
 
   String _accountErrorMessage(Object error) {
+    final message = error.toString();
+    final normalizedMessage = message.toLowerCase();
+    if (normalizedMessage.contains('certificate_verify_failed') ||
+        normalizedMessage.contains('unable to get local issuer') ||
+        normalizedMessage.contains('handshakeexception')) {
+      return 'Die sichere HTTPS-Verbindung zum Online-Dienst konnte das '
+          'Serverzertifikat auf diesem Gerät nicht prüfen. Bitte Windows '
+          'Datum/Uhrzeit und Windows-Updates prüfen. In Vereins- oder '
+          'Firmennetzen können Proxy oder Virenschutz HTTPS-Zertifikate '
+          'ersetzen; dafür muss die korrekte Stammzertifizierungsstelle '
+          'von der zuständigen IT eingerichtet werden. Die '
+          'Zertifikatsprüfung darf nicht deaktiviert werden.';
+    }
     if (error is AuthException) {
       if (error.code == 'invalid_credentials' ||
           error.message.toLowerCase().contains('invalid login credentials')) {
@@ -168,7 +187,6 @@ class _AccountMenuCardState extends State<AccountMenuCard> {
       }
       return error.message;
     }
-    final message = error.toString();
     if (message.contains('AuthException')) {
       return message
           .replaceFirst('AuthException(message: ', '')

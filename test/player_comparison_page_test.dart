@@ -1,4 +1,5 @@
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/monthly_player_performance.dart';
 import 'package:dart_tournament_manager/features/statistics/presentation/player_comparison_page.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
@@ -33,6 +34,12 @@ class _FakeDatabase extends LocalAppDatabase {
     'left',
     'right',
   ];
+
+  @override
+  Future<List<MonthlyPlayerPerformance>> loadMonthlyPlayerPerformances(
+    Set<String> playerProfileIds, {
+    int? year,
+  }) async => const [];
 }
 
 class _FakeTournamentStorage extends TournamentStorage {

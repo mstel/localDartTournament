@@ -7,6 +7,7 @@ import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/domain/tournament_winner.dart';
 import '../../league/application/league_board_runtime.dart';
 import 'best_performance.dart';
+import 'monthly_player_performance.dart';
 
 class DirectEncounter {
   const DirectEncounter({
@@ -50,10 +51,12 @@ class LocalPlayerStatistics {
     required this.setsWon,
     required this.setsLost,
     required this.bestPerformances,
+    this.monthlyPerformances = const [],
   });
   final int tournaments, matches, wins, losses, draws, tournamentWins;
   final int legsWon, legsLost, legsDrawn, setsWon, setsLost;
   final List<BestPerformance> bestPerformances;
+  final List<MonthlyPlayerPerformance> monthlyPerformances;
   int get legsPlayed => legsWon + legsLost;
   int get setsPlayed => setsWon + setsLost;
   double get matchWinRate => matches == 0 ? 0 : wins * 100 / matches;
@@ -293,6 +296,8 @@ class LocalStatisticsService {
       setsWon: setsWon,
       setsLost: setsLost,
       bestPerformances: performances,
+      monthlyPerformances: await (database ?? LocalAppDatabase())
+          .loadMonthlyPlayerPerformances(ids, year: year),
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_advancement_forecast_engine.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
@@ -8,6 +9,64 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('running matches are clearly separated from suggestions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament();
+    final match = const OrderOfPlayController()
+        .plan(tournament, 0)
+        .planned
+        .first
+        .entry
+        .match;
+    expect(
+      const OrderOfPlayController().start(tournament, 0, match, 1),
+      isTrue,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Aktuelle Partien (1)'), findsOneWidget);
+    expect(find.textContaining('JETZT LIVE · BOARD 1'), findsOneWidget);
+    expect(
+      find.byKey(
+        ValueKey(
+          'second-screen-running-match-${match.round}-'
+          '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
+          '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Empfohlene Partien (2 Vorschläge)'), findsOneWidget);
+    expect(
+      find.byKey(
+        ValueKey(
+          'second-screen-match-${match.round}-'
+          '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
+          '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
+        ),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tournament clock precedes the mode switch on TV surfaces', (
     tester,
   ) async {

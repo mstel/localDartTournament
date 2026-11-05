@@ -243,6 +243,19 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
                     Text(
                       '${stats.completed} Spiele fertig · ${stats.expectedCompleted} laut Zeitplan',
                     ),
+                  if (widget.onEditTimes != null &&
+                      (t.finishedAt != null || widget.allowEndTimeEdit))
+                    TextButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => _editTimestamp(start: false),
+                      icon: const Icon(Icons.edit_calendar_outlined),
+                      label: Text(
+                        t.finishedAt == null
+                            ? 'Endzeit festlegen'
+                            : 'Endzeit anpassen',
+                      ),
+                    ),
                   if (t.finishedAt == null && widget.onPauseToggle != null)
                     TextButton.icon(
                       onPressed: _busy

@@ -16,8 +16,8 @@ class AppBootstrap {
     WidgetsFlutterBinding.ensureInitialized();
     PerformanceDiagnostics.start();
     if (_instance != null) return null;
-    await SupabaseAccountBootstrap.initialize();
     await DesktopUpdateLauncher.forward(args);
+    await SupabaseAccountBootstrap.initialize();
     try {
       final store = await TournamentStorage().storageFile();
       _instance = await AppInstanceLock.acquire(

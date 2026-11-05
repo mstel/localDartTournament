@@ -17,7 +17,7 @@ void main() {
     players: const [],
     stages: const [],
     runStages: const [],
-  );
+  )..updatedAt = DateTime.utc(2026, 1, 1);
 
   test('uses the requested tournament instead of the latest active one', () {
     expect(
@@ -45,4 +45,18 @@ void main() {
   test('uses the most recent active tournament when no id is supplied', () {
     expect(resolveSecondScreenTournament([finished, active]), same(active));
   });
+
+  test(
+    'standalone refreshes only when tournament identity or revision changes',
+    () {
+      final unchanged = CreatedTournament.fromJson(active.toJson());
+      final revised = CreatedTournament.fromJson(active.toJson())
+        ..updatedAt = active.updatedAt.add(const Duration(seconds: 1));
+
+      expect(secondScreenTournamentChanged(active, unchanged), isFalse);
+      expect(secondScreenTournamentChanged(active, revised), isTrue);
+      expect(secondScreenTournamentChanged(active, finished), isTrue);
+      expect(secondScreenTournamentChanged(active, null), isTrue);
+    },
+  );
 }

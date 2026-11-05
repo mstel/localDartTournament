@@ -236,6 +236,64 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     }
   }
 
+  Future<void> _editTournamentEndTime(CreatedTournament tournament) async {
+    final current = tournament.finishedAt ?? tournament.createdAt;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: current.toLocal(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: 'Turnier-Enddatum auswählen',
+      confirmText: 'Weiter',
+      cancelText: 'Abbrechen',
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(current.toLocal()),
+      helpText: 'Endzeit auswählen',
+      confirmText: 'Speichern',
+      cancelText: 'Abbrechen',
+    );
+    if (time == null || !mounted) return;
+    final endTime = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    final previous = tournament.finishedAt;
+    if (tournament.startedAt != null &&
+        endTime.isBefore(tournament.startedAt!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Das Turnierende muss nach dem Turnierstart liegen.'),
+        ),
+      );
+      return;
+    }
+    try {
+      tournament.finishedAt = endTime;
+      await _storage.saveTournament(tournament);
+      if (mounted) {
+        _reloadTournaments();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Turnier-Enddatum gespeichert.')),
+        );
+      }
+    } catch (error) {
+      tournament.finishedAt = previous;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Enddatum konnte nicht gespeichert werden: $error'),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _deleteTournament(CreatedTournament tournament) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -476,6 +534,8 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                           tournament: tournament,
                           onOpen: () => _openTournament(tournament),
                           onDelete: () => _deleteTournament(tournament),
+                          onEditEndTime: () =>
+                              _editTournamentEndTime(tournament),
                           onCopy: () => _copyTournament(tournament),
                         ),
                     ],

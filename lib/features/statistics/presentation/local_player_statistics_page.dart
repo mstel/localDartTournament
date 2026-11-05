@@ -6,6 +6,7 @@ import '../../rankings/domain/local_ranking.dart';
 import '../application/player_statistics_image_generator.dart';
 import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
+import '../domain/monthly_player_performance.dart';
 import 'widgets/structured_best_performances_view.dart';
 
 class LocalPlayerStatisticsPage extends StatefulWidget {
@@ -244,6 +245,22 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                     ),
                   ],
                 ),
+                if (stats.monthlyPerformances.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    'Historische Monatswerte',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Importierte Monatsdurchschnitte; sie verändern keine '
+                    'Einzelspiel- oder Turnierzähler.',
+                  ),
+                  const SizedBox(height: 8),
+                  _MonthlyPerformanceTable(
+                    performances: stats.monthlyPerformances,
+                  ),
+                ],
                 const SizedBox(height: 20),
                 Text(
                   'Bestleistungen',
@@ -283,6 +300,49 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
           },
         ),
   );
+}
+
+class _MonthlyPerformanceTable extends StatelessWidget {
+  const _MonthlyPerformanceTable({required this.performances});
+
+  final List<MonthlyPlayerPerformance> performances;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: DataTable(
+      columns: const [
+        DataColumn(label: Text('Monat')),
+        DataColumn(label: Text('3-Dart Ø'), numeric: true),
+        DataColumn(label: Text('First 9'), numeric: true),
+        DataColumn(label: Text('Checkout'), numeric: true),
+        DataColumn(label: Text('Partien'), numeric: true),
+        DataColumn(label: Text('Legs'), numeric: true),
+      ],
+      rows: [
+        for (final performance in performances)
+          DataRow(
+            cells: [
+              DataCell(Text(_monthLabel(performance.monthDate))),
+              DataCell(Text(performance.threeDartAverage.toStringAsFixed(2))),
+              DataCell(Text(performance.firstNineAverage.toStringAsFixed(2))),
+              DataCell(
+                Text(
+                  performance.checkoutPercentage == null
+                      ? '–'
+                      : '${performance.checkoutPercentage!.toStringAsFixed(1)} %',
+                ),
+              ),
+              DataCell(Text('${performance.matches}')),
+              DataCell(Text('${performance.legs}')),
+            ],
+          ),
+      ],
+    ),
+  );
+
+  String _monthLabel(DateTime month) =>
+      '${month.year}-${month.month.toString().padLeft(2, '0')}';
 }
 
 class _RankingPositionChip extends StatelessWidget {

@@ -559,6 +559,7 @@ class CreatedTournament {
     this.syncRevision = 0,
     List<PlayerWithdrawal>? withdrawals,
     Set<int>? blockedBoards,
+    Map<String, List<int>>? groupBoardAssignments,
     this.startedAt,
     this.finishedAt,
     this.pausedAt,
@@ -574,6 +575,10 @@ class CreatedTournament {
        updatedAt = updatedAt ?? DateTime.now(),
        completedStageIndexes = completedStageIndexes ?? <int>{},
        blockedBoards = blockedBoards ?? <int>{},
+       groupBoardAssignments = {
+         for (final entry in (groupBoardAssignments ?? const {}).entries)
+           entry.key: List<int>.unmodifiable(entry.value),
+       },
        rankingIds = List<String>.from(rankingIds),
        withdrawals = withdrawals ?? [];
 
@@ -623,6 +628,16 @@ class CreatedTournament {
       blockedBoards: _intListFromJson(
         json['blockedBoards'],
       ).where((b) => b >= 1 && b <= 64).toSet(),
+      groupBoardAssignments: json['groupBoardAssignments'] is Map
+          ? (json['groupBoardAssignments'] as Map).map(
+              (key, value) => MapEntry(
+                key.toString(),
+                _intListFromJson(
+                  value,
+                ).where((board) => board >= 1 && board <= 64).toList(),
+              ),
+            )
+          : const {},
       startedAt: _dateTimeFromJson(json['startedAt']),
       finishedAt: _dateTimeFromJson(json['finishedAt']),
       pausedAt: _dateTimeFromJson(json['pausedAt']),
@@ -654,6 +669,7 @@ class CreatedTournament {
   int syncRevision;
   final List<PlayerWithdrawal> withdrawals;
   final Set<int> blockedBoards;
+  final Map<String, List<int>> groupBoardAssignments;
   DateTime? startedAt, finishedAt, pausedAt;
   bool reopenedForCorrections;
   int totalPausedSeconds;
@@ -683,6 +699,11 @@ class CreatedTournament {
       if (syncRevision != 0) 'syncRevision': syncRevision,
       if (blockedBoards.isNotEmpty)
         'blockedBoards': blockedBoards.toList()..sort(),
+      if (groupBoardAssignments.isNotEmpty)
+        'groupBoardAssignments': {
+          for (final entry in groupBoardAssignments.entries)
+            entry.key: entry.value.toList()..sort(),
+        },
       'startedAt': startedAt?.toUtc().toIso8601String(),
       'finishedAt': finishedAt?.toUtc().toIso8601String(),
       if (pausedAt != null) 'pausedAt': pausedAt?.toUtc().toIso8601String(),

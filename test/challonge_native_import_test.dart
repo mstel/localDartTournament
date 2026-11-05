@@ -7,6 +7,8 @@ import 'package:dart_tournament_manager/features/challonge/domain/challonge_tour
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
+import 'package:dart_tournament_manager/tournament_workspace.dart'
+    show ProductionTournamentRuntime;
 
 Map<String, dynamic> fixture(
   String mode,
@@ -164,6 +166,75 @@ void main() {
         hasLength(3),
       );
       expect(result.importedArchive!.nativeValidation!['issues'], isEmpty);
+    },
+  );
+  test(
+    'double elimination imports the complete eight-player bracket from tournament 25',
+    () {
+      const names = [
+        'Tobi_B',
+        'David',
+        'Marvin_S',
+        'Jan_Wa',
+        'Timo_S',
+        'Andre_Wi',
+        'Max_Re',
+        'Markus_D',
+      ];
+      const games = [
+        [1, 1, 2, 2, 0],
+        [1, 3, 4, 1, 2],
+        [1, 5, 6, 2, 0],
+        [1, 7, 8, 2, 0],
+        [2, 1, 4, 0, 2],
+        [2, 5, 7, 1, 2],
+        [3, 4, 7, 0, 2],
+        [4, 7, 5, 2, 0],
+        [-1, 2, 3, 2, 1],
+        [-1, 6, 8, 2, 1],
+        [-2, 5, 2, 2, 1],
+        [-2, 1, 6, 2, 1],
+        [-3, 5, 1, 2, 1],
+        [-4, 4, 5, 0, 1],
+      ];
+      final data =
+          fixture('double elimination', games, ranks: [1, 2, 3, 4, 5, 6, 7, 8])
+            ..['participants'] = [
+              for (var i = 0; i < names.length; i++)
+                {'id': i + 1, 'name': names[i], 'final_rank': i + 1},
+            ];
+
+      final result = native(data);
+      final bracket = result.runStages.single as KnockoutTournamentRunStage;
+
+      expect(
+        bracket.rounds.expand((round) => round).where((m) => m.hasResult),
+        hasLength(14),
+      );
+      expect(bracket.eliminationLossLimit, 2);
+      expect(
+        bracket.rounds
+            .expand((round) => round)
+            .singleWhere(
+              (m) =>
+                  m.homePlayer?.name == 'Max_Re' &&
+                  m.awayPlayer?.name == 'Timo_S',
+            )
+            .winner
+            ?.name,
+        'Max_Re',
+      );
+      expect(result.importedArchive!.nativeValidation!['checkedMatches'], 14);
+
+      final restored = CreatedTournament.fromJson(result.toJson());
+      final runtime = ProductionTournamentRuntime(restored)..advance();
+      final restoredBracket =
+          restored.runStages.single as KnockoutTournamentRunStage;
+      expect(
+        runtime.matches(restoredBracket).where((match) => match.hasResult),
+        hasLength(14),
+      );
+
     },
   );
 }

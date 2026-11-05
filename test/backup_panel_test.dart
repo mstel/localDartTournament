@@ -122,6 +122,8 @@ void main() {
       matching: find.text('Backup wiederherstellen'),
     );
     Future<void> openPreview() async {
+      listPosition.jumpTo(listPosition.maxScrollExtent);
+      await tester.pump();
       await tester.ensureVisible(find.text('Backup wiederherstellen'));
       expect(find.text('Backup wiederherstellen').hitTestable(), findsOneWidget);
       await tester.tap(find.text('Backup wiederherstellen'));

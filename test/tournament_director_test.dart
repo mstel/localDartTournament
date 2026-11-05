@@ -207,7 +207,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 28);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 29);
     },
   );
   testWidgets('director dashboard survives width changes', (tester) async {
@@ -421,6 +421,51 @@ void main() {
     expect(find.byTooltip('Priorisierte Partie'), findsWidgets);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('director can lock and reopen boards directly', (tester) async {
+    final tournament = fixture(boards: 2);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            body: SingleChildScrollView(
+              child: TournamentDirectorDashboard(
+                tournament: tournament,
+                activeStage: 0,
+                onChange: () async {},
+                onResult: (_) async {},
+                onBlock: (board) async {
+                  setState(() {
+                    if (!tournament.blockedBoards.remove(board)) {
+                      tournament.blockedBoards.add(board);
+                    }
+                  });
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final lock = find.text('Board 1 sperren');
+    await tester.ensureVisible(lock);
+    await tester.tap(lock);
+    await tester.pumpAndSettle();
+    expect(find.text('Board 1 freigeben'), findsOneWidget);
+    expect(tournament.blockedBoards, contains(1));
+
+    final unlock = find.text('Board 1 freigeben');
+    await tester.ensureVisible(unlock);
+    await tester.tap(unlock);
+    await tester.pumpAndSettle();
+    expect(find.text('Board 1 sperren'), findsOneWidget);
+    expect(tournament.blockedBoards, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('save and synchronization errors stay visible and offer retry', (
     tester,
   ) async {

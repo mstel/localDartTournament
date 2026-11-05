@@ -244,6 +244,260 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  bool get _hasStartedMatches => widget.tournament.runStages.any(
+    (stage) => _matchesForStage(stage).any((match) => match.startedAt != null),
+  );
+
+  bool get _canAdjustParticipants =>
+      widget.tournament.finishedAt == null &&
+      !_hasRecordedTournamentResults() &&
+      !_hasStartedMatches;
+
+  Set<String> _enabledPlannerModes() {
+    final modes = <String>{};
+    for (final stage in widget.tournament.stages) {
+      if (stage.type == 'groups') {
+        final groupTypes = stage.groupPlayTypes.isEmpty
+            ? [stage.groupPlayType]
+            : stage.groupPlayTypes;
+        modes.addAll(groupTypes.map((type) => 'groups:$type'));
+      } else {
+        modes.add(stage.type);
+      }
+    }
+    return modes
+        .where(TournamentPlanningRequest.modeLabels.containsKey)
+        .toSet();
+  }
+
+  Future<String?> _promptParticipantName() async {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => const _ParticipantNameDialog(),
+    );
+  }
+
+  Future<TournamentPlayer?> _selectPlayerToKick() =>
+      showDialog<TournamentPlayer>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Spieler vor Turnierbeginn kicken'),
+          content: SizedBox(
+            width: 420,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final player in widget.tournament.players)
+                  ListTile(
+                    leading: const Icon(Icons.person_remove_outlined),
+                    title: Text(player.name),
+                    onTap: () => Navigator.pop(context, player),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen'),
+            ),
+          ],
+        ),
+      );
+
+  Future<void> _addParticipantAndReplan() async {
+    if (!_canAdjustParticipants) return;
+    final name = (await _promptParticipantName())?.trim();
+    if (name == null || name.isEmpty || !mounted) return;
+    if (widget.tournament.players.any(
+      (player) => player.name.trim().toLowerCase() == name.toLowerCase(),
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Dieser Spieler ist bereits eingetragen.'),
+        ),
+      );
+      return;
+    }
+    await _planParticipantChange([
+      ...widget.tournament.players,
+      TournamentPlayer(name: name, isGenerated: false),
+    ]);
+  }
+
+  Future<void> _kickParticipantAndReplan() async {
+    if (!_canAdjustParticipants || widget.tournament.startedAt != null) return;
+    final player = await _selectPlayerToKick();
+    if (player == null || !mounted) return;
+    final players = widget.tournament.players
+        .where((entry) => entry != player)
+        .toList();
+    if (players.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ein Turnier benötigt mindestens zwei Spieler.'),
+        ),
+      );
+      return;
+    }
+    await _planParticipantChange(players);
+  }
+
+  Future<void> _planParticipantChange(
+    List<TournamentPlayer> proposedPlayers,
+  ) async {
+    if (!_canAdjustParticipants) return;
+    final tournament = widget.tournament;
+    final suggestion = await showDialog<TournamentFormatSuggestion>(
+      context: context,
+      builder: (_) => TournamentFormatPlannerDialog(
+        initialPlayerCount: proposedPlayers.length,
+        initialBoardCount: tournament.boardCount,
+        initialMinimumMatches: 3,
+        initialTargetMinutes: tournament.plannedMinutes,
+        initialEnabledModes: _enabledPlannerModes(),
+        initialMaximumStages: tournament.stages.length,
+        initialRequireGroupPhase: tournament.stages.any(
+          (stage) => stage.type == 'groups',
+        ),
+        lockBoardCount: true,
+        initialGameFormat: tournament.stages.isEmpty
+            ? null
+            : tournament.stages.first.gameFormat,
+      ),
+    );
+    if (suggestion == null || !mounted || !_canAdjustParticipants) return;
+    if (suggestion.configurations.isEmpty ||
+        suggestion.participantCount != proposedPlayers.length) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Der Vorschlag enthält keine gültige Turnierstruktur.'),
+        ),
+      );
+      return;
+    }
+
+    final previousStages = tournament.stages;
+    final groupSettings = previousStages.where(
+      (stage) => stage.type == 'groups',
+    );
+    final previousGroup = groupSettings.isEmpty ? null : groupSettings.first;
+    final previousKnockoutStages = previousStages
+        .where((stage) => _isKnockoutStageType(stage.type))
+        .toList();
+    final adjustedStages = [
+      for (final proposed in suggestion.configurations)
+        if (proposed.type == 'groups' && previousGroup != null)
+          TournamentStage.fromJson({
+            ...proposed.toJson(),
+            'groupTieBreakers': previousGroup.groupTieBreakers,
+            'groupDrawOnStart': previousGroup.groupDrawOnStart,
+            'groupDrawCompleted': false,
+            'groupSlotOrder': const <int?>[],
+            'qualificationAutoAdjust': previousGroup.qualificationAutoAdjust,
+          })
+        else if (_isKnockoutStageType(proposed.type) &&
+            previousKnockoutStages.isNotEmpty)
+          TournamentStage.fromJson({
+            ...proposed.toJson(),
+            'knockoutSeedingMode': previousKnockoutStages
+                .firstWhere(
+                  (stage) => stage.type == proposed.type,
+                  orElse: () => previousKnockoutStages.first,
+                )
+                .knockoutSeedingMode,
+            'knockoutDrawOnStart': previousKnockoutStages
+                .firstWhere(
+                  (stage) => stage.type == proposed.type,
+                  orElse: () => previousKnockoutStages.first,
+                )
+                .knockoutDrawOnStart,
+            'knockoutSlotOrder': const <int?>[],
+          })
+        else
+          proposed,
+    ];
+
+    try {
+      final candidate = CreatedTournament.fromJson(tournament.toJson());
+      candidate.players
+        ..clear()
+        ..addAll(proposedPlayers);
+      candidate.stages
+        ..clear()
+        ..addAll(adjustedStages);
+      candidate.runStages.clear();
+      candidate.activeStageIndex = 0;
+      candidate.completedStageIndexes.clear();
+      candidate.plannedMatchEndSeconds = [];
+
+      final runtime = ProductionTournamentRuntime(candidate);
+      var incomingPlayers = candidate.players;
+      for (var index = 0; index < candidate.stages.length; index++) {
+        final stage = candidate.stages[index];
+        final runStage = runtime.build(stage, incomingPlayers);
+        candidate.runStages.add(runStage);
+        runtime.activate(index);
+        runtime.advance();
+        if (index + 1 < candidate.stages.length) {
+          incomingPlayers = runtime.qualifiers(runStage);
+        }
+      }
+
+      candidate
+        ..plannedMinimumMinutes = suggestion.durationSpan.minimumMinutes
+        ..plannedMinutes = suggestion.estimatedMinutes
+        ..plannedMatches = suggestion.totalMatches;
+
+      await _runController.saveProgress(
+        tournament: candidate,
+        activeStageIndex: 0,
+        completedStageIndexes: const {},
+      );
+      if (!mounted) return;
+      setState(() {
+        tournament.players
+          ..clear()
+          ..addAll(candidate.players);
+        tournament.stages
+          ..clear()
+          ..addAll(candidate.stages);
+        tournament.runStages
+          ..clear()
+          ..addAll(candidate.runStages);
+        tournament
+          ..activeStageIndex = candidate.activeStageIndex
+          ..updatedAt = candidate.updatedAt
+          ..syncRevision = candidate.syncRevision
+          ..plannedMinimumMinutes = candidate.plannedMinimumMinutes
+          ..plannedMinutes = candidate.plannedMinutes
+          ..plannedMatches = candidate.plannedMatches
+          ..plannedMatchEndSeconds = candidate.plannedMatchEndSeconds;
+        tournament.completedStageIndexes.clear();
+        _activeStageIndex = 0;
+        _viewStageIndex = 0;
+        _completedStageIndexes.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Teilnehmer und Turnierformat wurden übernommen. Bitte eine neue Gruppenauslosung durchführen, falls sie zuvor bereits feststand.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Teilnehmeränderung konnte nicht gespeichert werden: $error',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _exportTournament() async {
     final data = TournamentExport.encode(widget.tournament);
     final html = TournamentExport.html(widget.tournament);
@@ -1057,6 +1311,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     for (final stage in widget.tournament.runStages) {
       if (stage is KnockoutTournamentRunStage) {
         if (stage.eliminationLossLimit == 2) {
+          if (_preserveCompletedImportedDoubleElimination(stage)) continue;
           _advanceDoubleEliminationRounds(
             stage.rounds,
             finalEndsTournament: stage.finalEndsTournament,
@@ -1113,6 +1368,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         }
       }
     }
+  }
+
+  bool _preserveCompletedImportedDoubleElimination(
+    KnockoutTournamentRunStage stage,
+  ) {
+    final archive = widget.tournament.importedArchive;
+    return archive?.usesNativeLogic == true &&
+        archive?.mode == 'double elimination' &&
+        stage.matches.every((match) => match.isResolved);
   }
 
   void _advanceWinnersInRounds(List<List<GroupMatch>> rounds) {
@@ -3105,6 +3369,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             SportActionsMenu(
               label: 'Turnier',
               actions: [
+                if (_canAdjustParticipants)
+                  SportMenuAction(
+                    label: 'Spieler hinzufügen & Format anpassen',
+                    icon: Icons.person_add_alt_1_outlined,
+                    onTap: _addParticipantAndReplan,
+                  ),
+                if (_canAdjustParticipants &&
+                    widget.tournament.startedAt == null)
+                  SportMenuAction(
+                    label: 'Spieler kicken & Format anpassen',
+                    icon: Icons.person_remove_outlined,
+                    onTap: _kickParticipantAndReplan,
+                  ),
                 if (widget.tournament.finishedAt == null)
                   SportMenuAction(
                     label: 'Spieler aus Turnier entfernen',
@@ -3789,4 +4066,45 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       ),
     );
   }
+}
+
+class _ParticipantNameDialog extends StatefulWidget {
+  const _ParticipantNameDialog();
+
+  @override
+  State<_ParticipantNameDialog> createState() => _ParticipantNameDialogState();
+}
+
+class _ParticipantNameDialogState extends State<_ParticipantNameDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Spieler hinzufügen'),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      maxLength: 80,
+      decoration: const InputDecoration(
+        labelText: 'Spielername',
+        border: OutlineInputBorder(),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Abbrechen'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _controller.text.trim()),
+        child: const Text('Weiter'),
+      ),
+    ],
+  );
 }

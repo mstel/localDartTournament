@@ -541,6 +541,33 @@ class _TournamentDirectorDashboardState
         const Text(
           'Alle Boards sind gesperrt. Ein Board freigeben, um fortzufahren.',
         ),
+      const SizedBox(height: 8),
+      Text(
+        'Board-Verfügbarkeit',
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      const SizedBox(height: 4),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (var board = 1; board <= t.boardCount; board++)
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: _busy ? null : () => _act(() => widget.onBlock(board)),
+              icon: Icon(
+                t.blockedBoards.contains(board)
+                    ? Icons.lock_open_outlined
+                    : Icons.lock_outline,
+              ),
+              label: Text(
+                t.blockedBoards.contains(board)
+                    ? 'Board $board freigeben'
+                    : 'Board $board sperren',
+              ),
+            ),
+        ],
+      ),
       if (active.isNotEmpty && completed == active.length && waiting == 0)
         const Text(
           'Etappe fertig: Buttons oben zum Abschließen oder vorzeitigen Beenden nutzen.',

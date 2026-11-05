@@ -26,6 +26,11 @@ CreatedTournament? resolveSecondScreenTournament(
   return tournaments.isEmpty ? null : tournaments.last;
 }
 
+bool secondScreenTournamentChanged(
+  CreatedTournament? current,
+  CreatedTournament? latest,
+) => current?.id != latest?.id || current?.updatedAt != latest?.updatedAt;
+
 class SecondScreenStandaloneApp extends StatelessWidget {
   const SecondScreenStandaloneApp({super.key, this.tournamentId});
 
@@ -58,6 +63,8 @@ class _SecondScreenStandalonePageState
     extends State<_SecondScreenStandalonePage> {
   CreatedTournament? _tournament;
   bool _loading = true;
+  bool _isLoadingTournament = false;
+  String? _loadError;
   Timer? _pollTimer;
 
   @override
@@ -76,6 +83,8 @@ class _SecondScreenStandalonePageState
   }
 
   Future<void> _loadTournament({bool silent = false}) async {
+    if (_isLoadingTournament) return;
+    _isLoadingTournament = true;
     try {
       final storage = TournamentStorage();
       final tournaments = await storage.loadTournaments();
@@ -85,14 +94,26 @@ class _SecondScreenStandalonePageState
       );
 
       if (!mounted) return;
-      setState(() {
-        _tournament = matched;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!silent && mounted) {
+      if (_loading ||
+          _loadError != null ||
+          secondScreenTournamentChanged(_tournament, matched)) {
+        setState(() {
+          _tournament = matched;
+          _loading = false;
+          _loadError = null;
+        });
+      }
+    } catch (error) {
+      if (mounted && _loadError != error.toString()) {
+        setState(() {
+          _loading = false;
+          _loadError = error.toString();
+        });
+      } else if (!silent && mounted && _loading) {
         setState(() => _loading = false);
       }
+    } finally {
+      _isLoadingTournament = false;
     }
   }
 
@@ -129,18 +150,33 @@ class _SecondScreenStandalonePageState
               const Icon(Icons.tv_off, color: Colors.white38, size: 48),
               const SizedBox(height: 16),
               Text(
-                requestedTournament
+                _loadError != null
+                    ? 'Turnierdaten konnten nicht geladen werden.'
+                    : requestedTournament
                     ? 'Das angeforderte Turnier wurde nicht gefunden.'
                     : 'Kein aktives Turnier gefunden.',
                 style: TextStyle(color: Colors.white, fontSize: 18),
               ),
               const SizedBox(height: 8),
               Text(
-                requestedTournament
+                _loadError != null
+                    ? 'Bitte Verbindung und Turnierspeicher prüfen und erneut versuchen.'
+                    : requestedTournament
                     ? 'Bitte öffne die Anzeige erneut aus dem gewünschten Turnier.'
                     : 'Starte oder wähle ein Turnier am Hauptbildschirm.',
                 style: TextStyle(color: Colors.white54),
               ),
+              if (_loadError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Tooltip(
+                    message: _loadError!,
+                    child: const Text(
+                      'Details zum Ladefehler',
+                      style: TextStyle(color: Colors.white38),
+                    ),
+                  ),
+                ),
               const SizedBox(height: 16),
               FilledButton.tonal(
                 onPressed: () => _loadTournament(),
@@ -155,10 +191,37 @@ class _SecondScreenStandalonePageState
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: TournamentSecondScreenView(
-          tournament: _tournament!,
-          isStandaloneWindow: true,
-          onClose: _closeStandaloneWindow,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            TournamentSecondScreenView(
+              tournament: _tournament!,
+              isStandaloneWindow: true,
+              onClose: _closeStandaloneWindow,
+            ),
+            if (_loadError != null)
+              Positioned(
+                top: 8,
+                left: 8,
+                right: 8,
+                child: Material(
+                  color: Colors.red.shade900,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'Aktualisierung fehlgeschlagen. Letzter gespeicherter '
+                      'Stand wird angezeigt.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

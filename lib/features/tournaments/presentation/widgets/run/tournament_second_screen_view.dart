@@ -50,7 +50,7 @@ class _TournamentSecondScreenViewState
   bool _showInlineNextStagePreview = false;
   bool _showPrognosis = false;
   Timer? _clockTimer;
-  int _clockTicks = 0;
+  int _rotationTicks = 0;
   int _priorityNoticeIndex = 0;
   int _nextMatchIndex = 0;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
@@ -64,12 +64,12 @@ class _TournamentSecondScreenViewState
     _showNextStagePreview = widget.showNextStagePreviewInitially;
     _refreshEloChanges();
     _refreshAdvancementForecast();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _clockTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) {
         setState(() {
-          _clockTicks++;
-          if (_clockTicks % 8 == 0) _priorityNoticeIndex++;
-          if (_clockTicks % 5 == 0) _nextMatchIndex++;
+          _rotationTicks++;
+          if (_rotationTicks % 2 == 0) _priorityNoticeIndex++;
+          _nextMatchIndex++;
         });
       }
     });
@@ -1392,9 +1392,11 @@ class _TournamentSecondScreenViewState
   }) {
     final schedule = const OrderOfPlayController().plan(t, activeIndex);
     final flowPriority = TournamentFlowPriority.forStage(stage);
-    final matches = _matchesOf(
-      stage,
-    ).where((m) => m.hasPlayers && !m.isResolved).toList();
+    final matches = _matchesOf(stage).where((m) {
+      return m.hasPlayers &&
+          !m.isResolved &&
+          !schedule.running.any((entry) => identical(entry.match, m));
+    }).toList();
     final plannedOrder = {
       for (var index = 0; index < schedule.planned.length; index++)
         schedule.planned[index].entry.match: index,
@@ -1437,6 +1439,7 @@ class _TournamentSecondScreenViewState
       }
     }
     final visibleSuggestions = suggestions;
+    final runningMatches = schedule.running;
     final priorityNotice = flowPriority.notices.isEmpty
         ? null
         : flowPriority.notices[_priorityNoticeIndex %
@@ -1529,6 +1532,48 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (runningMatches.isNotEmpty) ...[
+          Row(
+            children: [
+              const Icon(
+                Icons.play_circle_fill,
+                size: 22,
+                color: TournamentDisplayPalette.accent,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Aktuelle Partien (${runningMatches.length})',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 10.0;
+              final columns = constraints.maxWidth >= 740
+                  ? 3
+                  : constraints.maxWidth >= 460
+                  ? 2
+                  : 1;
+              final width =
+                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (final entry in runningMatches)
+                    _buildRunningMatchTile(context, entry, width: width),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
         Row(
           children: [
             const Icon(
@@ -1582,6 +1627,67 @@ class _TournamentSecondScreenViewState
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildRunningMatchTile(
+    BuildContext context,
+    PlayEntry entry, {
+    required double width,
+  }) {
+    final match = entry.match;
+    final elapsed = match.startedAt == null
+        ? null
+        : DateTime.now().difference(match.startedAt!);
+    final elapsedLabel = elapsed == null ? '' : ' · ${elapsed.inMinutes} Min.';
+    return Container(
+      width: width,
+      key: ValueKey(
+        'second-screen-running-match-${match.round}-'
+        '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
+        '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
+      ),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: TournamentDisplayPalette.cardEmphasis,
+        border: Border.all(color: TournamentDisplayPalette.accent, width: 2),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'JETZT LIVE · BOARD ${match.boardNumber}$elapsedLabel',
+            style: const TextStyle(
+              color: TournamentDisplayPalette.accent,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${match.homePlayer?.shortDisplayName ?? "Offen"} - '
+            '${match.awayPlayer?.shortDisplayName ?? "Offen"}',
+            style: const TextStyle(
+              color: TournamentDisplayPalette.text,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            entry.origin,
+            style: const TextStyle(
+              color: TournamentDisplayPalette.mutedText,
+              fontSize: 13,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
