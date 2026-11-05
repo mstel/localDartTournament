@@ -280,11 +280,15 @@ class WebsiteReadModelService {
     };
 
     final monthlyPerformance = <Map<String, dynamic>>[];
+    final importedMonthlyStatistics = <Map<String, dynamic>>[];
     for (final player in players) {
       final playerId = player['id'] as String;
+      final imported = await _database.loadMonthlyPlayerPerformances({
+        playerId,
+      });
       final entries = combineMonthlyPlayerPerformances(
         recorded: await _database.loadPlayerMonthlyPerformance(playerId),
-        imported: await _database.loadMonthlyPlayerPerformances({playerId}),
+        imported: imported,
       );
       for (final entry in entries) {
         monthlyPerformance.add({
@@ -299,9 +303,24 @@ class WebsiteReadModelService {
           'checkoutQuote': entry.checkoutRate,
         });
       }
+      for (final entry in imported) {
+        importedMonthlyStatistics.add({
+          'playerId': entry.playerProfileId,
+          'sourcePlayerName': entry.sourcePlayerName,
+          'period': entry.month,
+          'year': entry.monthDate.year,
+          'month': entry.monthDate.month,
+          'threeDartAverage': entry.threeDartAverage,
+          'firstNineAverage': entry.firstNineAverage,
+          'checkoutPercentage': entry.checkoutPercentage,
+          'legs': entry.legs,
+          'matches': entry.matches,
+        });
+      }
     }
     resources['performance'] = _version2Resource('performance', generatedAt, {
       'monthlyPerformance': monthlyPerformance,
+      'importedMonthlyStatistics': importedMonthlyStatistics,
       'currentForm': readModel['currentForm'],
     });
 

@@ -3894,7 +3894,7 @@ class _TournamentSecondScreenViewState
             builder: (context, constraints) {
               const spacing = 10.0;
               final columns = constraints.maxWidth >= 740
-                  ? 3
+                  ? 4
                   : constraints.maxWidth >= 460
                   ? 2
                   : 1;
@@ -3959,7 +3959,7 @@ class _TournamentSecondScreenViewState
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: TournamentDisplayPalette.cardEmphasis,
-        border: Border.all(color: TournamentDisplayPalette.accent, width: 2),
+        border: Border.all(color: const Color(0xFF42C6BE), width: 2),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -3968,9 +3968,9 @@ class _TournamentSecondScreenViewState
           Text(
             'JETZT LIVE · BOARD ${match.boardNumber}$elapsedLabel',
             style: const TextStyle(
-              color: TournamentDisplayPalette.accent,
+              color: Color(0xFF42C6BE),
               fontWeight: FontWeight.bold,
-              fontSize: 14,
+              fontSize: 13,
             ),
           ),
           const SizedBox(height: 6),
@@ -3980,17 +3980,7 @@ class _TournamentSecondScreenViewState
             style: const TextStyle(
               color: TournamentDisplayPalette.text,
               fontWeight: FontWeight.bold,
-              fontSize: 20,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            entry.origin,
-            style: const TextStyle(
-              color: TournamentDisplayPalette.mutedText,
-              fontSize: 13,
+              fontSize: 16,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -4049,12 +4039,15 @@ class _TournamentSecondScreenViewState
                               (assignment) =>
                                   assignment.entry.stageIndex == activeIndex &&
                                   assignment.board == board &&
-                                  assignment.entry.match.hasPlayers,
+                                  assignment.entry.match.hasPlayers &&
+                                  !identical(
+                                    assignment.entry.match,
+                                    running?.match,
+                                  ),
                             )
                             .take(3)
                             .toList();
                         final groupNames = <String>{
-                          ?running?.groupKey,
                           for (final assignment in upcoming)
                             ?assignment.entry.groupKey,
                         };
@@ -4114,50 +4107,18 @@ class _TournamentSecondScreenViewState
                                   ),
                                 ],
                               ),
-                              if (tournament.directorSchedulingStrategy ==
-                                      'group' &&
-                                  groupNames.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    groupNames.join(' · '),
-                                    style: const TextStyle(
-                                      color: TournamentDisplayPalette.mutedText,
-                                      fontSize: 11,
-                                    ),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Empfohlene Partien für '
+                                  '${tournament.boardDisplayName(board)}'
+                                  '${tournament.directorSchedulingStrategy == 'group' && groupNames.isNotEmpty ? ' · ${groupNames.join(' · ')}' : ''}',
+                                  style: const TextStyle(
+                                    color: TournamentDisplayPalette.mutedText,
+                                    fontSize: 11,
                                   ),
                                 ),
-                              if (running != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Aktuell: ${running.match.participantShortLabel}',
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: TournamentDisplayPalette.text,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      if (playerInsights.isNotEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 3,
-                                          ),
-                                          child: PlayerInsightBadgeRow(
-                                            insights: insightsForMatch(
-                                              running.match,
-                                              playerInsights,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
+                              ),
                               if (upcoming.isEmpty && running == null)
                                 const Padding(
                                   padding: EdgeInsets.only(top: 8),

@@ -132,6 +132,11 @@ void main() {
     expect(find.text('Jahresschnitt und Summen'), findsOneWidget);
     expect(find.text('Partien: 5'), findsOneWidget);
     expect(find.text('Gewertete Legs: 16'), findsOneWidget);
+    expect(find.byType(DataTable), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Jahresschnitt und Summen')).dy,
+      lessThan(tester.getTopLeft(find.byType(DataTable)).dy),
+    );
     expect(tester.takeException(), isNull);
   });
 }

@@ -2,6 +2,7 @@ import '../../../../shared/widgets/sport_menu.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime, TournamentRunPage;
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
+import '../../../../shared/theme/tournament_display_palette.dart';
 import '../../domain/engines/placement_engine.dart';
 import '../../domain/engines/group_standings_engine.dart';
 import '../../domain/knockout_round_names.dart';
@@ -83,9 +84,10 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     }
     final summary = _TournamentResultSummary.fromTournament(tournament);
     final scheme = Theme.of(context).colorScheme;
+    final completionPalette = TournamentDisplayPalette.forColorScheme(scheme);
     final completionColors = [
-      Color.lerp(const Color(0xFF142B3A), scheme.primary, .28)!,
-      Color.lerp(const Color(0xFF175C59), scheme.tertiary, .3)!,
+      completionPalette.card,
+      completionPalette.cardEmphasis,
     ];
     final podium = summary.ranking.take(3).toList();
     final performances = [

@@ -195,15 +195,32 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
       await action();
     } catch (error) {
       _error = true;
-      _status = switch (error) {
-        AuthException() => _authFailureMessage(error),
-        StorageException() => 'Cloud-Storage fehlgeschlagen: $error',
-        StateError() => '$error',
-        _ => 'Cloud-Vorgang fehlgeschlagen: $error',
-      };
+      _status =
+          _tlsTrustFailureMessage(error) ??
+          switch (error) {
+            AuthException() => _authFailureMessage(error),
+            StorageException() => 'Cloud-Storage fehlgeschlagen: $error',
+            StateError() => '$error',
+            _ => 'Cloud-Vorgang fehlgeschlagen: $error',
+          };
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String? _tlsTrustFailureMessage(Object error) {
+    final message = error.toString().toLowerCase();
+    if (!message.contains('certificate_verify_failed') &&
+        !message.contains('unable to get local issuer certificate')) {
+      return null;
+    }
+    return 'Die sichere TLS-Verbindung zu Supabase ist fehlgeschlagen: '
+        'Windows/App kann die ausstellende Zertifizierungsstelle nicht '
+        'verifizieren. Prüfe Datum und Uhrzeit und teste die Anmeldung über '
+        'einen Handy-Hotspot. Funktioniert es dort, muss die IT den '
+        'Vereinsnetz-Proxy oder die HTTPS-Prüfung des Virenschutzes prüfen '
+        'und dessen offizielles Root-Zertifikat korrekt bereitstellen. '
+        'Die Zertifikatsprüfung bleibt aktiv.';
   }
 
   String _authFailureMessage(AuthException error) {

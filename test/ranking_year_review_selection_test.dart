@@ -8,6 +8,7 @@ import 'package:dart_tournament_manager/features/tournaments/data/app_database.d
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/imported_tournament_archive.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/statistics/presentation/widgets/player_performance_trend_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -285,9 +286,7 @@ void main() {
     );
     expect(find.textContaining('Robin Spieler (66.7 %)'), findsOneWidget);
     expect(find.text('Gesamt-Performance pro Monat'), findsOneWidget);
-    expect(find.text('59.3'), findsOneWidget);
-    expect(find.text('98.1'), findsOneWidget);
-    expect(find.text('66.7 %'), findsOneWidget);
+    expect(find.byType(PlayerPerformanceTrendChart), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

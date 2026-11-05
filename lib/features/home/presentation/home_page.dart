@@ -189,6 +189,24 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     }
   }
 
+  Future<void> _quickEditTournament(CreatedTournament tournament) async {
+    final updatedTournament = await Navigator.of(context)
+        .push<CreatedTournament>(
+          MaterialPageRoute<CreatedTournament>(
+            builder: (_) => TournamentCreationPage(
+              tournamentStorage: _storage,
+              existingTournament: tournament,
+            ),
+          ),
+        );
+    if (!mounted) return;
+    if (updatedTournament == null) {
+      _reloadTournaments();
+    } else {
+      _reloadTournamentsWithUpdatedTournament(updatedTournament);
+    }
+  }
+
   Widget _tournamentPageFor(CreatedTournament tournament) {
     final lastStageIndex = tournament.runStages.length - 1;
     if (lastStageIndex >= 0 &&
@@ -623,6 +641,11 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                           onDelete: () => _deleteTournament(tournament),
                           onEditEndTime: () =>
                               _editTournamentEndTime(tournament),
+                          onQuickEdit:
+                              tournament.startedAt == null &&
+                                  tournament.importedArchive == null
+                              ? () => _quickEditTournament(tournament)
+                              : null,
                           onCopy: () => _copyTournament(tournament),
                           onConvert:
                               tournament.importedArchive != null &&

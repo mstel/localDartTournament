@@ -233,48 +233,6 @@ class _YearPerformanceChartState extends State<_YearPerformanceChart> {
                 padding: const EdgeInsets.only(top: 8),
                 child: _DataPointDetails(entry: selected),
               ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columnSpacing: 16,
-                horizontalMargin: 8,
-                columns: const [
-                  DataColumn(label: Text('Monat')),
-                  DataColumn(label: Text('Partien'), numeric: true),
-                  DataColumn(label: Text('Legs'), numeric: true),
-                  DataColumn(label: Text('Scoring'), numeric: true),
-                  DataColumn(label: Text('Average'), numeric: true),
-                  DataColumn(label: Text('Checkout Quote'), numeric: true),
-                ],
-                rows: [
-                  for (var month = 1; month <= 12; month++)
-                    DataRow(
-                      selected: _selectedMonth == month - 1,
-                      cells: [
-                        DataCell(
-                          Text(_monthName(month)),
-                          onTap: data[month - 1] == null
-                              ? null
-                              : () =>
-                                    setState(() => _selectedMonth = month - 1),
-                        ),
-                        DataCell(Text('${data[month - 1]?.matches ?? 0}')),
-                        DataCell(Text('${data[month - 1]?.weightedLegs ?? 0}')),
-                        DataCell(Text(_format(data[month - 1]?.scoring))),
-                        DataCell(Text(_format(data[month - 1]?.average))),
-                        DataCell(
-                          Text(
-                            data[month - 1]?.checkoutRate == null
-                                ? '–'
-                                : '${_format(data[month - 1]!.checkoutRate)} %',
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
@@ -293,23 +251,6 @@ class _YearPerformanceChartState extends State<_YearPerformanceChart> {
       setState(() => _selectedMonth = selectedMonth);
     }
   }
-
-  String _format(double? value) => value?.toStringAsFixed(1) ?? '–';
-
-  String _monthName(int month) => const [
-    'Jan',
-    'Feb',
-    'Mär',
-    'Apr',
-    'Mai',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Okt',
-    'Nov',
-    'Dez',
-  ][month - 1];
 }
 
 class _DataPointDetails extends StatelessWidget {

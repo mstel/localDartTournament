@@ -11,12 +11,14 @@ class TournamentSummaryCard extends StatelessWidget {
     required this.onOpen,
     required this.onDelete,
     this.onEditEndTime,
+    this.onQuickEdit,
     this.onCopy,
     this.onConvert,
   });
   final CreatedTournament tournament;
   final VoidCallback onOpen, onDelete;
   final VoidCallback? onEditEndTime;
+  final VoidCallback? onQuickEdit;
   final VoidCallback? onCopy;
   final VoidCallback? onConvert;
   @override
@@ -64,6 +66,9 @@ class TournamentSummaryCard extends StatelessWidget {
                     tooltip: 'Turnieraktionen',
                     onSelected: (action) {
                       switch (action) {
+                        case 'quickEdit':
+                          onQuickEdit?.call();
+                          break;
                         case 'copy':
                           onCopy?.call();
                           break;
@@ -79,6 +84,16 @@ class TournamentSummaryCard extends StatelessWidget {
                       }
                     },
                     itemBuilder: (_) => [
+                      if (onQuickEdit != null)
+                        const PopupMenuItem(
+                          value: 'quickEdit',
+                          child: ListTile(
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Schnell bearbeiten'),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
                       if (onCopy != null)
                         const PopupMenuItem(
                           value: 'copy',

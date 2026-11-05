@@ -240,6 +240,97 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Boards & nächste Begegnungen'), findsOneWidget);
+    expect(
+      find.textContaining('Empfohlene Partien für Board 1'),
+      findsOneWidget,
+    );
+    expect(find.text('Aktuell: ${match.participantShortLabel}'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('four active matches fit on one row on a desktop monitor', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final players = [
+      for (var index = 1; index <= 8; index++)
+        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+    ];
+    final matches = [
+      for (var index = 0; index < 4; index++)
+        GroupMatch(
+          homePlayer: players[index * 2],
+          awayPlayer: players[index * 2 + 1],
+          round: 1,
+        ),
+    ];
+    final tournament = CreatedTournament(
+      name: 'Vier Boards',
+      players: players,
+      stages: const [],
+      boardCount: 4,
+      directorModeEnabled: true,
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppenphase',
+          groupPlayType: 'round_robin',
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: players,
+              matches: matches,
+            ),
+          ],
+          qualificationPlan: null,
+          tieBreakers: const [],
+        ),
+      ],
+    );
+    for (var index = 0; index < matches.length; index++) {
+      expect(
+        const OrderOfPlayController().start(
+          tournament,
+          0,
+          matches[index],
+          index + 1,
+        ),
+        isTrue,
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tiles = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'second-screen-running-match-',
+          ),
+    );
+    expect(tiles, findsNWidgets(4));
+    final tileTops = [
+      for (final tile in tester.widgetList(tiles))
+        tester.getTopLeft(find.byWidget(tile)).dy,
+    ];
+    expect(
+      tileTops.reduce((left, right) => left > right ? left : right) -
+          tileTops.reduce((left, right) => left < right ? left : right),
+      lessThan(1),
+    );
     expect(tester.takeException(), isNull);
   });
 

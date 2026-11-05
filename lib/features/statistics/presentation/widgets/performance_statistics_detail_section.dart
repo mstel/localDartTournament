@@ -76,39 +76,6 @@ class _PerformanceStatisticsDetailSectionState
               year: _year,
               title: 'Performance-Entwicklung',
             ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columnSpacing: 16,
-                columns: const [
-                  DataColumn(label: Text('Monat')),
-                  DataColumn(label: Text('Scoring'), numeric: true),
-                  DataColumn(label: Text('Average'), numeric: true),
-                  DataColumn(label: Text('Checkout'), numeric: true),
-                  DataColumn(label: Text('Partien'), numeric: true),
-                  DataColumn(label: Text('Legs'), numeric: true),
-                ],
-                rows: [
-                  for (final entry in entries)
-                    DataRow(
-                      cells: [
-                        DataCell(Text(_monthName(entry.month))),
-                        DataCell(Text(_format(entry.scoring))),
-                        DataCell(Text(_format(entry.average))),
-                        DataCell(
-                          Text(
-                            entry.checkoutRate == null
-                                ? '–'
-                                : '${_format(entry.checkoutRate)} %',
-                          ),
-                        ),
-                        DataCell(Text('${entry.matches}')),
-                        DataCell(Text('${entry.weightedLegs}')),
-                      ],
-                    ),
-                ],
-              ),
-            ),
             const Divider(),
             Align(
               alignment: Alignment.centerLeft,
@@ -141,6 +108,40 @@ class _PerformanceStatisticsDetailSectionState
                       : '${_format(summary.checkoutRate)} %',
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 16,
+                columns: const [
+                  DataColumn(label: Text('Monat')),
+                  DataColumn(label: Text('Scoring'), numeric: true),
+                  DataColumn(label: Text('Average'), numeric: true),
+                  DataColumn(label: Text('Checkout'), numeric: true),
+                  DataColumn(label: Text('Partien'), numeric: true),
+                  DataColumn(label: Text('Legs'), numeric: true),
+                ],
+                rows: [
+                  for (final entry in entries)
+                    DataRow(
+                      cells: [
+                        DataCell(Text(_monthName(entry.month))),
+                        DataCell(Text(_format(entry.scoring))),
+                        DataCell(Text(_format(entry.average))),
+                        DataCell(
+                          Text(
+                            entry.checkoutRate == null
+                                ? '–'
+                                : '${_format(entry.checkoutRate)} %',
+                          ),
+                        ),
+                        DataCell(Text('${entry.matches}')),
+                        DataCell(Text('${entry.weightedLegs}')),
+                      ],
+                    ),
+                ],
+              ),
             ),
           ],
         ],

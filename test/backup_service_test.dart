@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/app/app_bootstrap.dart';
 import 'package:dart_tournament_manager/features/backups/data/backup_service.dart';
 import 'package:dart_tournament_manager/features/settings/data/planning_settings_storage.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/monthly_player_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
@@ -17,6 +18,7 @@ void main() {
   late BackupService service;
   late TournamentStorage tournaments;
   late LocalAppDatabase database;
+  late String profileId;
   setUp(() async {
     StorageAccess.restartRequired.value = false;
     root = await Directory.systemTemp.createTemp('backup_test_');
@@ -61,7 +63,22 @@ void main() {
         ],
       ),
     );
-    await database.createPlayerProfile(displayName: 'Eigener Spieler');
+    final profile = await database.createPlayerProfile(
+      displayName: 'Eigener Spieler',
+    );
+    profileId = profile.id;
+    await database.saveMonthlyPlayerPerformances([
+      MonthlyPlayerPerformance(
+        playerProfileId: profile.id,
+        sourcePlayerName: profile.displayName,
+        month: '2026-09',
+        threeDartAverage: 53.4,
+        firstNineAverage: 62.1,
+        checkoutPercentage: null,
+        legs: 42,
+        matches: 13,
+      ),
+    ]);
     await PlanningSettingsStorage(
       file: service.files['planning_settings.json'],
     ).save(
@@ -122,6 +139,16 @@ void main() {
         ),
         isTrue,
       );
+      final restoredMonthly = await database.loadMonthlyPlayerPerformances({
+        profileId,
+      });
+      expect(restoredMonthly, hasLength(1));
+      expect(restoredMonthly.single.month, '2026-09');
+      expect(restoredMonthly.single.threeDartAverage, 53.4);
+      expect(restoredMonthly.single.firstNineAverage, 62.1);
+      expect(restoredMonthly.single.checkoutPercentage, isNull);
+      expect(restoredMonthly.single.legs, 42);
+      expect(restoredMonthly.single.matches, 13);
       expect(
         (await PlanningSettingsStorage(
           file: service.files['planning_settings.json'],

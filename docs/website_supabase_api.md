@@ -154,7 +154,7 @@ Request one resource per call. `version=2` and `resource` are required;
 | `?version=2&resource=players` | `players` |
 | `?version=2&resource=rankings` | `rankings`, `rankingStandings` |
 | `?version=2&resource=statistics` | `statistics`, `bestPerformances`, `currentForm` |
-| `?version=2&resource=performance` | `monthlyPerformance`, `currentForm` |
+| `?version=2&resource=performance` | `monthlyPerformance`, `importedMonthlyStatistics`, `currentForm` |
 | `?version=2&resource=achievements` | `rankingAchievements` |
 | `?version=2&resource=tournaments&page=N` | One page of `completedTournaments` and `tournamentPage` |
 
@@ -173,6 +173,13 @@ percentage). Imported aggregates are authoritative when both sources contain
 the same player and month. Nullable performance values stay null; no values are
 inferred from tournament results. Profile-private details appear only in the
 independently requested `players` resource.
+
+`importedMonthlyStatistics` exposes the imported Excel-backed table without
+aggregation or field renaming: each row contains `playerId`,
+`sourcePlayerName`, `period`, `year`, `month`, `threeDartAverage`,
+`firstNineAverage`, nullable `checkoutPercentage`, `legs`, and `matches`.
+This preserves each stored player/month record 1:1 for clients that need the
+original data rather than the combined performance view.
 
 `currentForm` contains one record per player with the metrics calculated over
 up to the latest 100 weighted legs. Monthly statistics are weighted by their

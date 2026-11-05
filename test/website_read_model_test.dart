@@ -285,6 +285,7 @@ void main() {
             'checkoutQuote': 38.5,
           },
         ],
+        'importedMonthlyStatistics': <Map<String, dynamic>>[],
         'currentForm': [
           {
             'playerId': player.id,
@@ -357,6 +358,20 @@ void main() {
         'scoring': 62.7,
         'average': 54.2,
         'checkoutQuote': null,
+      },
+    ]);
+    expect(resources['performance']!['importedMonthlyStatistics'], [
+      {
+        'playerId': player.id,
+        'sourcePlayerName': player.displayName,
+        'period': '2026-09',
+        'year': 2026,
+        'month': 9,
+        'threeDartAverage': 54.2,
+        'firstNineAverage': 62.7,
+        'checkoutPercentage': null,
+        'legs': 36,
+        'matches': 12,
       },
     ]);
   });

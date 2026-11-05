@@ -1,3 +1,19 @@
+# 2.5.5+75
+
+- Entfernt die doppelte Performance-Tabelle im Spielerprofil und zeigt
+  Jahressummen oberhalb der Monatswerte.
+- Ergänzt `importedMonthlyStatistics` in der Website-API, damit historische
+  Monatsaggregate unverändert abrufbar sind. Die Werte bleiben Bestandteil
+  des Datenbank-Backups.
+- Passt die Turnier-Ergebnisübersicht an das gewählte Farbschema an und
+  übernimmt dieses auch beim Bildexport.
+- Macht die Schnellbearbeitung noch nicht gestarteter, nicht importierter
+  Turniere über das Turniermenü erreichbar.
+- Vereinfacht die Zweitbildschirm-Anzeige aktiver Partien und Board-
+  Empfehlungen und zeigt bis zu vier aktive Partien nebeneinander.
+- Ergänzt einen verständlicheren Hinweis für TLS-Zertifikatsvertrauensfehler;
+  die Zertifikatsprüfung bleibt aktiv.
+
 # 2.5.2+74
 
 - Zeigt Bestleistungen im Spielerprofil aufklappbar mit dem zugehörigen

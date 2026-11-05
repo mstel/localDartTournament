@@ -77,6 +77,38 @@ void main() {
     expect(find.text('Normales Turnier'), findsOneWidget);
   });
 
+  testWidgets('offers quick edit from the tournament actions menu', (
+    tester,
+  ) async {
+    var quickEditCalled = false;
+    final tournament = CreatedTournament(
+      name: 'Vereinsabend',
+      players: const [],
+      stages: const [],
+      runStages: const [],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSummaryCard(
+            tournament: tournament,
+            onOpen: () {},
+            onDelete: () {},
+            onQuickEdit: () => quickEditCalled = true,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Schnell bearbeiten'));
+    await tester.pumpAndSettle();
+
+    expect(quickEditCalled, isTrue);
+  });
+
   testWidgets('shows the winning team for a completed league match', (
     tester,
   ) async {
