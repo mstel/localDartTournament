@@ -1,195 +1,180 @@
 import 'package:flutter/material.dart';
+
 import '../../domain/best_performance.dart';
 
-/// Summarizes best performances with collapsible groups for shortlegs and high finishes,
-/// avoiding redundant listings for 180s and 170s.
 class StructuredBestPerformancesView extends StatelessWidget {
   const StructuredBestPerformancesView({
     super.key,
     required this.bestPerformances,
+    this.occurrences = const [],
+    this.onTournamentTap,
   });
 
   final List<BestPerformance> bestPerformances;
+  final List<BestPerformanceOccurrence> occurrences;
+  final ValueChanged<String>? onTournamentTap;
+
+  static const _types = [
+    BestPerformanceType.score180,
+    BestPerformanceType.bigFish170,
+    BestPerformanceType.score171Plus,
+    BestPerformanceType.highFinish,
+    BestPerformanceType.bullseyeFinish,
+    BestPerformanceType.shortLeg,
+  ];
 
   @override
   Widget build(BuildContext context) {
-    if (bestPerformances.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final shortLegs = bestPerformances
-        .where((item) => item.type == BestPerformanceType.shortLeg)
-        .toList();
-    final highFinishes = bestPerformances
-        .where((item) => item.type == BestPerformanceType.highFinish)
-        .toList();
-    final bullseyeFinishes = bestPerformances
+    final normalized = bestPerformances
         .where(
-          (item) => item.normalizedType == BestPerformanceType.bullseyeFinish,
+          (performance) =>
+              performance.normalizedType != BestPerformanceType.score170,
         )
         .toList();
-    final score170 = bestPerformances
-        .where((item) => item.normalizedType == BestPerformanceType.bigFish170)
-        .length;
-    final score171Plus = bestPerformances
-        .where(
-          (item) => item.normalizedType == BestPerformanceType.score171Plus,
-        )
-        .length;
-    final score180 = bestPerformances
-        .where((item) => item.normalizedType == BestPerformanceType.score180)
-        .length;
-
-    // Group shortlegs by dart count (ascending 9 to 18)
-    final shortLegsByDarts = <int, int>{};
-    for (final item in shortLegs) {
-      final darts = item.value ?? 18;
-      shortLegsByDarts[darts] = (shortLegsByDarts[darts] ?? 0) + 1;
-    }
-    final sortedDarts = shortLegsByDarts.keys.toList()..sort();
-
-    // Group high finishes by finish score (descending 170 to 100)
-    final highFinishesByScore = <int, int>{};
-    for (final item in highFinishes) {
-      final score = item.value ?? 100;
-      highFinishesByScore[score] = (highFinishesByScore[score] ?? 0) + 1;
-    }
-    final sortedScores = highFinishesByScore.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
-
-    if (shortLegs.isEmpty &&
-        highFinishes.isEmpty &&
-        bullseyeFinishes.isEmpty &&
-        score170 == 0 &&
-        score171Plus == 0 &&
-        score180 == 0) {
-      return const SizedBox.shrink();
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (score170 > 0)
-          _PerformanceSummaryCard(
-            icon: Icons.bolt,
-            title: '170 (Big Fish)',
-            count: score170,
-          ),
-        if (score171Plus > 0)
-          _PerformanceSummaryCard(
-            icon: Icons.bolt,
-            title: '171+ Aufnahmen',
-            count: score171Plus,
-          ),
-        if (score180 > 0)
-          _PerformanceSummaryCard(
-            icon: Icons.bolt,
-            title: '180+ Aufnahmen',
-            count: score180,
-          ),
-        if (bullseyeFinishes.isNotEmpty)
-          Card(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            child: ExpansionTile(
-              leading: const Icon(Icons.gps_fixed, color: Colors.redAccent),
-              title: Text('Bullseye Finishes (${bullseyeFinishes.length})'),
-              children: [
-                for (final finish in bullseyeFinishes)
-                  ListTile(
-                    dense: true,
-                    title: Text(finish.playerName),
-                    subtitle: Text(finish.details ?? 'Bullseye'),
-                  ),
-              ],
+        for (final type in _types)
+          if (normalized.any(
+            (performance) => performance.normalizedType == type,
+          ))
+            _PerformanceGroup(
+              type: type,
+              performances: normalized
+                  .where((performance) => performance.normalizedType == type)
+                  .toList(),
+              occurrences: occurrences
+                  .where(
+                    (occurrence) =>
+                        occurrence.performance.normalizedType == type,
+                  )
+                  .toList(),
+              onTournamentTap: onTournamentTap,
             ),
-          ),
-        if (shortLegs.isNotEmpty)
-          Card(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            child: ExpansionTile(
-              leading: const Icon(Icons.flash_on_outlined, color: Colors.amber),
-              title: Text('Shortlegs (${shortLegs.length})'),
-              subtitle: const Text(
-                'Hier tippen für Aufschlüsselung nach Darts (9–18)',
-              ),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              children: [
-                for (final darts in sortedDarts)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '$darts Darts',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          '${shortLegsByDarts[darts]}×',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        if (highFinishes.isNotEmpty)
-          Card(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            child: ExpansionTile(
-              leading: const Icon(Icons.stars_outlined, color: Colors.orange),
-              title: Text('High Finishes (${highFinishes.length})'),
-              subtitle: const Text(
-                'Hier tippen für Aufschlüsselung nach Checkouts',
-              ),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              children: [
-                for (final score in sortedScores)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '$score Checkout',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          '${highFinishesByScore[score]}×',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
       ],
     );
   }
 }
 
-class _PerformanceSummaryCard extends StatelessWidget {
-  const _PerformanceSummaryCard({
-    required this.icon,
-    required this.title,
-    required this.count,
+class _PerformanceGroup extends StatelessWidget {
+  const _PerformanceGroup({
+    required this.type,
+    required this.performances,
+    required this.occurrences,
+    required this.onTournamentTap,
   });
 
-  final IconData icon;
-  final String title;
-  final int count;
+  final BestPerformanceType type;
+  final List<BestPerformance> performances;
+  final List<BestPerformanceOccurrence> occurrences;
+  final ValueChanged<String>? onTournamentTap;
 
   @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.symmetric(vertical: 4),
-    child: ListTile(leading: Icon(icon), title: Text('$title · $count')),
-  );
+  Widget build(BuildContext context) {
+    final title = switch (type) {
+      BestPerformanceType.bigFish170 => '170 (Big Fish)',
+      BestPerformanceType.score171Plus ||
+      BestPerformanceType.score170 => '171+ Aufnahmen',
+      BestPerformanceType.score180 => '180+ Aufnahmen',
+      BestPerformanceType.highFinish => 'High Finishes',
+      BestPerformanceType.bullseyeFinish => 'Bullseye Finishes',
+      BestPerformanceType.shortLeg => 'Shortlegs',
+    };
+    final icon = switch (type) {
+      BestPerformanceType.bullseyeFinish => Icons.gps_fixed,
+      BestPerformanceType.highFinish => Icons.stars_outlined,
+      BestPerformanceType.shortLeg => Icons.flash_on_outlined,
+      _ => Icons.bolt,
+    };
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: ExpansionTile(
+        leading: Icon(icon),
+        title: Text('$title (${performances.length})'),
+        children: occurrences.isEmpty
+            ? [
+                for (final performance in _groupedLegacyEntries())
+                  ListTile(
+                    dense: true,
+                    title: Text(performance.$1),
+                    trailing: Text('${performance.$2}×'),
+                  ),
+              ]
+            : [
+                for (final occurrence in occurrences)
+                  _PerformanceOccurrenceRow(
+                    occurrence: occurrence,
+                    onTournamentTap: onTournamentTap,
+                  ),
+              ],
+      ),
+    );
+  }
+
+  List<(String, int)> _groupedLegacyEntries() {
+    final counts = <String, int>{};
+    for (final performance in performances) {
+      final label = switch (type) {
+        BestPerformanceType.shortLeg => '${performance.value ?? 18} Darts',
+        BestPerformanceType.highFinish =>
+          '${performance.value ?? 100} Checkout',
+        BestPerformanceType.bullseyeFinish => 'Bullseye',
+        _ => performance.details ?? performance.value?.toString() ?? 'Erfasst',
+      };
+      counts.update(label, (count) => count + 1, ifAbsent: () => 1);
+    }
+    return counts.entries.map((entry) => (entry.key, entry.value)).toList();
+  }
+}
+
+class _PerformanceOccurrenceRow extends StatelessWidget {
+  const _PerformanceOccurrenceRow({
+    required this.occurrence,
+    required this.onTournamentTap,
+  });
+
+  final BestPerformanceOccurrence occurrence;
+  final ValueChanged<String>? onTournamentTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final performance = occurrence.performance;
+    final description = switch (performance.normalizedType) {
+      BestPerformanceType.shortLeg =>
+        performance.details ?? '${performance.value ?? 18} Darts',
+      BestPerformanceType.highFinish =>
+        performance.details ?? '${performance.value ?? 0} Checkout',
+      BestPerformanceType.bullseyeFinish =>
+        performance.details ?? 'Bullseye Finish',
+      _ =>
+        performance.details ??
+            performance.value?.toString() ??
+            performance.label,
+    };
+    final link = TextButton(
+      onPressed: onTournamentTap == null
+          ? null
+          : () => onTournamentTap!(occurrence.tournamentId),
+      style: TextButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        textStyle: Theme.of(context).textTheme.bodyMedium,
+      ),
+      child: Text(occurrence.tournamentName, softWrap: true),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            '$description · ',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          link,
+        ],
+      ),
+    );
+  }
 }

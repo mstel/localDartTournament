@@ -1,3 +1,19 @@
+# 2.5.2+74
+
+- Zeigt Bestleistungen im Spielerprofil aufklappbar mit dem zugehörigen
+  Turnier als Link.
+- Ergänzt historische Monatswerte um Jahresfilter, Monatsnamen und
+  Jahressummen; die aktuelle Form vermeidet doppelte Angaben.
+- Vereinheitlicht die Performance-Diagramme im Spielerprofil und
+  Jahresrückblick. Datenpunkte zeigen Leistungswerte, gewertete Legs und
+  Partien; Reihen verbinden Monate ohne Messwerte, Legenden und Trendkurven
+  lassen sich steuern.
+- Bezieht importierte Monatsaggregate in Performance-Ansichten und
+  Website-API ein, ohne daraus Einzelspiele zu erzeugen. Bestleistungs-API-
+  Einträge enthalten den Turnierbezug und behalten wiederholte Vorkommen bei.
+- Die beiden verbleibenden Challonge-Turniere werden nicht automatisch
+  konvertiert und müssen manuell übertragen werden.
+
 # 2.5.1+73
 
 - Bezieht importierte historische Monatsaggregate in Spielerprofile,

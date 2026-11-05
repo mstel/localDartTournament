@@ -10,6 +10,7 @@ void main() {
   ) async {
     const monthlyPerformance = [
       RankingMonthlyClubPerformance(
+        year: 2026,
         month: 1,
         weightedLegs: 40,
         scoring: 49,
@@ -17,6 +18,7 @@ void main() {
         checkoutRate: 43.4,
       ),
       RankingMonthlyClubPerformance(
+        year: 2026,
         month: 2,
         weightedLegs: 100,
         scoring: 60,
@@ -53,11 +55,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Vereinsentwicklung pro Monat'), findsOneWidget);
-      expect(find.text('40 Legs'), findsOneWidget);
-      expect(find.text('Scoring: 49.0'), findsOneWidget);
-      expect(find.text('Average: 87.1'), findsOneWidget);
-      expect(find.text('Checkout-Quote: 43.4 %'), findsOneWidget);
+      expect(find.text('Gesamt-Performance pro Monat'), findsOneWidget);
+      expect(find.text('2026'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
 

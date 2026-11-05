@@ -18,7 +18,7 @@ class PlayerPerformanceSection extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           'Performance (gesamt)',
-          style: Theme.of(context).textTheme.titleMedium,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         Wrap(
           spacing: 12,
@@ -46,10 +46,13 @@ class PlayerPerformanceSection extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'Aktuelle Form: letzte 100 Legs',
-          style: Theme.of(context).textTheme.titleMedium,
+          currentForm.weightedLegs == 0
+              ? 'Aktuelle Form: keine gewerteten Legs'
+              : currentForm.weightedLegs < 100
+              ? 'Aktuelle Form: letzte ${currentForm.weightedLegs} Legs'
+              : 'Aktuelle Form: letzte 100 Legs',
+          style: Theme.of(context).textTheme.titleLarge,
         ),
-        Text('Ausgewertet: ${currentForm.weightedLegs} gewertete Legs'),
         const SizedBox(height: 8),
         Wrap(
           spacing: 12,

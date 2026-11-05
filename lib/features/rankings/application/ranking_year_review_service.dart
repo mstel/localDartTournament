@@ -22,15 +22,19 @@ class RankingYearPlayerStats {
 
 class RankingMonthlyClubPerformance {
   const RankingMonthlyClubPerformance({
+    required this.year,
     required this.month,
     required this.weightedLegs,
+    this.matches = 0,
     required this.scoring,
     required this.average,
     required this.checkoutRate,
   });
 
+  final int year;
   final int month;
   final int weightedLegs;
+  final int matches;
   final double? scoring;
   final double? average;
   final double? checkoutRate;
@@ -250,14 +254,16 @@ class RankingYearReviewService {
   List<RankingMonthlyClubPerformance> _monthlyClubPerformance(
     Iterable<PlayerMonthlyPerformance> performances,
   ) {
-    final byMonth = <int, List<PlayerMonthlyPerformance>>{};
+    final byMonth = <(int, int), List<PlayerMonthlyPerformance>>{};
     for (final performance in performances) {
       if (performance.weightedLegs <= 0 ||
           performance.month < 1 ||
           performance.month > 12) {
         continue;
       }
-      byMonth.putIfAbsent(performance.month, () => []).add(performance);
+      byMonth
+          .putIfAbsent((performance.year, performance.month), () => [])
+          .add(performance);
     }
 
     double? weightedMean(
@@ -275,14 +281,24 @@ class RankingYearReviewService {
       return totalWeight == 0 ? null : weightedTotal / totalWeight;
     }
 
+    final periods = byMonth.keys.toList()
+      ..sort((left, right) {
+        final yearOrder = left.$1.compareTo(right.$1);
+        return yearOrder != 0 ? yearOrder : left.$2.compareTo(right.$2);
+      });
     return [
-      for (var month = 1; month <= 12; month++)
-        if (byMonth[month] case final monthEntries?)
+      for (final period in periods)
+        if (byMonth[period] case final monthEntries?)
           RankingMonthlyClubPerformance(
-            month: month,
+            year: period.$1,
+            month: period.$2,
             weightedLegs: monthEntries.fold<int>(
               0,
               (total, entry) => total + entry.weightedLegs,
+            ),
+            matches: monthEntries.fold<int>(
+              0,
+              (total, entry) => total + entry.matches,
             ),
             scoring: weightedMean(monthEntries, (entry) => entry.scoring),
             average: weightedMean(monthEntries, (entry) => entry.average),

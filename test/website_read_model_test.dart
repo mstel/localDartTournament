@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/monthly_player_performance.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
@@ -81,6 +82,12 @@ void main() {
             playerProfileId: player.id,
             value: 180,
           ),
+          BestPerformance(
+            type: BestPerformanceType.score180,
+            playerName: player.displayName,
+            playerProfileId: player.id,
+            value: 180,
+          ),
         ],
       );
       final completed = CreatedTournament(
@@ -154,7 +161,7 @@ void main() {
               'firstPlaces': 0,
               'secondPlaces': 0,
               'thirdPlaces': 0,
-              'bestPerformances': 1,
+              'bestPerformances': 2,
             },
           ],
         },
@@ -211,13 +218,16 @@ void main() {
         },
       ]);
       expect(model['bestPerformances'], [
-        {
-          'type': 'score180',
-          'playerName': 'Ada Dart',
-          'playerProfileId': player.id,
-          'value': 180,
-          'playerId': player.id,
-        },
+        for (var occurrence = 0; occurrence < 2; occurrence++)
+          {
+            'type': 'score180',
+            'playerName': 'Ada Dart',
+            'playerProfileId': player.id,
+            'value': 180,
+            'playerId': player.id,
+            'tournamentId': 'finished',
+            'tournamentName': 'Vereinsturnier',
+          },
       ]);
       final resources = await service.createVersion2Resources(model);
       expect(
@@ -268,6 +278,7 @@ void main() {
             'period': '2026-10',
             'year': 2026,
             'month': 10,
+            'matches': 0,
             'weightedLegs': 18,
             'scoring': 72.5,
             'average': 51.2,
@@ -304,6 +315,51 @@ void main() {
       expect(serialized, isNot(contains('dartsSetupJson')));
     },
   );
+
+  test('performance API publishes imported monthly aggregates', () async {
+    final player = await database.createPlayerProfile(
+      firstName: 'Ada',
+      lastName: 'Dart',
+      country: 'DE',
+      city: 'Berlin',
+    );
+    await database.saveMonthlyPlayerPerformances([
+      MonthlyPlayerPerformance(
+        playerProfileId: player.id,
+        sourcePlayerName: player.displayName,
+        month: '2026-09',
+        threeDartAverage: 54.2,
+        firstNineAverage: 62.7,
+        checkoutPercentage: null,
+        legs: 36,
+        matches: 12,
+      ),
+    ]);
+
+    final service = WebsiteReadModelService(
+      database: database,
+      tournamentStorage: tournamentStorage,
+    );
+    final resources = await service.createVersion2Resources(
+      await service.create(),
+    );
+    final monthly = (resources['performance']!['monthlyPerformance'] as List)
+        .cast<Map<String, dynamic>>();
+
+    expect(monthly, [
+      {
+        'playerId': player.id,
+        'period': '2026-09',
+        'year': 2026,
+        'month': 9,
+        'matches': 12,
+        'weightedLegs': 36,
+        'scoring': 62.7,
+        'average': 54.2,
+        'checkoutQuote': null,
+      },
+    ]);
+  });
 
   test(
     'publishes the new best-performance categories and Bullseye details',

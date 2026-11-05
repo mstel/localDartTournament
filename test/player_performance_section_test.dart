@@ -1,5 +1,6 @@
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/statistics/presentation/widgets/player_performance_section.dart';
+import 'package:dart_tournament_manager/features/statistics/presentation/widgets/performance_statistics_detail_section.dart';
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,11 +56,82 @@ void main() {
 
       expect(find.text('Performance (gesamt)'), findsOneWidget);
       expect(find.text('Aktuelle Form: letzte 100 Legs'), findsOneWidget);
-      expect(find.text('Ausgewertet: 100 gewertete Legs'), findsOneWidget);
+      expect(find.text('Ausgewertet: 100 gewertete Legs'), findsNothing);
       expect(tester.takeException(), isNull);
     }
 
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+  });
+
+  testWidgets('short current form adjusts its heading to available legs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerPerformanceSection(
+            performance: [
+              PlayerMonthlyPerformance(
+                playerId: 'player',
+                year: DateTime.now().year - 1,
+                month: 4,
+                weightedLegs: 64,
+                scoring: 55,
+                average: 80,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Aktuelle Form: letzte 64 Legs'), findsOneWidget);
+    expect(find.textContaining('Ausgewertet:'), findsNothing);
+  });
+
+  testWidgets('monthly detail defaults to this year and shows annual totals', (
+    tester,
+  ) async {
+    final year = DateTime.now().year;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PerformanceStatisticsDetailSection(
+              entries: [
+                PlayerMonthlyPerformance(
+                  playerId: 'player',
+                  year: year,
+                  month: 9,
+                  matches: 5,
+                  weightedLegs: 16,
+                  scoring: 60,
+                  average: 45,
+                ),
+                PlayerMonthlyPerformance(
+                  playerId: 'player',
+                  year: year - 1,
+                  month: 2,
+                  matches: 3,
+                  weightedLegs: 10,
+                  scoring: 50,
+                  average: 40,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Performance Statistiken im Detail'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('September'), findsOneWidget);
+    expect(find.text('Jahresschnitt und Summen'), findsOneWidget);
+    expect(find.text('Partien: 5'), findsOneWidget);
+    expect(find.text('Gewertete Legs: 16'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

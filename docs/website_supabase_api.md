@@ -121,6 +121,9 @@ authorization header.
   record per player, also available independently in the version-2 performance
   resource.
 - `bestPerformances`: best-performance records with the corresponding `playerId`.
+  Records also contain `tournamentId` and `tournamentName` so the website can
+  link each occurrence to its tournament. Repeated performances in one
+  tournament remain separate records.
   The `type` is `bigFish170`, `score171Plus`, `score180`, `highFinish`,
   `bullseyeFinish`, or `shortLeg`; Bullseye finish records may include a
   user-entered `details` string. Legacy `score170` records are exposed as
@@ -162,12 +165,14 @@ pre-sliced and persisted separately, so a page request does not download the
 index or any other tournament page. Pages contain at most ten summaries. An
 empty tournament collection is represented by page 1 with an empty list.
 
-`monthlyPerformance` contains one row per manually maintained player/month
-record: `playerId`, `period` (`YYYY-MM`), `year`, `month`, `weightedLegs`,
+`monthlyPerformance` contains one row per player/month across manually
+maintained performance and imported historical aggregates:
+`playerId`, `period` (`YYYY-MM`), `year`, `month`, `matches`, `weightedLegs`,
 `scoring`, `average`, and `checkoutQuote` (the app's stored checkout-rate
-percentage). Nullable scoring values stay null; no values are inferred from
-tournament results. Profile-private details appear only in the independently
-requested `players` resource.
+percentage). Imported aggregates are authoritative when both sources contain
+the same player and month. Nullable performance values stay null; no values are
+inferred from tournament results. Profile-private details appear only in the
+independently requested `players` resource.
 
 `currentForm` contains one record per player with the metrics calculated over
 up to the latest 100 weighted legs. Monthly statistics are weighted by their

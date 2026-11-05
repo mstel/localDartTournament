@@ -6,6 +6,7 @@ class PlayerMonthlyPerformance {
     required this.year,
     required this.month,
     required this.weightedLegs,
+    this.matches = 0,
     this.scoring,
     this.average,
     this.checkoutRate,
@@ -26,6 +27,7 @@ class PlayerMonthlyPerformance {
   final int year;
   final int month;
   final int weightedLegs;
+  final int matches;
   final double? scoring;
   final double? average;
   final double? checkoutRate;
@@ -51,6 +53,7 @@ List<PlayerMonthlyPerformance> combineMonthlyPlayerPerformances({
       year: year,
       month: month,
       weightedLegs: entry.legs,
+      matches: entry.matches,
       scoring: entry.firstNineAverage,
       average: entry.threeDartAverage,
       checkoutRate: entry.checkoutPercentage,
@@ -62,6 +65,42 @@ List<PlayerMonthlyPerformance> combineMonthlyPlayerPerformances({
       return yearOrder != 0 ? yearOrder : left.month.compareTo(right.month);
     });
   return List.unmodifiable(result);
+}
+
+List<PlayerMonthlyPerformance> aggregateMonthlyPlayerPerformances(
+  Iterable<PlayerMonthlyPerformance> entries,
+) {
+  final byPeriod = <(int, int), _MonthlyPerformanceTotals>{};
+  final matches = <(int, int), int>{};
+  final firstPlayer = <(int, int), String>{};
+  for (final entry in entries) {
+    final period = (entry.year, entry.month);
+    byPeriod.putIfAbsent(period, _MonthlyPerformanceTotals.new).add(entry);
+    matches.update(
+      period,
+      (count) => count + entry.matches,
+      ifAbsent: () => entry.matches,
+    );
+    firstPlayer.putIfAbsent(period, () => entry.playerId);
+  }
+  final periods = byPeriod.keys.toList()
+    ..sort((left, right) {
+      final yearOrder = left.$1.compareTo(right.$1);
+      return yearOrder != 0 ? yearOrder : left.$2.compareTo(right.$2);
+    });
+  return List.unmodifiable([
+    for (final period in periods)
+      PlayerMonthlyPerformance(
+        playerId: firstPlayer[period]!,
+        year: period.$1,
+        month: period.$2,
+        matches: matches[period]!,
+        weightedLegs: byPeriod[period]!.weightedLegs,
+        scoring: byPeriod[period]!.scoring.value,
+        average: byPeriod[period]!.average.value,
+        checkoutRate: byPeriod[period]!.checkoutRate.value,
+      ),
+  ]);
 }
 
 class CurrentFormPerformance {

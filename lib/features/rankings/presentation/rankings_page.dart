@@ -363,10 +363,6 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                   (a, b) => a > b ? a : b,
                                 ),
                               ),
-                            const SizedBox(height: 16),
-                            RankingMonthlyClubPerformanceSection(
-                              monthlyPerformance: review.monthlyClubPerformance,
-                            ),
                           ] else ...[
                             Text(
                               'Turniere pro Jahr',
@@ -388,6 +384,10 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                       .fold<int>(0, (a, b) => a > b ? a : b),
                                 ),
                           ],
+                          const SizedBox(height: 16),
+                          RankingMonthlyClubPerformanceSection(
+                            monthlyPerformance: review.monthlyClubPerformance,
+                          ),
                           const SizedBox(height: 20),
                           Text(
                             'Kategorien & Bestleistungen',

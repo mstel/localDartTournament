@@ -284,11 +284,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('Robin Spieler (66.7 %)'), findsOneWidget);
-    expect(find.text('Vereinsentwicklung pro Monat'), findsOneWidget);
-    expect(find.text('30 Legs'), findsOneWidget);
-    expect(find.text('Scoring: 59.3'), findsOneWidget);
-    expect(find.text('Average: 98.1'), findsOneWidget);
-    expect(find.text('Checkout-Quote: 66.7 %'), findsOneWidget);
+    expect(find.text('Gesamt-Performance pro Monat'), findsOneWidget);
+    expect(find.text('59.3'), findsOneWidget);
+    expect(find.text('98.1'), findsOneWidget);
+    expect(find.text('66.7 %'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

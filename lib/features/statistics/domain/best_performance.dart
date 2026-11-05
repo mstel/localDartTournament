@@ -62,3 +62,15 @@ class BestPerformance {
     if (details != null) 'details': details,
   };
 }
+
+class BestPerformanceOccurrence {
+  const BestPerformanceOccurrence({
+    required this.performance,
+    required this.tournamentId,
+    required this.tournamentName,
+  });
+
+  final BestPerformance performance;
+  final String tournamentId;
+  final String tournamentName;
+}

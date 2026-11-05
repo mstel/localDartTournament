@@ -51,11 +51,13 @@ class LocalPlayerStatistics {
     required this.setsWon,
     required this.setsLost,
     required this.bestPerformances,
+    this.bestPerformanceOccurrences = const [],
     this.monthlyPerformances = const [],
   });
   final int tournaments, matches, wins, losses, draws, tournamentWins;
   final int legsWon, legsLost, legsDrawn, setsWon, setsLost;
   final List<BestPerformance> bestPerformances;
+  final List<BestPerformanceOccurrence> bestPerformanceOccurrences;
   final List<MonthlyPlayerPerformance> monthlyPerformances;
   int get legsPlayed => legsWon + legsLost;
   int get setsPlayed => setsWon + setsLost;
@@ -188,6 +190,7 @@ class LocalStatisticsService {
     var matches = 0, wins = 0, losses = 0, draws = 0, tournamentWins = 0;
     var legsWon = 0, legsLost = 0, legsDrawn = 0, setsWon = 0, setsLost = 0;
     final performances = <BestPerformance>[];
+    final performanceOccurrences = <BestPerformanceOccurrence>[];
     for (final tournament in tournaments) {
       if (year != null) {
         final tDate =
@@ -229,18 +232,22 @@ class LocalStatisticsService {
         if (match.homeLegs == match.awayLegs) legsDrawn++;
         setsWon += isHome ? match.homeSets ?? 0 : match.awaySets ?? 0;
         setsLost += isHome ? match.awaySets ?? 0 : match.homeSets ?? 0;
-        performances.addAll(
-          match.bestPerformances.where(
-            (p) =>
-                (p.playerProfileId != null &&
-                    ids.contains(p.playerProfileId)) ||
-                (p.playerProfileId == null &&
-                    (isHome
-                            ? match.homePlayer?.name
-                            : match.awayPlayer?.name) ==
-                        p.playerName),
-          ),
-        );
+        for (final performance in match.bestPerformances.where(
+          (p) =>
+              (p.playerProfileId != null && ids.contains(p.playerProfileId)) ||
+              (p.playerProfileId == null &&
+                  (isHome ? match.homePlayer?.name : match.awayPlayer?.name) ==
+                      p.playerName),
+        )) {
+          performances.add(performance);
+          performanceOccurrences.add(
+            BestPerformanceOccurrence(
+              performance: performance,
+              tournamentId: tournament.id,
+              tournamentName: tournament.name,
+            ),
+          );
+        }
       }
       final archive = tournament.importedArchive;
       final hasNativeBestPerformances = tournamentMatches.any(
@@ -288,6 +295,13 @@ class LocalStatisticsService {
                     : matchingProfileIds.first);
             if (profileId != null && ids.contains(profileId)) {
               performances.add(performance);
+              performanceOccurrences.add(
+                BestPerformanceOccurrence(
+                  performance: performance,
+                  tournamentId: tournament.id,
+                  tournamentName: tournament.name,
+                ),
+              );
             }
           }
         }
@@ -306,6 +320,7 @@ class LocalStatisticsService {
       setsWon: setsWon,
       setsLost: setsLost,
       bestPerformances: performances,
+      bestPerformanceOccurrences: performanceOccurrences,
       monthlyPerformances: await (database ?? LocalAppDatabase())
           .loadMonthlyPlayerPerformances(ids, year: year),
     );

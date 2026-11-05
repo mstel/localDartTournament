@@ -4,74 +4,187 @@ import 'package:flutter/material.dart';
 
 import '../../domain/player_monthly_performance.dart';
 
-class PlayerPerformanceTrendChart extends StatelessWidget {
+class PlayerPerformanceTrendChart extends StatefulWidget {
   const PlayerPerformanceTrendChart({
     super.key,
     required this.entries,
     required this.year,
+    this.title = 'Performance-Entwicklung',
   });
 
   final List<PlayerMonthlyPerformance> entries;
   final int? year;
+  final String title;
 
-  static const _series = [
+  static const series = [
     (label: 'Scoring', color: Color(0xFF4FC3F7)),
     (label: 'Average', color: Color(0xFFFFB74D)),
     (label: 'Checkout Quote', color: Color(0xFF81C784)),
   ];
 
   @override
+  State<PlayerPerformanceTrendChart> createState() =>
+      _PlayerPerformanceTrendChartState();
+}
+
+class _PlayerPerformanceTrendChartState
+    extends State<PlayerPerformanceTrendChart> {
+  final _visibleSeries = <int>{0, 1, 2};
+  bool _showTrendCurves = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (entries.isEmpty) return const SizedBox.shrink();
-    final years = year == null
-        ? entries.map((entry) => entry.year).toSet().toList()
-        : [year!];
+    if (widget.entries.isEmpty) return const SizedBox.shrink();
+    final years = widget.year == null
+        ? widget.entries.map((entry) => entry.year).toSet().toList()
+        : [widget.year!];
     years.sort((left, right) => right.compareTo(left));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Performance-Entwicklung',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
         const Text(
-          'Die Linien zeigen den Monatsverlauf je Kennzahl normiert auf deren eigenen Wertebereich; die Tabelle nennt die Originalwerte.',
+          'Die Kennzahlen sind jeweils auf ihren eigenen Wertebereich normiert. '
+          'Für Originalwerte Monat oder Datenpunkt auswählen.',
         ),
         const SizedBox(height: 8),
         Wrap(
-          spacing: 16,
-          runSpacing: 8,
+          spacing: 12,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            for (final item in _series)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(width: 18, height: 3, color: item.color),
-                  const SizedBox(width: 6),
-                  Text(item.label),
-                ],
+            for (
+              var index = 0;
+              index < PlayerPerformanceTrendChart.series.length;
+              index++
+            )
+              _SeriesToggle(
+                label: PlayerPerformanceTrendChart.series[index].label,
+                color: PlayerPerformanceTrendChart.series[index].color,
+                selected: _visibleSeries.contains(index),
+                onTap: () => setState(() {
+                  if (_visibleSeries.contains(index)) {
+                    _visibleSeries.remove(index);
+                  } else {
+                    _visibleSeries.add(index);
+                  }
+                }),
               ),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Switch(
+                  value: _showTrendCurves,
+                  onChanged: (value) =>
+                      setState(() => _showTrendCurves = value),
+                ),
+                const SizedBox(width: 8),
+                const SizedBox(
+                  width: 220,
+                  child: Text('Trendkurven anzeigen', softWrap: true),
+                ),
+              ],
+            ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         for (final chartYear in years)
-          _yearChart(
-            context,
-            chartYear,
-            entries.where((entry) => entry.year == chartYear).toList(),
+          _YearPerformanceChart(
+            key: ValueKey('performance-chart-$chartYear'),
+            year: chartYear,
+            entries: widget.entries
+                .where((entry) => entry.year == chartYear)
+                .toList(),
+            visibleSeries: _visibleSeries.toSet(),
+            showTrendCurves: _showTrendCurves,
           ),
       ],
     );
   }
+}
 
-  Widget _yearChart(
-    BuildContext context,
-    int chartYear,
-    List<PlayerMonthlyPerformance> entries,
-  ) {
-    final byMonth = {for (final entry in entries) entry.month: entry};
+class _SeriesToggle extends StatelessWidget {
+  const _SeriesToggle({
+    required this.label,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: '$label ${selected ? "anzeigen" : "ausgeblendet"}',
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: SizedBox(
+        height: 48,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 18,
+                height: 3,
+                color: selected ? color : color.withValues(alpha: 0.3),
+              ),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 200),
+                child: Text(
+                  label,
+                  softWrap: true,
+                  style: TextStyle(
+                    color: selected
+                        ? null
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    decoration: selected ? null : TextDecoration.lineThrough,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _YearPerformanceChart extends StatefulWidget {
+  const _YearPerformanceChart({
+    super.key,
+    required this.year,
+    required this.entries,
+    required this.visibleSeries,
+    required this.showTrendCurves,
+  });
+
+  final int year;
+  final List<PlayerMonthlyPerformance> entries;
+  final Set<int> visibleSeries;
+  final bool showTrendCurves;
+
+  @override
+  State<_YearPerformanceChart> createState() => _YearPerformanceChartState();
+}
+
+class _YearPerformanceChartState extends State<_YearPerformanceChart> {
+  int? _selectedMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    final byMonth = {for (final entry in widget.entries) entry.month: entry};
     final data = [for (var month = 1; month <= 12; month++) byMonth[month]];
+    final selected = _selectedMonth == null ? null : data[_selectedMonth!];
     return Card(
       margin: const EdgeInsets.only(top: 8),
       child: Padding(
@@ -79,20 +192,47 @@ class PlayerPerformanceTrendChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('$chartYear', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              '${widget.year}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             SizedBox(
               height: 180,
-              child: CustomPaint(
-                painter: _PerformanceChartPainter(
-                  entries: data,
-                  colors: [for (final item in _series) item.color],
-                  textColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                  gridColor: Theme.of(context).colorScheme.outlineVariant,
+              child: LayoutBuilder(
+                builder: (context, constraints) => MouseRegion(
+                  onHover: (event) =>
+                      _selectAt(event.localPosition.dx, constraints.maxWidth),
+                  onExit: (_) {
+                    if (_selectedMonth != null) {
+                      setState(() => _selectedMonth = null);
+                    }
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (event) =>
+                        _selectAt(event.localPosition.dx, constraints.maxWidth),
+                    child: CustomPaint(
+                      painter: _PerformanceChartPainter(
+                        entries: data,
+                        visibleSeries: widget.visibleSeries,
+                        showTrendCurves: widget.showTrendCurves,
+                        textColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant,
+                        gridColor: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
                 ),
-                child: const SizedBox.expand(),
               ),
             ),
+            if (selected != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: _DataPointDetails(entry: selected),
+              ),
             const SizedBox(height: 8),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -101,22 +241,33 @@ class PlayerPerformanceTrendChart extends StatelessWidget {
                 horizontalMargin: 8,
                 columns: const [
                   DataColumn(label: Text('Monat')),
-                  DataColumn(label: Text('Scoring')),
-                  DataColumn(label: Text('Average')),
-                  DataColumn(label: Text('Checkout Quote')),
+                  DataColumn(label: Text('Partien'), numeric: true),
+                  DataColumn(label: Text('Legs'), numeric: true),
+                  DataColumn(label: Text('Scoring'), numeric: true),
+                  DataColumn(label: Text('Average'), numeric: true),
+                  DataColumn(label: Text('Checkout Quote'), numeric: true),
                 ],
                 rows: [
                   for (var month = 1; month <= 12; month++)
                     DataRow(
+                      selected: _selectedMonth == month - 1,
                       cells: [
-                        DataCell(Text(_monthName(month))),
+                        DataCell(
+                          Text(_monthName(month)),
+                          onTap: data[month - 1] == null
+                              ? null
+                              : () =>
+                                    setState(() => _selectedMonth = month - 1),
+                        ),
+                        DataCell(Text('${data[month - 1]?.matches ?? 0}')),
+                        DataCell(Text('${data[month - 1]?.weightedLegs ?? 0}')),
                         DataCell(Text(_format(data[month - 1]?.scoring))),
                         DataCell(Text(_format(data[month - 1]?.average))),
                         DataCell(
                           Text(
                             data[month - 1]?.checkoutRate == null
                                 ? '–'
-                                : '${data[month - 1]!.checkoutRate!.toStringAsFixed(1)} %',
+                                : '${_format(data[month - 1]!.checkoutRate)} %',
                           ),
                         ),
                       ],
@@ -130,9 +281,22 @@ class PlayerPerformanceTrendChart extends StatelessWidget {
     );
   }
 
-  static String _format(double? value) => value?.toStringAsFixed(1) ?? '–';
+  void _selectAt(double dx, double width) {
+    const graphLeft = 30.0;
+    const graphRight = 8.0;
+    final graphWidth = width - graphLeft - graphRight;
+    if (graphWidth <= 0 || dx < graphLeft || dx > width - graphRight) return;
+    final index = (((dx - graphLeft) / graphWidth) * 11).round().clamp(0, 11);
+    final hasData = widget.entries.any((entry) => entry.month == index + 1);
+    final selectedMonth = hasData ? index : null;
+    if (_selectedMonth != selectedMonth) {
+      setState(() => _selectedMonth = selectedMonth);
+    }
+  }
 
-  static String _monthName(int month) => const [
+  String _format(double? value) => value?.toStringAsFixed(1) ?? '–';
+
+  String _monthName(int month) => const [
     'Jan',
     'Feb',
     'Mär',
@@ -148,16 +312,67 @@ class PlayerPerformanceTrendChart extends StatelessWidget {
   ][month - 1];
 }
 
+class _DataPointDetails extends StatelessWidget {
+  const _DataPointDetails({required this.entry});
+
+  final PlayerMonthlyPerformance entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final month = const [
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember',
+    ][entry.month - 1];
+    return Card(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 8,
+          children: [
+            Text(
+              '$month ${entry.year}',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            Text('Partien: ${entry.matches}'),
+            Text('Gewertete Legs: ${entry.weightedLegs}'),
+            Text('Scoring: ${_format(entry.scoring)}'),
+            Text('Average: ${_format(entry.average)}'),
+            Text(
+              'Checkout Quote: ${entry.checkoutRate == null ? "–" : "${_format(entry.checkoutRate)} %"}',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _format(double? value) => value?.toStringAsFixed(1) ?? '–';
+}
+
 class _PerformanceChartPainter extends CustomPainter {
   const _PerformanceChartPainter({
     required this.entries,
-    required this.colors,
+    required this.visibleSeries,
+    required this.showTrendCurves,
     required this.textColor,
     required this.gridColor,
   });
 
   final List<PlayerMonthlyPerformance?> entries;
-  final List<Color> colors;
+  final Set<int> visibleSeries;
+  final bool showTrendCurves;
   final Color textColor;
   final Color gridColor;
 
@@ -173,6 +388,7 @@ class _PerformanceChartPainter extends CustomPainter {
       size.width - right,
       size.height - bottom,
     );
+    if (graph.width <= 0 || graph.height <= 0) return;
     final gridPaint = Paint()
       ..color = gridColor
       ..strokeWidth = 0.7;
@@ -187,7 +403,7 @@ class _PerformanceChartPainter extends CustomPainter {
     for (var month = 1; month <= 12; month++) {
       final x = graph.left + graph.width * (month - 1) / 11;
       monthPaint.text = TextSpan(
-        text: PlayerPerformanceTrendChart._monthName(month),
+        text: _monthName(month),
         style: TextStyle(color: textColor, fontSize: 10),
       );
       monthPaint.layout();
@@ -197,54 +413,124 @@ class _PerformanceChartPainter extends CustomPainter {
       );
     }
 
-    for (var series = 0; series < colors.length; series++) {
-      final values = [
-        for (final entry in entries)
-          switch (series) {
-            0 => entry?.scoring,
-            1 => entry?.average,
-            _ => entry?.checkoutRate,
-          },
+    for (final series in visibleSeries) {
+      final color = PlayerPerformanceTrendChart.series[series].color;
+      final values = [for (final entry in entries) _value(entry, series)];
+      final present = [
+        for (var index = 0; index < values.length; index++)
+          if (values[index] != null) (index, values[index]!),
       ];
-      final present = values.whereType<double>().toList();
       if (present.isEmpty) continue;
-      final maximum = present.reduce(math.max);
-      final minimum = present.reduce(math.min);
+      final minimum = present.map((point) => point.$2).reduce(math.min);
+      final maximum = present.map((point) => point.$2).reduce(math.max);
       final range = maximum - minimum;
-      final path = Path();
-      var hasStarted = false;
-      for (var index = 0; index < values.length; index++) {
-        final value = values[index];
-        if (value == null) {
-          hasStarted = false;
-          continue;
-        }
+      Offset point(int index, double value) {
         final x = graph.left + graph.width * index / 11;
-        final normalized = range == 0 ? 0.5 : (value - minimum) / range;
-        final point = Offset(x, graph.bottom - normalized * graph.height);
-        if (hasStarted) {
-          path.lineTo(point.dx, point.dy);
+        final normalized = range == 0
+            ? 0.5
+            : ((value - minimum) / range).clamp(0.0, 1.0);
+        return Offset(x, graph.bottom - normalized * graph.height);
+      }
+
+      final path = Path();
+      Offset? previousPoint;
+      for (final item in present) {
+        final currentPoint = point(item.$1, item.$2);
+        if (previousPoint == null) {
+          path.moveTo(currentPoint.dx, currentPoint.dy);
         } else {
-          path.moveTo(point.dx, point.dy);
-          hasStarted = true;
+          path.lineTo(currentPoint.dx, currentPoint.dy);
         }
-        canvas.drawCircle(point, 3.5, Paint()..color = colors[series]);
+        previousPoint = currentPoint;
+        canvas.drawCircle(currentPoint, 3.5, Paint()..color = color);
       }
       canvas.drawPath(
         path,
         Paint()
-          ..color = colors[series]
+          ..color = color
           ..strokeWidth = 2.5
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round,
       );
+      if (showTrendCurves && present.length > 1) {
+        final trend = _trendPath(present, point);
+        final dashPaint = Paint()
+          ..color = color.withValues(alpha: 0.8)
+          ..strokeWidth = 1.8
+          ..style = PaintingStyle.stroke;
+        for (final metric in trend.computeMetrics()) {
+          for (var distance = 0.0; distance < metric.length; distance += 9) {
+            canvas.drawPath(
+              metric.extractPath(
+                distance,
+                math.min(distance + 5, metric.length),
+              ),
+              dashPaint,
+            );
+          }
+        }
+      }
     }
   }
+
+  Path _trendPath(
+    List<(int, double)> points,
+    Offset Function(int, double) toPoint,
+  ) {
+    final meanX =
+        points.fold<double>(0, (sum, point) => sum + point.$1) / points.length;
+    final meanY =
+        points.fold<double>(0, (sum, point) => sum + point.$2) / points.length;
+    var numerator = 0.0;
+    var denominator = 0.0;
+    for (final item in points) {
+      numerator += (item.$1 - meanX) * (item.$2 - meanY);
+      denominator += math.pow(item.$1 - meanX, 2);
+    }
+    if (denominator == 0) return Path();
+    final slope = numerator / denominator;
+    final minimumX = points.first.$1;
+    final maximumX = points.last.$1;
+    final minimum = points.map((item) => item.$2).reduce(math.min);
+    final maximum = points.map((item) => item.$2).reduce(math.max);
+    double fittedValue(int x) {
+      return (meanY + slope * (x - meanX)).clamp(minimum, maximum);
+    }
+
+    final start = toPoint(minimumX, fittedValue(minimumX));
+    final end = toPoint(maximumX, fittedValue(maximumX));
+    return Path()
+      ..moveTo(start.dx, start.dy)
+      ..lineTo(end.dx, end.dy);
+  }
+
+  double? _value(PlayerMonthlyPerformance? entry, int series) =>
+      switch (series) {
+        0 => entry?.scoring,
+        1 => entry?.average,
+        _ => entry?.checkoutRate,
+      };
+
+  static String _monthName(int month) => const [
+    'Jan',
+    'Feb',
+    'Mär',
+    'Apr',
+    'Mai',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Okt',
+    'Nov',
+    'Dez',
+  ][month - 1];
 
   @override
   bool shouldRepaint(covariant _PerformanceChartPainter oldDelegate) =>
       entries != oldDelegate.entries ||
-      colors != oldDelegate.colors ||
+      visibleSeries != oldDelegate.visibleSeries ||
+      showTrendCurves != oldDelegate.showTrendCurves ||
       textColor != oldDelegate.textColor ||
       gridColor != oldDelegate.gridColor;
 }

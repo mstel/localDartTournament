@@ -82,8 +82,13 @@ class WebsiteReadModelService {
         'setsLost': result.setsLost,
         'currentForm': currentFormJson,
       });
-      for (final performance in result.bestPerformances) {
-        bestPerformances.add({...performance.toJson(), 'playerId': profile.id});
+      for (final occurrence in result.bestPerformanceOccurrences) {
+        bestPerformances.add({
+          ...occurrence.performance.toJson(),
+          'playerId': profile.id,
+          'tournamentId': occurrence.tournamentId,
+          'tournamentName': occurrence.tournamentName,
+        });
       }
     }
 
@@ -232,7 +237,7 @@ class WebsiteReadModelService {
       'rankingAchievements': achievementStandings,
       'statistics': playerStatistics,
       'currentForm': currentForms,
-      'bestPerformances': _uniquePerformances(bestPerformances),
+      'bestPerformances': bestPerformances,
       'completedTournaments': [
         for (final tournament in completed)
           {
@@ -277,14 +282,17 @@ class WebsiteReadModelService {
     final monthlyPerformance = <Map<String, dynamic>>[];
     for (final player in players) {
       final playerId = player['id'] as String;
-      for (final entry in await _database.loadPlayerMonthlyPerformance(
-        playerId,
-      )) {
+      final entries = combineMonthlyPlayerPerformances(
+        recorded: await _database.loadPlayerMonthlyPerformance(playerId),
+        imported: await _database.loadMonthlyPlayerPerformances({playerId}),
+      );
+      for (final entry in entries) {
         monthlyPerformance.add({
           'playerId': entry.playerId,
           'period': entry.periodKey,
           'year': entry.year,
           'month': entry.month,
+          'matches': entry.matches,
           'weightedLegs': entry.weightedLegs,
           'scoring': entry.scoring,
           'average': entry.average,
@@ -442,19 +450,4 @@ class WebsiteReadModelService {
           (tournament.finishedAt != null || tournament.importedArchive != null))
         tournament,
   ];
-
-  static List<Map<String, dynamic>> _uniquePerformances(
-    List<Map<String, dynamic>> performances,
-  ) {
-    final seen = <String>{};
-    return [
-      for (final performance in performances)
-        if (seen.add(
-          '${performance['playerId']}|${performance['type']}|'
-          '${performance['playerName']}|${performance['value']}|'
-          '${performance['details']}',
-        ))
-          performance,
-    ];
-  }
 }
