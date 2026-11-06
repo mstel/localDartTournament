@@ -49,7 +49,9 @@ legacy full v1 response.
 
    The repository config enables JWT verification. The function uses Supabase's
    `SUPABASE_URL` and `SUPABASE_ANON_KEY`; no secret key needs to be configured
-   in Astro or the Flutter app.
+   in Astro or the Flutter app. This deployment is separate from the homepage
+   pipeline and from **Jetzt abgleichen** in the app; deploy the function when
+   its code or the published resource schema changes.
 3. Install this app update. After the operator logs in, use **Jetzt abgleichen**
    in **Einstellungen → Daten** to publish the read model alongside the private
    backup. An existing account with an existing backup publishes it on its next

@@ -54,6 +54,7 @@ Deno.test('accepts a versioned resource slice and rejects bundled data', () => {
       average: 51.2,
       checkoutQuote: 38.5,
     }],
+    currentForm: [],
   };
   if (!isWebsiteResourcePayload(payload, request)) {
     throw new Error('Valid performance resource was rejected');
@@ -65,6 +66,42 @@ Deno.test('accepts a versioned resource slice and rejects bundled data', () => {
     )
   ) {
     throw new Error('A resource containing unrelated page data was accepted');
+  }
+  const updatedPayload = {
+    ...payload,
+    monthlyClubPerformance: [{
+      year: 2026,
+      month: 10,
+      period: '2026-10',
+      matches: 9,
+      weightedLegs: 18,
+      scoring: 72.5,
+      average: 51.2,
+      checkoutQuote: 38.5,
+    }],
+    importedMonthlyStatistics: [{
+      playerId: 'player-1',
+      sourcePlayerName: 'Ada Dart',
+      period: '2026-10',
+      year: 2026,
+      month: 10,
+      threeDartAverage: 51.2,
+      firstNineAverage: 60,
+      checkoutPercentage: 38.5,
+      legs: 18,
+      matches: 9,
+    }],
+  };
+  if (!isWebsiteResourcePayload(updatedPayload, request)) {
+    throw new Error('Updated performance resource fields were rejected');
+  }
+  if (
+    isWebsiteResourcePayload(
+      { ...updatedPayload, monthlyClubPerformance: 'invalid' },
+      request,
+    )
+  ) {
+    throw new Error('Invalid club performance data was accepted');
   }
 });
 

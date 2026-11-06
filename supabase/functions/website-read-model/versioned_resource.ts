@@ -31,6 +31,22 @@ const hasExactKeys = (
     Object.keys(value).every((key) => expected.has(key));
 };
 
+const hasRequiredAndOptionalKeys = (
+  value: Record<string, unknown>,
+  requiredKeys: string[],
+  optionalKeys: string[],
+): boolean => {
+  const expected = new Set([
+    'schemaVersion',
+    'resource',
+    'generatedAt',
+    ...requiredKeys,
+    ...optionalKeys,
+  ]);
+  return requiredKeys.every((key) => Object.hasOwn(value, key)) &&
+    Object.keys(value).every((key) => expected.has(key));
+};
+
 const isAchievementStanding = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) &&
   typeof value.rankingId === 'string' &&
@@ -139,7 +155,11 @@ export function isWebsiteResourcePayload(
         Array.isArray(value.currentForm) &&
         value.currentForm.every(isRecord);
     case 'performance':
-      return hasExactKeys(value, ['monthlyPerformance', 'currentForm']) &&
+      return hasRequiredAndOptionalKeys(
+        value,
+        ['monthlyPerformance', 'currentForm'],
+        ['monthlyClubPerformance', 'importedMonthlyStatistics'],
+      ) &&
         Array.isArray(value.monthlyPerformance) &&
         value.monthlyPerformance.every((entry) =>
           isRecord(entry) &&
@@ -150,7 +170,20 @@ export function isWebsiteResourcePayload(
           typeof entry.weightedLegs === 'number'
         ) &&
         Array.isArray(value.currentForm) &&
-        value.currentForm.every(isRecord);
+        value.currentForm.every(isRecord) &&
+        (value.monthlyClubPerformance === undefined ||
+          Array.isArray(value.monthlyClubPerformance) &&
+          value.monthlyClubPerformance.every((entry) =>
+            isRecord(entry) &&
+            typeof entry.period === 'string' &&
+            typeof entry.year === 'number' &&
+            typeof entry.month === 'number' &&
+            typeof entry.matches === 'number' &&
+            typeof entry.weightedLegs === 'number'
+          )) &&
+        (value.importedMonthlyStatistics === undefined ||
+          Array.isArray(value.importedMonthlyStatistics) &&
+          value.importedMonthlyStatistics.every(isRecord));
     case 'achievements':
       return hasExactKeys(value, ['rankingAchievements']) &&
         Array.isArray(value.rankingAchievements) &&
