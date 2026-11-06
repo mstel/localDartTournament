@@ -10,10 +10,8 @@ import '../../notifications/presentation/push_device_menu.dart';
 import '../../dev_tools/presentation/dev_tools_page.dart';
 import '../../govee/presentation/govee_hub_page.dart';
 import '../../random_draw/presentation/random_draw_tool_page.dart';
-import 'priority_notice_settings_panel.dart';
 import 'tie_breaker_defaults_panel.dart';
 import 'player_insight_defaults_panel.dart';
-import 'audio_announcement_defaults_panel.dart';
 
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'appearance_panel.dart';
@@ -119,7 +117,6 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
       const PushSenderMenu(),
       const PushDeviceMenu(),
       const Card(child: PlayerInsightDefaultsPanel()),
-      const Card(child: AudioAnnouncementDefaultsPanel()),
       Card(
         child: ListTile(
           leading: const Icon(Icons.lightbulb_outline),
@@ -158,7 +155,6 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
         ),
       ),
       const Card(child: TieBreakerDefaultsPanel()),
-      const Card(child: PriorityNoticeSettingsPanel()),
       Card(
         child: ListTile(
           leading: const Icon(Icons.science_outlined),

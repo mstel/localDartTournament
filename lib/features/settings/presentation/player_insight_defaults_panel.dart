@@ -17,6 +17,17 @@ class _PlayerInsightDefaultsPanelState
   var _settings = PlayerInsightPreferences.defaults();
   var _loading = true;
   final Set<PlayerInsightType> _saving = {};
+  late final _thresholdControllers = {
+    for (final type in PlayerInsightType.values)
+      if (type.hasThreshold)
+        type: TextEditingController(
+          text: '${PlayerInsightPreferences.defaultThreshold(type)}',
+        ),
+  };
+  final _thresholdForms = {
+    for (final type in PlayerInsightType.values)
+      if (type.hasThreshold) type: GlobalKey<FormState>(),
+  };
 
   @override
   void initState() {
@@ -27,7 +38,14 @@ class _PlayerInsightDefaultsPanelState
   Future<void> _load() async {
     try {
       final settings = await _storage.load();
-      if (mounted) setState(() => _settings = settings);
+      if (mounted) {
+        setState(() {
+          _settings = settings;
+          for (final entry in _thresholdControllers.entries) {
+            entry.value.text = '${settings.thresholdFor(entry.key)}';
+          }
+        });
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -54,7 +72,11 @@ class _PlayerInsightDefaultsPanelState
       await _storage.save(updated);
     } catch (error) {
       if (mounted) {
-        setState(() => _settings = previous);
+        setState(() {
+          _settings = previous;
+          _thresholdControllers[type]?.text =
+              '${previous.thresholdFor(type)}';
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Speichern fehlgeschlagen: $error')),
         );
@@ -75,7 +97,11 @@ class _PlayerInsightDefaultsPanelState
       await _storage.save(updated);
     } catch (error) {
       if (mounted) {
-        setState(() => _settings = previous);
+        setState(() {
+          _settings = previous;
+          _thresholdControllers[type]?.text =
+              '${previous.thresholdFor(type)}';
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Speichern fehlgeschlagen: $error')),
         );
@@ -83,6 +109,31 @@ class _PlayerInsightDefaultsPanelState
     } finally {
       if (mounted) setState(() => _saving.remove(type));
     }
+  }
+
+  Future<void> _saveThreshold(PlayerInsightType type) async {
+    final form = _thresholdForms[type]?.currentState;
+    if (form == null || !form.validate()) return;
+    final value = int.parse(_thresholdControllers[type]!.text.trim());
+    await _setThreshold(type, value);
+  }
+
+  String? _validateThreshold(PlayerInsightType type, String? text) {
+    final value = int.tryParse(text?.trim() ?? '');
+    if (value == null ||
+        value < type.minimumThreshold ||
+        value > type.maximumThreshold) {
+      return 'Zahl von ${type.minimumThreshold} bis ${type.maximumThreshold} eingeben.';
+    }
+    return null;
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _thresholdControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   @override
@@ -101,33 +152,68 @@ class _PlayerInsightDefaultsPanelState
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(type.label),
+              subtitle: Text(
+                type.conditionDescription(_settings.thresholdFor(type)),
+              ),
               value: _settings.isEnabled(type),
               onChanged: _loading || _saving.contains(type)
                   ? null
                   : (enabled) => _setEnabled(type, enabled),
             ),
-            if (_settings.isEnabled(type))
+            if (_settings.isEnabled(type) && type.hasThreshold)
               Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: DropdownButtonFormField<int>(
-                  initialValue: _settings.thresholdFor(type).clamp(1, 5),
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: 'Schwelle für ${type.label}',
-                    border: const OutlineInputBorder(),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Form(
+                  key: _thresholdForms[type],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final fieldWidth = constraints.maxWidth > 420
+                          ? constraints.maxWidth - 64
+                          : constraints.maxWidth;
+                      return Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          SizedBox(
+                            width: fieldWidth,
+                            child: TextFormField(
+                              key: ValueKey('insight-threshold-${type.name}'),
+                              controller: _thresholdControllers[type],
+                              enabled: !_loading && !_saving.contains(type),
+                              keyboardType: const TextInputType.numberWithOptions(
+                                decimal: false,
+                                signed: false,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: type.thresholdLabel,
+                                suffixText: type.thresholdUnit,
+                                border: const OutlineInputBorder(),
+                              ),
+                              validator: (value) =>
+                                  _validateThreshold(type, value),
+                              onFieldSubmitted: _loading ||
+                                      _saving.contains(type)
+                                  ? null
+                                  : (_) => _saveThreshold(type),
+                            ),
+                          ),
+                          IconButton(
+                            key: ValueKey('save-insight-${type.name}'),
+                            tooltip: 'Schwelle für ${type.label} speichern',
+                            constraints: const BoxConstraints.tightFor(
+                              width: 48,
+                              height: 48,
+                            ),
+                            onPressed: _loading || _saving.contains(type)
+                                ? null
+                                : () => _saveThreshold(type),
+                            icon: const Icon(Icons.save_outlined),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text('1')),
-                    DropdownMenuItem(value: 2, child: Text('2')),
-                    DropdownMenuItem(value: 3, child: Text('3')),
-                    DropdownMenuItem(value: 4, child: Text('4')),
-                    DropdownMenuItem(value: 5, child: Text('5')),
-                  ],
-                  onChanged: _loading || _saving.contains(type)
-                      ? null
-                      : (value) {
-                          if (value != null) _setThreshold(type, value);
-                        },
                 ),
               ),
           ],

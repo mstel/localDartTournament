@@ -28,10 +28,14 @@ import '../../statistics/domain/player_monthly_performance.dart';
 import '../../statistics/presentation/widgets/player_performance_trend_chart.dart';
 
 class RankingsPage extends StatefulWidget {
-  const RankingsPage({super.key, LocalAppDatabase? database})
-    : _database = database;
+  const RankingsPage({
+    super.key,
+    LocalAppDatabase? database,
+    this.onOpenTournament,
+  }) : _database = database;
 
   final LocalAppDatabase? _database;
+  final void Function(String tournamentId)? onOpenTournament;
 
   @override
   State<RankingsPage> createState() => _RankingsPageState();
@@ -512,6 +516,8 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                 const SizedBox(height: 14),
                 DropdownButtonFormField<PlayerProfile>(
                   initialValue: _selectedPlayer,
+                  isExpanded: true,
+                  itemHeight: null,
                   decoration: const InputDecoration(
                     labelText: 'Spieler auswählen',
                     border: OutlineInputBorder(),
@@ -1155,7 +1161,11 @@ class _RankingsPageState extends State<RankingsPage> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ranking.type == RankingType.elo
-            ? LocalRankingStandingsPage(database: _database, ranking: ranking)
+            ? LocalRankingStandingsPage(
+                database: _database,
+                ranking: ranking,
+                onOpenTournament: widget.onOpenTournament,
+              )
             : LocalRankingSeriesStandingsPage(
                 database: _database,
                 ranking: ranking,
@@ -2264,10 +2274,12 @@ class LocalRankingStandingsPage extends StatefulWidget {
     super.key,
     required this.database,
     required this.ranking,
+    this.onOpenTournament,
   });
 
   final LocalAppDatabase database;
   final LocalRanking ranking;
+  final void Function(String tournamentId)? onOpenTournament;
 
   @override
   State<LocalRankingStandingsPage> createState() =>
@@ -2398,6 +2410,7 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
                           history: entries.history[player.id] ?? const [],
                           enableTiers: widget.ranking.enableTiers,
                           tierBands: widget.ranking.effectiveTierBands,
+                          onOpenTournament: widget.onOpenTournament,
                         ),
                       ),
                     );
@@ -2560,6 +2573,7 @@ class PlayerEloHistoryPage extends StatelessWidget {
     required this.history,
     this.enableTiers = false,
     this.tierBands = EloTier.values,
+    this.onOpenTournament,
   });
 
   final LocalEloPlayer player;
@@ -2567,6 +2581,7 @@ class PlayerEloHistoryPage extends StatelessWidget {
   final List<LocalEloHistoryItem> history;
   final bool enableTiers;
   final List<EloTier> tierBands;
+  final void Function(String tournamentId)? onOpenTournament;
 
   @override
   Widget build(BuildContext context) {
@@ -2866,9 +2881,30 @@ class PlayerEloHistoryPage extends StatelessWidget {
                       size: 20,
                     ),
                   ),
-                  title: Text(
-                    group.tournamentName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  title: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        group.tournamentName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      if (onOpenTournament != null)
+                        TextButton(
+                          key: ValueKey(
+                            'open-tournament-${group.tournamentId}',
+                          ),
+                          style: TextButton.styleFrom(
+                            alignment: Alignment.centerLeft,
+                            padding: EdgeInsets.zero,
+                          ),
+                          onPressed: () =>
+                              onOpenTournament!(group.tournamentId),
+                          child: const Text('(Turnier öffnen)'),
+                        ),
+                    ],
                   ),
                   subtitle: Text(
                     '${group.playedAt.day}.${group.playedAt.month}.${group.playedAt.year} · ${group.wins} Siege · ${group.losses} Niederlagen${group.draws > 0 ? " · ${group.draws} Unentschieden" : ""}',
@@ -3105,38 +3141,53 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth.clamp(0.0, 320.0).toDouble()
+            : 320.0;
+        return SizedBox(
+          width: width,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        value,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

@@ -7,6 +7,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _tournamentStorage = TournamentStorage();
+
   List<SportDestination> get _destinations => [
     SportDestination(
       'Übersicht',
@@ -31,7 +33,7 @@ class _HomePageState extends State<HomePage> {
     SportDestination(
       'Ranglisten',
       Icons.leaderboard_outlined,
-      () => _open(const RankingsPage(), 4),
+      () => _open(RankingsPage(onOpenTournament: _openTournamentById), 4),
     ),
   ];
 
@@ -46,6 +48,41 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  Future<void> _openTournamentById(String tournamentId) async {
+    try {
+      final tournaments = await _tournamentStorage.loadTournaments();
+      final tournament = tournaments
+          .where((item) => item.id == tournamentId)
+          .firstOrNull;
+      if (tournament == null) {
+        throw StateError('Das zugehörige Turnier wurde nicht gefunden.');
+      }
+      final lastStageIndex = tournament.runStages.length - 1;
+      final isComplete =
+          lastStageIndex >= 0 &&
+          tournament.completedStageIndexes.contains(lastStageIndex);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => isComplete
+              ? TournamentResultsPage(tournament: tournament)
+              : TournamentRunPage(
+                  tournament: tournament,
+                  tournamentStorage: _tournamentStorage,
+                ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Turnier konnte nicht geöffnet werden: $error'),
+          ),
+        );
+      }
+    }
   }
 
   void _openTournamentArea() => _open(const TournamentHomePage(), 1);
@@ -102,7 +139,10 @@ class _HomePageState extends State<HomePage> {
               SportMenuAction(
                 label: 'Ranglisten',
                 icon: Icons.leaderboard_outlined,
-                onTap: () => _open(const RankingsPage(), 4),
+                onTap: () => _open(
+                  RankingsPage(onOpenTournament: _openTournamentById),
+                  4,
+                ),
               ),
             ],
           ),

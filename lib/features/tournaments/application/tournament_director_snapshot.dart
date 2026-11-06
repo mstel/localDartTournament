@@ -1,4 +1,7 @@
 import '../domain/tournament_models.dart';
+import '../domain/tournament_settings.dart';
+import 'tournament_flow_priority.dart';
+import '../domain/tournament_flow_priority_settings.dart';
 import 'order_of_play/order_of_play_controller.dart';
 
 /// A read-only view of the production queue. Does not predict future winners.
@@ -27,7 +30,7 @@ class TournamentDirectorSnapshot {
             assignment.board == board &&
             assignment.entry.match.hasPlayers,
       )
-      .take(3)
+      .take(4)
       .toList();
 
   List<BoardAssignment> selectableForBoard(int board) {
@@ -73,6 +76,46 @@ class TournamentDirectorSnapshot {
       freeBoards.isNotEmpty &&
       !tournament.completedStageIndexes.contains(stage) &&
       !schedule.running.any((r) => r.players.any(entry.players.contains));
+
+  List<BoardAssignment> visibleRecommendations({
+    TournamentSettings settings = const TournamentSettings(),
+    int limit = 6,
+  }) {
+    final prioritized = TournamentFlowPriority.forStage(
+      tournament.runStages[stage],
+      settings: TournamentFlowPrioritySettings(
+        playerMatchDeficitThreshold: settings.playerMatchDeficitThreshold,
+        groupMatchDeficitThreshold: settings.groupMatchDeficitThreshold,
+        usePercentageForGroups: settings.usePercentageForGroups,
+      ),
+    ).prioritizedMatches;
+    final assignments = schedule.planned
+        .where(
+          (assignment) =>
+              assignment.entry.stageIndex == stage &&
+              assignment.entry.match.hasPlayers,
+        )
+        .toList();
+    final originalOrder = {
+      for (var index = 0; index < assignments.length; index++)
+        assignments[index]: index,
+    };
+    assignments.sort((a, b) {
+      final priority =
+          prioritized.contains(a.entry.match) ==
+              prioritized.contains(b.entry.match)
+          ? 0
+          : prioritized.contains(a.entry.match)
+          ? -1
+          : 1;
+      if (priority != 0) return priority;
+      final blockOrder = a.block.compareTo(b.block);
+      if (blockOrder != 0) return blockOrder;
+      return originalOrder[a]!.compareTo(originalOrder[b]!);
+    });
+    return assignments.take(limit).toList(growable: false);
+  }
+
   List<PlayEntry> search(String query) {
     final text = query.trim().toLowerCase();
     if (text.isEmpty) return [];

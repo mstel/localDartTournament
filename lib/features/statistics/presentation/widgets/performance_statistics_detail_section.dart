@@ -38,6 +38,8 @@ class _PerformanceStatisticsDetailSectionState
         title: Text(
           'Performance Statistiken im Detail',
           style: Theme.of(context).textTheme.titleLarge,
+          maxLines: 2,
+          softWrap: true,
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [

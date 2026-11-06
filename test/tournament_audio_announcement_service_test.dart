@@ -74,7 +74,7 @@ void main() {
     expect(output.events, ['stop', 'cue']);
   });
 
-  test('speaks the alternative after a separate half-second pause', () async {
+  test('speaks the alternative after a separate one-second pause', () async {
     final output = _FakeAudioOutput();
     final service = TournamentAudioAnnouncementService(
       output: output,
@@ -94,7 +94,7 @@ void main() {
       'cue',
       'delay:1000',
       'speak:Nächste Partie: Marvin gegen Daniel an Board Nummer 3.',
-      'delay:500',
+      'delay:1000',
       'speak:Alternativ: Silas gegen Patrick an Board Nummer 3.',
     ]);
   });

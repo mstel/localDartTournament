@@ -345,14 +345,18 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             onReorderItem: _reorderTournamentPlayers,
             itemBuilder: (context, index) {
               final player = players[index];
-              return ReorderableDragStartListener(
+              return _playerManagementTile(
+                player,
                 key: ValueKey(player),
-                index: index,
-                child: _playerManagementTile(
-                  player,
-                  leading: const Tooltip(
+                leading: ReorderableDragStartListener(
+                  index: index,
+                  child: const Tooltip(
                     message: 'Spieler ziehen, um die Setzung zu ändern',
-                    child: Icon(Icons.drag_handle),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Icon(Icons.drag_handle),
+                    ),
                   ),
                 ),
               );
@@ -1276,23 +1280,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  Future<void> _saveSoundModeSetting(bool enabled) async {
-    final previous = widget.tournament.soundModeEnabled;
-    widget.tournament.soundModeEnabled = enabled;
-    if (!enabled) _audioAnnouncementService?.cancel();
-    try {
-      await _saveTournamentProgress(propagateError: true);
-      if (mounted) setState(() {});
-    } catch (error) {
-      widget.tournament.soundModeEnabled = previous;
-      if (!mounted) return;
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ton-Modus konnte nicht gespeichert werden: $error'),
-        ),
-      );
+  Future<void> _saveTournamentSettings() async {
+    await _saveTournamentProgress(propagateError: true);
+    if (!widget.tournament.soundModeEnabled) {
+      _audioAnnouncementService?.cancel();
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _announceRecommendationForBoard(int board) async {
@@ -1308,28 +1301,42 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         widget.tournament,
         stageIndex,
       );
-      final recommendation = snapshot.recommendationForBoard(board);
-      if (recommendation == null) return;
-      final nextMatch = recommendation.next.entry.match;
+      final boardAssignments = snapshot.upcomingForBoard(board);
+      if (boardAssignments.isEmpty) return;
+      final nextMatch = boardAssignments.first.entry.match;
       final boardName = widget.tournament.boardDisplayName(board);
-      final settings = await AudioAnnouncementPreferencesStorage().load();
+      final tournamentSettings = widget.tournament.tournamentSettings;
+      final settings = AudioAnnouncementPreferences(
+        nameFormat: switch (tournamentSettings.announcementNameFormat) {
+          tournament_settings.AnnouncementNameFormat.fullName =>
+            AnnouncementNameFormat.fullName,
+          tournament_settings.AnnouncementNameFormat.firstNameLastInitial =>
+            AnnouncementNameFormat.firstNameLastInitial,
+        },
+        speakNicknameWhenAvailable:
+            tournamentSettings.speakNicknameWhenAvailable,
+        readAlternativeRecommendations:
+            tournamentSettings.readAlternativeRecommendations,
+        alternativeRecommendationCount:
+            tournamentSettings.alternativeRecommendationCount,
+      );
       final profiles = await LocalAppDatabase().loadPlayerProfiles();
       if (!mounted || !widget.tournament.soundModeEnabled) return;
       final profilesById = {
         for (final profile in profiles) profile.id: profile,
       };
       final alternativeMatches = settings.readAlternativeRecommendations
-          ? snapshot
-                .selectableForBoard(board)
+          ? boardAssignments
+                .skip(1)
                 .where(
                   (assignment) =>
-                      !identical(assignment.entry.match, nextMatch) &&
-                      assignment.board != board,
+                      assignment.entry.match.hasPlayers &&
+                      !assignment.entry.match.isResolved,
                 )
                 .take(settings.alternativeRecommendationCount)
                 .map(
                   (assignment) =>
-                      'Oder: ${spokenMatchLabel(assignment.entry.match, settings, profilesById)} an ${_spokenBoardName(boardName)}.',
+                      'Alternativ: ${spokenMatchLabel(assignment.entry.match, settings, profilesById)} an ${_spokenBoardName(boardName)}.',
                 )
                 .toList()
           : const <String>[];
@@ -1359,23 +1366,21 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               widget.tournament,
               stageIndex,
             );
-            final refreshedNext = refreshed.recommendationForBoard(board)?.next;
+            final refreshedAssignments = refreshed.upcomingForBoard(board);
+            final refreshedNext = refreshedAssignments.firstOrNull;
             final refreshedAlternativeTexts =
                 settings.readAlternativeRecommendations
-                ? refreshed
-                      .selectableForBoard(board)
+                ? refreshedAssignments
+                      .skip(1)
                       .where(
                         (assignment) =>
-                            !identical(
-                              assignment.entry.match,
-                              refreshedNext?.entry.match,
-                            ) &&
-                            assignment.board != board,
+                            assignment.entry.match.hasPlayers &&
+                            !assignment.entry.match.isResolved,
                       )
                       .take(settings.alternativeRecommendationCount)
                       .map(
                         (assignment) =>
-                            'Oder: ${spokenMatchLabel(assignment.entry.match, settings, profilesById)} an ${_spokenBoardName(boardName)}.',
+                            'Alternativ: ${spokenMatchLabel(assignment.entry.match, settings, profilesById)} an ${_spokenBoardName(boardName)}.',
                       )
                       .toList()
                 : const <String>[];
@@ -5074,16 +5079,24 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           widget.tournament.showPlayerInsights,
                                       onChanged: _savePlayerInsightsSetting,
                                     ),
-                                  if (widget.tournament.directorModeEnabled)
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text('Ton-Modus'),
-                                      subtitle: const Text(
-                                        'Spielt nach erfolgreich gespeicherten Leitungsergebnissen einen Signalton und liest die nächste Board-Empfehlung vor.',
-                                      ),
-                                      value: widget.tournament.soundModeEnabled,
-                                      onChanged: _saveSoundModeSetting,
+                                  ExpansionTile(
+                                    key: const ValueKey(
+                                      'tournament-run-settings',
                                     ),
+                                    leading: const Icon(
+                                      Icons.settings_outlined,
+                                    ),
+                                    title: const Text('Turniereinstellungen'),
+                                    subtitle: const Text(
+                                      'Tonmodus, akustische Hinweise und Prioritätsschwellen',
+                                    ),
+                                    children: [
+                                      TournamentRunSettingsPanel(
+                                        tournament: widget.tournament,
+                                        onChanged: _saveTournamentSettings,
+                                      ),
+                                    ],
+                                  ),
                                   if (widget.tournament.directorModeEnabled)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 12),

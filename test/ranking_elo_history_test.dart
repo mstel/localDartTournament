@@ -59,6 +59,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('tournament history link opens the linked tournament', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    String? openedTournamentId;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerEloHistoryPage(
+          player: LocalEloPlayer(id: 'player-1', name: 'Spieler', rating: 1030),
+          rankingName: 'Vereinsrangliste',
+          history: [
+            LocalEloHistoryItem(
+              tournamentId: 'cup-2026',
+              matchIndex: 0,
+              playedAt: DateTime(2026, 5, 21),
+              tournamentName: 'Frühjahrscup',
+              opponentName: 'Gegner',
+              score: '2:0',
+              delta: 30,
+              ratingAfter: 1030,
+              kFactor: 32,
+              expectedScore: 0.5,
+            ),
+          ],
+          onOpenTournament: (tournamentId) => openedTournamentId = tournamentId,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Turnier- und Spielverlauf'), findsOneWidget);
+    final link = find.byKey(const ValueKey('open-tournament-cup-2026'));
+    expect(link, findsOneWidget);
+    await tester.ensureVisible(link);
+    await tester.tap(link);
+
+    expect(openedTournamentId, 'cup-2026');
+  });
+
   testWidgets('Elo curve exposes the hovered tournament and rating delta', (
     tester,
   ) async {

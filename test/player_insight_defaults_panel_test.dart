@@ -24,6 +24,8 @@ void main() {
       final loaded = await storage.load();
       expect(loaded.isEnabled(PlayerInsightType.unstoppable), isFalse);
       expect(loaded.isEnabled(PlayerInsightType.hotStreak), isTrue);
+      expect(PlayerInsightType.momentum.hasThreshold, isFalse);
+      expect(initial.thresholds.containsKey(PlayerInsightType.momentum), isFalse);
     },
   );
 
@@ -49,6 +51,51 @@ void main() {
         find.byType(SwitchListTile),
         findsNWidgets(PlayerInsightType.values.length),
       );
+      expect(
+        find.byKey(const ValueKey('insight-threshold-momentum')),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('erste abgeschlossene Partie'),
+        findsOneWidget,
+      );
     },
   );
+
+  testWidgets('Elo thresholds accept hundreds in numeric fields', (tester) async {
+    tester.view
+      ..physicalSize = const Size(800, 1400)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(children: const [PlayerInsightDefaultsPanel()]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Insights Standardwerte'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+    final eloField = find.byKey(
+      const ValueKey('insight-threshold-giantKiller'),
+    );
+    await tester.ensureVisible(eloField);
+    await tester.enterText(eloField, '850');
+    final saveButton = find.byKey(
+      const ValueKey('save-insight-giantKiller'),
+    );
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+    expect(
+      (await PlayerInsightPreferencesStorage().load())
+          .thresholdFor(PlayerInsightType.giantKiller),
+      850,
+    );
+    expect(find.textContaining('mindestens 850 ELO-Punkten mehr'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

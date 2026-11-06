@@ -1,4 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dart_tournament_manager/tournament_workspace.dart'
+    show TournamentFormatPlannerDialog;
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_format_planner.dart';
 
 void main() {
@@ -43,5 +46,36 @@ void main() {
     );
     expect(planner.suggestFormats(request(0)), isEmpty);
     expect(planner.suggestFormats(request(-1)), isEmpty);
+  });
+
+  testWidgets('planner pre-fills an adjusted tournament target duration', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TournamentFormatPlannerDialog(
+          initialPlayerCount: 7,
+          initialBoardCount: 3,
+          initialTargetMinutes: 150,
+        ),
+      ),
+    );
+
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Wunschdauer'))
+          .selected,
+      isTrue,
+    );
+    expect(
+      find.text('2 Std. 30 Min. (Vorschläge sortiert nach Nähe)'),
+      findsOneWidget,
+    );
+    final fields = tester
+        .widgetList<TextField>(find.byType(TextField))
+        .toList();
+    expect(fields[0].controller!.text, '7');
+    expect(fields[1].controller!.text, '3');
+    expect(tester.takeException(), isNull);
   });
 }

@@ -14,12 +14,14 @@ class ConfigurationDurationBar extends StatefulWidget {
     required this.onBoardsChanged,
     this.editing = false,
     this.parameters,
+    this.onEstimateChanged,
   });
   final List<TournamentStage> stages;
   final int boards;
   final ValueChanged<int> onBoardsChanged;
   final bool editing;
   final TournamentPlanningParameters? parameters;
+  final ValueChanged<ConfigurationEstimate?>? onEstimateChanged;
 
   @override
   State<ConfigurationDurationBar> createState() =>
@@ -86,6 +88,7 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
             _minutes = estimate?.minutes;
             _loading = false;
           });
+          widget.onEstimateChanged?.call(estimate);
         }
       } catch (_) {
         if (mounted) {
@@ -93,6 +96,7 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
             _loading = false;
             _error = 'Konfiguration für eine Schätzung noch unvollständig.';
           });
+          widget.onEstimateChanged?.call(null);
         }
       }
     });

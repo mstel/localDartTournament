@@ -174,21 +174,26 @@ class PlayerInsightEngine {
       final winsInARow = _leadingStreak(outcomes, true);
       final lossesInARow = _leadingStreak(outcomes, false);
 
-      if (winsInARow >= 5) {
+      if (winsInARow >=
+          insightPreferences.thresholdFor(PlayerInsightType.unstoppable)) {
         add(
           playerId,
           PlayerInsightType.unstoppable,
-          '$playerName hat mindestens 5 Matches in Folge gewonnen '
+          '$playerName hat mindestens '
+          '${insightPreferences.thresholdFor(PlayerInsightType.unstoppable)} '
+          'Matches in Folge gewonnen '
           '(aktuell $winsInARow).',
         );
-      } else if (winsInARow >= 3) {
+      } else if (winsInARow >=
+          insightPreferences.thresholdFor(PlayerInsightType.hotStreak)) {
         add(
           playerId,
           PlayerInsightType.hotStreak,
           '$playerName hat seine letzten $winsInARow Matches in Folge gewonnen.',
         );
       }
-      if (lossesInARow >= 3) {
+      if (lossesInARow >=
+          insightPreferences.thresholdFor(PlayerInsightType.coldStreak)) {
         add(
           playerId,
           PlayerInsightType.coldStreak,
@@ -211,7 +216,8 @@ class PlayerInsightEngine {
           outcomes.skip(1).toList(),
           false,
         );
-        if (precedingLosses >= 3) {
+        if (precedingLosses >=
+            insightPreferences.thresholdFor(PlayerInsightType.backOnTrack)) {
           add(
             playerId,
             PlayerInsightType.backOnTrack,
@@ -258,6 +264,7 @@ class PlayerInsightEngine {
         playerName,
         monthlyEntries[playerId] ?? const [],
         now,
+        insightPreferences,
       );
       _addTitleDefender(add, playerId, playerName, tournament, history);
     }
@@ -276,7 +283,14 @@ class PlayerInsightEngine {
       eloSnapshot,
       add,
     );
-    _addEloClimbers(participants, eloRanking, eloSnapshot, add, now);
+    _addEloClimbers(
+      participants,
+      eloRanking,
+      eloSnapshot,
+      insightPreferences,
+      add,
+      now,
+    );
 
     return {
       for (final entry in insights.entries)
@@ -290,6 +304,7 @@ class PlayerInsightEngine {
     String playerName,
     List<PlayerMonthlyPerformance> entries,
     DateTime now,
+    PlayerInsightPreferences insightPreferences,
   ) {
     final currentMonth = DateTime(now.year, now.month);
     final previousMonth = DateTime(now.year, now.month - 1);
@@ -297,13 +312,16 @@ class PlayerInsightEngine {
     final previous = _eligibleMonth(entries, previousMonth);
     if (current?.average == null || previous?.average == null) return;
     final improvement = current!.average! - previous!.average!;
-    if (improvement < 5) return;
+    final minimumImprovement = insightPreferences.thresholdFor(
+      PlayerInsightType.risingStar,
+    );
+    if (improvement < minimumImprovement) return;
     add(
       playerId,
       PlayerInsightType.risingStar,
       '$playerName hat seinen Average im Vergleich zum Vormonat um '
       '${improvement.toStringAsFixed(1).replaceFirst('.', ',')} Punkte '
-      'gesteigert.',
+      'gesteigert (Schwelle: $minimumImprovement Punkte).',
     );
   }
 
@@ -381,7 +399,10 @@ class PlayerInsightEngine {
             int wins,
             int losses,
           ) {
-            if (losses >= 7) {
+            if (losses >=
+                insightPreferences.thresholdFor(
+                  PlayerInsightType.bogeyOpponent,
+                )) {
               add(
                 playerId,
                 PlayerInsightType.bogeyOpponent,
@@ -390,7 +411,11 @@ class PlayerInsightEngine {
                 rivalId: rivalId,
               );
             }
-            if (wins >= 4 && wins <= 6) {
+            final balancedWinThreshold = insightPreferences.thresholdFor(
+              PlayerInsightType.rival,
+            );
+            if (wins >= balancedWinThreshold &&
+                wins <= 10 - balancedWinThreshold) {
               add(
                 playerId,
                 PlayerInsightType.rival,
@@ -425,6 +450,7 @@ class PlayerInsightEngine {
           firstName,
           secondName,
           directMatches,
+          insightPreferences,
           add,
         );
         _addRevengeInsight(
@@ -433,6 +459,7 @@ class PlayerInsightEngine {
           secondName,
           firstName,
           directMatches,
+          insightPreferences,
           add,
         );
         _addGiantKillerInsight(
@@ -465,14 +492,21 @@ class PlayerInsightEngine {
     String playerName,
     String rivalName,
     List<_InsightMatch> directMatches,
+    PlayerInsightPreferences insightPreferences,
     void Function(String, PlayerInsightType, String, {String? rivalId}) add,
   ) {
     final recent = directMatches.reversed.toList();
-    if (recent.length < 3 || !recent.first.winnerIds.contains(playerId)) return;
+    final minimumPriorLosses = insightPreferences.thresholdFor(
+      PlayerInsightType.sweetRevenge,
+    );
+    if (recent.length < minimumPriorLosses + 1 ||
+        !recent.first.winnerIds.contains(playerId)) {
+      return;
+    }
     final priorLosses = _leadingStreak([
       for (final match in recent.skip(1)) match.winnerIds.contains(rivalId),
     ], true);
-    if (priorLosses < 2) return;
+    if (priorLosses < minimumPriorLosses) return;
     add(
       playerId,
       PlayerInsightType.sweetRevenge,
@@ -503,7 +537,8 @@ class PlayerInsightEngine {
     );
     if (ratingBefore == null) return;
     final difference = ratingBefore.$2 - ratingBefore.$1;
-    if (difference < insightPreferences.thresholdFor(PlayerInsightType.giantKiller)) {
+    if (difference <
+        insightPreferences.thresholdFor(PlayerInsightType.giantKiller)) {
       return;
     }
     add(
@@ -584,6 +619,7 @@ class PlayerInsightEngine {
     Map<String, TournamentPlayer> participants,
     LocalRanking? ranking,
     LocalEloSnapshot? snapshot,
+    PlayerInsightPreferences insightPreferences,
     void Function(String, PlayerInsightType, String, {String? rivalId}) add,
     DateTime now,
   ) {
@@ -613,7 +649,10 @@ class PlayerInsightEngine {
       0,
       (highest, gain) => gain > highest ? gain : highest,
     );
-    if (highestGain <= 0) return;
+    if (highestGain <
+        insightPreferences.thresholdFor(PlayerInsightType.eloClimber)) {
+      return;
+    }
     for (final entry in gains.entries) {
       if (entry.value != highestGain) continue;
       final playerName = participants[entry.key]!.name;

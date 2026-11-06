@@ -7,6 +7,7 @@ import 'features/challonge/application/challonge_tournament_conversion_service.d
 import 'features/tournaments/presentation/widgets/run/tournament_run_header.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_timing_panel.dart';
+import 'features/tournaments/presentation/widgets/run/tournament_run_settings_panel.dart';
 import 'features/tournaments/presentation/widgets/creation/expert_setup_section.dart';
 import 'features/tournaments/presentation/widgets/creation/triple_ko_preview_sections.dart';
 import 'features/tournaments/presentation/widgets/tournament_summary_card.dart';
@@ -55,6 +56,7 @@ import 'features/tournaments/modes/swiss/swiss_engine.dart';
 import 'features/tournaments/presentation/widgets/creation/configuration_duration_bar.dart';
 import 'features/tournaments/presentation/widgets/creation/creation_entry_choices.dart';
 import 'features/tournaments/application/tournament_timing.dart';
+import 'features/tournaments/application/configuration_duration_estimator.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
 import 'features/govee/presentation/govee_ambience_panel.dart';
 import 'features/statistics/presentation/tournament_match_statistics_page.dart';
@@ -76,6 +78,8 @@ import 'features/tournaments/domain/tournament_models.dart'
     hide defaultGroupTieBreakers, groupLabel;
 import 'features/tournaments/domain/second_screen_widget_placement.dart';
 import 'features/tournaments/domain/tournament_format_planner.dart';
+import 'features/tournaments/domain/tournament_settings.dart'
+    as tournament_settings;
 import 'features/tournaments/presentation/models/match_result.dart';
 import 'features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'features/tournaments/presentation/pages/challonge_local_import_page.dart';

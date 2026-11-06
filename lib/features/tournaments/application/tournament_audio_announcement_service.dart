@@ -70,7 +70,7 @@ class TournamentAudioAnnouncementService {
         return;
       }
       try {
-        await _delay(const Duration(milliseconds: 500));
+        await _delay(const Duration(seconds: 1));
       } catch (error) {
         debugPrint('Wartezeit vor Alternativansage fehlgeschlagen: $error');
         return;
@@ -97,6 +97,9 @@ class TournamentAudioAnnouncementService {
       _runAudioOperation('Sprachausgabe abbrechen', _output.stopSpeaking),
     );
   }
+
+  Future<void> playAlert() =>
+      _runAudioOperation('Signalton abspielen', _output.playCue);
 
   Future<void> dispose() async {
     _requestId++;

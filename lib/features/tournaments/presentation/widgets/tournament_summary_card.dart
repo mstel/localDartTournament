@@ -145,6 +145,28 @@ class TournamentSummaryCard extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 4,
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: 15,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    Text(
+                      _formatTournamentDate(
+                        tournament.tournamentDate ?? tournament.createdAt,
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Text(
                 league != null
                     ? '${league.homePoints}:${league.awayPoints} Mannschaftspunkte'
@@ -230,6 +252,12 @@ class TournamentSummaryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _formatTournamentDate(DateTime value) {
+    final date = value.toLocal();
+    return '${date.day.toString().padLeft(2, '0')}.'
+        '${date.month.toString().padLeft(2, '0')}.${date.year}';
   }
 
   String? _winnerName(CreatedTournament tournament, bool complete) {

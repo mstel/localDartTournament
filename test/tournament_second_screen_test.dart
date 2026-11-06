@@ -431,6 +431,40 @@ void main() {
     }
   });
 
+  testWidgets('second screen shows a status tile for every configured board', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..boardCount = 4
+      ..directorModeEnabled = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    for (var board = 1; board <= 4; board++) {
+      expect(
+        find.byKey(ValueKey('second-screen-director-board-$board')),
+        findsOneWidget,
+      );
+    }
+    expect(find.textContaining('Frei - Board 3 -'), findsOneWidget);
+    expect(find.text('Jetzt Partie zuweisen!'), findsNWidgets(3));
+    expect(tester.takeException(), isNull);
+  });
+
   for (final size in [
     const Size(360, 800),
     const Size(800, 600),

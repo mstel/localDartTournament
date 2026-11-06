@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../application/configuration_duration_estimator.dart';
 import '../../../settings/data/planning_settings_storage.dart';
 import '../../domain/tournament_format_planner.dart';
 import '../../domain/tournament_models.dart';
@@ -12,12 +13,14 @@ class KratzerDurationPreview extends StatelessWidget {
     required this.participantCount,
     required this.boards,
     required this.onBoardsChanged,
+    this.onEstimateChanged,
   });
 
   final List<TournamentStage> stages;
   final int participantCount;
   final int boards;
   final ValueChanged<int> onBoardsChanged;
+  final ValueChanged<ConfigurationEstimate?>? onEstimateChanged;
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
@@ -64,6 +67,9 @@ class KratzerDurationPreview extends StatelessWidget {
       final minutes = estimates.fold<int>(
         0,
         (total, entry) => total + entry.estimate.minutes,
+      );
+      onEstimateChanged?.call(
+        ConfigurationEstimate(minutes, games, games, true),
       );
       return Card(
         child: Padding(

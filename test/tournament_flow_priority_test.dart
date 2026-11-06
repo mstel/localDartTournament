@@ -161,6 +161,22 @@ void main() {
       expect(priority.notices, isNot(contains(contains('Gruppe D'))));
     },
   );
+
+  test('one scaled match flags the 8-of-10 versus 4-of-6 group gap', () {
+    final stage = _stageWithSizes([5, 4]);
+    _finishCount(stage.groups[0], 8);
+    _finishCount(stage.groups[1], 4);
+
+    final priority = TournamentFlowPriority.forStage(
+      stage,
+      settings: const TournamentFlowPrioritySettings(
+        groupMatchDeficitThreshold: 1,
+        usePercentageForGroups: true,
+      ),
+    );
+
+    expect(priority.notices, contains(contains('Gruppe B')));
+  });
 }
 
 void _finish(GroupMatch match) {

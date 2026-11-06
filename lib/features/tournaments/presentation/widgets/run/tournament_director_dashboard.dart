@@ -7,10 +7,10 @@ import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
 import '../../../application/tournament_flow_priority.dart';
-import '../../../application/tournament_flow_priority_preferences.dart';
 import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
+import '../../../application/tournament_audio_announcement_service.dart';
 import '../../../domain/tournament_models.dart';
 import 'tournament_timing_panel.dart';
 import 'tournament_second_screen_view.dart';
@@ -82,16 +82,36 @@ class _TournamentDirectorDashboardState
   final _recentResultsController = ScrollController();
   bool _busy = false;
   String? _actionError;
-  TournamentFlowPrioritySettings _prioritySettings =
-      TournamentFlowPriority.defaultSettings;
+  TournamentAudioAnnouncementService? _alertAudio;
+  final Map<int, DateTime> _idleBoardSince = {};
+  final Map<int, DateTime> _idleBoardLastAlert = {};
+  Timer? _idleBoardTimer;
+  List<String> _visibleNotices = const [];
+  bool _hasObservedNotices = false;
+  DateTime? _lastAlertAt;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late String _eloInputFingerprint;
+
+  TournamentAudioAnnouncementService get _audio =>
+      _alertAudio ??= TournamentAudioAnnouncementService();
+
+  TournamentFlowPrioritySettings get _prioritySettings {
+    final settings = widget.tournament.tournamentSettings;
+    return TournamentFlowPrioritySettings(
+      playerMatchDeficitThreshold: settings.playerMatchDeficitThreshold,
+      groupMatchDeficitThreshold: settings.groupMatchDeficitThreshold,
+      usePercentageForGroups: settings.usePercentageForGroups,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     _refreshEloChanges();
-    unawaited(_loadPrioritySettings());
+    _idleBoardTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _checkIdleBoardSound(),
+    );
   }
 
   @override
@@ -100,6 +120,13 @@ class _TournamentDirectorDashboardState
     final fingerprint = jsonEncode(widget.tournament.toJson());
     if (fingerprint != _eloInputFingerprint) {
       _refreshEloChanges(fingerprint: fingerprint);
+    }
+    if (oldWidget.tournament.id != widget.tournament.id ||
+        oldWidget.activeStage != widget.activeStage) {
+      _idleBoardSince.clear();
+      _idleBoardLastAlert.clear();
+      _visibleNotices = const [];
+      _hasObservedNotices = false;
     }
   }
 
@@ -123,22 +150,103 @@ class _TournamentDirectorDashboardState
     _eloChanges = TournamentMatchEloService().calculate(widget.tournament);
   }
 
-  Future<void> _loadPrioritySettings() async {
-    try {
-      final settings = await TournamentFlowPriorityPreferences().load();
-      if (mounted) setState(() => _prioritySettings = settings);
-    } catch (error) {
-      if (mounted) {
-        setState(
-          () => _actionError =
-              'Hinweiseinstellungen konnten nicht geladen werden: $error',
-        );
-      }
+  void _observeNotices(List<String> notices) {
+    final previous = _visibleNotices.toSet();
+    final current = notices.toSet();
+    final newlyVisible = current.difference(previous);
+    _visibleNotices = notices;
+    if (!_hasObservedNotices) {
+      _hasObservedNotices = true;
+      return;
     }
+    if (newlyVisible.isEmpty ||
+        !widget.tournament.tournamentSettings.announceHintsAudibly) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          widget.tournament.tournamentSettings.announceHintsAudibly &&
+          newlyVisible.any(_visibleNotices.contains)) {
+        _playAlert();
+      }
+    });
+  }
+
+  void _checkIdleBoardSound() {
+    if (!mounted) return;
+    final settings = widget.tournament.tournamentSettings;
+    if (!widget.directorModeEnabled || !settings.idleBoardSoundEnabled) {
+      _idleBoardSince.clear();
+      _idleBoardLastAlert.clear();
+      return;
+    }
+    final snapshot = TournamentDirectorSnapshot(
+      widget.tournament,
+      widget.activeStage,
+    );
+    final hasPlayableMatches = snapshot.ready.any(snapshot.canStart);
+    final freeBoards = hasPlayableMatches
+        ? snapshot.freeBoards.toSet()
+        : <int>{};
+    final now = DateTime.now();
+    _idleBoardSince.removeWhere((board, _) => !freeBoards.contains(board));
+    _idleBoardLastAlert.removeWhere((board, _) => !freeBoards.contains(board));
+    for (final board in freeBoards) {
+      final lastBoardMatch = snapshot.entries
+          .map((entry) => entry.match)
+          .where(
+            (match) =>
+                match.boardNumber == board &&
+                match.finishedAt != null &&
+                !match.isAnnulled,
+          )
+          .map((match) => match.finishedAt!)
+          .fold<DateTime?>(null, (latest, finishedAt) {
+            if (latest == null || finishedAt.isAfter(latest)) {
+              return finishedAt;
+            }
+            return latest;
+          });
+      final tournamentStart = widget.tournament.startedAt ?? now;
+      final inferredSince =
+          lastBoardMatch != null && lastBoardMatch.isAfter(tournamentStart)
+          ? lastBoardMatch
+          : tournamentStart;
+      _idleBoardSince.putIfAbsent(board, () => inferredSince);
+    }
+    final dueBoards = freeBoards.where((board) {
+      final since = _idleBoardSince[board]!;
+      final firstAlertAt = since.add(
+        Duration(minutes: settings.idleBoardSoundStartMinutes),
+      );
+      final lastAlert = _idleBoardLastAlert[board];
+      return lastAlert == null
+          ? !now.isBefore(firstAlertAt)
+          : now.difference(lastAlert) >=
+                Duration(minutes: settings.idleBoardSoundRepeatMinutes);
+    }).toList();
+    if (dueBoards.isEmpty) return;
+    for (final board in dueBoards) {
+      _idleBoardLastAlert[board] = now;
+    }
+    _playAlert();
+  }
+
+  void _playAlert() {
+    final now = DateTime.now();
+    if (_lastAlertAt != null &&
+        now.difference(_lastAlertAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastAlertAt = now;
+    unawaited(_audio.playAlert());
   }
 
   @override
   void dispose() {
+    _idleBoardTimer?.cancel();
+    final alertAudio = _alertAudio;
+    if (alertAudio != null) unawaited(alertAudio.dispose());
     _matchSearchController.dispose();
     _recentResultsController.dispose();
     super.dispose();
@@ -1030,6 +1138,7 @@ class _TournamentDirectorDashboardState
           });
     final latestResults = recentResults;
     final flowNotices = flowPriority.notices;
+    _observeNotices(flowNotices);
 
     final totalGames = active.length;
     final totalTournamentGames = state.entries

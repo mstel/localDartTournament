@@ -15,7 +15,7 @@ class TournamentStorage {
 
   final File? _file;
   // Schema 24 is accepted only after exact verification against its v22 backup.
-  static const _schemaVersion = 38;
+  static const _schemaVersion = 39;
   static const _maximumDocumentBytes = 128 * 1024 * 1024;
 
   Future<T> _locked<T>(Future<T> Function() action) =>

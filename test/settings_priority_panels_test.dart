@@ -8,7 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('administration settings expand inline', (tester) async {
+  testWidgets('global settings no longer contain tournament hint settings', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
     await tester.tap(find.byType(ChoiceChip).last);
     await tester.pumpAndSettle();
@@ -24,18 +26,7 @@ void main() {
     expect(find.text('Tie Breaker Standardwerte'), findsOneWidget);
     expect(find.textContaining('Diese Reihenfolge wird'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('Hinweiseinstellungen'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(find.text('Hinweiseinstellungen'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Prioritätshinweis pro Spieler ab Verzug von'),
-      findsOneWidget,
-    );
-    expect(find.text('Prozentuale Berechnung verwenden'), findsOneWidget);
+    expect(find.text('Ton Modus Einstellungen'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -51,8 +42,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(2)),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(
@@ -86,8 +78,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(2)),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: const Scaffold(

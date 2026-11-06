@@ -33,6 +33,7 @@ void main() {
       countsForRanking: true,
       rankingIds: ['ranking'],
       completedStageIndexes: {0},
+      tournamentDate: DateTime(2026, 5, 21),
     );
 
     await tester.pumpWidget(
@@ -49,6 +50,7 @@ void main() {
 
     expect(find.text('Ranglistenturnier'), findsOneWidget);
     expect(find.text('Sieger: Anna'), findsOneWidget);
+    expect(find.text('21.05.2026'), findsOneWidget);
   });
 
   testWidgets('labels unassigned tournaments as normal tournaments', (

@@ -21,6 +21,25 @@ void main() {
     },
   );
 
+  test('new tournament saves its previewed duration and match count', () async {
+    final storage = _RecordingTournamentStorage();
+    final tournament = await TournamentCreationController(storage: storage)
+        .createTournament(
+          name: 'Zeitgeplant',
+          players: const [],
+          stages: const [],
+          runStages: const [],
+          plannedMinimumMinutes: 90,
+          plannedMinutes: 150,
+          plannedMatches: 42,
+        );
+
+    final restored = CreatedTournament.fromJson(tournament.toJson());
+    expect(restored.plannedMinimumMinutes, 90);
+    expect(restored.plannedMinutes, 150);
+    expect(restored.plannedMatches, 42);
+  });
+
   test(
     'updating configuration keeps the tournament identity and resets run state',
     () async {

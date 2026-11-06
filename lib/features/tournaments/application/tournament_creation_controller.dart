@@ -38,6 +38,9 @@ class TournamentCreationController {
     required List<TournamentStage> stages,
     required List<TournamentRunStage> runStages,
     DateTime? tournamentDate,
+    int? plannedMinimumMinutes,
+    int? plannedMinutes,
+    int? plannedMatches,
   }) async {
     final tournament = _buildTournament(
       boardCount: boardCount,
@@ -48,6 +51,9 @@ class TournamentCreationController {
       countsForRanking: countsForRanking,
       rankingIds: rankingIds,
       tournamentDate: tournamentDate,
+      plannedMinimumMinutes: plannedMinimumMinutes,
+      plannedMinutes: plannedMinutes,
+      plannedMatches: plannedMatches,
     );
     await (_storage ?? TournamentStorage()).saveTournament(tournament);
     return tournament;
@@ -62,6 +68,9 @@ class TournamentCreationController {
     required List<TournamentStage> stages,
     required List<TournamentRunStage> runStages,
     DateTime? tournamentDate,
+    int? plannedMinimumMinutes,
+    int? plannedMinutes,
+    int? plannedMatches,
   }) async {
     final cleanDraft = CreatedTournament.fromJson({
       'name': name,
@@ -71,8 +80,10 @@ class TournamentCreationController {
       'boardCount': boardCount,
       'countsForRanking': countsForRanking,
       'rankingIds': rankingIds,
-      if (tournamentDate != null)
-        'tournamentDate': tournamentDate.toIso8601String(),
+      'tournamentDate': ?tournamentDate?.toIso8601String(),
+      'plannedMinimumMinutes': ?plannedMinimumMinutes,
+      'plannedMinutes': ?plannedMinutes,
+      'plannedMatches': ?plannedMatches,
     });
     return createTournament(
       boardCount: boardCount,
@@ -83,6 +94,9 @@ class TournamentCreationController {
       stages: stages,
       runStages: cleanDraft.runStages,
       tournamentDate: tournamentDate,
+      plannedMinimumMinutes: plannedMinimumMinutes,
+      plannedMinutes: plannedMinutes,
+      plannedMatches: plannedMatches,
     );
   }
 
@@ -97,6 +111,9 @@ class TournamentCreationController {
     required List<TournamentRunStage> runStages,
     required bool settingsChanged,
     DateTime? tournamentDate,
+    int? plannedMinimumMinutes,
+    int? plannedMinutes,
+    int? plannedMatches,
   }) async {
     if (hasRecordedResults(existing)) {
       throw StateError(
@@ -112,8 +129,10 @@ class TournamentCreationController {
       'boardCount': boardCount,
       'countsForRanking': countsForRanking,
       'rankingIds': rankingIds,
-      if (tournamentDate != null)
-        'tournamentDate': tournamentDate.toIso8601String(),
+      'tournamentDate': ?tournamentDate?.toIso8601String(),
+      'plannedMinimumMinutes': ?plannedMinimumMinutes,
+      'plannedMinutes': ?plannedMinutes,
+      'plannedMatches': ?plannedMatches,
       if (settingsChanged) 'activeStageIndex': 0,
       if (settingsChanged) 'completedStageIndexes': const <int>[],
       if (settingsChanged) 'startedAt': null,
@@ -230,6 +249,9 @@ class TournamentCreationController {
     bool countsForRanking = true,
     List<String> rankingIds = const [],
     DateTime? tournamentDate,
+    int? plannedMinimumMinutes,
+    int? plannedMinutes,
+    int? plannedMatches,
   }) {
     return CreatedTournament(
       boardCount: boardCount.clamp(1, 64),
@@ -240,6 +262,9 @@ class TournamentCreationController {
       countsForRanking: countsForRanking,
       rankingIds: List.unmodifiable(rankingIds),
       tournamentDate: tournamentDate,
+      plannedMinimumMinutes: plannedMinimumMinutes,
+      plannedMinutes: plannedMinutes,
+      plannedMatches: plannedMatches,
     );
   }
 }

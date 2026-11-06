@@ -21,7 +21,6 @@ import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../domain/engines/qualification_certainty.dart';
 import '../../../application/group_stage_preview_service.dart';
 import '../../../application/tournament_flow_priority.dart';
-import '../../../application/tournament_flow_priority_preferences.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/group_advancement_forecast_service.dart';
 import '../../../application/player_insights_service.dart';
@@ -124,8 +123,15 @@ class _TournamentSecondScreenViewState
   final _previewVerticalController = ScrollController();
   final _previewHorizontalController = ScrollController();
   final _recentResultsController = ScrollController();
-  TournamentFlowPrioritySettings _prioritySettings =
-      TournamentFlowPriority.defaultSettings;
+  TournamentFlowPrioritySettings get _prioritySettings {
+    final settings = widget.tournament.tournamentSettings;
+    return TournamentFlowPrioritySettings(
+      playerMatchDeficitThreshold: settings.playerMatchDeficitThreshold,
+      groupMatchDeficitThreshold: settings.groupMatchDeficitThreshold,
+      usePercentageForGroups: settings.usePercentageForGroups,
+    );
+  }
+
   String? _prioritySettingsError;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
   late Future<Map<String, List<PlayerInsight>>> _playerInsights;
@@ -154,7 +160,6 @@ class _TournamentSecondScreenViewState
     _useCustomLayout = _loadedLayoutName != null;
     _monitorPlacements = _savedLayoutOrDefault();
     unawaited(_removeUnavailableRankingWidgets());
-    unawaited(_loadPrioritySettings());
     _refreshEloChanges();
     _refreshPlayerInsights();
     _refreshRankingStandings();
@@ -238,23 +243,6 @@ class _TournamentSecondScreenViewState
               )
             : placements[index],
     ];
-  }
-
-  Future<void> _loadPrioritySettings() async {
-    try {
-      final settings = await TournamentFlowPriorityPreferences().load();
-      if (!mounted) return;
-      setState(() {
-        _prioritySettings = settings;
-        _prioritySettingsError = null;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(
-        () => _prioritySettingsError =
-            'Hinweiseinstellungen konnten nicht geladen werden: $error',
-      );
-    }
   }
 
   @override
@@ -4074,12 +4062,16 @@ class _TournamentSecondScreenViewState
                                 ),
                               ),
                               if (upcoming.isEmpty && running == null)
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    'Keine nächste Begegnung zugewiesen.',
-                                    style: TextStyle(
-                                      color: TournamentDisplayPalette.mutedText,
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: _FreeBoardStatusLabel(
+                                    boardName: tournament.boardDisplayName(
+                                      board,
+                                    ),
+                                    since: _freeBoardSince(
+                                      snapshot,
+                                      tournament,
+                                      board,
                                     ),
                                   ),
                                 ),
@@ -4575,6 +4567,78 @@ class _RunningMatchElapsedLabelState extends State<_RunningMatchElapsedLabel> {
         fontWeight: FontWeight.bold,
         fontSize: 13,
       ),
+    );
+  }
+}
+
+DateTime _freeBoardSince(
+  TournamentDirectorSnapshot snapshot,
+  CreatedTournament tournament,
+  int board,
+) {
+  DateTime? latestFinished;
+  for (final entry in snapshot.entries) {
+    final match = entry.match;
+    final finishedAt = match.finishedAt;
+    if (match.boardNumber == board &&
+        finishedAt != null &&
+        !match.isAnnulled &&
+        (latestFinished == null || finishedAt.isAfter(latestFinished))) {
+      latestFinished = finishedAt;
+    }
+  }
+  final tournamentStarted = tournament.startedAt ?? tournament.createdAt;
+  if (latestFinished != null && latestFinished.isAfter(tournamentStarted)) {
+    return latestFinished;
+  }
+  return tournamentStarted;
+}
+
+class _FreeBoardStatusLabel extends StatefulWidget {
+  const _FreeBoardStatusLabel({required this.boardName, required this.since});
+
+  final String boardName;
+  final DateTime since;
+
+  @override
+  State<_FreeBoardStatusLabel> createState() => _FreeBoardStatusLabelState();
+}
+
+class _FreeBoardStatusLabelState extends State<_FreeBoardStatusLabel> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final freeMinutes = DateTime.now().difference(widget.since).inMinutes;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Frei - ${widget.boardName} - ${freeMinutes < 0 ? 0 : freeMinutes}min.',
+          style: const TextStyle(
+            color: TournamentDisplayPalette.mutedText,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const Text(
+          'Jetzt Partie zuweisen!',
+          style: TextStyle(color: TournamentDisplayPalette.mutedText),
+        ),
+      ],
     );
   }
 }

@@ -6,7 +6,6 @@ import '../../../../../shared/widgets/sport_menu.dart';
 import 'package:flutter/material.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../application/tournament_flow_priority.dart';
-import '../../../application/tournament_flow_priority_preferences.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../../statistics/presentation/tournament_match_statistics_page.dart';
@@ -29,33 +28,6 @@ class OrderOfPlaySection extends StatefulWidget {
 }
 
 class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
-  TournamentFlowPrioritySettings _prioritySettings =
-      TournamentFlowPriority.defaultSettings;
-  String? _prioritySettingsError;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPrioritySettings();
-  }
-
-  Future<void> _loadPrioritySettings() async {
-    try {
-      final settings = await TournamentFlowPriorityPreferences().load();
-      if (!mounted) return;
-      setState(() {
-        _prioritySettings = settings;
-        _prioritySettingsError = null;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(
-        () => _prioritySettingsError =
-            'Hinweiseinstellungen konnten nicht geladen werden: $error',
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     const controller = OrderOfPlayController();
@@ -70,7 +42,14 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
         : null;
     final flowPriority = TournamentFlowPriority.forStage(
       activeStageData,
-      settings: _prioritySettings,
+      settings: TournamentFlowPrioritySettings(
+        playerMatchDeficitThreshold:
+            tournament.tournamentSettings.playerMatchDeficitThreshold,
+        groupMatchDeficitThreshold:
+            tournament.tournamentSettings.groupMatchDeficitThreshold,
+        usePercentageForGroups:
+            tournament.tournamentSettings.usePercentageForGroups,
+      ),
     );
     final occupied = {for (final e in schedule.running) e.match.boardNumber};
     Widget title(String text) => Padding(
@@ -189,13 +168,6 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
             Text(
               '${schedule.running.length} laufend · ${schedule.planned.length} eingeplant · ${schedule.finished.length} erledigt',
             ),
-            if (_prioritySettingsError case final error?) ...[
-              const SizedBox(height: 8),
-              Text(
-                error,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
               isExpanded: true,

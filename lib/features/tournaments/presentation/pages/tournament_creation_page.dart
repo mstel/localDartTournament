@@ -34,6 +34,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final Set<int> _selectedExtraGroups = {};
   final List<TournamentPlayer> _players = [];
   int _plannedBoardCount = 4;
+  ConfigurationEstimate? _configurationEstimate;
   final List<TournamentStage> _stages = [];
   final List<String> _groupTieBreakers = List<String>.from(
     defaultGroupTieBreakers,
@@ -2108,6 +2109,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           runStages: runStages,
           settingsChanged: settingsChanged,
           tournamentDate: _tournamentDate,
+          plannedMinimumMinutes: _configurationEstimate?.minimumMinutes,
+          plannedMinutes: _configurationEstimate?.minutes,
+          plannedMatches: _configurationEstimate?.totalMatches,
         );
       } else if (existing != null) {
         tournament = await controller.createTournamentCopy(
@@ -2119,6 +2123,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           stages: stages,
           runStages: copyRunStages,
           tournamentDate: _tournamentDate,
+          plannedMinimumMinutes: _configurationEstimate?.minimumMinutes,
+          plannedMinutes: _configurationEstimate?.minutes,
+          plannedMatches: _configurationEstimate?.totalMatches,
         );
       } else {
         tournament = await controller.createTournament(
@@ -2130,6 +2137,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           stages: stages,
           runStages: runStages,
           tournamentDate: _tournamentDate,
+          plannedMinimumMinutes: _configurationEstimate?.minimumMinutes,
+          plannedMinutes: _configurationEstimate?.minutes,
+          plannedMatches: _configurationEstimate?.totalMatches,
         );
       }
       if (!mounted) return;
@@ -3546,6 +3556,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     boards: _plannedBoardCount,
                     onBoardsChanged: (boards) =>
                         setState(() => _plannedBoardCount = boards),
+                    onEstimateChanged: (estimate) {
+                      _configurationEstimate = estimate;
+                    },
                   )
                 else
                   ConfigurationDurationBar(
@@ -3560,6 +3573,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     boards: _plannedBoardCount,
                     onBoardsChanged: (boards) =>
                         setState(() => _plannedBoardCount = boards),
+                    onEstimateChanged: (estimate) {
+                      _configurationEstimate = estimate;
+                    },
                   ),
                 const SizedBox(height: 12),
                 const SizedBox(height: 24),

@@ -12,15 +12,24 @@ class PlayerInsightPreferences {
 
   factory PlayerInsightPreferences.defaults() => PlayerInsightPreferences(
     enabledTypes: PlayerInsightType.values.toSet(),
-    thresholds: {for (final type in PlayerInsightType.values) type: defaultThreshold(type)},
+    thresholds: {
+      for (final type in PlayerInsightType.values)
+        if (type.hasThreshold) type: defaultThreshold(type),
+    },
   );
 
   static int defaultThreshold(PlayerInsightType type) => switch (type) {
+    PlayerInsightType.hotStreak => 3,
+    PlayerInsightType.coldStreak => 3,
+    PlayerInsightType.risingStar => 5,
+    PlayerInsightType.unstoppable => 5,
+    PlayerInsightType.backOnTrack => 3,
     PlayerInsightType.bogeyOpponent => 7,
+    PlayerInsightType.rival => 4,
+    PlayerInsightType.sweetRevenge => 2,
     PlayerInsightType.giantKiller => 200,
     PlayerInsightType.lastLegStanding => 3,
-    PlayerInsightType.momentum => 1,
-    PlayerInsightType.rival => 4,
+    PlayerInsightType.eloClimber => 100,
     _ => 1,
   };
 
@@ -29,8 +38,13 @@ class PlayerInsightPreferences {
 
   bool isEnabled(PlayerInsightType type) => enabledTypes.contains(type);
 
-  int thresholdFor(PlayerInsightType type) =>
-      thresholds[type] ?? defaultThreshold(type);
+  int thresholdFor(PlayerInsightType type) {
+    if (!type.hasThreshold) return 1;
+    return (thresholds[type] ?? defaultThreshold(type)).clamp(
+      type.minimumThreshold,
+      type.maximumThreshold,
+    );
+  }
 
   PlayerInsightPreferences withEnabled(PlayerInsightType type, bool enabled) =>
       PlayerInsightPreferences(
@@ -89,9 +103,11 @@ class PlayerInsightPreferencesStorage {
     return PlayerInsightPreferences(
       enabledTypes: enabledTypes,
       thresholds: {
-        ...thresholds,
         for (final type in PlayerInsightType.values)
-          if (!thresholds.containsKey(type)) type: PlayerInsightPreferences.defaultThreshold(type),
+          if (type.hasThreshold)
+            type: (thresholds[type] ??
+                    PlayerInsightPreferences.defaultThreshold(type))
+                .clamp(type.minimumThreshold, type.maximumThreshold),
       },
     );
   }
@@ -107,7 +123,7 @@ class PlayerInsightPreferencesStorage {
         _thresholdKey,
         jsonEncode({
           for (final entry in value.thresholds.entries)
-            entry.key.name: entry.value,
+              if (entry.key.hasThreshold) entry.key.name: entry.value,
         }),
       ),
     ]);

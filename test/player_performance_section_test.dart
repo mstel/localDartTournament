@@ -139,4 +139,36 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('monthly detail heading wraps on a narrow large-text layout', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(360, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PerformanceStatisticsDetailSection(entries: const []),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final title = tester.widget<Text>(
+      find.text('Performance Statistiken im Detail'),
+    );
+    expect(title.maxLines, 2);
+    expect(title.softWrap, isTrue);
+    expect(tester.takeException(), isNull);
+  });
 }

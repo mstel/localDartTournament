@@ -7,6 +7,7 @@ import '../../statistics/domain/best_performance.dart';
 import '../../league/domain/league_match.dart';
 import 'second_screen_widget_placement.dart';
 import 'tournament_activity_entry.dart';
+import 'tournament_settings.dart';
 
 const List<String> defaultGroupTieBreakers = [
   'points',
@@ -685,7 +686,8 @@ class CreatedTournament {
     this.directorSchedulingStrategy = 'group',
     this.showAchievementNotifications = true,
     this.showPlayerInsights = false,
-    this.soundModeEnabled = false,
+    bool? soundModeEnabled,
+    TournamentSettings? tournamentSettings,
     Map<String, List<int>> directorGroupBoardAssignments = const {},
     Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts =
         const {},
@@ -706,7 +708,12 @@ class CreatedTournament {
     this.plannedMatches,
     this.plannedMatchEndSeconds = const [],
     Set<int>? completedStageIndexes,
-  }) : _countsForRanking = countsForRanking,
+  }) : tournamentSettings = tournamentSettings == null
+           ? TournamentSettings(soundModeEnabled: soundModeEnabled ?? false)
+           : soundModeEnabled == null
+           ? tournamentSettings
+           : tournamentSettings.copyWith(soundModeEnabled: soundModeEnabled),
+       _countsForRanking = countsForRanking,
        id = id ?? _newTournamentId(),
        createdAt = createdAt ?? DateTime.now(),
        tournamentDate = tournamentDate == null
@@ -796,7 +803,12 @@ class CreatedTournament {
       showAchievementNotifications:
           json['showAchievementNotifications'] as bool? ?? true,
       showPlayerInsights: json['showPlayerInsights'] as bool? ?? false,
-      soundModeEnabled: json['soundModeEnabled'] as bool? ?? false,
+      soundModeEnabled: json['soundModeEnabled'] as bool?,
+      tournamentSettings: json['tournamentSettings'] is Map
+          ? TournamentSettings.fromJson(
+              Map<String, dynamic>.from(json['tournamentSettings'] as Map),
+            )
+          : null,
       directorGroupBoardAssignments: {
         for (final entry
             in (json['directorGroupBoardAssignments'] as Map? ?? {}).entries)
@@ -882,7 +894,12 @@ class CreatedTournament {
   String directorSchedulingStrategy;
   bool showAchievementNotifications;
   bool showPlayerInsights;
-  bool soundModeEnabled;
+  TournamentSettings tournamentSettings;
+  bool get soundModeEnabled => tournamentSettings.soundModeEnabled;
+  set soundModeEnabled(bool value) {
+    tournamentSettings = tournamentSettings.copyWith(soundModeEnabled: value);
+  }
+
   final Map<String, List<int>> directorGroupBoardAssignments;
   final Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts;
   String? secondScreenActiveLayout;
@@ -959,7 +976,8 @@ class CreatedTournament {
         'directorSchedulingStrategy': directorSchedulingStrategy,
       if (!showAchievementNotifications) 'showAchievementNotifications': false,
       if (showPlayerInsights) 'showPlayerInsights': true,
-      if (soundModeEnabled) 'soundModeEnabled': true,
+      'soundModeEnabled': soundModeEnabled,
+      'tournamentSettings': tournamentSettings.toJson(),
       if (directorGroupBoardAssignments.isNotEmpty)
         'directorGroupBoardAssignments': {
           for (final entry in directorGroupBoardAssignments.entries)
