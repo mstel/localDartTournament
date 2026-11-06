@@ -221,7 +221,50 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  Widget _playerManagementTile(TournamentPlayer player) => ListTile(
+  bool get _canReorderTournamentPlayers =>
+      _canAdjustParticipants &&
+      widget.tournament.stages.isNotEmpty &&
+      widget.tournament.runStages.isNotEmpty &&
+      widget.tournament.stages.every((stage) => stage.type != 'groups') &&
+      widget.tournament.runStages.every(
+        (stage) => stage is KnockoutTournamentRunStage,
+      ) &&
+      _isKnockoutStageType(widget.tournament.stages.first.type) &&
+      widget.tournament.runStages.first is KnockoutTournamentRunStage;
+
+  Future<void> _reorderTournamentPlayers(int oldIndex, int newIndex) async {
+    if (!_canReorderTournamentPlayers) return;
+    final players = widget.tournament.players;
+    if (oldIndex == newIndex ||
+        oldIndex < 0 ||
+        oldIndex >= players.length ||
+        newIndex < 0 ||
+        newIndex >= players.length) {
+      return;
+    }
+
+    setState(() {
+      final player = players.removeAt(oldIndex);
+      players.insert(newIndex, player);
+      widget.tournament.runStages[0] = _buildRunStageFromPlayers(
+        widget.tournament.stages.first,
+        players,
+      );
+      widget.tournament.addActivity(
+        'players_reseeded',
+        'Spielerreihenfolge für die Setzung angepasst',
+      );
+    });
+    await _saveTournamentProgress();
+  }
+
+  Widget _playerManagementTile(
+    TournamentPlayer player, {
+    Key? key,
+    Widget? leading,
+  }) => ListTile(
+    key: key,
+    leading: leading,
     contentPadding: EdgeInsets.zero,
     title: Text(player.name),
     subtitle: Wrap(
@@ -247,15 +290,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             onPressed: () => _renamePlayer(player),
           ),
         if (widget.tournament.finishedAt == null &&
-            PlayerWithdrawalService.policy(widget.tournament, player) == null)
+            PlayerWithdrawalService.policy(widget.tournament, player) == null &&
+            _canAdjustParticipants)
           IconButton(
-            tooltip: 'Spieler entfernen (Drop)',
+            tooltip: 'Spieler entfernen',
             icon: const Icon(
               Icons.person_remove_outlined,
               size: 20,
               color: Colors.red,
             ),
-            onPressed: () => _withdrawPlayer(player),
+            onPressed: () => _removeParticipant(player),
           ),
       ],
     ),
@@ -272,7 +316,51 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         'Namen anpassen oder Spieler aus dem Turnier entfernen.',
       ),
       childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
-      children: [for (final player in players) _playerManagementTile(player)],
+      children: [
+        if (_canReorderTournamentPlayers)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Spieler ziehen, um die Setzung festzulegen.'),
+            ),
+          ),
+        if (_canAdjustParticipants)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _addParticipantToTournament,
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+                label: const Text('Spieler hinzufügen'),
+              ),
+            ),
+          ),
+        if (_canReorderTournamentPlayers)
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: players.length,
+            onReorderItem: _reorderTournamentPlayers,
+            itemBuilder: (context, index) {
+              final player = players[index];
+              return ReorderableDragStartListener(
+                key: ValueKey(player),
+                index: index,
+                child: _playerManagementTile(
+                  player,
+                  leading: const Tooltip(
+                    message: 'Spieler ziehen, um die Setzung zu ändern',
+                    child: Icon(Icons.drag_handle),
+                  ),
+                ),
+              );
+            },
+          )
+        else
+          for (final player in players) _playerManagementTile(player),
+      ],
     ),
   );
 
@@ -291,7 +379,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       LeagueTournamentPlayerSections(
         leagueMatch: league,
         players: widget.tournament.players,
-        playerTileBuilder: _playerManagementTile,
+        playerTileBuilder: (player) => _playerManagementTile(player),
       ),
     ];
   }
@@ -399,58 +487,138 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     );
   }
 
-  Future<TournamentPlayer?> _selectPlayerToKick() =>
-      showDialog<TournamentPlayer>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Spieler vor Turnierbeginn kicken'),
-          content: SizedBox(
-            width: 420,
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                for (final player in widget.tournament.players)
-                  ListTile(
-                    leading: const Icon(Icons.person_remove_outlined),
-                    title: Text(player.name),
-                    onTap: () => Navigator.pop(context, player),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen'),
-            ),
-          ],
+  Future<bool?> _confirmParticipantFormatAdjustment({
+    required String action,
+    required String title,
+  }) => showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(
+        'Möchtest du das Turnierformat für die neue Teilnehmerzahl automatisch anpassen?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
         ),
-      );
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(action),
+        ),
+      ],
+    ),
+  );
 
-  Future<void> _addParticipantAndReplan() async {
+  Future<void> _addParticipantToTournament() async {
     if (!_canAdjustParticipants) return;
-    final name = (await _promptParticipantName())?.trim();
-    if (name == null || name.isEmpty || !mounted) return;
-    if (widget.tournament.players.any(
-      (player) => player.name.trim().toLowerCase() == name.toLowerCase(),
-    )) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Dieser Spieler ist bereits eingetragen.'),
+    final source = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Spieler hinzufügen'),
+        content: const Text(
+          'Wähle aus, ob du einen neuen Namen eingeben oder einen Spieler aus dem Katalog übernehmen möchtest.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'catalog'),
+            child: const Text('Aus Spielerkatalog'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'manual'),
+            child: const Text('Neuen Namen'),
+          ),
+        ],
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    if (source == 'manual') {
+      final name = (await _promptParticipantName())?.trim();
+      if (name == null || name.isEmpty || !mounted) return;
+      if (widget.tournament.players.any(
+        (player) => player.name.trim().toLowerCase() == name.toLowerCase(),
+      )) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Dieser Spieler ist bereits eingetragen.'),
+          ),
+        );
+        return;
+      }
+      final confirmed = await _confirmParticipantFormatAdjustment(
+        action: 'Turnierformat anpassen',
+        title: 'Spieler hinzufügen',
+      );
+      if (confirmed != true || !mounted || !_canAdjustParticipants) return;
+      await _planParticipantChange([
+        ...widget.tournament.players,
+        TournamentPlayer(name: name, isGenerated: false),
+      ]);
+      return;
+    }
+
+    final profiles = await LocalAppDatabase().loadPlayerProfiles();
+    if (!mounted) return;
+    // ignore: use_build_context_synchronously
+    final selectedProfiles = await showDialog<List<PlayerProfile>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PlayerProfilePickerDialog(
+        profiles: profiles,
+        selectedProfileIds: {
+          for (final player in widget.tournament.players)
+            if (player.profileId != null) player.profileId!,
+        },
+        createPlayer: (firstName, lastName) => LocalAppDatabase()
+            .createPlayerProfile(firstName: firstName, lastName: lastName),
+      ),
+    );
+    if (selectedProfiles == null || !mounted) return;
+
+    final candidates = selectedProfiles
+        .where(
+          (profile) => !widget.tournament.players.any(
+            (player) => player.profileId == profile.id,
+          ),
+        )
+        .map(
+          (profile) => TournamentPlayer(
+            profileId: profile.id,
+            name: profile.displayName,
+            isGenerated: false,
+            compactName: profile.compactDisplayName,
+          ),
+        )
+        .toList();
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Keine neuen Spieler ausgewählt.')),
       );
       return;
     }
-    await _planParticipantChange([
-      ...widget.tournament.players,
-      TournamentPlayer(name: name, isGenerated: false),
-    ]);
+    final confirmed = await _confirmParticipantFormatAdjustment(
+      action: 'Turnierformat anpassen',
+      title: 'Spieler aus Katalog hinzufügen',
+    );
+    if (confirmed != true || !mounted || !_canAdjustParticipants) return;
+    await _planParticipantChange([...widget.tournament.players, ...candidates]);
   }
 
-  Future<void> _kickParticipantAndReplan() async {
-    if (!_canAdjustParticipants || widget.tournament.startedAt != null) return;
-    final player = await _selectPlayerToKick();
-    if (player == null || !mounted) return;
+  Future<void> _removeParticipant(TournamentPlayer player) async {
+    if (!_canAdjustParticipants) return;
+    final confirmed = await _confirmParticipantFormatAdjustment(
+      action: 'Turnierformat anpassen',
+      title: 'Spieler entfernen',
+    );
+    if (confirmed != true || !mounted || !_canAdjustParticipants) return;
+
     final players = widget.tournament.players
         .where((entry) => entry != player)
         .toList();
@@ -470,6 +638,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   ) async {
     if (!_canAdjustParticipants) return;
     final tournament = widget.tournament;
+    final baselineMinutes =
+        tournament.plannedMinutes ??
+        tournament.plannedMinimumMinutes ??
+        const Duration(minutes: 180).inMinutes;
+    final minimumDurationMinutes = (baselineMinutes - 60).clamp(0, 10000);
+    final maximumDurationMinutes = baselineMinutes + 60;
     final suggestion = await showDialog<TournamentFormatSuggestion>(
       context: context,
       builder: (_) => TournamentFormatPlannerDialog(
@@ -477,6 +651,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         initialBoardCount: tournament.boardCount,
         initialMinimumMatches: 3,
         initialTargetMinutes: tournament.plannedMinutes,
+        initialMinimumDurationMinutes: minimumDurationMinutes,
+        initialMaximumDurationMinutes: maximumDurationMinutes,
         initialEnabledModes: _enabledPlannerModes(),
         initialMaximumStages: tournament.stages.length,
         initialRequireGroupPhase: tournament.stages.any(
@@ -1135,7 +1311,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       final recommendation = snapshot.recommendationForBoard(board);
       if (recommendation == null) return;
       final nextMatch = recommendation.next.entry.match;
-      final alternativeMatch = recommendation.alternative?.entry.match;
       final boardName = widget.tournament.boardDisplayName(board);
       final settings = await AudioAnnouncementPreferencesStorage().load();
       final profiles = await LocalAppDatabase().loadPlayerProfiles();
@@ -1143,17 +1318,35 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       final profilesById = {
         for (final profile in profiles) profile.id: profile,
       };
+      final alternativeMatches = settings.readAlternativeRecommendations
+          ? snapshot
+                .selectableForBoard(board)
+                .where(
+                  (assignment) =>
+                      !identical(assignment.entry.match, nextMatch) &&
+                      assignment.board != board,
+                )
+                .take(settings.alternativeRecommendationCount)
+                .map(
+                  (assignment) =>
+                      'Oder: ${spokenMatchLabel(assignment.entry.match, settings, profilesById)} an ${_spokenBoardName(boardName)}.',
+                )
+                .toList()
+          : const <String>[];
       final audioService = _audioAnnouncementService ??=
           TournamentAudioAnnouncementService();
+      final primaryText =
+          'Nächste Partie: ${spokenMatchLabel(nextMatch, settings, profilesById)} an '
+          '${_spokenBoardName(boardName)}.';
       unawaited(
         audioService.announce(
-          text:
-              'Nächste Partie: ${spokenMatchLabel(nextMatch, settings, profilesById)} an '
-              '${_spokenBoardName(boardName)}.',
-          alternativeText: alternativeMatch == null
-              ? null
-              : 'Alternativ: ${spokenMatchLabel(alternativeMatch, settings, profilesById)} an '
-                    '${_spokenBoardName(boardName)}.',
+          text: primaryText,
+          alternativeText: alternativeMatches.isNotEmpty
+              ? alternativeMatches.first
+              : null,
+          alternativeTexts: alternativeMatches.length > 1
+              ? alternativeMatches.sublist(1)
+              : null,
           isStillCurrent: () {
             if (!mounted ||
                 !widget.tournament.soundModeEnabled ||
@@ -1165,11 +1358,37 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             final refreshed = TournamentDirectorSnapshot(
               widget.tournament,
               stageIndex,
-            ).recommendationForBoard(board);
-            return refreshed != null &&
+            );
+            final refreshedNext = refreshed.recommendationForBoard(board)?.next;
+            final refreshedAlternativeTexts =
+                settings.readAlternativeRecommendations
+                ? refreshed
+                      .selectableForBoard(board)
+                      .where(
+                        (assignment) =>
+                            !identical(
+                              assignment.entry.match,
+                              refreshedNext?.entry.match,
+                            ) &&
+                            assignment.board != board,
+                      )
+                      .take(settings.alternativeRecommendationCount)
+                      .map(
+                        (assignment) =>
+                            'Oder: ${spokenMatchLabel(assignment.entry.match, settings, profilesById)} an ${_spokenBoardName(boardName)}.',
+                      )
+                      .toList()
+                : const <String>[];
+            return refreshedNext != null &&
                 widget.tournament.boardDisplayName(board) == boardName &&
-                identical(refreshed.next.entry.match, nextMatch) &&
-                identical(refreshed.alternative?.entry.match, alternativeMatch);
+                identical(refreshedNext.entry.match, nextMatch) &&
+                refreshedAlternativeTexts.length == alternativeMatches.length &&
+                List.generate(
+                  alternativeMatches.length,
+                  (index) =>
+                      refreshedAlternativeTexts[index] ==
+                      alternativeMatches[index],
+                ).every((matches) => matches);
           },
         ),
       );
@@ -4531,19 +4750,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             SportActionsMenu(
               label: 'Turnier',
               actions: [
-                if (_canAdjustParticipants)
-                  SportMenuAction(
-                    label: 'Spieler hinzufügen & Format anpassen',
-                    icon: Icons.person_add_alt_1_outlined,
-                    onTap: _addParticipantAndReplan,
-                  ),
-                if (_canAdjustParticipants &&
-                    widget.tournament.startedAt == null)
-                  SportMenuAction(
-                    label: 'Spieler kicken & Format anpassen',
-                    icon: Icons.person_remove_outlined,
-                    onTap: _kickParticipantAndReplan,
-                  ),
                 if (widget.tournament.finishedAt == null)
                   SportMenuAction(
                     label: 'Spieler aus Turnier entfernen',
@@ -5693,9 +5899,22 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            'Spieler',
-                            style: Theme.of(context).textTheme.titleLarge,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Spieler',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              if (_canAdjustParticipants)
+                                FilledButton.icon(
+                                  onPressed: _addParticipantToTournament,
+                                  icon: const Icon(
+                                    Icons.person_add_alt_1_outlined,
+                                  ),
+                                  label: const Text('Spieler hinzufügen'),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           for (final player in widget.tournament.players)
@@ -5713,24 +5932,24 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         'Aus dem Turnier ausgeschieden',
                                       ),
                                 trailing:
-                                    true &&
-                                        widget.tournament.finishedAt == null &&
+                                    widget.tournament.finishedAt == null &&
                                         PlayerWithdrawalService.policy(
                                               widget.tournament,
                                               player,
                                             ) ==
-                                            null
+                                            null &&
+                                        _canAdjustParticipants
                                     ? const Icon(Icons.person_remove_outlined)
                                     : null,
                                 onTap:
-                                    true &&
-                                        widget.tournament.finishedAt == null &&
+                                    widget.tournament.finishedAt == null &&
                                         PlayerWithdrawalService.policy(
                                               widget.tournament,
                                               player,
                                             ) ==
-                                            null
-                                    ? () => _withdrawPlayer(player)
+                                            null &&
+                                        _canAdjustParticipants
+                                    ? () => _removeParticipant(player)
                                     : null,
                               ),
                             ),

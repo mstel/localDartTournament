@@ -42,6 +42,8 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'Viewport $size');
       await tester.tap(find.text('Standard wiederherstellen'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Wiederherstellen'));
+      await tester.pumpAndSettle();
     }
   });
 
@@ -102,9 +104,19 @@ void main() {
         ),
       ),
     );
+    result = null;
     await tester.tap(find.byKey(const ValueKey('open-dialog')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Standard wiederherstellen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Standardwerte wiederherstellen?'), findsOneWidget);
+    await tester.tap(find.text('Abbrechen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Achievement-Werte anpassen'), findsOneWidget);
+    expect(result, isNull);
+    await tester.tap(find.text('Standard wiederherstellen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wiederherstellen'));
     await tester.pumpAndSettle();
     expect(result, isEmpty);
   });

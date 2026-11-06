@@ -318,6 +318,36 @@ class _PlanningParametersPanelState extends State<_PlanningParametersPanel> {
     }
   }
 
+  Future<void> _restoreDefaults() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        title: const Text('Standardwerte wiederherstellen?'),
+        content: const Text(
+          'Alle angepassten Turnierplanungswerte werden durch die Standardwerte ersetzt.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Wiederherstellen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    for (final entry in _controllers.entries) {
+      entry.value.text = '${entry.key.defaultValue}';
+    }
+    _form.currentState?.validate();
+    setState(() {});
+  }
+
   @override
   void dispose() {
     for (final controller in _controllers.values) {
@@ -438,14 +468,7 @@ class _PlanningParametersPanelState extends State<_PlanningParametersPanel> {
                 label: Text(_saving ? 'Speichert …' : 'Speichern'),
               ),
               OutlinedButton(
-                onPressed: _saving
-                    ? null
-                    : () {
-                        for (final entry in _controllers.entries) {
-                          entry.value.text = '${entry.key.defaultValue}';
-                        }
-                        _form.currentState?.validate();
-                      },
+                onPressed: _saving ? null : _restoreDefaults,
                 child: const Text('Standardwerte einsetzen'),
               ),
             ],

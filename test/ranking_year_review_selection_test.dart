@@ -192,6 +192,36 @@ CreatedTournament _convertedChallongeWithBestPerformance() {
 }
 
 void main() {
+  test('monthly club totals count each match and leg once', () async {
+    final review = await RankingYearReviewService(
+      database: _YearReviewDatabase(
+        performance: const [
+          PlayerMonthlyPerformance(
+            playerId: 'player',
+            year: 2026,
+            month: 1,
+            matches: 4,
+            weightedLegs: 12,
+            scoring: 50,
+          ),
+          PlayerMonthlyPerformance(
+            playerId: 'empty-player',
+            year: 2026,
+            month: 1,
+            matches: 6,
+            weightedLegs: 20,
+            scoring: 60,
+          ),
+        ],
+      ),
+      tournamentStorage: _YearReviewStorage(),
+    ).calculate(const LocalRanking(id: 'default', name: 'Club'), 2026);
+
+    expect(review.monthlyClubPerformance, hasLength(1));
+    expect(review.monthlyClubPerformance.single.matches, 5);
+    expect(review.monthlyClubPerformance.single.weightedLegs, 16);
+  });
+
   testWidgets('year review selects default ranking and year from its name', (
     tester,
   ) async {

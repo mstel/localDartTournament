@@ -154,7 +154,7 @@ Request one resource per call. `version=2` and `resource` are required;
 | `?version=2&resource=players` | `players` |
 | `?version=2&resource=rankings` | `rankings`, `rankingStandings` |
 | `?version=2&resource=statistics` | `statistics`, `bestPerformances`, `currentForm` |
-| `?version=2&resource=performance` | `monthlyPerformance`, `importedMonthlyStatistics`, `currentForm` |
+| `?version=2&resource=performance` | `monthlyPerformance`, `monthlyClubPerformance`, `importedMonthlyStatistics`, `currentForm` |
 | `?version=2&resource=achievements` | `rankingAchievements` |
 | `?version=2&resource=tournaments&page=N` | One page of `completedTournaments` and `tournamentPage` |
 
@@ -173,6 +173,14 @@ percentage). Imported aggregates are authoritative when both sources contain
 the same player and month. Nullable performance values stay null; no values are
 inferred from tournament results. Profile-private details appear only in the
 independently requested `players` resource.
+
+`monthlyClubPerformance` contains one row per month across all catalog players:
+`year`, `month`, `period`, `matches`, `weightedLegs`, `scoring`, `average`, and
+`checkoutQuote`. Match and leg totals are divided by two because each recorded
+match/leg is represented for both players. Scoring, average, and checkout quote
+are weighted by the source leg counts. Imported monthly data is combined with
+manually maintained monthly data using the same player/month precedence as
+`monthlyPerformance`.
 
 `importedMonthlyStatistics` exposes the imported Excel-backed table without
 aggregation or field renaming: each row contains `playerId`,

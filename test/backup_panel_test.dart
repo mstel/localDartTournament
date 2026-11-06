@@ -59,6 +59,8 @@ void main() {
         ),
       ),
     );
+    await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Backup exportieren'));
     await tester.pump();
     expect(find.text('Exportieren'), findsOneWidget);

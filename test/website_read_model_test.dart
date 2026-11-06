@@ -285,6 +285,18 @@ void main() {
             'checkoutQuote': 38.5,
           },
         ],
+        'monthlyClubPerformance': [
+          {
+            'year': 2026,
+            'month': 10,
+            'period': '2026-10',
+            'matches': 0,
+            'weightedLegs': 9,
+            'scoring': 72.5,
+            'average': 51.2,
+            'checkoutQuote': 38.5,
+          },
+        ],
         'importedMonthlyStatistics': <Map<String, dynamic>>[],
         'currentForm': [
           {
@@ -374,6 +386,18 @@ void main() {
         'matches': 12,
       },
     ]);
+    final monthlyClubPerformance =
+        resources['performance']!['monthlyClubPerformance'] as List;
+    expect(monthlyClubPerformance, hasLength(1));
+    final clubMonth = monthlyClubPerformance.single as Map<String, dynamic>;
+    expect(clubMonth['year'], 2026);
+    expect(clubMonth['month'], 9);
+    expect(clubMonth['period'], '2026-09');
+    expect(clubMonth['matches'], 6);
+    expect(clubMonth['weightedLegs'], 18);
+    expect(clubMonth['scoring'], closeTo(62.7, 0.0001));
+    expect(clubMonth['average'], 54.2);
+    expect(clubMonth['checkoutQuote'], isNull);
   });
 
   test(
@@ -537,6 +561,7 @@ void main() {
       id: 'achievements-ranking',
       name: 'Vereinsrangliste',
       achievementsEnabled: true,
+      achievementTargets: {'tournament_participation_5': 9},
     );
     await database.saveLocalRanking(ranking);
     await database.setRankingPlayers(ranking.id, [player.id]);
@@ -568,6 +593,12 @@ void main() {
     expect(players, hasLength(1));
     expect(players.single['playerId'], player.id);
     expect(players.single['achievements'], isNotEmpty);
+    final participation = (players.single['achievements'] as List)
+        .cast<Map<String, dynamic>>()
+        .singleWhere(
+          (achievement) => achievement['id'] == 'tournament_participation_5',
+        );
+    expect(participation['target'], 9);
     expect(achievements['schemaVersion'], 2);
     expect(achievements['resource'], 'achievements');
   });

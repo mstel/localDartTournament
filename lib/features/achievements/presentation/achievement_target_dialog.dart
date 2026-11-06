@@ -56,6 +56,33 @@ class _AchievementTargetDialogState extends State<AchievementTargetDialog> {
     });
   }
 
+  Future<void> _restoreDefaults() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        title: const Text('Standardwerte wiederherstellen?'),
+        content: const Text(
+          'Alle angepassten Achievement-Zielwerte dieser Rangliste werden auf die Standardwerte zurückgesetzt.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Wiederherstellen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      Navigator.of(context).pop(const <String, double>{});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -129,7 +156,7 @@ class _AchievementTargetDialogState extends State<AchievementTargetDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(const <String, double>{}),
+          onPressed: _restoreDefaults,
           child: const Text('Standard wiederherstellen'),
         ),
         FilledButton(onPressed: _save, child: const Text('Speichern')),

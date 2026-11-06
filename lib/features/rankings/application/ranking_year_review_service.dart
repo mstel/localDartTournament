@@ -99,7 +99,9 @@ class RankingYearReviewService {
       ),
       imported: await db.loadMonthlyPlayerPerformances(roster, year: year),
     );
-    final monthlyClubPerformance = _monthlyClubPerformance(monthlyPerformance);
+    final monthlyClubPerformance = aggregateMonthlyClubPerformance(
+      monthlyPerformance,
+    );
     for (final performance in monthlyPerformance) {
       final playerStats = stats[performance.playerId];
       if (playerStats == null) continue;
@@ -251,7 +253,7 @@ class RankingYearReviewService {
     );
   }
 
-  List<RankingMonthlyClubPerformance> _monthlyClubPerformance(
+  static List<RankingMonthlyClubPerformance> aggregateMonthlyClubPerformance(
     Iterable<PlayerMonthlyPerformance> performances,
   ) {
     final byMonth = <(int, int), List<PlayerMonthlyPerformance>>{};
@@ -292,14 +294,18 @@ class RankingYearReviewService {
           RankingMonthlyClubPerformance(
             year: period.$1,
             month: period.$2,
-            weightedLegs: monthEntries.fold<int>(
-              0,
-              (total, entry) => total + entry.weightedLegs,
-            ),
-            matches: monthEntries.fold<int>(
-              0,
-              (total, entry) => total + entry.matches,
-            ),
+            weightedLegs:
+                monthEntries.fold<int>(
+                  0,
+                  (total, entry) => total + entry.weightedLegs,
+                ) ~/
+                2,
+            matches:
+                monthEntries.fold<int>(
+                  0,
+                  (total, entry) => total + entry.matches,
+                ) ~/
+                2,
             scoring: weightedMean(monthEntries, (entry) => entry.scoring),
             average: weightedMean(monthEntries, (entry) => entry.average),
             checkoutRate: weightedMean(

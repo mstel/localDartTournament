@@ -34,11 +34,28 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
   @override
   void initState() {
     super.initState();
-    if (widget.tournament.finishedAt == null) {
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() {});
-      });
-    }
+    _syncClockTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant TournamentTimingPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncClockTimer();
+  }
+
+  void _syncClockTimer() {
+    final tournament = widget.tournament;
+    final shouldRun =
+        tournament.startedAt != null &&
+        tournament.finishedAt == null &&
+        !tournament.isClockPaused;
+    if (shouldRun == (_timer != null)) return;
+    _timer?.cancel();
+    _timer = shouldRun
+        ? Timer.periodic(const Duration(minutes: 1), (_) {
+            if (mounted) setState(() {});
+          })
+        : null;
   }
 
   @override
@@ -111,6 +128,8 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
           ),
         );
       }
+    } finally {
+      if (mounted) _syncClockTimer();
     }
   }
 
@@ -151,7 +170,10 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
         );
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        _syncClockTimer();
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -216,7 +238,10 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
                                   );
                                 }
                               } finally {
-                                if (mounted) setState(() => _busy = false);
+                                if (mounted) {
+                                  _syncClockTimer();
+                                  setState(() => _busy = false);
+                                }
                               }
                             },
                       icon: const Icon(Icons.play_circle_outline),
@@ -275,7 +300,10 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
                                   );
                                 }
                               } finally {
-                                if (mounted) setState(() => _busy = false);
+                                if (mounted) {
+                                  _syncClockTimer();
+                                  setState(() => _busy = false);
+                                }
                               }
                             },
                       icon: Icon(

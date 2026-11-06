@@ -99,6 +99,7 @@ Map<String, List<PlayerInsight>> _calculate({
   monthlyEntries: monthlyEntries,
   eloRanking: ranking,
   eloSnapshot: snapshot,
+  insightPreferences: PlayerInsightPreferences.defaults(),
   now: _date,
 );
 
@@ -167,12 +168,12 @@ void main() {
         homeTypes,
         containsAll({
           PlayerInsightType.unstoppable,
+          PlayerInsightType.momentum,
           PlayerInsightType.risingStar,
           PlayerInsightType.lastLegStanding,
         }),
       );
       expect(homeTypes, isNot(contains(PlayerInsightType.hotStreak)));
-      expect(homeTypes, isNot(contains(PlayerInsightType.momentum)));
       expect(awayTypes, contains(PlayerInsightType.coldStreak));
       expect(awayTypes, contains(PlayerInsightType.lastLegStanding));
     },
@@ -204,9 +205,11 @@ void main() {
       history: history,
     )['player']!.map((insight) => insight.type).toSet();
 
-    expect(types, contains(PlayerInsightType.unstoppable));
+    expect(types, containsAll({
+      PlayerInsightType.unstoppable,
+      PlayerInsightType.momentum,
+    }));
     expect(types, isNot(contains(PlayerInsightType.hotStreak)));
-    expect(types, isNot(contains(PlayerInsightType.momentum)));
   });
 
   test(
@@ -1028,7 +1031,11 @@ void main() {
     );
 
     final results = _calculate(current: current, history: [current]);
-    expect(results.values.expand((items) => items), isEmpty);
+    expect(
+      results['home']!.map((insight) => insight.type),
+      contains(PlayerInsightType.momentum),
+    );
+    expect(results['away'], isEmpty);
   });
 }
 

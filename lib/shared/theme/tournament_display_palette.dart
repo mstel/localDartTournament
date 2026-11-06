@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class TournamentDisplayPalette {
   const TournamentDisplayPalette._();
 
+  static const heroGradient = [Color(0xFF142B3A), Color(0xFF175C59)];
   static const background = Color(0xFF0D1318);
   static const card = Color(0xFF14202B);
   static const cardEmphasis = Color(0xFF1B2B38);

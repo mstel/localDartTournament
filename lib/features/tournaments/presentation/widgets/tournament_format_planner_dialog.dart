@@ -7,6 +7,8 @@ class TournamentFormatPlannerDialog extends StatefulWidget {
     this.initialBoardCount,
     this.initialMinimumMatches,
     this.initialTargetMinutes,
+    this.initialMinimumDurationMinutes,
+    this.initialMaximumDurationMinutes,
     this.initialEnabledModes,
     this.initialMaximumStages,
     this.initialRequireGroupPhase = false,
@@ -18,6 +20,8 @@ class TournamentFormatPlannerDialog extends StatefulWidget {
   final int? initialBoardCount;
   final int? initialMinimumMatches;
   final int? initialTargetMinutes;
+  final int? initialMinimumDurationMinutes;
+  final int? initialMaximumDurationMinutes;
   final Set<String>? initialEnabledModes;
   final int? initialMaximumStages;
   final bool initialRequireGroupPhase;
@@ -211,6 +215,16 @@ class _TournamentFormatPlannerDialogState
       _targetHours.text = '${targetMinutes ~/ 60}';
       _targetMinutes.text = '${targetMinutes % 60}';
       _useTargetDuration = true;
+    }
+    final minDurationMinutes = widget.initialMinimumDurationMinutes;
+    if (minDurationMinutes != null && minDurationMinutes >= 0) {
+      _minHours.text = '${minDurationMinutes ~/ 60}';
+      _minMinutes.text = '${minDurationMinutes % 60}';
+    }
+    final maxDurationMinutes = widget.initialMaximumDurationMinutes;
+    if (maxDurationMinutes != null && maxDurationMinutes >= 0) {
+      _maxHours.text = '${maxDurationMinutes ~/ 60}';
+      _maxMinutes.text = '${maxDurationMinutes % 60}';
     }
     if (widget.initialEnabledModes != null &&
         widget.initialEnabledModes!.isNotEmpty) {

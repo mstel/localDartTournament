@@ -108,13 +108,54 @@ class _AudioAnnouncementDefaultsPanelState
         onChanged: _loading || _saving
             ? null
             : (enabled) {
-                if (enabled != null) {
-                  _save(
-                    _settings.copyWith(speakNicknameWhenAvailable: enabled),
-                  );
-                }
+                _save(
+                  _settings.copyWith(speakNicknameWhenAvailable: enabled),
+                );
               },
       ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Alternative Empfehlungen vorlesen'),
+        subtitle: const Text(
+          'Zusätzliche empfohlene Partien werden mit „oder“ angekündigt.',
+        ),
+        value: _settings.readAlternativeRecommendations,
+        onChanged: _loading || _saving
+            ? null
+            : (enabled) {
+                _save(
+                  _settings.copyWith(
+                    readAlternativeRecommendations: enabled,
+                  ),
+                );
+              },
+      ),
+      if (_settings.readAlternativeRecommendations)
+        DropdownButtonFormField<int>(
+          key: ValueKey('audio-alt-count-${_settings.alternativeRecommendationCount}'),
+          initialValue: _settings.alternativeRecommendationCount.clamp(1, 3),
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Alternative Empfehlungen',
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(value: 1, child: Text('1 alternative Empfehlung')),
+            DropdownMenuItem(value: 2, child: Text('2 alternative Empfehlungen')),
+            DropdownMenuItem(value: 3, child: Text('3 alternative Empfehlungen')),
+          ],
+          onChanged: _loading || _saving
+              ? null
+              : (count) {
+                  if (count != null) {
+                    _save(
+                      _settings.copyWith(
+                        alternativeRecommendationCount: count,
+                      ),
+                    );
+                  }
+                },
+        ),
     ],
   );
 }

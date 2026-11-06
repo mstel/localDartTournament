@@ -109,12 +109,27 @@ void main() {
       final savedBefore = storage.savedTournament;
       expect(savedBefore, isNotNull);
 
-      await tester.tap(find.byTooltip('Turnier'));
+      await tester.tap(find.text('Einstellungen'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Spieler hinzufügen & Format anpassen'));
+      await _scrollToText(tester, 'Spieler (8)');
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Neue Person');
+      await tester.tap(find.text('Spieler (8)'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Spieler hinzufügen'));
+      await tester.tap(find.text('Spieler hinzufügen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Neuen Namen'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog).last,
+          matching: find.byType(TextField),
+        ),
+        'Neue Person',
+      );
       await tester.tap(find.text('Weiter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Turnierformat anpassen'));
       await tester.pumpAndSettle();
 
       expect(find.text('Passende Turnierform finden'), findsOneWidget);
@@ -305,6 +320,191 @@ void main() {
       await tester.pump();
     },
   );
+
+  testWidgets('players can be reseeded before a knockout starts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = _knockoutTournament();
+    final storage = _MemoryTournamentStorage();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: tournament,
+          runController: _RecordingRunController(storage),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+    await _scrollToText(tester, 'Spieler (4)');
+    await tester.tap(find.text('Spieler (4)'));
+    await tester.pumpAndSettle();
+
+    final reorderableList = tester.widget<ReorderableListView>(
+      find.byType(ReorderableListView),
+    );
+    reorderableList.onReorderItem!(0, 1);
+    await tester.pumpAndSettle();
+
+    expect(tournament.players.map((player) => player.name), [
+      'Spieler 2',
+      'Spieler 1',
+      'Spieler 3',
+      'Spieler 4',
+    ]);
+    final runStage = tournament.runStages.single as KnockoutTournamentRunStage;
+    expect(runStage.rounds.first.map((match) => match.homePlayer?.name), [
+      'Spieler 2',
+      'Spieler 1',
+    ]);
+    expect(storage.savedTournament, isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('player reseeding is hidden after a knockout result exists', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: _knockoutTournament(withResult: true),
+          runController: _RecordingRunController(_MemoryTournamentStorage()),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+    await _scrollToText(tester, 'Spieler (4)');
+    await tester.tap(find.text('Spieler (4)'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ReorderableListView), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('supports reseeding all group-free knockout modes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    for (final type in [
+      'single_knockout',
+      'double_knockout',
+      'triple_knockout',
+      'kratzer',
+    ]) {
+      final tournament = _knockoutTournament(type: type, stageCount: 2);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TournamentRunPage(
+            tournament: tournament,
+            runController: _RecordingRunController(_MemoryTournamentStorage()),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Einstellungen'));
+      await tester.pumpAndSettle();
+      await _scrollToText(tester, 'Spieler (4)');
+      await tester.tap(find.text('Spieler (4)'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReorderableListView), findsOneWidget, reason: type);
+      tester
+          .widget<ReorderableListView>(find.byType(ReorderableListView))
+          .onReorderItem!(0, 1);
+      await tester.pumpAndSettle();
+
+      expect(tournament.players.first.name, 'Spieler 2', reason: type);
+      expect(
+        (tournament.runStages.first as KnockoutTournamentRunStage).isKratzer,
+        type == 'kratzer',
+        reason: type,
+      );
+      expect(tester.takeException(), isNull, reason: type);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
+  });
+}
+
+CreatedTournament _knockoutTournament({
+  bool withResult = false,
+  String type = 'single_knockout',
+  int stageCount = 1,
+}) {
+  final players = [
+    for (var index = 1; index <= 4; index++) TournamentPlayer.generated(index),
+  ];
+  final firstMatch = GroupMatch(
+    homePlayer: players[0],
+    awayPlayer: players[3],
+    round: 1,
+    homeLegs: withResult ? 3 : null,
+    awayLegs: withResult ? 1 : null,
+  );
+  final stages = [
+    for (var index = 0; index < stageCount; index++)
+      TournamentStage(
+        name: 'K.-o.-Phase ${index + 1}',
+        type: type,
+        finalEndsTournament: true,
+        knockoutParticipantCount: 4,
+        knockoutBracketSize: 4,
+      ),
+  ];
+  return CreatedTournament(
+    name: 'Setzungstest',
+    players: players,
+    stages: stages,
+    runStages: [
+      for (final stage in stages)
+        KnockoutTournamentRunStage(
+          name: stage.name,
+          rounds: [
+            [
+              firstMatch,
+              GroupMatch(
+                homePlayer: players[1],
+                awayPlayer: players[2],
+                round: 1,
+              ),
+            ],
+            [GroupMatch(round: 2)],
+          ],
+          participants: players,
+        ),
+    ],
+  );
+}
+
+Future<void> _scrollToText(WidgetTester tester, String text) async {
+  final finder = find.text(text);
+  for (var attempt = 0; attempt < 8 && finder.evaluate().isEmpty; attempt++) {
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+  }
+  expect(finder, findsOneWidget);
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
 }
 
 CreatedTournament _tournament() {

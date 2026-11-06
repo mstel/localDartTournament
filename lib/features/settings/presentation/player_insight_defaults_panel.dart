@@ -64,6 +64,27 @@ class _PlayerInsightDefaultsPanelState
     }
   }
 
+  Future<void> _setThreshold(PlayerInsightType type, int value) async {
+    final previous = _settings;
+    final updated = previous.withThreshold(type, value);
+    setState(() {
+      _settings = updated;
+      _saving.add(type);
+    });
+    try {
+      await _storage.save(updated);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _settings = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Speichern fehlgeschlagen: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving.remove(type));
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ExpansionTile(
     leading: const Icon(Icons.auto_awesome_outlined),
@@ -75,13 +96,41 @@ class _PlayerInsightDefaultsPanelState
     children: [
       if (_loading) const LinearProgressIndicator(),
       for (final type in PlayerInsightType.values)
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(type.label),
-          value: _settings.isEnabled(type),
-          onChanged: _loading || _saving.contains(type)
-              ? null
-              : (enabled) => _setEnabled(type, enabled),
+        Column(
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(type.label),
+              value: _settings.isEnabled(type),
+              onChanged: _loading || _saving.contains(type)
+                  ? null
+                  : (enabled) => _setEnabled(type, enabled),
+            ),
+            if (_settings.isEnabled(type))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: DropdownButtonFormField<int>(
+                  initialValue: _settings.thresholdFor(type).clamp(1, 5),
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'Schwelle für ${type.label}',
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 1, child: Text('1')),
+                    DropdownMenuItem(value: 2, child: Text('2')),
+                    DropdownMenuItem(value: 3, child: Text('3')),
+                    DropdownMenuItem(value: 4, child: Text('4')),
+                    DropdownMenuItem(value: 5, child: Text('5')),
+                  ],
+                  onChanged: _loading || _saving.contains(type)
+                      ? null
+                      : (value) {
+                          if (value != null) _setThreshold(type, value);
+                        },
+                ),
+              ),
+          ],
         ),
     ],
   );

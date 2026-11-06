@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/theme/tournament_display_palette.dart';
 
 class SportHero extends StatelessWidget {
   const SportHero({super.key, required this.onTournament});
@@ -9,7 +10,7 @@ class SportHero extends StatelessWidget {
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(24),
       gradient: const LinearGradient(
-        colors: [Color(0xFF142B3A), Color(0xFF175C59)],
+        colors: TournamentDisplayPalette.heroGradient,
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),

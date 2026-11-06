@@ -78,12 +78,10 @@ class TournamentDirectorDashboard extends StatefulWidget {
 
 class _TournamentDirectorDashboardState
     extends State<TournamentDirectorDashboard> {
-  Timer? _timer;
   final _matchSearchController = TextEditingController();
   final _recentResultsController = ScrollController();
   bool _busy = false;
   String? _actionError;
-  int _noticeIndex = 0;
   TournamentFlowPrioritySettings _prioritySettings =
       TournamentFlowPriority.defaultSettings;
   late Future<Map<String, List<TournamentMatchEloChange>>> _eloChanges;
@@ -94,11 +92,6 @@ class _TournamentDirectorDashboardState
     super.initState();
     _refreshEloChanges();
     unawaited(_loadPrioritySettings());
-    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (mounted) {
-        setState(() => _noticeIndex++);
-      }
-    });
   }
 
   @override
@@ -108,6 +101,20 @@ class _TournamentDirectorDashboardState
     if (fingerprint != _eloInputFingerprint) {
       _refreshEloChanges(fingerprint: fingerprint);
     }
+  }
+
+  String _displayGroupLabel(String? groupKey) {
+    if (groupKey == null || groupKey.trim().isEmpty) return '';
+    final cleaned = groupKey.trim();
+    final separatorIndex = cleaned.indexOf(':');
+    if (separatorIndex >= 0) {
+      final prefix = cleaned.substring(0, separatorIndex).trim();
+      if (prefix.isNotEmpty && int.tryParse(prefix) != null) {
+        final remainder = cleaned.substring(separatorIndex + 1).trim();
+        if (remainder.isNotEmpty) return remainder;
+      }
+    }
+    return cleaned;
   }
 
   void _refreshEloChanges({String? fingerprint}) {
@@ -132,7 +139,6 @@ class _TournamentDirectorDashboardState
 
   @override
   void dispose() {
-    _timer?.cancel();
     _matchSearchController.dispose();
     _recentResultsController.dispose();
     super.dispose();
@@ -190,13 +196,6 @@ class _TournamentDirectorDashboardState
     icon: Icon(icon),
     label: Text(label),
   );
-  String _duration(Duration d) =>
-      '${d.inHours} h ${d.inMinutes.remainder(60)} min';
-  String _clock(DateTime t) =>
-      '${t.toLocal().hour.toString().padLeft(2, '0')}:${t.toLocal().minute.toString().padLeft(2, '0')}';
-  String _timeOfDay(DateTime t) =>
-      '${t.toLocal().hour.toString().padLeft(2, '0')}:${t.toLocal().minute.toString().padLeft(2, '0')} Uhr';
-
   bool get _showBoardNumber =>
       widget.showBoardNumber ?? widget.directorModeEnabled;
 
@@ -623,8 +622,6 @@ class _TournamentDirectorDashboardState
   Widget _build(BuildContext context) {
     final t = widget.tournament;
     final state = TournamentDirectorSnapshot(t, widget.activeStage);
-    final now = DateTime.now();
-    final timing = TournamentTiming.snapshot(t, now);
     final activeStageEntries = state.entries
         .where((entry) => entry.stageIndex == widget.activeStage)
         .toList();
@@ -705,11 +702,16 @@ class _TournamentDirectorDashboardState
                       : suggestion != null
                       ? Colors.green.shade700
                       : TournamentDisplayPalette.mutedText;
-                  final assignedGroups = <String>{
-                    ?running?.groupKey,
-                    for (final assignment in upcomingForBoard)
-                      ?assignment.entry.groupKey,
-                  };
+                  final assignedGroups =
+                      <String>{
+                            ?running?.groupKey,
+                            for (final assignment in upcomingForBoard)
+                              ?assignment.entry.groupKey,
+                          }
+                          .map(_displayGroupLabel)
+                          .where((value) => value.isNotEmpty)
+                          .toList()
+                        ..sort();
                   return Container(
                     key: ValueKey('director-board-$board'),
                     padding: const EdgeInsets.all(10),
@@ -1165,13 +1167,7 @@ class _TournamentDirectorDashboardState
             '$totalCompleted/$totalTournamentGames gesamt',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          Text(
-            t.startedAt == null
-                ? 'Turnieruhr nicht gestartet'
-                : 'Laufzeit: ${_duration(timing.elapsed)} · Start ${_timeOfDay(t.startedAt!)}',
-          ),
-          if (timing.forecast != null)
-            Text('Prognose Ende: ${_clock(timing.forecast!)}'),
+          _TournamentClockSummary(tournament: t),
         ],
       ),
       if (!widget.canOperate)
@@ -1228,40 +1224,35 @@ class _TournamentDirectorDashboardState
         ),
       ],
       if (_actionError != null) Text(_actionError!),
-      if (flowNotices.isNotEmpty)
-        Builder(
-          builder: (context) {
-            final notice = flowNotices[_noticeIndex % flowNotices.length];
-            return Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: TournamentDisplayPalette.card,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: TournamentDisplayPalette.border),
+      for (final notice in flowNotices)
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: TournamentDisplayPalette.card,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: TournamentDisplayPalette.border),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.priority_high,
+                color: TournamentDisplayPalette.accent,
+                size: 20,
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.priority_high,
-                    color: TournamentDisplayPalette.accent,
-                    size: 20,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  notice,
+                  style: TextStyle(
+                    color: TournamentDisplayPalette.text,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      notice,
-                      style: TextStyle(
-                        color: TournamentDisplayPalette.text,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       if (waiting > 0)
         Text('$waiting Paarungen warten auf vorherige Ergebnisse.'),
@@ -1373,6 +1364,82 @@ class _TournamentDirectorDashboardState
           showResult: true,
           maxColumns: 4,
         ),
+      ],
+    );
+  }
+}
+
+class _TournamentClockSummary extends StatefulWidget {
+  const _TournamentClockSummary({required this.tournament});
+
+  final CreatedTournament tournament;
+
+  @override
+  State<_TournamentClockSummary> createState() =>
+      _TournamentClockSummaryState();
+}
+
+class _TournamentClockSummaryState extends State<_TournamentClockSummary> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TournamentClockSummary oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTimer();
+  }
+
+  void _syncTimer() {
+    final tournament = widget.tournament;
+    final shouldRun =
+        tournament.startedAt != null &&
+        tournament.finishedAt == null &&
+        !tournament.isClockPaused;
+    if (shouldRun == (_timer != null)) return;
+    _timer?.cancel();
+    _timer = shouldRun
+        ? Timer.periodic(const Duration(minutes: 1), (_) {
+            if (mounted) setState(() {});
+          })
+        : null;
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tournament = widget.tournament;
+    if (tournament.startedAt == null) {
+      return const Text('Turnieruhr nicht gestartet');
+    }
+    final timing = TournamentTiming.snapshot(tournament, DateTime.now());
+    final localStart = tournament.startedAt!.toLocal();
+    final start =
+        '${localStart.hour.toString().padLeft(2, '0')}:'
+        '${localStart.minute.toString().padLeft(2, '0')} Uhr';
+    return Wrap(
+      spacing: 20,
+      runSpacing: 12,
+      children: [
+        Text(
+          'Laufzeit: ${timing.elapsed.inHours} h '
+          '${timing.elapsed.inMinutes.remainder(60)} min · Start $start',
+        ),
+        if (timing.forecast != null)
+          Text(
+            'Prognose Ende: '
+            '${timing.forecast!.toLocal().hour.toString().padLeft(2, '0')}:'
+            '${timing.forecast!.toLocal().minute.toString().padLeft(2, '0')}',
+          ),
       ],
     );
   }

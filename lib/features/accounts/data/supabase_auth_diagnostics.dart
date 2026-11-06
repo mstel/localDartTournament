@@ -30,6 +30,28 @@ class SupabaseAuthDiagnostics {
     return File(p.join(directory.path, 'supabase-auth.log'));
   }
 
+  Future<void> recordInitializationCheck({
+    required bool isConfigured,
+    bool initialized = false,
+    String? reason,
+    Object? error,
+    StackTrace? stackTrace,
+    String? projectHost,
+  }) async {
+    final resolvedProjectHost = projectHost ?? SupabaseAccountConfig.projectHost;
+    await _append('supabase_initialization', {
+      'isConfigured': isConfigured,
+      'initialized': initialized,
+      'reason': reason,
+      if (error != null) ..._safeErrorDetails(error),
+      if (stackTrace != null) 'stackTrace': _sanitize(stackTrace.toString()),
+      'urlConfigured': SupabaseAccountConfig.url.isNotEmpty,
+      'publishableKeyConfigured': SupabaseAccountConfig.anonKey.isNotEmpty,
+      'projectHost': resolvedProjectHost,
+      'configurationSummary': SupabaseAccountConfig.configurationSummary,
+    });
+  }
+
   Future<void> recordSignInStarted() async {
     await _append('sign_in_started', const {});
   }

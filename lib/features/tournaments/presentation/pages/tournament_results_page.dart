@@ -83,12 +83,6 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       return ChallongeArchivePage(tournament: tournament);
     }
     final summary = _TournamentResultSummary.fromTournament(tournament);
-    final scheme = Theme.of(context).colorScheme;
-    final completionPalette = TournamentDisplayPalette.forColorScheme(scheme);
-    final completionColors = [
-      completionPalette.card,
-      completionPalette.cardEmphasis,
-    ];
     final podium = summary.ranking.take(3).toList();
     final performances = [
       for (final entry in _resultMatches(tournament))
@@ -127,7 +121,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: completionColors,
+                    colors: TournamentDisplayPalette.heroGradient,
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -500,6 +494,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       ],
       rankingChanges: const [],
       bestPerformances: performances,
+      tournamentDate: tournament.effectiveDate,
     );
   }
 

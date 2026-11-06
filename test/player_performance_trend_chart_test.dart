@@ -50,13 +50,17 @@ void main() {
     );
     final topLeft = tester.getTopLeft(chart);
     final chartSize = tester.getSize(chart);
-    final monthFourX = topLeft.dx + 30 + (chartSize.width - 38) * 3 / 11;
+    final monthFourX = topLeft.dx + chartSize.width - 8;
     await tester.tapAt(Offset(monthFourX, topLeft.dy + 60));
     await tester.pumpAndSettle();
     expect(find.text('April 2026'), findsOneWidget);
     expect(find.text('Partien: 7'), findsOneWidget);
     expect(find.text('Gewertete Legs: 20'), findsOneWidget);
     expect(find.text('Scoring: 60.0'), findsOneWidget);
+    expect(
+      tester.widget<Tooltip>(find.byType(Tooltip)).message,
+      contains('Partien: 7'),
+    );
 
     await tester.tap(find.text('Scoring').first);
     await tester.pumpAndSettle();
@@ -68,6 +72,64 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  });
+
+  testWidgets('chart starts and ends at months with data', (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PlayerPerformanceTrendChart(
+              year: 2026,
+              entries: const [
+                PlayerMonthlyPerformance(
+                  playerId: 'player',
+                  year: 2026,
+                  month: 7,
+                  matches: 3,
+                  weightedLegs: 9,
+                  scoring: 50,
+                  average: 80,
+                  checkoutRate: 40,
+                ),
+                PlayerMonthlyPerformance(
+                  playerId: 'player',
+                  year: 2026,
+                  month: 9,
+                  matches: 5,
+                  weightedLegs: 15,
+                  scoring: 60,
+                  average: 90,
+                  checkoutRate: 50,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final chart = find.byWidgetPredicate(
+      (widget) => widget is SizedBox && widget.height == 180,
+    );
+    final topLeft = tester.getTopLeft(chart);
+    final chartSize = tester.getSize(chart);
+    await tester.tapAt(
+      Offset(topLeft.dx + chartSize.width - 8, topLeft.dy + 60),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('September 2026'), findsOneWidget);
+    expect(find.text('Partien: 5'), findsOneWidget);
+    expect(
+      tester.widget<Tooltip>(find.byType(Tooltip)).message,
+      contains('Partien: 5'),
+    );
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
   });

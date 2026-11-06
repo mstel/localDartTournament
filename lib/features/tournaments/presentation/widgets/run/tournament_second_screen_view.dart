@@ -121,7 +121,6 @@ class _TournamentSecondScreenViewState
   bool _showInlineNextStagePreview = false;
   bool _showOnlyRankingParticipants = false;
   _StandingsDisplayMode _standingsDisplayMode = _StandingsDisplayMode.standings;
-  Timer? _clockTimer;
   final _previewVerticalController = ScrollController();
   final _previewHorizontalController = ScrollController();
   final _recentResultsController = ScrollController();
@@ -160,11 +159,6 @@ class _TournamentSecondScreenViewState
     _refreshPlayerInsights();
     _refreshRankingStandings();
     _refreshAdvancementForecast();
-    _clockTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
   }
 
   List<SecondScreenWidgetPlacement> _savedLayoutOrDefault() {
@@ -471,7 +465,6 @@ class _TournamentSecondScreenViewState
 
   @override
   void dispose() {
-    _clockTimer?.cancel();
     _previewVerticalController.dispose();
     _previewHorizontalController.dispose();
     _recentResultsController.dispose();
@@ -497,20 +490,6 @@ class _TournamentSecondScreenViewState
       return;
     }
     setState(() => _showNextStagePreview = false);
-  }
-
-  String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    final s = d.inSeconds.remainder(60);
-    if (h > 0) return '$h Std. $m Min. ${s}s';
-    return '$m Min. ${s}s';
-  }
-
-  String _formatClockTime(DateTime value) {
-    final local = value.toLocal();
-    return '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
   }
 
   List<GroupMatch> _matchesOf(TournamentRunStage? stage) {
@@ -550,8 +529,6 @@ class _TournamentSecondScreenViewState
       text: TournamentDisplayPalette.text,
       mutedText: TournamentDisplayPalette.mutedText,
     );
-    final timing = TournamentTiming.snapshot(t, DateTime.now());
-
     final activeIndex = t.activeStageIndex.clamp(
       0,
       t.runStages.isEmpty ? 0 : t.runStages.length - 1,
@@ -647,14 +624,12 @@ class _TournamentSecondScreenViewState
                     activeIndex: activeIndex,
                     activeStage: activeStage,
                     playedMatches: playedMatches,
-                    timing: timing,
                   )
                 : _buildOverview(
                     context,
                     t: t,
                     activeIndex: activeIndex,
                     activeStage: activeStage,
-                    timing: timing,
                     playedMatches: playedMatches,
                   ),
           ),
@@ -673,7 +648,6 @@ class _TournamentSecondScreenViewState
     required CreatedTournament t,
     required int activeIndex,
     required TournamentRunStage? activeStage,
-    required TimingSnapshot timing,
     required List<GroupMatch> playedMatches,
   }) {
     return LayoutBuilder(
@@ -810,14 +784,7 @@ class _TournamentSecondScreenViewState
                 spacing: 8,
                 runSpacing: 4,
                 children: [
-                  const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
-                  Text(
-                    'Turnieruhr: ${_formatDuration(timing.elapsed)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  _MonitorTournamentClock(tournament: t),
                   Text(
                     '$playedCount/$totalMatchCount gespielt',
                     style: const TextStyle(
@@ -831,11 +798,6 @@ class _TournamentSecondScreenViewState
                       '${activeStage.name}: '
                       '$stagePlayedCount/$stageTotalCount',
                       style: const TextStyle(color: Colors.white70),
-                    ),
-                  if (timing.forecast != null)
-                    Text(
-                      'Ende ca. ${_formatClockTime(timing.forecast!)}',
-                      style: const TextStyle(color: Colors.white),
                     ),
                   if (widget.isStandaloneWindow) ...[
                     OutlinedButton.icon(
@@ -867,7 +829,6 @@ class _TournamentSecondScreenViewState
     required int activeIndex,
     required TournamentRunStage? activeStage,
     required List<GroupMatch> playedMatches,
-    required TimingSnapshot timing,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -888,7 +849,7 @@ class _TournamentSecondScreenViewState
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildCustomLayoutStatusBar(t, activeStage, timing),
+            _buildCustomLayoutStatusBar(t, activeStage),
             LayoutBuilder(
               builder: (context, toolbarConstraints) =>
                   _buildCustomLayoutToolbar(
@@ -933,7 +894,6 @@ class _TournamentSecondScreenViewState
   Widget _buildCustomLayoutStatusBar(
     CreatedTournament tournament,
     TournamentRunStage? activeStage,
-    TimingSnapshot timing,
   ) {
     final matches = TournamentTiming.matches(tournament);
     final playedCount = matches
@@ -955,14 +915,7 @@ class _TournamentSecondScreenViewState
         spacing: 8,
         runSpacing: 4,
         children: [
-          const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
-          Text(
-            'Turnieruhr: ${_formatDuration(timing.elapsed)}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
+          _MonitorTournamentClock(tournament: tournament),
           Text(
             '$playedCount/$totalMatchCount gespielt',
             style: const TextStyle(
@@ -976,11 +929,6 @@ class _TournamentSecondScreenViewState
               '${_matchesOf(knockoutStage).where((match) => match.hasResult).length}/'
               '${_countMatchesForProgress(knockoutStage)}',
               style: const TextStyle(color: Colors.white70),
-            ),
-          if (timing.forecast != null)
-            Text(
-              'Ende ca. ${_formatClockTime(timing.forecast!)}',
-              style: const TextStyle(color: Colors.white),
             ),
         ],
       ),
@@ -3939,16 +3887,26 @@ class _TournamentSecondScreenViewState
     );
   }
 
+  String _displayGroupLabel(String? groupKey) {
+    if (groupKey == null || groupKey.trim().isEmpty) return '';
+    final cleaned = groupKey.trim();
+    final separatorIndex = cleaned.indexOf(':');
+    if (separatorIndex >= 0) {
+      final prefix = cleaned.substring(0, separatorIndex).trim();
+      if (prefix.isNotEmpty && int.tryParse(prefix) != null) {
+        final remainder = cleaned.substring(separatorIndex + 1).trim();
+        if (remainder.isNotEmpty) return remainder;
+      }
+    }
+    return cleaned;
+  }
+
   Widget _buildRunningMatchTile(
     BuildContext context,
     PlayEntry entry, {
     required double width,
   }) {
     final match = entry.match;
-    final elapsed = match.startedAt == null
-        ? null
-        : DateTime.now().difference(match.startedAt!);
-    final elapsedLabel = elapsed == null ? '' : ' · ${elapsed.inMinutes} Min.';
     return Container(
       width: width,
       key: ValueKey(
@@ -3958,20 +3916,16 @@ class _TournamentSecondScreenViewState
       ),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: TournamentDisplayPalette.cardEmphasis,
-        border: Border.all(color: const Color(0xFF42C6BE), width: 2),
+        color: TournamentDisplayPalette.card,
+        border: Border.all(color: TournamentDisplayPalette.accent, width: 2),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'JETZT LIVE · BOARD ${match.boardNumber}$elapsedLabel',
-            style: const TextStyle(
-              color: Color(0xFF42C6BE),
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
+          _RunningMatchElapsedLabel(
+            boardNumber: match.boardNumber,
+            startedAt: match.startedAt,
           ),
           const SizedBox(height: 6),
           Text(
@@ -4049,8 +4003,8 @@ class _TournamentSecondScreenViewState
                             .toList();
                         final groupNames = <String>{
                           for (final assignment in upcoming)
-                            ?assignment.entry.groupKey,
-                        };
+                            _displayGroupLabel(assignment.entry.groupKey),
+                        }.where((value) => value.isNotEmpty).toList()..sort();
                         final status = running != null
                             ? 'Läuft'
                             : blocked
@@ -4482,4 +4436,151 @@ class _KnockoutPreviewConnectorPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _KnockoutPreviewConnectorPainter oldDelegate) =>
       true;
+}
+
+class _MonitorTournamentClock extends StatefulWidget {
+  const _MonitorTournamentClock({required this.tournament});
+
+  final CreatedTournament tournament;
+
+  @override
+  State<_MonitorTournamentClock> createState() =>
+      _MonitorTournamentClockState();
+}
+
+class _MonitorTournamentClockState extends State<_MonitorTournamentClock> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MonitorTournamentClock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTimer();
+  }
+
+  void _syncTimer() {
+    final tournament = widget.tournament;
+    final shouldRun =
+        tournament.startedAt != null &&
+        tournament.finishedAt == null &&
+        !tournament.isClockPaused;
+    if (shouldRun == (_timer != null)) return;
+    _timer?.cancel();
+    _timer = shouldRun
+        ? Timer.periodic(const Duration(seconds: 1), (_) {
+            if (mounted) setState(() {});
+          })
+        : null;
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timing = TournamentTiming.snapshot(widget.tournament, DateTime.now());
+    final elapsed = timing.elapsed;
+    final hours = elapsed.inHours;
+    final minutes = elapsed.inMinutes.remainder(60);
+    final seconds = elapsed.inSeconds.remainder(60);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      children: [
+        const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
+        Text(
+          hours > 0
+              ? 'Turnieruhr: $hours Std. $minutes Min. ${seconds}s'
+              : 'Turnieruhr: $minutes Min. ${seconds}s',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        if (timing.forecast != null)
+          Text(
+            'Ende ca. ${_formatMonitorClockTime(timing.forecast!)}',
+            style: const TextStyle(color: Colors.white),
+          ),
+      ],
+    );
+  }
+}
+
+class _RunningMatchElapsedLabel extends StatefulWidget {
+  const _RunningMatchElapsedLabel({
+    required this.boardNumber,
+    required this.startedAt,
+  });
+
+  final int? boardNumber;
+  final DateTime? startedAt;
+
+  @override
+  State<_RunningMatchElapsedLabel> createState() =>
+      _RunningMatchElapsedLabelState();
+}
+
+class _RunningMatchElapsedLabelState extends State<_RunningMatchElapsedLabel> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RunningMatchElapsedLabel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTimer();
+  }
+
+  void _syncTimer() {
+    final shouldRun = widget.startedAt != null;
+    if (shouldRun == (_timer != null)) return;
+    _timer?.cancel();
+    _timer = shouldRun
+        ? Timer.periodic(const Duration(minutes: 1), (_) {
+            if (mounted) setState(() {});
+          })
+        : null;
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final startedAt = widget.startedAt;
+    final elapsed = startedAt == null
+        ? null
+        : DateTime.now().difference(startedAt);
+    final elapsedLabel = elapsed == null ? '' : ' · ${elapsed.inMinutes} Min.';
+    return Text(
+      'JETZT LIVE · BOARD ${widget.boardNumber}$elapsedLabel',
+      style: const TextStyle(
+        color: TournamentDisplayPalette.accent,
+        fontWeight: FontWeight.bold,
+        fontSize: 13,
+      ),
+    );
+  }
+}
+
+String _formatMonitorClockTime(DateTime value) {
+  final local = value.toLocal();
+  return '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
 }

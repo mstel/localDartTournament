@@ -251,8 +251,12 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
             ),
             const SizedBox(height: 8),
             if (!configured)
-              const Text(
-                'Für Cloud-Sicherung SUPABASE_PUBLISHABLE_KEY beim App-Build setzen.',
+              Text(
+                'Für Cloud-Sicherung fehlt die Supabase-Konfiguration: '
+                '${SupabaseAccountConfig.configurationSummary}. '
+                'Beim App-Build müssen SUPABASE_URL und '
+                'SUPABASE_PUBLISHABLE_KEY mit dem gewünschten Projekt '
+                'übergeben werden.',
               )
             else
               StreamBuilder<AuthState>(

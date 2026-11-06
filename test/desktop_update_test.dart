@@ -561,11 +561,13 @@ void main() {
       final startedFile = p.join(temp.path, 'restart.started');
       final logFile = p.join(temp.path, 'restart.log');
       final failureFile = p.join(temp.path, 'update-failure.txt');
+      final finishedFile = p.join(temp.path, 'update.finished');
       await fakeUpdate.writeAsString(
         '@echo off\r\n'
         'timeout /t 2 /nobreak >nul\r\n'
         'echo {"schemaVersion":1,"id":"build-12-123"} > "$activeFile"\r\n'
         'timeout /t 3 /nobreak >nul\r\n'
+        'echo finished > "$finishedFile"\r\n'
         'exit /b 0\r\n',
       );
       final command = DesktopUpdateLauncher.windowsScript(
@@ -579,13 +581,13 @@ void main() {
         originalExe: where,
       );
 
-      final timer = Stopwatch()..start();
       final result = await runWindowsScript(command);
-      timer.stop();
+      final updaterWasStillRunning = !await File(finishedFile).exists();
       await Future<void>.delayed(const Duration(seconds: 4));
 
       expect(result.exitCode, 0, reason: '${result.stderr}\n${result.stdout}');
-      expect(timer.elapsed, lessThan(const Duration(seconds: 5)));
+      expect(updaterWasStillRunning, isTrue);
+      expect(await File(finishedFile).exists(), isTrue);
       expect(
         await File(activeFile).readAsString(),
         contains('"id":"build-12-123"'),

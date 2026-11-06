@@ -47,6 +47,7 @@ class _PerformanceStatisticsDetailSectionState
               width: 220,
               child: DropdownButtonFormField<int>(
                 initialValue: _year,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Jahr',
                   border: OutlineInputBorder(),

@@ -38,6 +38,7 @@ class TournamentCompletionImageData {
     required this.podium,
     required this.rankingChanges,
     required this.bestPerformances,
+    this.tournamentDate,
   });
 
   final String tournamentName;
@@ -50,6 +51,7 @@ class TournamentCompletionImageData {
   final List<TournamentCompletionPodiumEntry> podium;
   final List<TournamentRankingPlayerChange> rankingChanges;
   final List<BestPerformance> bestPerformances;
+  final DateTime? tournamentDate;
 }
 
 class TournamentCompletionImageGenerator {
@@ -142,6 +144,17 @@ class TournamentCompletionImageGenerator {
       fontSize: 22,
       color: palette.mutedText,
     );
+    if (data.tournamentDate != null) {
+      y += 34;
+      _text(
+        canvas,
+        'Turnierdatum: ${_formatShortDate(data.tournamentDate!)}',
+        Offset(padding, y),
+        maxWidth: contentWidth,
+        fontSize: 18,
+        color: palette.accent,
+      );
+    }
     y += 68;
 
     _section(canvas, padding, y, contentWidth, summaryHeight, palette);
@@ -423,6 +436,14 @@ class TournamentCompletionImageGenerator {
     BestPerformanceType.bullseyeFinish => 'Bullseye Finish',
     BestPerformanceType.shortLeg => 'Shortleg',
   };
+
+  String _formatShortDate(DateTime value) {
+    final date = value.toLocal();
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year;
+    return '$day.$month.$year';
+  }
 
   void _text(
     Canvas canvas,

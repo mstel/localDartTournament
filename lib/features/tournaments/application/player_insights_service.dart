@@ -33,6 +33,7 @@ class PlayerInsightsService {
     required CreatedTournament tournament,
     DateTime? now,
   }) async {
+    final preferences = await PlayerInsightPreferencesStorage().load();
     final tournaments = await _storage.loadTournaments();
     final history = [
       for (final item in tournaments)
@@ -76,9 +77,9 @@ class PlayerInsightsService {
       monthlyEntries: monthlyEntries,
       eloRanking: eloRanking,
       eloSnapshot: eloSnapshot,
+      insightPreferences: preferences,
       now: now ?? DateTime.now(),
     );
-    final preferences = await PlayerInsightPreferencesStorage().load();
     final rankedPlayerIds = <String>{};
     if (tournament.countsForRanking && tournament.rankingIds.isNotEmpty) {
       final catalogIds = (await _database.loadPlayerProfiles())
@@ -115,6 +116,7 @@ class PlayerInsightEngine {
     required Map<String, List<PlayerMonthlyPerformance>> monthlyEntries,
     required LocalRanking? eloRanking,
     required LocalEloSnapshot? eloSnapshot,
+    required PlayerInsightPreferences insightPreferences,
     required DateTime now,
   }) {
     final participants = <String, TournamentPlayer>{
@@ -193,13 +195,15 @@ class PlayerInsightEngine {
           '$playerName hat seine letzten $lossesInARow Matches in Folge verloren.',
         );
       }
-      if (winsInARow < 5 &&
-          outcomes.length >= 2 &&
-          outcomes.take(2).every((won) => won == true)) {
+      final firstCompletedResult = recent
+          .where((match) => match.hasOutcome)
+          .firstOrNull;
+      if (firstCompletedResult != null &&
+          firstCompletedResult.winnerIds.contains(playerId)) {
         add(
           playerId,
           PlayerInsightType.momentum,
-          '$playerName hat seine letzten 2 Matches gewonnen.',
+          '$playerName hat seine erste abgeschlossene Partie des Turniers gewonnen.',
         );
       }
       if (outcomes.isNotEmpty && outcomes.first == true && lossesInARow == 0) {
@@ -235,7 +239,10 @@ class PlayerInsightEngine {
         final decidingMatches = lastFive
             .where((match) => match.isDecider)
             .length;
-        if (decidingMatches >= 3) {
+        final minimumDeciders = insightPreferences.thresholdFor(
+          PlayerInsightType.lastLegStanding,
+        );
+        if (decidingMatches >= minimumDeciders) {
           add(
             playerId,
             PlayerInsightType.lastLegStanding,
@@ -255,7 +262,13 @@ class PlayerInsightEngine {
       _addTitleDefender(add, playerId, playerName, tournament, history);
     }
 
-    _addHeadToHeadInsights(participants, matches, add, eloSnapshot);
+    _addHeadToHeadInsights(
+      participants,
+      matches,
+      add,
+      eloSnapshot,
+      insightPreferences,
+    );
     _addTournamentUnderdogs(
       tournament,
       participants,
@@ -312,6 +325,7 @@ class PlayerInsightEngine {
     List<_InsightMatch> matches,
     void Function(String, PlayerInsightType, String, {String? rivalId}) add,
     LocalEloSnapshot? eloSnapshot,
+    PlayerInsightPreferences insightPreferences,
   ) {
     final playerIds = participants.keys.toList();
     final directMatchesByPair = <(String, String), List<_InsightMatch>>{};
@@ -428,6 +442,7 @@ class PlayerInsightEngine {
           secondName,
           directMatches,
           eloSnapshot,
+          insightPreferences,
           add,
         );
         _addGiantKillerInsight(
@@ -437,6 +452,7 @@ class PlayerInsightEngine {
           firstName,
           directMatches,
           eloSnapshot,
+          insightPreferences,
           add,
         );
       }
@@ -473,6 +489,7 @@ class PlayerInsightEngine {
     String rivalName,
     List<_InsightMatch> directMatches,
     LocalEloSnapshot? eloSnapshot,
+    PlayerInsightPreferences insightPreferences,
     void Function(String, PlayerInsightType, String, {String? rivalId}) add,
   ) {
     if (eloSnapshot == null || directMatches.isEmpty) return;
@@ -486,7 +503,9 @@ class PlayerInsightEngine {
     );
     if (ratingBefore == null) return;
     final difference = ratingBefore.$2 - ratingBefore.$1;
-    if (difference < 200) return;
+    if (difference < insightPreferences.thresholdFor(PlayerInsightType.giantKiller)) {
+      return;
+    }
     add(
       playerId,
       PlayerInsightType.giantKiller,
@@ -784,6 +803,7 @@ class _InsightMatch {
   final TournamentGameFormat? gameFormat;
 
   Set<String> get players => {...homeIds, ...awayIds};
+  bool get hasOutcome => winnerIds.isNotEmpty || loserIds.isNotEmpty;
   bool get isOneVsOne =>
       !match.isKratzer && homeIds.length == 1 && awayIds.length == 1;
   bool get isDecider {

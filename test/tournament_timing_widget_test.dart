@@ -127,7 +127,7 @@ void main() {
           ],
         ),
       );
-      await tester.pump(const Duration(seconds: 15));
+      await tester.pump(const Duration(seconds: 45));
       expect(find.text('1 Spiele fertig · 2 laut Zeitplan'), findsOneWidget);
       expect(find.textContaining('Voraussichtliches Ende:'), findsOneWidget);
       expect(tester.takeException(), isNull);

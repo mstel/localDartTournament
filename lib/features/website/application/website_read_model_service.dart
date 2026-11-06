@@ -1,5 +1,6 @@
 import '../../rankings/application/local_ranking_elo_service.dart';
 import '../../rankings/application/local_ranking_series_service.dart';
+import '../../rankings/application/ranking_year_review_service.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../achievements/application/ranking_achievement_service.dart';
 import '../../statistics/domain/local_statistics.dart';
@@ -281,6 +282,7 @@ class WebsiteReadModelService {
 
     final monthlyPerformance = <Map<String, dynamic>>[];
     final importedMonthlyStatistics = <Map<String, dynamic>>[];
+    final combinedMonthlyPerformance = <PlayerMonthlyPerformance>[];
     for (final player in players) {
       final playerId = player['id'] as String;
       final imported = await _database.loadMonthlyPlayerPerformances({
@@ -290,6 +292,7 @@ class WebsiteReadModelService {
         recorded: await _database.loadPlayerMonthlyPerformance(playerId),
         imported: imported,
       );
+      combinedMonthlyPerformance.addAll(entries);
       for (final entry in entries) {
         monthlyPerformance.add({
           'playerId': entry.playerId,
@@ -318,8 +321,25 @@ class WebsiteReadModelService {
         });
       }
     }
+    final monthlyClubPerformance =
+        RankingYearReviewService.aggregateMonthlyClubPerformance(
+          combinedMonthlyPerformance,
+        );
     resources['performance'] = _version2Resource('performance', generatedAt, {
       'monthlyPerformance': monthlyPerformance,
+      'monthlyClubPerformance': [
+        for (final entry in monthlyClubPerformance)
+          {
+            'year': entry.year,
+            'month': entry.month,
+            'period': '${entry.year}-${entry.month.toString().padLeft(2, '0')}',
+            'matches': entry.matches,
+            'weightedLegs': entry.weightedLegs,
+            'scoring': entry.scoring,
+            'average': entry.average,
+            'checkoutQuote': entry.checkoutRate,
+          },
+      ],
       'importedMonthlyStatistics': importedMonthlyStatistics,
       'currentForm': readModel['currentForm'],
     });

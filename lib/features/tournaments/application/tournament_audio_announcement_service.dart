@@ -26,9 +26,14 @@ class TournamentAudioAnnouncementService {
   Future<void> announce({
     required String text,
     String? alternativeText,
+    List<String>? alternativeTexts,
     required bool Function() isStillCurrent,
   }) async {
     final requestId = ++_requestId;
+    final allAlternatives = [
+      ...(alternativeText == null ? const <String>[] : [alternativeText]),
+      ...(alternativeTexts ?? const <String>[]),
+    ];
     await _runAudioOperation(
       'Vorherige Sprachausgabe stoppen',
       _output.stopSpeaking,
@@ -54,34 +59,36 @@ class TournamentAudioAnnouncementService {
       'Deutsche Turnieransage',
       () => _output.speakGerman(text),
     );
-    if (alternativeText == null || requestId != _requestId) return;
-    try {
-      if (!isStillCurrent()) return;
-    } catch (error) {
-      debugPrint(
-        'Aktualität der alternativen Turnieransage konnte nicht geprüft werden: $error',
+    for (final alternative in allAlternatives) {
+      if (requestId != _requestId) return;
+      try {
+        if (!isStillCurrent()) return;
+      } catch (error) {
+        debugPrint(
+          'Aktualität der alternativen Turnieransage konnte nicht geprüft werden: $error',
+        );
+        return;
+      }
+      try {
+        await _delay(const Duration(milliseconds: 500));
+      } catch (error) {
+        debugPrint('Wartezeit vor Alternativansage fehlgeschlagen: $error');
+        return;
+      }
+      if (requestId != _requestId) return;
+      try {
+        if (!isStillCurrent()) return;
+      } catch (error) {
+        debugPrint(
+          'Aktualität der alternativen Turnieransage konnte nicht geprüft werden: $error',
+        );
+        return;
+      }
+      await _runAudioOperation(
+        'Alternative deutsche Turnieransage',
+        () => _output.speakGerman(alternative),
       );
-      return;
     }
-    try {
-      await _delay(const Duration(milliseconds: 500));
-    } catch (error) {
-      debugPrint('Wartezeit vor Alternativansage fehlgeschlagen: $error');
-      return;
-    }
-    if (requestId != _requestId) return;
-    try {
-      if (!isStillCurrent()) return;
-    } catch (error) {
-      debugPrint(
-        'Aktualität der alternativen Turnieransage konnte nicht geprüft werden: $error',
-      );
-      return;
-    }
-    await _runAudioOperation(
-      'Alternative deutsche Turnieransage',
-      () => _output.speakGerman(alternativeText),
-    );
   }
 
   void cancel() {
