@@ -128,6 +128,11 @@ void main() {
     await tester.tap(find.text('Performance Statistiken im Detail'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Jahr'), findsOneWidget);
+    expect(
+      tester.getBottomLeft(find.text('Jahr')).dy,
+      lessThan(tester.getTopLeft(find.byType(DropdownButtonFormField<int>)).dy),
+    );
     expect(find.text('September'), findsOneWidget);
     expect(find.text('Jahresschnitt und Summen'), findsOneWidget);
     expect(find.text('Partien: 5'), findsOneWidget);

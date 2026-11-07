@@ -185,8 +185,11 @@ class RankingAchievementService {
             )
             .toList()
           ..sort(_compareTournaments);
-    final monthlyPerformance = await _database.loadPlayerMonthlyPerformance(
-      playerProfileId,
+    final monthlyPerformance = combineMonthlyPlayerPerformances(
+      recorded: await _database.loadPlayerMonthlyPerformance(playerProfileId),
+      imported: await _database.loadMonthlyPlayerPerformances({
+        playerProfileId,
+      }),
     );
     final sourceHash = _fingerprint(ranking, relevant, monthlyPerformance);
     final stored = await _database.loadRankingAchievementProgress(
@@ -1303,7 +1306,7 @@ class RankingAchievementService {
     List<PlayerMonthlyPerformance> monthlyPerformance,
   ) {
     final source = jsonEncode({
-      'achievementCalculationVersion': 2,
+      'achievementCalculationVersion': 3,
       'ranking': ranking.toJson(),
       'tournaments': [for (final item in tournaments) item.toJson()],
       'monthlyPerformance': [

@@ -2838,7 +2838,7 @@ class PlayerEloHistoryPage extends StatelessWidget {
             ],
             if (trajectory.length > 1) ...[
               Text(
-                'Elo-Entwicklung pro Turnier',
+                'Elo-Entwicklung im Jahresverlauf',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -2859,8 +2859,6 @@ class PlayerEloHistoryPage extends StatelessWidget {
                       Wrap(
                         alignment: WrapAlignment.spaceBetween,
                         children: [
-                          Text(trajectory.first.tournamentName),
-                          Text(trajectory.last.tournamentName),
                           Text(
                             '${trajectory.first.rating} → ${trajectory.last.rating} Elo',
                             style: const TextStyle(fontWeight: FontWeight.bold),

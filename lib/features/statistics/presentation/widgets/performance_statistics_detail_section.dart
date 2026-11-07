@@ -45,24 +45,30 @@ class _PerformanceStatisticsDetailSectionState
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: SizedBox(
-              width: 220,
-              child: DropdownButtonFormField<int>(
-                initialValue: _year,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Jahr',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.calendar_today_outlined),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Jahr', style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _year,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.calendar_today_outlined),
+                    ),
+                    items: [
+                      for (final year in years)
+                        DropdownMenuItem(value: year, child: Text('$year')),
+                    ],
+                    onChanged: (year) {
+                      if (year != null) setState(() => _year = year);
+                    },
+                  ),
                 ),
-                items: [
-                  for (final year in years)
-                    DropdownMenuItem(value: year, child: Text('$year')),
-                ],
-                onChanged: (year) {
-                  if (year != null) setState(() => _year = year);
-                },
-              ),
+              ],
             ),
           ),
           const SizedBox(height: 8),

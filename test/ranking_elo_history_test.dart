@@ -53,7 +53,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Start'), findsNWidgets(2));
+    final chart = find.byType(EloTrajectoryChart);
+    expect(
+      find.descendant(of: chart, matching: find.text('Start')),
+      findsNothing,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label ==
+                'Interaktive Elo-Entwicklung mit Monatsachse Januar bis Dezember',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('1000 → 1030 Elo'), findsOneWidget);
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
@@ -246,15 +259,25 @@ void main() {
     );
     final chart = find.byType(EloTrajectoryChart);
     final rect = tester.getRect(chart);
-    await tester.tapAt(Offset(rect.left + rect.width / 2, rect.center.dy));
+    await tester.tapAt(
+      Offset(rect.left + rect.width / 12, rect.center.dy),
+    );
     await tester.pump();
 
-    expect(find.textContaining('Turnier verpasst: -6 Elo'), findsOneWidget);
-    expect(
-      find.textContaining(
-        'Erhalten, weil Chris ein Turnier verpasst hat: +4 Elo',
+    final tooltipText = tester.widget<Text>(
+      find.descendant(
+        of: chart,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.data?.contains('Turnier verpasst: -6 Elo') == true,
+        ),
       ),
-      findsOneWidget,
+    );
+    expect(tooltipText.data, contains('Turnier verpasst: -6 Elo'));
+    expect(
+      tooltipText.data,
+      contains('Erhalten, weil Chris ein Turnier verpasst hat: +4 Elo'),
     );
     expect(tester.takeException(), isNull);
   });

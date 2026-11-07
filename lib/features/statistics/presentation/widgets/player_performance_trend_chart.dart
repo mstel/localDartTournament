@@ -152,11 +152,6 @@ class _YearPerformanceChartState extends State<_YearPerformanceChart> {
                 ),
               ),
             ),
-            if (selected != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: _DataPointDetails(entry: selected),
-              ),
           ],
         ),
       ),
@@ -208,55 +203,6 @@ String _performanceTooltipText(PlayerMonthlyPerformance entry) {
     'Average: ${format(entry.average)}',
     'Checkout Quote: ${entry.checkoutRate == null ? "–" : "${format(entry.checkoutRate)} %"}',
   ].join('\n');
-}
-
-class _DataPointDetails extends StatelessWidget {
-  const _DataPointDetails({required this.entry});
-
-  final PlayerMonthlyPerformance entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final month = const [
-      'Januar',
-      'Februar',
-      'März',
-      'April',
-      'Mai',
-      'Juni',
-      'Juli',
-      'August',
-      'September',
-      'Oktober',
-      'November',
-      'Dezember',
-    ][entry.month - 1];
-    return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          children: [
-            Text(
-              '$month ${entry.year}',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            Text('Partien: ${entry.matches}'),
-            Text('Gewertete Legs: ${entry.weightedLegs}'),
-            Text('Scoring: ${_format(entry.scoring)}'),
-            Text('Average: ${_format(entry.average)}'),
-            Text(
-              'Checkout Quote: ${entry.checkoutRate == null ? "–" : "${_format(entry.checkoutRate)} %"}',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _format(double? value) => value?.toStringAsFixed(1) ?? '–';
 }
 
 class _PerformanceChartPainter extends CustomPainter {

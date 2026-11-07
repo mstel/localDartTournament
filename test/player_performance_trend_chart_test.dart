@@ -54,13 +54,13 @@ void main() {
     final monthFourX = topLeft.dx + chartSize.width - 8;
     await tester.tapAt(Offset(monthFourX, topLeft.dy + 60));
     await tester.pumpAndSettle();
-    expect(find.text('April 2026'), findsOneWidget);
-    expect(find.text('Partien: 7'), findsOneWidget);
-    expect(find.text('Gewertete Legs: 20'), findsOneWidget);
-    expect(find.text('Scoring: 60.0'), findsOneWidget);
+    expect(find.text('April 2026'), findsNothing);
+    expect(find.text('Partien: 7'), findsNothing);
+    expect(find.text('Gewertete Legs: 20'), findsNothing);
+    expect(find.text('Scoring: 60.0'), findsNothing);
     expect(
       tester.widget<Tooltip>(find.byType(Tooltip).first).message,
-      contains('Partien: 7'),
+      allOf(contains('April 2026'), contains('Partien: 7')),
     );
     expect(tester.takeException(), isNull);
 
@@ -117,8 +117,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('September 2026'), findsOneWidget);
-    expect(find.text('Partien: 5'), findsOneWidget);
+    expect(find.text('September 2026'), findsNothing);
+    expect(find.text('Partien: 5'), findsNothing);
     expect(
       tester.widget<Tooltip>(find.byType(Tooltip).first).message,
       contains('Partien: 5'),

@@ -305,7 +305,6 @@ class _AchievementProgressTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final status = switch (progress.status) {
       AchievementStatus.locked => 'Gesperrt',
       AchievementStatus.inProgress => 'Aktiv',
@@ -319,7 +318,7 @@ class _AchievementProgressTile extends StatelessWidget {
             : progress.status == AchievementStatus.inProgress
             ? Icons.timelapse
             : Icons.lock_outline,
-        color: progress.isCompleted ? theme.colorScheme.primary : null,
+        color: progress.isCompleted ? Colors.green : null,
       ),
       title: Text(progress.definition.name),
       subtitle: Column(

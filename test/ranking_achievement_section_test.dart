@@ -139,6 +139,25 @@ void main() {
     expect(find.text('Maximum I'), findsOneWidget);
     expect(find.textContaining('3 / 3'), findsOneWidget);
     expect(find.textContaining('Nächste Stufe:'), findsNothing);
+    final achievementTile = tester.widget<ListTile>(
+      find.ancestor(
+        of: find.text('Maximum I'),
+        matching: find.byType(ListTile),
+      ),
+    );
+    expect((achievementTile.leading! as Icon).color, Colors.green);
+    final progressBar = tester.widget<LinearProgressIndicator>(
+      find
+          .descendant(
+            of: find.ancestor(
+              of: find.text('Maximum I'),
+              matching: find.byType(ListTile),
+            ),
+            matching: find.byType(LinearProgressIndicator),
+          )
+          .first,
+    );
+    expect(progressBar.color, Colors.green);
   });
 
   testWidgets('ranking awards category is summarized as one possible award', (

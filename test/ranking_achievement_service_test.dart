@@ -4,6 +4,7 @@ import 'package:dart_tournament_manager/features/achievements/application/rankin
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/monthly_player_performance.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/imported_tournament_archive.dart';
@@ -498,6 +499,79 @@ void main() {
       expect(
         corrected.evaluation.progress['checkout_rate_30']!.isCompleted,
         isTrue,
+      );
+    },
+  );
+
+  test(
+    'performance achievements use the best eligible imported month in the ranking period',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'ranking_achievement_imported_month_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final player = await database.createPlayerProfile(displayName: 'Spieler');
+      const ranking = LocalRanking(
+        id: 'monthly-ranking',
+        name: 'Rangliste 2026',
+        achievementsEnabled: true,
+        validFromYear: 2026,
+        validToYear: 2026,
+      );
+      await database.saveLocalRanking(ranking);
+      await database.setRankingPlayers(ranking.id, [player.id]);
+      await database.saveMonthlyPlayerPerformances([
+        MonthlyPlayerPerformance(
+          playerProfileId: player.id,
+          sourcePlayerName: player.displayName,
+          month: '2026-03',
+          threeDartAverage: 65,
+          firstNineAverage: 65,
+          checkoutPercentage: 31,
+          legs: 10,
+          matches: 5,
+        ),
+        MonthlyPlayerPerformance(
+          playerProfileId: player.id,
+          sourcePlayerName: player.displayName,
+          month: '2026-04',
+          threeDartAverage: 40,
+          firstNineAverage: 39,
+          checkoutPercentage: 10,
+          legs: 12,
+          matches: 6,
+        ),
+      ]);
+
+      final result = await RankingAchievementService(database: database)
+          .refreshPlayer(
+            ranking: ranking,
+            playerProfileId: player.id,
+            tournaments: const [],
+          );
+
+      for (final id in [
+        'checkout_rate_20',
+        'checkout_rate_25',
+        'checkout_rate_30',
+        'monthly_average_40',
+        'monthly_average_50',
+        'monthly_average_60',
+        'monthly_scoring_40',
+        'monthly_scoring_50',
+        'monthly_scoring_60',
+      ]) {
+        expect(result.evaluation.progress[id]!.isCompleted, isTrue, reason: id);
+      }
+      expect(
+        result.evaluation.progress['monthly_average_60']!.currentValue,
+        65,
+      );
+      expect(
+        result.evaluation.progress['monthly_average_60']!.unlockedAt!.month,
+        3,
       );
     },
   );

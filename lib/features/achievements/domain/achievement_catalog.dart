@@ -100,7 +100,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'second_places_3',
       name: 'Silbermedaillist I',
-      description: 'Beende zwei Turniere dieser Rangliste auf Platz zwei.',
+      description:
+          'Beende zwei Turniere dieser Rangliste auf Platz zwei oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.secondPlaces,
       target: 2,
@@ -109,7 +110,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'second_places_5',
       name: 'Silbermedaillist II',
-      description: 'Beende drei Turniere dieser Rangliste auf Platz zwei.',
+      description:
+          'Beende drei Turniere dieser Rangliste auf Platz zwei oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.secondPlaces,
       target: 3,
@@ -118,7 +120,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'second_places_7',
       name: 'Silbermedaillist III',
-      description: 'Beende fünf Turniere dieser Rangliste auf Platz zwei.',
+      description:
+          'Beende fünf Turniere dieser Rangliste auf Platz zwei oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.secondPlaces,
       target: 5,
@@ -127,7 +130,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'third_places_3',
       name: 'Bronzejunge I',
-      description: 'Beende zwei Turniere dieser Rangliste auf Platz drei.',
+      description:
+          'Beende zwei Turniere dieser Rangliste auf Platz drei oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.thirdPlaces,
       target: 2,
@@ -136,7 +140,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'third_places_5',
       name: 'Bronzejunge II',
-      description: 'Beende drei Turniere dieser Rangliste auf Platz drei.',
+      description:
+          'Beende drei Turniere dieser Rangliste auf Platz drei oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.thirdPlaces,
       target: 3,
@@ -145,7 +150,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'third_places_7',
       name: 'Bronzejunge III',
-      description: 'Beende fünf Turniere dieser Rangliste auf Platz drei.',
+      description:
+          'Beende fünf Turniere dieser Rangliste auf Platz drei oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.thirdPlaces,
       target: 5,
@@ -154,7 +160,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'fourth_places_5',
       name: 'Fast geschafft I',
-      description: 'Beende zwei Turniere dieser Rangliste auf Platz vier.',
+      description:
+          'Beende zwei Turniere dieser Rangliste auf Platz vier oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.fourthPlaces,
       target: 2,
@@ -163,7 +170,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'fourth_places_10',
       name: 'Fast geschafft II',
-      description: 'Beende drei Turniere dieser Rangliste auf Platz vier.',
+      description:
+          'Beende drei Turniere dieser Rangliste auf Platz vier oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.fourthPlaces,
       target: 3,
@@ -172,7 +180,8 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'fourth_places_25',
       name: 'Fast geschafft III',
-      description: 'Beende fünf Turniere dieser Rangliste auf Platz vier.',
+      description:
+          'Beende fünf Turniere dieser Rangliste auf Platz vier oder höher.',
       category: AchievementCategory.tournamentResults,
       metric: AchievementMetric.fourthPlaces,
       target: 5,
