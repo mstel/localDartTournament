@@ -56,7 +56,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Gesamt-Performance pro Monat'), findsOneWidget);
-      expect(find.text('2026'), findsOneWidget);
+      expect(find.textContaining('2026'), findsNWidgets(3));
       expect(tester.takeException(), isNull);
     }
 

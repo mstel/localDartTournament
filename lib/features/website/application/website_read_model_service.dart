@@ -1,6 +1,7 @@
 import '../../rankings/application/local_ranking_elo_service.dart';
 import '../../rankings/application/local_ranking_series_service.dart';
 import '../../rankings/application/ranking_year_review_service.dart';
+import '../../rankings/domain/local_elo_calculator.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../achievements/application/ranking_achievement_service.dart';
 import '../../statistics/domain/local_statistics.dart';
@@ -94,6 +95,7 @@ class WebsiteReadModelService {
     }
 
     final rankingStandings = <Map<String, dynamic>>[];
+    final eloHistory = <Map<String, dynamic>>[];
     final eloService = LocalRankingEloService(
       database: _database,
       tournamentStorage: _tournamentStorage,
@@ -108,6 +110,36 @@ class WebsiteReadModelService {
           ranking,
           tournaments: completed,
         );
+        for (final playerHistory in snapshot.history.entries) {
+          final historyByTournament = <String, List<LocalEloHistoryItem>>{};
+          for (final item in playerHistory.value) {
+            historyByTournament
+                .putIfAbsent(item.tournamentId, () => [])
+                .add(item);
+          }
+          for (final tournamentHistory in historyByTournament.values) {
+            final orderedHistory = tournamentHistory.toList()
+              ..sort((left, right) {
+                final byDate = left.playedAt.compareTo(right.playedAt);
+                return byDate != 0
+                    ? byDate
+                    : left.matchIndex.compareTo(right.matchIndex);
+              });
+            final last = orderedHistory.last;
+            eloHistory.add({
+              'rankingId': ranking.id,
+              'playerId': playerHistory.key,
+              'tournamentId': last.tournamentId,
+              'tournamentName': last.tournamentName,
+              'occurredAt': last.playedAt.toUtc().toIso8601String(),
+              'ratingAfter': last.ratingAfter,
+              'delta': tournamentHistory.fold<int>(
+                0,
+                (total, item) => total + item.delta,
+              ),
+            });
+          }
+        }
         rankingStandings.add({
           'rankingId': ranking.id,
           'entries': [
@@ -239,6 +271,7 @@ class WebsiteReadModelService {
           {'id': ranking.id, 'name': ranking.name, 'type': ranking.type.name},
       ],
       'rankingStandings': rankingStandings,
+      'eloHistory': eloHistory,
       'rankingAchievements': achievementStandings,
       'statistics': playerStatistics,
       'currentForm': currentForms,
@@ -273,6 +306,7 @@ class WebsiteReadModelService {
       'rankings': _version2Resource('rankings', generatedAt, {
         'rankings': readModel['rankings'],
         'rankingStandings': readModel['rankingStandings'],
+        'eloHistory': readModel['eloHistory'] ?? const [],
       }),
       'statistics': _version2Resource('statistics', generatedAt, {
         'statistics': readModel['statistics'],

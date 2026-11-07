@@ -137,6 +137,7 @@ void main() {
         players: [home, away],
         date: _date,
         format: const TournamentGameFormat(bestOfLegs: 5),
+        matches: [_match(home, away, homeLegs: 3, awayLegs: 2, date: _date)],
       );
 
       final results = _calculate(
@@ -179,7 +180,7 @@ void main() {
     },
   );
 
-  test('unstoppable replaces hot streak and momentum for five wins', () {
+  test('first tournament win grants momentum alongside a five-win streak', () {
     final player = _player('player');
     final opponent = _player('opponent');
     final history = [
@@ -201,14 +202,20 @@ void main() {
     ];
 
     final types = _calculate(
-      current: _tournament(id: 'current', players: [player, opponent]),
+      current: _tournament(
+        id: 'current',
+        players: [player, opponent],
+        matches: [
+          _match(player, opponent, homeLegs: 3, awayLegs: 0, date: _date),
+        ],
+      ),
       history: history,
     )['player']!.map((insight) => insight.type).toSet();
 
-    expect(types, containsAll({
-      PlayerInsightType.unstoppable,
-      PlayerInsightType.momentum,
-    }));
+    expect(
+      types,
+      containsAll({PlayerInsightType.unstoppable, PlayerInsightType.momentum}),
+    );
     expect(types, isNot(contains(PlayerInsightType.hotStreak)));
   });
 

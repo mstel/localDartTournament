@@ -127,8 +127,14 @@ class PlayerInsightEngine {
     };
     if (participants.isEmpty) return const {};
 
-    final matches = [for (final item in history) ..._matchesForTournament(item)]
-      ..sort(_compareMatches);
+    final tournaments = [
+      for (final item in history)
+        if (item.id != tournament.id) item,
+      tournament,
+    ];
+    final matches = [
+      for (final item in tournaments) ..._matchesForTournament(item),
+    ]..sort(_compareMatches);
     final insights = <String, List<PlayerInsight>>{
       for (final playerId in participants.keys) playerId: <PlayerInsight>[],
     };

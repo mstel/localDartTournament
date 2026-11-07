@@ -110,6 +110,14 @@ authorization header.
 - `rankings`: `{ id, name, type }`, where type is `elo` or `series`.
 - `rankingStandings`: `{ rankingId, entries }`; entry fields vary by ranking type
   and include the position and player ID/name.
+- `eloHistory`: one public record per ELO-ranked player per completed tournament:
+  `{ rankingId, playerId, tournamentId, tournamentName, occurredAt,
+  ratingAfter, delta }`. `ratingAfter` is the player's final rating after that
+  tournament, `delta` is the net rating change across its matches and decay
+  events, and `occurredAt` is the UTC timestamp of the last history event in
+  that tournament. Records are chronological. This additive field is included
+  in the version-2 rankings resource; it is not inferred from current
+  standings.
 - `rankingAchievements`: one record per achievement-enabled ranking, with its
   ID, name, type, and eligible catalog players. Each player record contains
   their level/experience progress and achievement definitions, values, status,

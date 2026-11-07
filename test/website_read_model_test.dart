@@ -252,7 +252,9 @@ void main() {
         'generatedAt',
         'rankings',
         'rankingStandings',
+        'eloHistory',
       });
+      expect(resources['rankings']!['eloHistory'], isEmpty);
       expect(resources['statistics']!.keys, {
         'schemaVersion',
         'resource',
@@ -326,6 +328,104 @@ void main() {
       expect(serialized, isNot(contains('1990-01-01')));
       expect(serialized, isNot(contains('private-id')));
       expect(serialized, isNot(contains('dartsSetupJson')));
+    },
+  );
+
+  test(
+    'rankings resource publishes public Elo history by tournament',
+    () async {
+      final winner = await database.createPlayerProfile(
+        firstName: 'Ada',
+        lastName: 'Dart',
+        country: '',
+        city: '',
+        dartsSetupJson: '',
+      );
+      final opponent = await database.createPlayerProfile(
+        firstName: 'Bert',
+        lastName: 'Dart',
+        country: '',
+        city: '',
+        dartsSetupJson: '',
+      );
+      const ranking = LocalRanking(id: 'elo-ranking', name: 'Vereins-Elo');
+      await database.saveLocalRanking(ranking);
+      await database.setRankingPlayers(ranking.id, [winner.id, opponent.id]);
+
+      final winnerPlayer = TournamentPlayer(
+        profileId: winner.id,
+        name: winner.displayName,
+        isGenerated: false,
+      );
+      final opponentPlayer = TournamentPlayer(
+        profileId: opponent.id,
+        name: opponent.displayName,
+        isGenerated: false,
+      );
+      final tournament = CreatedTournament(
+        id: 'elo-cup',
+        name: 'Frühjahrscup',
+        players: [winnerPlayer, opponentPlayer],
+        stages: const [],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppen',
+            groupPlayType: 'round_robin',
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: [winnerPlayer, opponentPlayer],
+                matches: [
+                  GroupMatch(
+                    homePlayer: winnerPlayer,
+                    awayPlayer: opponentPlayer,
+                    round: 1,
+                    homeLegs: 2,
+                    awayLegs: 0,
+                    finishedAt: DateTime.utc(2026, 10, 20, 20),
+                  ),
+                ],
+              ),
+            ],
+            qualificationPlan: null,
+            tieBreakers: const [],
+          ),
+        ],
+        rankingIds: [ranking.id],
+        tournamentDate: DateTime(2026, 10, 20),
+        finishedAt: DateTime.utc(2026, 10, 20, 21),
+      );
+      await tournamentStorage.saveTournament(tournament);
+
+      final model = await WebsiteReadModelService(
+        database: database,
+        tournamentStorage: tournamentStorage,
+      ).create();
+      final records = (model['eloHistory'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(records, hasLength(2));
+      final winnerRecord = records.singleWhere(
+        (record) => record['playerId'] == winner.id,
+      );
+      expect(winnerRecord['rankingId'], ranking.id);
+      expect(winnerRecord['tournamentId'], tournament.id);
+      expect(winnerRecord['tournamentName'], tournament.name);
+      expect(
+        winnerRecord['occurredAt'],
+        tournament.tournamentDate!.toUtc().toIso8601String(),
+      );
+      expect(winnerRecord['ratingAfter'], greaterThan(ranking.startRating));
+      expect(
+        winnerRecord['delta'],
+        winnerRecord['ratingAfter'] - ranking.startRating,
+      );
+
+      final resources = await WebsiteReadModelService(
+        database: database,
+        tournamentStorage: tournamentStorage,
+      ).createVersion2Resources(model);
+      expect(resources['rankings']!['eloHistory'], records);
     },
   );
 

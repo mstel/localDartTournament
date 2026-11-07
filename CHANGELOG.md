@@ -1,3 +1,12 @@
+# 2.5.9+79
+
+- Behebt die Ermittlung von Spieler-Insights für das laufende Turnier und
+  berücksichtigt dessen aktuelle abgeschlossene Partien in der Historie.
+- Korrigiert die Verwendung des ausgewählten Farbschemas beim Export der
+  Turnierabschlussgrafik und aktualisiert betroffene responsive Tests.
+- Ergänzt eine chronologische Elo-Historie je Spieler und Turnier im
+  Website-Rankings-Read-Model.
+
 # 2.5.8+78
 
 - Ergänzt alternative Achievement-Erfüllungswege mit ranglistenspezifischen

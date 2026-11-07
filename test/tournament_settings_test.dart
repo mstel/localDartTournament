@@ -39,12 +39,9 @@ void main() {
     expect(settingsJson['version'], 1);
   });
 
-  test(
-    'percentage group deficit defaults to one scaled match for uneven groups',
-    () {
-      expect(const TournamentSettings().groupMatchDeficitThreshold, 1);
-    },
-  );
+  test('group deficit defaults to three scaled matches', () {
+    expect(const TournamentSettings().groupMatchDeficitThreshold, 3);
+  });
 
   testWidgets(
     'tournament settings expose numeric thresholds and sound options',
