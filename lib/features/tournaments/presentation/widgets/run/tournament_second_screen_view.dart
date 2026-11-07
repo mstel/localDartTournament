@@ -3806,7 +3806,8 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (runningMatches.isNotEmpty) ...[
+        if (widget.tournament.directorModeEnabled ||
+            runningMatches.isNotEmpty) ...[
           Row(
             children: [
               const Icon(
@@ -3816,7 +3817,9 @@ class _TournamentSecondScreenViewState
               ),
               const SizedBox(width: 8),
               Text(
-                'Aktuelle Partien (${runningMatches.length})',
+                widget.tournament.directorModeEnabled
+                    ? 'Board Belegung'
+                    : 'Aktuelle Partien (${runningMatches.length})',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -3826,26 +3829,80 @@ class _TournamentSecondScreenViewState
             ],
           ),
           const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const spacing = 10.0;
-              final columns = constraints.maxWidth >= 740
-                  ? 4
-                  : constraints.maxWidth >= 460
-                  ? 2
-                  : 1;
-              final width =
-                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  for (final entry in runningMatches)
-                    _buildRunningMatchTile(context, entry, width: width),
-                ],
-              );
-            },
-          ),
+          if (widget.tournament.directorModeEnabled)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 10.0;
+                final columns = constraints.maxWidth >= 740
+                    ? 4
+                    : constraints.maxWidth >= 460
+                    ? 2
+                    : 1;
+                final width =
+                    (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                final snapshot = TournamentDirectorSnapshot(
+                  widget.tournament,
+                  activeIndex,
+                );
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (
+                      var board = 1;
+                      board <= widget.tournament.boardCount;
+                      board++
+                    )
+                      Builder(
+                        builder: (context) {
+                          final running = runningMatches
+                              .where(
+                                (entry) => entry.match.boardNumber == board,
+                              )
+                              .firstOrNull;
+                          return running == null
+                              ? _buildFreeBoardOccupancyTile(
+                                  context,
+                                  board: board,
+                                  since: _freeBoardSince(
+                                    snapshot,
+                                    widget.tournament,
+                                    board,
+                                  ),
+                                  width: width,
+                                )
+                              : _buildRunningMatchTile(
+                                  context,
+                                  running,
+                                  width: width,
+                                );
+                        },
+                      ),
+                  ],
+                );
+              },
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 10.0;
+                final columns = constraints.maxWidth >= 740
+                    ? 4
+                    : constraints.maxWidth >= 460
+                    ? 2
+                    : 1;
+                final width =
+                    (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (final entry in runningMatches)
+                      _buildRunningMatchTile(context, entry, width: width),
+                  ],
+                );
+              },
+            ),
           const SizedBox(height: 16),
         ],
         Text(
@@ -3931,6 +3988,26 @@ class _TournamentSecondScreenViewState
       ),
     );
   }
+
+  Widget _buildFreeBoardOccupancyTile(
+    BuildContext context, {
+    required int board,
+    required DateTime since,
+    required double width,
+  }) => Container(
+    width: width,
+    key: ValueKey('second-screen-free-board-$board'),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFF144D34),
+      border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: _FreeBoardStatusLabel(
+      boardName: widget.tournament.boardDisplayName(board),
+      since: since,
+    ),
+  );
 
   Widget _buildDirectorBoardQueue(
     BuildContext context,

@@ -163,6 +163,7 @@ class _AchievementDetailsDialog extends StatefulWidget {
 
 class _AchievementDetailsDialogState extends State<_AchievementDetailsDialog> {
   AchievementCategory? _selectedCategory;
+  bool _hideCompleted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -171,8 +172,9 @@ class _AchievementDetailsDialogState extends State<_AchievementDetailsDialog> {
         : [_selectedCategory!];
     final visibleProgress = widget.view.evaluation.progress.values.where(
       (item) =>
-          _selectedCategory == null ||
-          item.definition.category == _selectedCategory,
+          (_selectedCategory == null ||
+              item.definition.category == _selectedCategory) &&
+          (!_hideCompleted || !item.isCompleted),
     );
     final grouped = {
       for (final category in categories)
@@ -199,11 +201,11 @@ class _AchievementDetailsDialogState extends State<_AchievementDetailsDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const Text('Kategorie filtern'),
                 DropdownButtonFormField<AchievementCategory?>(
                   initialValue: _selectedCategory,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    labelText: 'Kategorie filtern',
                     border: OutlineInputBorder(),
                   ),
                   items: [
@@ -220,18 +222,31 @@ class _AchievementDetailsDialogState extends State<_AchievementDetailsDialog> {
                   onChanged: (value) =>
                       setState(() => _selectedCategory = value),
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Abgeschlossene ausblenden'),
+                  value: _hideCompleted,
+                  onChanged: (value) => setState(() => _hideCompleted = value),
+                ),
                 const SizedBox(height: 8),
                 for (final category in categories)
                   Builder(
                     builder: (context) {
                       final categoryItems = grouped[category]!;
-                      final completedCount = categoryItems
+                      final allCategoryItems = widget
+                          .view
+                          .evaluation
+                          .progress
+                          .values
+                          .where((item) => item.definition.category == category)
+                          .toList();
+                      final completedCount = allCategoryItems
                           .where((item) => item.isCompleted)
                           .length;
                       final countLabel =
                           category == AchievementCategory.rankingAwards
                           ? '${completedCount == 0 ? 0 : 1} / 1 abgeschlossen'
-                          : '$completedCount / ${categoryItems.length} abgeschlossen';
+                          : '$completedCount / ${allCategoryItems.length} abgeschlossen';
                       return ExpansionTile(
                         tilePadding: EdgeInsets.zero,
                         title: Text(category.label),
@@ -293,7 +308,7 @@ class _AchievementProgressTile extends StatelessWidget {
     final theme = Theme.of(context);
     final status = switch (progress.status) {
       AchievementStatus.locked => 'Gesperrt',
-      AchievementStatus.inProgress => 'In Bearbeitung',
+      AchievementStatus.inProgress => 'Aktiv',
       AchievementStatus.completed => 'Abgeschlossen',
     };
     return ListTile(
@@ -311,12 +326,36 @@ class _AchievementProgressTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(progress.definition.description),
+          if (progress.definition.alternativeDescription != null) ...[
+            const SizedBox(height: 4),
+            Text('Oder: ${progress.definition.alternativeDescription}'),
+          ],
           const SizedBox(height: 4),
           Text(
             '$status · ${_format(progress.currentValue)} / '
             '${_format(progress.definition.target)}',
           ),
-          LinearProgressIndicator(value: progress.fraction),
+          LinearProgressIndicator(
+            value: progress.isCompleted ? 1 : progress.fraction,
+            color: progress.isCompleted ? Colors.green : null,
+          ),
+          if (progress.definition.alternativeDescription != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Alternative: ${_format(progress.alternativeCurrentValue)} / '
+              '${_format(progress.definition.alternativeTarget ?? 0)}',
+            ),
+            LinearProgressIndicator(
+              value:
+                  progress.definition.alternativeTarget == null ||
+                      progress.definition.alternativeTarget! <= 0
+                  ? 0
+                  : (progress.alternativeCurrentValue /
+                            progress.definition.alternativeTarget!)
+                        .clamp(0, 1),
+              color: progress.isCompleted ? Colors.green : null,
+            ),
+          ],
           if (progress.unlockedAt != null)
             Text(
               'Freigeschaltet am '

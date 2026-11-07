@@ -270,29 +270,38 @@ class AchievementCatalog {
     ),
     AchievementDefinition(
       id: 'legs_lost_10',
-      name: 'Niederlagen gehören dazu I',
+      name: 'Niederlagen gehören dazu...oder? I',
       description: 'Verliere insgesamt zehn Legs.',
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsLost,
       target: 10,
+      alternativeDescription: 'Gewinne fünf Matches zu Null.',
+      alternativeMetric: AchievementMetric.shutoutMatchWins,
+      alternativeTarget: 5,
       experiencePoints: 7,
     ),
     AchievementDefinition(
       id: 'legs_lost_25',
-      name: 'Niederlagen gehören dazu II',
+      name: 'Niederlagen gehören dazu...oder? II',
       description: 'Verliere insgesamt 25 Legs.',
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsLost,
       target: 25,
+      alternativeDescription: 'Gewinne zehn Matches zu Null.',
+      alternativeMetric: AchievementMetric.shutoutMatchWins,
+      alternativeTarget: 10,
       experiencePoints: 13,
     ),
     AchievementDefinition(
       id: 'legs_lost_50',
-      name: 'Niederlagen gehören dazu III',
+      name: 'Niederlagen gehören dazu...oder? III',
       description: 'Verliere insgesamt 50 Legs.',
       category: AchievementCategory.gameplay,
       metric: AchievementMetric.legsLost,
       target: 50,
+      alternativeDescription: 'Gewinne 25 Matches zu Null.',
+      alternativeMetric: AchievementMetric.shutoutMatchWins,
+      alternativeTarget: 25,
       experiencePoints: 19,
     ),
     AchievementDefinition(
@@ -652,6 +661,10 @@ class AchievementCatalog {
       description: 'Gewinne nach fünf Niederlagen in Folge wieder ein Match.',
       category: AchievementCategory.rivalriesAndComebacks,
       metric: AchievementMetric.winsAfterLossStreak,
+      target: 1,
+      alternativeDescription: 'Gewinne zehn Matches am Stück.',
+      alternativeMetric: AchievementMetric.matchWinStreak,
+      alternativeTarget: 10,
       experiencePoints: 31,
     ),
     AchievementDefinition(
@@ -662,6 +675,12 @@ class AchievementCatalog {
           '200 ELO-Punkte mehr hat.',
       category: AchievementCategory.rivalriesAndComebacks,
       metric: AchievementMetric.eloUpsetWins,
+      parameterLabel: 'ELO-Abstand in Punkten',
+      parameterTarget: 200,
+      alternativeDescription:
+          'Gewinne fünf Matches in Folge gegen Gegner, die mindestens 200 ELO-Punkte weniger haben.',
+      alternativeMetric: AchievementMetric.consecutiveWinsAgainstLowerElo,
+      alternativeTarget: 5,
       experiencePoints: 49,
     ),
     AchievementDefinition(
@@ -680,6 +699,9 @@ class AchievementCatalog {
       category: AchievementCategory.rivalriesAndComebacks,
       metric: AchievementMetric.lossesToSameOpponent,
       target: 10,
+      alternativeDescription: 'Gewinne zehn Legs gegen denselben Gegner.',
+      alternativeMetric: AchievementMetric.legsWonAgainstSameOpponent,
+      alternativeTarget: 10,
       experiencePoints: 25,
     ),
     AchievementDefinition(
@@ -804,9 +826,16 @@ class AchievementCatalog {
     0,
     (total, definition) => total + definition.experiencePoints,
   );
-  static List<AchievementDefinition> withTargets(Map<String, double> targets) =>
-      [
-        for (final definition in definitions)
-          definition.copyWith(target: targets[definition.id]),
-      ];
+  static List<AchievementDefinition> withTargets(
+    Map<String, double> targets, {
+    Map<String, double> parameters = const {},
+    Map<String, double> alternativeTargets = const {},
+  }) => [
+    for (final definition in definitions)
+      definition.copyWith(
+        target: targets[definition.id],
+        parameterTarget: parameters[definition.id],
+        alternativeTarget: alternativeTargets[definition.id],
+      ),
+  ];
 }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 enum AchievementCategory {
   tournamentResults,
   gameplay,
@@ -33,6 +35,8 @@ enum AchievementMetric {
   tournamentWinStreak,
   legsWon,
   legsLost,
+  shutoutMatchWins,
+  legsWonAgainstSameOpponent,
   score180Count,
   firstScore180,
   firstScore171,
@@ -50,6 +54,7 @@ enum AchievementMetric {
   trainingSessions,
   winsAfterLossStreak,
   eloUpsetWins,
+  consecutiveWinsAgainstLowerElo,
   distinctOpponentsBeaten,
   lossesToSameOpponent,
   rankingGold,
@@ -67,6 +72,11 @@ class AchievementDefinition {
     required this.experiencePoints,
     this.metric,
     this.target = 1,
+    this.parameterLabel,
+    this.parameterTarget,
+    this.alternativeDescription,
+    this.alternativeMetric,
+    this.alternativeTarget,
     this.strictTarget = false,
     this.requiresCompletedRanking = false,
     this.contributesToLevel = true,
@@ -80,6 +90,11 @@ class AchievementDefinition {
   final int experiencePoints;
   final AchievementMetric? metric;
   final double target;
+  final String? parameterLabel;
+  final double? parameterTarget;
+  final String? alternativeDescription;
+  final AchievementMetric? alternativeMetric;
+  final double? alternativeTarget;
   final bool strictTarget;
   final bool requiresCompletedRanking;
   final bool contributesToLevel;
@@ -87,21 +102,59 @@ class AchievementDefinition {
 
   bool get isCategoryCompletion => completionCategory != null;
 
-  AchievementDefinition copyWith({double? target}) => AchievementDefinition(
-    id: id,
-    name: name,
-    description: target == null || target == this.target
-        ? description
-        : _descriptionForTarget(description, this.target, target),
-    category: category,
-    experiencePoints: experiencePoints,
-    metric: metric,
-    target: target ?? this.target,
-    strictTarget: strictTarget,
-    requiresCompletedRanking: requiresCompletedRanking,
-    contributesToLevel: contributesToLevel,
-    completionCategory: completionCategory,
-  );
+  AchievementDefinition copyWith({
+    double? target,
+    double? parameterTarget,
+    double? alternativeTarget,
+  }) {
+    var nextAlternativeDescription = alternativeDescription;
+    if (alternativeTarget != null &&
+        alternativeTarget != this.alternativeTarget &&
+        nextAlternativeDescription != null &&
+        this.alternativeTarget != null) {
+      nextAlternativeDescription = _descriptionForTarget(
+        nextAlternativeDescription,
+        this.alternativeTarget!,
+        alternativeTarget,
+      );
+    }
+    if (parameterTarget != null &&
+        parameterTarget != this.parameterTarget &&
+        nextAlternativeDescription != null &&
+        this.parameterTarget != null) {
+      nextAlternativeDescription = _descriptionForTarget(
+        nextAlternativeDescription,
+        this.parameterTarget!,
+        parameterTarget,
+      );
+    }
+    return AchievementDefinition(
+      id: id,
+      name: name,
+      description: parameterTarget != null && this.parameterTarget != null
+          ? _descriptionForTarget(
+              description,
+              this.parameterTarget!,
+              parameterTarget,
+            )
+          : target == null || target == this.target
+          ? description
+          : _descriptionForTarget(description, this.target, target),
+      alternativeDescription: nextAlternativeDescription,
+      category: category,
+      experiencePoints: experiencePoints,
+      metric: metric,
+      target: target ?? this.target,
+      parameterLabel: parameterLabel,
+      parameterTarget: parameterTarget ?? this.parameterTarget,
+      alternativeTarget: alternativeTarget ?? this.alternativeTarget,
+      alternativeMetric: alternativeMetric,
+      strictTarget: strictTarget,
+      requiresCompletedRanking: requiresCompletedRanking,
+      contributesToLevel: contributesToLevel,
+      completionCategory: completionCategory,
+    );
+  }
 }
 
 String _descriptionForTarget(
@@ -163,19 +216,27 @@ class AchievementProgress {
   const AchievementProgress({
     required this.definition,
     required this.currentValue,
+    this.alternativeCurrentValue = 0,
     required this.status,
     this.unlockedAt,
   });
 
   final AchievementDefinition definition;
   final double currentValue;
+  final double alternativeCurrentValue;
   final AchievementStatus status;
   final DateTime? unlockedAt;
 
   bool get isCompleted => status == AchievementStatus.completed;
 
   double get fraction {
-    if (definition.target <= 0) return isCompleted ? 1 : 0;
-    return (currentValue / definition.target).clamp(0, 1);
+    final primary = definition.target <= 0
+        ? (isCompleted ? 1.0 : 0.0)
+        : (currentValue / definition.target).clamp(0, 1).toDouble();
+    final alternativeTarget = definition.alternativeTarget;
+    if (alternativeTarget == null || alternativeTarget <= 0) return primary;
+    return math
+        .max(primary, (alternativeCurrentValue / alternativeTarget).clamp(0, 1))
+        .toDouble();
   }
 }

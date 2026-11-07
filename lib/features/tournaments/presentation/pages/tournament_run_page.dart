@@ -234,18 +234,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _reorderTournamentPlayers(int oldIndex, int newIndex) async {
     if (!_canReorderTournamentPlayers) return;
-    final players = widget.tournament.players;
+    final players = List<TournamentPlayer>.of(widget.tournament.players);
     if (oldIndex == newIndex ||
         oldIndex < 0 ||
         oldIndex >= players.length ||
         newIndex < 0 ||
-        newIndex >= players.length) {
+        newIndex > players.length) {
       return;
     }
 
+    final movedPlayer = players.removeAt(oldIndex);
+    final insertionIndex = newIndex.clamp(0, players.length);
+    players.insert(insertionIndex, movedPlayer);
     setState(() {
-      final player = players.removeAt(oldIndex);
-      players.insert(newIndex, player);
+      widget.tournament.players = players;
       widget.tournament.runStages[0] = _buildRunStageFromPlayers(
         widget.tournament.stages.first,
         players,
@@ -301,6 +303,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             ),
             onPressed: () => _removeParticipant(player),
           ),
+        if (widget.tournament.finishedAt == null &&
+            PlayerWithdrawalService.policy(widget.tournament, player) == null &&
+            !_canAdjustParticipants &&
+            _hasRecordedTournamentResults())
+          IconButton(
+            tooltip: 'Spieler zurückziehen',
+            icon: const Icon(
+              Icons.person_off_outlined,
+              size: 20,
+              color: Colors.red,
+            ),
+            onPressed: () => _withdrawPlayer(player),
+          ),
       ],
     ),
   );
@@ -341,6 +356,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
             itemCount: players.length,
             onReorderItem: _reorderTournamentPlayers,
             itemBuilder: (context, index) {
@@ -494,13 +510,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   Future<bool?> _confirmParticipantFormatAdjustment({
     required String action,
     required String title,
+    String? message,
   }) => showDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (context) => AlertDialog(
       title: Text(title),
       content: Text(
-        'Möchtest du das Turnierformat für die neue Teilnehmerzahl automatisch anpassen?',
+        message ??
+            'Möchtest du das Turnierformat für die neue Teilnehmerzahl automatisch anpassen?',
       ),
       actions: [
         TextButton(
@@ -620,6 +638,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final confirmed = await _confirmParticipantFormatAdjustment(
       action: 'Turnierformat anpassen',
       title: 'Spieler entfernen',
+      message:
+          '„${player.name}“ wird aus dem Turnier entfernt. Dafür muss das '
+          'Turnierformat an die neue Teilnehmerzahl angepasst werden. '
+          'Möchtest du fortfahren?',
     );
     if (confirmed != true || !mounted || !_canAdjustParticipants) return;
 
@@ -722,13 +744,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
     try {
       final candidate = CreatedTournament.fromJson(tournament.toJson());
-      candidate.players
-        ..clear()
-        ..addAll(proposedPlayers);
-      candidate.stages
-        ..clear()
-        ..addAll(adjustedStages);
-      candidate.runStages.clear();
+      candidate.players = List<TournamentPlayer>.of(proposedPlayers);
+      candidate.stages = List<TournamentStage>.of(adjustedStages);
+      candidate.runStages = <TournamentRunStage>[];
       candidate.activeStageIndex = 0;
       candidate.completedStageIndexes.clear();
       candidate.plannedMatchEndSeconds = [];
@@ -758,15 +776,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       );
       if (!mounted) return;
       setState(() {
-        tournament.players
-          ..clear()
-          ..addAll(candidate.players);
-        tournament.stages
-          ..clear()
-          ..addAll(candidate.stages);
-        tournament.runStages
-          ..clear()
-          ..addAll(candidate.runStages);
+        tournament.players = List<TournamentPlayer>.of(candidate.players);
+        tournament.stages = List<TournamentStage>.of(candidate.stages);
+        tournament.runStages = List<TournamentRunStage>.of(candidate.runStages);
         tournament
           ..activeStageIndex = candidate.activeStageIndex
           ..updatedAt = candidate.updatedAt
@@ -1287,6 +1299,96 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     if (mounted) setState(() {});
   }
+
+  Widget _groupBoardAssignmentsSettings() => ExpansionTile(
+    key: const ValueKey('group-board-assignments'),
+    leading: const Icon(Icons.grid_view_outlined),
+    title: const Text('Board Zuweisung'),
+    subtitle: const Text('Boards für einzelne Gruppen festlegen'),
+    children: [
+      for (
+        var stageIndex = 0;
+        stageIndex < widget.tournament.runStages.length;
+        stageIndex++
+      )
+        if (widget.tournament.runStages[stageIndex]
+            case final GroupTournamentRunStage stage)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Divider(height: 24),
+                Text(stage.name, style: Theme.of(context).textTheme.titleSmall),
+                for (final group in stage.groups)
+                  Builder(
+                    builder: (context) {
+                      final key = GroupBoardAssignment.keyFor(
+                        stageIndex,
+                        group.name,
+                      );
+                      final defaults = GroupBoardAssignment.defaults(
+                        groupNames: stage.groups
+                            .map(
+                              (item) => GroupBoardAssignment.keyFor(
+                                stageIndex,
+                                item.name,
+                              ),
+                            )
+                            .toList(),
+                        boardCount: widget.tournament.boardCount,
+                      );
+                      final selected =
+                          (widget
+                                      .tournament
+                                      .directorGroupBoardAssignments[key] ??
+                                  defaults[key] ??
+                                  const <int>{})
+                              .toSet();
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${group.name} wird gespielt auf Board:'),
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 2,
+                              children: [
+                                for (
+                                  var board = 1;
+                                  board <= widget.tournament.boardCount;
+                                  board++
+                                )
+                                  FilterChip(
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.padded,
+                                    label: Text(
+                                      widget.tournament.boardDisplayName(board),
+                                    ),
+                                    selected: selected.contains(board),
+                                    onSelected: (value) =>
+                                        _handleDirectorSettings(
+                                          () => _setDirectorGroupBoard(
+                                            stageIndex,
+                                            group.name,
+                                            board,
+                                            value,
+                                          ),
+                                        ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+    ],
+  );
 
   Future<void> _announceRecommendationForBoard(int board) async {
     try {
@@ -4755,12 +4857,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             SportActionsMenu(
               label: 'Turnier',
               actions: [
-                if (widget.tournament.finishedAt == null)
-                  SportMenuAction(
-                    label: 'Spieler aus Turnier entfernen',
-                    icon: Icons.person_remove_outlined,
-                    onTap: _withdrawPlayer,
-                  ),
                 SportMenuAction(
                   label: 'Turnierdaten exportieren',
                   icon: Icons.ios_share,
@@ -5066,6 +5162,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         },
                                       ),
                                     ),
+                                  if (widget.tournament.directorModeEnabled &&
+                                      widget
+                                              .tournament
+                                              .directorSchedulingStrategy ==
+                                          'group')
+                                    _groupBoardAssignmentsSettings(),
+                                  if (widget.tournament.directorModeEnabled)
+                                    TournamentRunSettingsPanel(
+                                      tournament: widget.tournament,
+                                      onChanged: _saveTournamentSettings,
+                                      showAudioSettings: true,
+                                      showPrioritySettings: false,
+                                      showHintAudioSettings: false,
+                                    ),
                                   if (widget.tournament.directorModeEnabled)
                                     SwitchListTile(
                                       contentPadding: EdgeInsets.zero,
@@ -5079,24 +5189,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           widget.tournament.showPlayerInsights,
                                       onChanged: _savePlayerInsightsSetting,
                                     ),
-                                  ExpansionTile(
-                                    key: const ValueKey(
-                                      'tournament-run-settings',
-                                    ),
-                                    leading: const Icon(
-                                      Icons.settings_outlined,
-                                    ),
-                                    title: const Text('Turniereinstellungen'),
-                                    subtitle: const Text(
-                                      'Tonmodus, akustische Hinweise und Prioritätsschwellen',
-                                    ),
-                                    children: [
-                                      TournamentRunSettingsPanel(
-                                        tournament: widget.tournament,
-                                        onChanged: _saveTournamentSettings,
-                                      ),
-                                    ],
-                                  ),
                                   if (widget.tournament.directorModeEnabled)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 12),
@@ -5186,159 +5278,34 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               ),
                                             ],
                                           ),
-                                          if (widget
-                                                  .tournament
-                                                  .directorSchedulingStrategy ==
-                                              'group')
-                                            ExpansionTile(
-                                              key: const ValueKey(
-                                                'group-board-assignments',
-                                              ),
-                                              leading: const Icon(
-                                                Icons.grid_view_outlined,
-                                              ),
-                                              title: const Text(
-                                                'Board Zuweisung',
-                                              ),
-                                              subtitle: const Text(
-                                                'Boards für einzelne Gruppen festlegen',
-                                              ),
-                                              children: [
-                                                for (
-                                                  var stageIndex = 0;
-                                                  stageIndex <
-                                                      widget
-                                                          .tournament
-                                                          .runStages
-                                                          .length;
-                                                  stageIndex++
-                                                )
-                                                  if (widget
-                                                          .tournament
-                                                          .runStages[stageIndex]
-                                                      case final GroupTournamentRunStage
-                                                          stage)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            bottom: 12,
-                                                          ),
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .stretch,
-                                                        children: [
-                                                          const Divider(
-                                                            height: 24,
-                                                          ),
-                                                          Text(
-                                                            stage.name,
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .titleSmall,
-                                                          ),
-                                                          for (final group
-                                                              in stage.groups)
-                                                            Builder(
-                                                              builder: (context) {
-                                                                final key =
-                                                                    GroupBoardAssignment.keyFor(
-                                                                      stageIndex,
-                                                                      group
-                                                                          .name,
-                                                                    );
-                                                                final defaults = GroupBoardAssignment.defaults(
-                                                                  groupNames: stage
-                                                                      .groups
-                                                                      .map(
-                                                                        (
-                                                                          item,
-                                                                        ) => GroupBoardAssignment.keyFor(
-                                                                          stageIndex,
-                                                                          item.name,
-                                                                        ),
-                                                                      )
-                                                                      .toList(),
-                                                                  boardCount: widget
-                                                                      .tournament
-                                                                      .boardCount,
-                                                                );
-                                                                final selected =
-                                                                    (widget.tournament.directorGroupBoardAssignments[key] ??
-                                                                            defaults[key] ??
-                                                                            const <
-                                                                              int
-                                                                            >{})
-                                                                        .toSet();
-                                                                return Padding(
-                                                                  padding:
-                                                                      const EdgeInsets.symmetric(
-                                                                        vertical:
-                                                                            6,
-                                                                      ),
-                                                                  child: Column(
-                                                                    crossAxisAlignment:
-                                                                        CrossAxisAlignment
-                                                                            .start,
-                                                                    children: [
-                                                                      Text(
-                                                                        '${group.name} wird gespielt auf Board:',
-                                                                      ),
-                                                                      Wrap(
-                                                                        spacing:
-                                                                            4,
-                                                                        runSpacing:
-                                                                            2,
-                                                                        children: [
-                                                                          for (
-                                                                            var board =
-                                                                                1;
-                                                                            board <=
-                                                                                widget.tournament.boardCount;
-                                                                            board++
-                                                                          )
-                                                                            FilterChip(
-                                                                              materialTapTargetSize: MaterialTapTargetSize.padded,
-                                                                              label: Text(
-                                                                                widget.tournament.boardDisplayName(
-                                                                                  board,
-                                                                                ),
-                                                                              ),
-                                                                              selected: selected.contains(
-                                                                                board,
-                                                                              ),
-                                                                              onSelected:
-                                                                                  (
-                                                                                    value,
-                                                                                  ) => _handleDirectorSettings(
-                                                                                    () => _setDirectorGroupBoard(
-                                                                                      stageIndex,
-                                                                                      group.name,
-                                                                                      board,
-                                                                                      value,
-                                                                                    ),
-                                                                                  ),
-                                                                            ),
-                                                                        ],
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                );
-                                                              },
-                                                            ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                              ],
-                                            ),
                                         ],
                                       ),
                                     ),
                                 ],
                               ),
+                            ),
+                          ),
+                          Card(
+                            child: ExpansionTile(
+                              key: const ValueKey('tournament-hint-settings'),
+                              leading: const Icon(Icons.notifications_active),
+                              title: const Text('Hinweiseinstellungen'),
+                              childrenPadding: const EdgeInsets.fromLTRB(
+                                16,
+                                0,
+                                16,
+                                16,
+                              ),
+                              children: [
+                                TournamentRunSettingsPanel(
+                                  tournament: widget.tournament,
+                                  onChanged: _saveTournamentSettings,
+                                  showAudioSettings: false,
+                                  showPrioritySettings: true,
+                                  showHintAudioSettings:
+                                      widget.tournament.directorModeEnabled,
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -5931,41 +5898,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                           ),
                           const SizedBox(height: 8),
                           for (final player in widget.tournament.players)
-                            Card(
-                              child: ListTile(
-                                title: Text(player.name),
-                                subtitle:
-                                    PlayerWithdrawalService.policy(
-                                          widget.tournament,
-                                          player,
-                                        ) ==
-                                        null
-                                    ? null
-                                    : const Text(
-                                        'Aus dem Turnier ausgeschieden',
-                                      ),
-                                trailing:
-                                    widget.tournament.finishedAt == null &&
-                                        PlayerWithdrawalService.policy(
-                                              widget.tournament,
-                                              player,
-                                            ) ==
-                                            null &&
-                                        _canAdjustParticipants
-                                    ? const Icon(Icons.person_remove_outlined)
-                                    : null,
-                                onTap:
-                                    widget.tournament.finishedAt == null &&
-                                        PlayerWithdrawalService.policy(
-                                              widget.tournament,
-                                              player,
-                                            ) ==
-                                            null &&
-                                        _canAdjustParticipants
-                                    ? () => _removeParticipant(player)
-                                    : null,
-                              ),
-                            ),
+                            Card(child: _playerManagementTile(player)),
                         ],
                       )
                     else ...[

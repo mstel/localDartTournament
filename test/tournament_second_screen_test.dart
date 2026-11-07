@@ -227,7 +227,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Aktuelle Partien (1)'), findsOneWidget);
+    expect(find.text('Board Belegung'), findsOneWidget);
     expect(find.textContaining('JETZT LIVE · BOARD 1'), findsOneWidget);
     expect(
       find.byKey(
@@ -460,8 +460,25 @@ void main() {
         findsOneWidget,
       );
     }
-    expect(find.textContaining('Frei - Board 3 -'), findsOneWidget);
-    expect(find.text('Jetzt Partie zuweisen!'), findsNWidgets(3));
+    for (var board = 2; board <= 4; board++) {
+      final boardTile = find.byKey(
+        ValueKey('second-screen-director-board-$board'),
+      );
+      expect(
+        find.descendant(
+          of: boardTile,
+          matching: find.textContaining('Frei - Board $board -'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: boardTile,
+          matching: find.text('Jetzt Partie zuweisen!'),
+        ),
+        findsOneWidget,
+      );
+    }
     expect(tester.takeException(), isNull);
   });
 

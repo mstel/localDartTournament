@@ -268,13 +268,13 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                   onChanged: _selectRanking,
                 ),
                 const SizedBox(height: 16),
+                const Text('Jahr'),
+                const SizedBox(height: 8),
                 DropdownButtonFormField<int?>(
                   initialValue: _year,
                   menuMaxHeight: 320,
                   decoration: const InputDecoration(
-                    labelText: 'Zeitraum',
                     border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.calendar_today_outlined),
                   ),
                   items: [
                     const DropdownMenuItem<int?>(
@@ -533,13 +533,13 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                   onChanged: _selectPlayer,
                 ),
                 const SizedBox(height: 16),
+                const Text('Jahr'),
+                const SizedBox(height: 8),
                 DropdownButtonFormField<int?>(
                   initialValue: _year,
                   menuMaxHeight: 320,
                   decoration: const InputDecoration(
-                    labelText: 'Zeitraum',
                     border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.calendar_today_outlined),
                   ),
                   items: [
                     const DropdownMenuItem<int?>(
@@ -1071,13 +1071,28 @@ class _RankingsPageState extends State<RankingsPage> {
         updated.achievementTargets.entries.any(
           (entry) => ranking.achievementTargets[entry.key] != entry.value,
         );
+    final achievementAlternativeTargetsChanged =
+        updated.achievementAlternativeTargets.length !=
+            ranking.achievementAlternativeTargets.length ||
+        updated.achievementAlternativeTargets.entries.any(
+          (entry) =>
+              ranking.achievementAlternativeTargets[entry.key] != entry.value,
+        );
+    final achievementParametersChanged =
+        updated.achievementParameters.length !=
+            ranking.achievementParameters.length ||
+        updated.achievementParameters.entries.any(
+          (entry) => ranking.achievementParameters[entry.key] != entry.value,
+        );
     try {
       await _database.saveLocalRanking(updated);
       rankingSaved = true;
       if (updated.achievementsEnabled &&
           (!ranking.achievementsEnabled ||
               updated.isCompleted != ranking.isCompleted ||
-              achievementTargetsChanged)) {
+              achievementTargetsChanged ||
+              achievementAlternativeTargetsChanged ||
+              achievementParametersChanged)) {
         await RankingAchievementService(
           database: _database,
           tournamentStorage: TournamentStorage(),
@@ -1382,6 +1397,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   bool _isDefaultForStatistics = false;
   bool _achievementsEnabled = false;
   Map<String, double> _achievementTargets = {};
+  Map<String, double> _achievementParameters = {};
+  Map<String, double> _achievementAlternativeTargets = {};
   bool _isCompleted = false;
   List<TextEditingController> _tierNames = [];
   List<TextEditingController> _tierMinimums = [];
@@ -1414,6 +1431,10 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     _isDefaultForStatistics = initial.isDefaultForStatistics;
     _achievementsEnabled = initial.achievementsEnabled;
     _achievementTargets = Map.of(initial.achievementTargets);
+    _achievementParameters = Map.of(initial.achievementParameters);
+    _achievementAlternativeTargets = Map.of(
+      initial.achievementAlternativeTargets,
+    );
     _isCompleted = initial.isCompleted;
     _fromDate =
         initial.validFromDate ??
@@ -1499,12 +1520,20 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
   }
 
   Future<void> _adjustAchievementTargets() async {
-    final targets = await showDialog<Map<String, double>>(
+    final targets = await showDialog<AchievementTargetValues>(
       context: context,
-      builder: (_) => AchievementTargetDialog(targets: _achievementTargets),
+      builder: (_) => AchievementTargetDialog(
+        targets: _achievementTargets,
+        parameters: _achievementParameters,
+        alternativeTargets: _achievementAlternativeTargets,
+      ),
     );
     if (targets != null && mounted) {
-      setState(() => _achievementTargets = targets);
+      setState(() {
+        _achievementTargets = targets.primary;
+        _achievementParameters = targets.parameters;
+        _achievementAlternativeTargets = targets.alternative;
+      });
     }
   }
 
@@ -1565,6 +1594,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
         isDefaultForStatistics: _isDefaultForStatistics,
         achievementsEnabled: _achievementsEnabled,
         achievementTargets: _achievementTargets,
+        achievementParameters: _achievementParameters,
+        achievementAlternativeTargets: _achievementAlternativeTargets,
         isCompleted: _isCompleted,
       ),
     );
@@ -2005,9 +2036,11 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
                       label: const Text('Werte anpassen'),
                     ),
                     Text(
-                      _achievementTargets.isEmpty
+                      _achievementTargets.isEmpty &&
+                              _achievementParameters.isEmpty &&
+                              _achievementAlternativeTargets.isEmpty
                           ? 'Es gelten die Standardwerte.'
-                          : '${_achievementTargets.length} eigene Werte; '
+                          : '${_achievementTargets.length + _achievementParameters.length + _achievementAlternativeTargets.length} eigene Werte; '
                                 'Änderungen werden mit der Rangliste gespeichert.',
                     ),
                   ],

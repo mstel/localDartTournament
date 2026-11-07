@@ -874,9 +874,9 @@ class CreatedTournament {
   final DateTime createdAt;
   DateTime? tournamentDate;
   DateTime updatedAt;
-  final List<TournamentPlayer> players;
-  final List<TournamentStage> stages;
-  final List<TournamentRunStage> runStages;
+  List<TournamentPlayer> players;
+  List<TournamentStage> stages;
+  List<TournamentRunStage> runStages;
   final LeagueMatch? leagueMatch;
   final ImportedTournamentArchive? importedArchive;
   bool _countsForRanking;

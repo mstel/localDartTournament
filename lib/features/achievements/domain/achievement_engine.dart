@@ -52,19 +52,37 @@ class AchievementEngine {
       final current = isPreserved && metricValue < definition.target
           ? definition.target
           : metricValue;
+      final alternativeMetricValue = definition.alternativeMetric == null
+          ? 0.0
+          : (values[definition.alternativeMetric] ?? 0)
+                .clamp(0, double.infinity)
+                .toDouble();
+      final alternativeTarget = definition.alternativeTarget;
+      final alternativeCurrent =
+          isPreserved &&
+              alternativeTarget != null &&
+              alternativeMetricValue < alternativeTarget
+          ? alternativeTarget
+          : alternativeMetricValue;
       final eligible = !definition.requiresCompletedRanking || rankingCompleted;
-      final reached = definition.strictTarget
-          ? current > definition.target
-          : current >= definition.target;
+      final reached =
+          (definition.strictTarget
+              ? current > definition.target
+              : current >= definition.target) ||
+          (alternativeTarget != null &&
+              (definition.strictTarget
+                  ? alternativeCurrent > alternativeTarget
+                  : alternativeCurrent >= alternativeTarget));
       final completed = isPreserved || (eligible && reached);
       final status = completed
           ? AchievementStatus.completed
-          : current > 0
+          : current > 0 || alternativeCurrent > 0
           ? AchievementStatus.inProgress
           : AchievementStatus.locked;
       progress[definition.id] = AchievementProgress(
         definition: definition,
         currentValue: current,
+        alternativeCurrentValue: alternativeCurrent,
         status: status,
         unlockedAt: unlockedAt[definition.id],
       );

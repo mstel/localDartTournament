@@ -156,6 +156,15 @@ class PlayerInsightEngine {
         matchesByPlayer[playerId]?.add(match);
       }
     }
+    final tournamentMatches = matches
+        .where((match) => match.tournament.id == tournament.id)
+        .toList();
+    final firstCompletedMatchIndex = tournamentMatches.indexWhere(
+      (match) => match.hasOutcome,
+    );
+    final momentumPlayerIds = firstCompletedMatchIndex < 0
+        ? const <String>{}
+        : tournamentMatches[firstCompletedMatchIndex].winnerIds;
 
     for (final entry in participants.entries) {
       final playerId = entry.key;
@@ -200,15 +209,20 @@ class PlayerInsightEngine {
           '$playerName hat seine letzten $lossesInARow Matches in Folge verloren.',
         );
       }
-      final firstCompletedResult = recent
-          .where((match) => match.hasOutcome)
-          .firstOrNull;
-      if (firstCompletedResult != null &&
-          firstCompletedResult.winnerIds.contains(playerId)) {
+      final hasLostSinceFirstTournamentWin =
+          momentumPlayerIds.contains(playerId) &&
+          tournamentMatches.indexed.any(
+            (entry) =>
+                entry.$1 > firstCompletedMatchIndex &&
+                entry.$2.loserIds.contains(playerId),
+          );
+      if (momentumPlayerIds.contains(playerId) &&
+          !hasLostSinceFirstTournamentWin) {
         add(
           playerId,
           PlayerInsightType.momentum,
-          '$playerName hat seine erste abgeschlossene Partie des Turniers gewonnen.',
+          '$playerName hat die erste abgeschlossene Partie des Turniers '
+          'gewonnen und seitdem noch keine Partie verloren.',
         );
       }
       if (outcomes.isNotEmpty && outcomes.first == true && lossesInARow == 0) {

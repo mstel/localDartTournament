@@ -61,17 +61,18 @@ class TournamentCompletionImageGenerator {
     required TournamentCompletionImageData data,
     ColorScheme? colorScheme,
   }) async {
-    final palette = colorScheme == null
-        ? const TournamentDisplayColors(
-            background: TournamentDisplayPalette.background,
-            card: TournamentDisplayPalette.card,
-            cardEmphasis: TournamentDisplayPalette.cardEmphasis,
-            border: TournamentDisplayPalette.border,
-            accent: TournamentDisplayPalette.accent,
-            text: TournamentDisplayPalette.text,
-            mutedText: TournamentDisplayPalette.mutedText,
-          )
+    final themePalette = colorScheme == null
+        ? null
         : TournamentDisplayPalette.forColorScheme(colorScheme);
+    final palette = TournamentDisplayColors(
+      background: TournamentDisplayPalette.background,
+      card: TournamentDisplayPalette.card,
+      cardEmphasis: TournamentDisplayPalette.cardEmphasis,
+      border: TournamentDisplayPalette.border,
+      accent: themePalette?.accent ?? TournamentDisplayPalette.accent,
+      text: TournamentDisplayPalette.text,
+      mutedText: TournamentDisplayPalette.mutedText,
+    );
     const width = 1080.0;
     const padding = 56.0;
     const contentWidth = width - padding * 2;

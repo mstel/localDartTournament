@@ -78,51 +78,98 @@ class _EloTrajectoryChartState extends State<EloTrajectoryChart> {
             onHorizontalDragUpdate: (details) =>
                 _selectPoint(details.localPosition.dx, constraints.maxWidth),
             child: SizedBox(
-              height: 180,
               width: double.infinity,
-              child: Stack(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _EloTrajectoryPainter(
-                        ratings: [
-                          for (final item in widget.points) item.rating,
-                        ],
-                        selectedIndex: selected,
-                        color: widget.color,
-                        gridColor: widget.gridColor,
-                      ),
-                    ),
-                  ),
-                  if (point != null)
-                    Positioned(
-                      top: 0,
-                      left: tooltipLeft
-                          .clamp(0.0, constraints.maxWidth - tooltipWidth)
-                          .toDouble(),
-                      width: tooltipWidth,
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.inverseSurface,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Text(
-                              [
-                                '${point.playedAt.day}.${point.playedAt.month}.${point.playedAt.year} · ${point.tournamentName}',
-                                '${point.rating} Elo (${point.delta >= 0 ? '+' : ''}${point.delta})',
-                                ...point.breakdown,
-                              ].join('\n'),
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onInverseSurface,
-                              ),
-                              textAlign: TextAlign.center,
+                  SizedBox(
+                    height: 180,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _EloTrajectoryPainter(
+                              ratings: [
+                                for (final item in widget.points) item.rating,
+                              ],
+                              selectedIndex: selected,
+                              color: widget.color,
+                              gridColor: widget.gridColor,
                             ),
                           ),
+                        ),
+                        if (point != null)
+                          Positioned(
+                            top: 0,
+                            left: tooltipLeft
+                                .clamp(0.0, constraints.maxWidth - tooltipWidth)
+                                .toDouble(),
+                            width: tooltipWidth,
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.inverseSurface,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text(
+                                    [
+                                      '${point.playedAt.day}.${point.playedAt.month}.${point.playedAt.year} · ${point.tournamentName}',
+                                      '${point.rating} Elo (${point.delta >= 0 ? '+' : ''}${point.delta})',
+                                      ...point.breakdown,
+                                    ].join('\n'),
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onInverseSurface,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (widget.points.isNotEmpty)
+                    SizedBox(
+                      height: 52,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final item in widget.points)
+                              SizedBox(
+                                width: 120,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${item.playedAt.day}.${item.playedAt.month}.${item.playedAt.year}',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.labelSmall,
+                                      ),
+                                      Text(
+                                        item.tournamentName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
@@ -190,6 +237,14 @@ class _EloTrajectoryPainter extends CustomPainter {
         canvas.drawCircle(
           point,
           6,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.fill,
+        );
+      } else {
+        canvas.drawCircle(
+          point,
+          3.5,
           Paint()
             ..color = color
             ..style = PaintingStyle.fill,

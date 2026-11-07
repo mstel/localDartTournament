@@ -101,6 +101,12 @@ class TournamentAudioAnnouncementService {
   Future<void> playAlert() =>
       _runAudioOperation('Signalton abspielen', _output.playCue);
 
+  Future<void> speakGerman(String text) =>
+      _runAudioOperation('Deutsche Turnieransage', () {
+        _requestId++;
+        return _output.speakGerman(text);
+      });
+
   Future<void> dispose() async {
     _requestId++;
     await _runAudioOperation('Sprachausgabe stoppen', _output.stopSpeaking);

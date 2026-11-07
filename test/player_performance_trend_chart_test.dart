@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('chart supports series toggles and data point details', (
-    tester,
-  ) async {
+  testWidgets('separate metric charts show data point details', (tester) async {
     tester.view.physicalSize = const Size(800, 600);
     tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(
@@ -44,12 +42,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Trendkurven anzeigen'), findsOneWidget);
+    expect(find.text('Scoring · 2026'), findsOneWidget);
+    expect(find.text('Average · 2026'), findsOneWidget);
+    expect(find.text('Checkout Quote · 2026'), findsOneWidget);
     final chart = find.byWidgetPredicate(
       (widget) => widget is SizedBox && widget.height == 180,
     );
-    final topLeft = tester.getTopLeft(chart);
-    final chartSize = tester.getSize(chart);
+    final firstChart = chart.first;
+    final topLeft = tester.getTopLeft(firstChart);
+    final chartSize = tester.getSize(firstChart);
     final monthFourX = topLeft.dx + chartSize.width - 8;
     await tester.tapAt(Offset(monthFourX, topLeft.dy + 60));
     await tester.pumpAndSettle();
@@ -58,18 +59,9 @@ void main() {
     expect(find.text('Gewertete Legs: 20'), findsOneWidget);
     expect(find.text('Scoring: 60.0'), findsOneWidget);
     expect(
-      tester.widget<Tooltip>(find.byType(Tooltip)).message,
+      tester.widget<Tooltip>(find.byType(Tooltip).first).message,
       contains('Partien: 7'),
     );
-
-    await tester.tap(find.text('Scoring').first);
-    await tester.pumpAndSettle();
-    expect(
-      tester.widget<Text>(find.text('Scoring').first).style?.decoration,
-      TextDecoration.lineThrough,
-    );
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
     addTearDown(tester.view.resetPhysicalSize);
@@ -117,8 +109,9 @@ void main() {
     final chart = find.byWidgetPredicate(
       (widget) => widget is SizedBox && widget.height == 180,
     );
-    final topLeft = tester.getTopLeft(chart);
-    final chartSize = tester.getSize(chart);
+    final firstChart = chart.first;
+    final topLeft = tester.getTopLeft(firstChart);
+    final chartSize = tester.getSize(firstChart);
     await tester.tapAt(
       Offset(topLeft.dx + chartSize.width - 8, topLeft.dy + 60),
     );
@@ -127,7 +120,7 @@ void main() {
     expect(find.text('September 2026'), findsOneWidget);
     expect(find.text('Partien: 5'), findsOneWidget);
     expect(
-      tester.widget<Tooltip>(find.byType(Tooltip)).message,
+      tester.widget<Tooltip>(find.byType(Tooltip).first).message,
       contains('Partien: 5'),
     );
     addTearDown(tester.view.resetPhysicalSize);

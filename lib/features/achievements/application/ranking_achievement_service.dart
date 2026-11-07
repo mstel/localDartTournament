@@ -41,7 +41,7 @@ class RankingAchievementService {
     return switch (progress.definition.metric) {
       AchievementMetric.eloUpsetWins =>
         'Du hast einen Gegner besiegt, der zum Zeitpunkt des Matches '
-            'mindestens 200 ELO-Punkte mehr hatte.',
+            'mindestens ${_formatMetric(progress.definition.parameterTarget ?? 200)} ELO-Punkte mehr hatte.',
       AchievementMetric.firstScore180 || AchievementMetric.score180Count =>
         'Du hast ${value == '1' ? 'eine 180 geworfen' : '$value 180er geworfen'}.',
       AchievementMetric.legsWon => 'Du hast insgesamt $value Legs gewonnen.',
@@ -88,6 +88,8 @@ class RankingAchievementService {
     );
     final definitions = AchievementCatalog.withTargets(
       ranking.achievementTargets,
+      parameters: ranking.achievementParameters,
+      alternativeTargets: ranking.achievementAlternativeTargets,
     );
     final progress = <String, AchievementProgress>{
       for (final definition in definitions)
@@ -193,16 +195,34 @@ class RankingAchievementService {
     );
     final definitions = AchievementCatalog.withTargets(
       ranking.achievementTargets,
+      parameters: ranking.achievementParameters,
+      alternativeTargets: ranking.achievementAlternativeTargets,
     );
+    final sourceChanged =
+        stored.isEmpty ||
+        stored.values.any((row) => row['source_hash'] != sourceHash);
     final changedTargetIds = <String>{};
     for (final definition in definitions) {
       final defaultTarget = AchievementCatalog.definitions
           .singleWhere((item) => item.id == definition.id)
           .target;
+      final defaultAlternativeTarget = AchievementCatalog.definitions
+          .singleWhere((item) => item.id == definition.id)
+          .alternativeTarget;
+      final defaultParameterTarget = AchievementCatalog.definitions
+          .singleWhere((item) => item.id == definition.id)
+          .parameterTarget;
       final storedTarget = (stored[definition.id]?['target_value'] as num?)
           ?.toDouble();
+      final storedAlternativeTarget =
+          (stored[definition.id]?['alternative_target_value'] as num?)
+              ?.toDouble();
       if (definition.target != defaultTarget ||
-          (storedTarget != null && storedTarget != definition.target)) {
+          (storedTarget != null && storedTarget != definition.target) ||
+          definition.alternativeTarget != defaultAlternativeTarget ||
+          definition.parameterTarget != defaultParameterTarget ||
+          (storedAlternativeTarget != null &&
+              storedAlternativeTarget != (definition.alternativeTarget ?? 0))) {
         changedTargetIds.add(definition.id);
       }
     }
@@ -219,8 +239,12 @@ class RankingAchievementService {
           .where((definition) => definition.id == entry.key)
           .firstOrNull;
       final storedTarget = (row['target_value'] as num?)?.toDouble();
+      final storedAlternativeTarget = (row['alternative_target_value'] as num?)
+          ?.toDouble();
       final targetUnchanged =
-          definition != null && storedTarget == definition.target;
+          definition != null &&
+          storedTarget == definition.target &&
+          storedAlternativeTarget == (definition.alternativeTarget ?? 0);
       final categoryTargetChanged =
           definition?.isCategoryCompletion == true &&
           changedTargetIds.any(
@@ -247,6 +271,18 @@ class RankingAchievementService {
       monthlyPerformance,
       eloSnapshot: eloSnapshot,
     );
+    if (sourceChanged) {
+      unlockedAt.addAll(
+        await _historicalUnlockDates(
+          ranking: ranking,
+          profileId: playerProfileId,
+          tournaments: relevant,
+          monthlyPerformance: monthlyPerformance,
+          definitions: definitions,
+          eloSnapshot: eloSnapshot,
+        ),
+      );
+    }
     final hasParticipation = relevant.any(
       (tournament) => _containsPlayer(tournament.players, playerProfileId),
     );
@@ -317,6 +353,7 @@ class RankingAchievementService {
     List<CreatedTournament> tournaments,
     List<PlayerMonthlyPerformance> monthlyPerformance, {
     LocalEloSnapshot? eloSnapshot,
+    DateTime? through,
   }) {
     final values = <AchievementMetric, double>{};
     final participationTournaments = <CreatedTournament>[];
@@ -324,6 +361,7 @@ class RankingAchievementService {
     final matchRecords = <_PlayerMatchRecord>[];
     final beatenOpponents = <String>{};
     final lossesByOpponent = <String, int>{};
+    final legsWonByOpponent = <String, int>{};
     var tournamentWins = 0;
     var secondPlaces = 0;
     var thirdPlaces = 0;
@@ -337,6 +375,7 @@ class RankingAchievementService {
     var bullseyeFinishes = 0;
     var highFinishes = 0;
     var shortLegs = 0;
+    var shutoutMatchWins = 0;
 
     void recordPerformance(BestPerformance performance) {
       switch (performance.normalizedType) {
@@ -360,18 +399,30 @@ class RankingAchievementService {
 
     for (final tournament in tournaments) {
       final date = tournament.effectiveDate;
-      if (_containsPlayer(tournament.players, profileId)) {
+      final participationDate =
+          tournament.startedAt ??
+          tournament.tournamentDate ??
+          tournament.createdAt;
+      if (_containsPlayer(tournament.players, profileId) &&
+          (through == null || !participationDate.isAfter(through))) {
         participationTournaments.add(tournament);
       }
 
-      final winnerId = tournament.finishedAt == null
+      final tournamentFinishedAt = tournament.finishedAt ?? date;
+      final tournamentCompleteByDate =
+          tournament.finishedAt != null &&
+          (through == null || !tournamentFinishedAt.isAfter(through));
+      final winnerId =
+          tournament.finishedAt == null || !tournamentCompleteByDate
           ? null
           : TournamentWinner.profileId(tournament);
       if (winnerId == profileId) {
         tournamentWins++;
         tournamentWinsList.add(tournament);
       }
-      final placement = _placementFor(tournament, profileId);
+      final placement = tournamentCompleteByDate
+          ? _placementFor(tournament, profileId)
+          : null;
       if (placement == 2) secondPlaces++;
       if (placement == 3) thirdPlaces++;
       if (placement == 4) fourthPlaces++;
@@ -380,6 +431,7 @@ class RankingAchievementService {
       for (final match in matches) {
         if (!match.countsForStatistics) continue;
         final matchDate = match.finishedAt ?? date;
+        if (through != null && matchDate.isAfter(through)) continue;
         final sides = _matchSides(match);
         final homePlayers = sides.$1;
         final awayPlayers = sides.$2;
@@ -392,9 +444,29 @@ class RankingAchievementService {
         if (homeHasPlayer && match.homeLegs != null) {
           legsWon += match.homeLegs!;
           legsLost += match.awayLegs ?? 0;
+          if (match.awayLegs == 0) shutoutMatchWins++;
+          for (final opponent in awayPlayers) {
+            for (final opponentId in _individualProfileIds(opponent)) {
+              legsWonByOpponent.update(
+                opponentId,
+                (count) => count + match.homeLegs!,
+                ifAbsent: () => match.homeLegs!,
+              );
+            }
+          }
         } else if (awayHasPlayer && match.awayLegs != null) {
           legsWon += match.awayLegs!;
           legsLost += match.homeLegs ?? 0;
+          if (match.homeLegs == 0) shutoutMatchWins++;
+          for (final opponent in homePlayers) {
+            for (final opponentId in _individualProfileIds(opponent)) {
+              legsWonByOpponent.update(
+                opponentId,
+                (count) => count + match.awayLegs!,
+                ifAbsent: () => match.awayLegs!,
+              );
+            }
+          }
         }
 
         final winner = match.winner;
@@ -424,7 +496,8 @@ class RankingAchievementService {
           recordPerformance(performance);
         }
       }
-      if (!matches.any((match) => match.bestPerformances.isNotEmpty)) {
+      if (!matches.any((match) => match.bestPerformances.isNotEmpty) &&
+          (through == null || !date.isAfter(through))) {
         for (final archived in _archivedBestPerformances(tournament)) {
           if (archived.$2 == profileId) recordPerformance(archived.$1);
         }
@@ -434,11 +507,19 @@ class RankingAchievementService {
     values[AchievementMetric.tournamentParticipations] =
         participationTournaments.length.toDouble();
     values[AchievementMetric.tournamentWins] = tournamentWins.toDouble();
-    values[AchievementMetric.secondPlaces] = secondPlaces.toDouble();
-    values[AchievementMetric.thirdPlaces] = thirdPlaces.toDouble();
-    values[AchievementMetric.fourthPlaces] = fourthPlaces.toDouble();
+    values[AchievementMetric.secondPlaces] = (secondPlaces + tournamentWins)
+        .toDouble();
+    values[AchievementMetric.thirdPlaces] =
+        (thirdPlaces + secondPlaces + tournamentWins).toDouble();
+    values[AchievementMetric.fourthPlaces] =
+        (fourthPlaces + thirdPlaces + secondPlaces + tournamentWins).toDouble();
     values[AchievementMetric.legsWon] = legsWon.toDouble();
     values[AchievementMetric.legsLost] = legsLost.toDouble();
+    values[AchievementMetric.shutoutMatchWins] = shutoutMatchWins.toDouble();
+    values[AchievementMetric.legsWonAgainstSameOpponent] = legsWonByOpponent
+        .values
+        .fold<int>(0, (maximum, count) => count > maximum ? count : maximum)
+        .toDouble();
     values[AchievementMetric.score180Count] = score180s.toDouble();
     values[AchievementMetric.firstScore180] = score180s > 0 ? 1 : 0;
     values[AchievementMetric.score171Count] = score171s.toDouble();
@@ -484,7 +565,16 @@ class RankingAchievementService {
     final eligibleMonths = monthlyPerformance.where(
       (entry) =>
           entry.weightedLegs >= 10 &&
-          _rankingIncludesMonth(entry.year, entry.month, ranking),
+          _rankingIncludesMonth(entry.year, entry.month, ranking) &&
+          (through == null ||
+              !DateTime(
+                entry.year,
+                entry.month + 1,
+                0,
+                23,
+                59,
+                59,
+              ).isAfter(through)),
     );
     final months = eligibleMonths.toList();
     values[AchievementMetric.monthlyAverage] = _maximum(
@@ -517,6 +607,16 @@ class RankingAchievementService {
       profileId,
       tournaments,
       eloSnapshot,
+      through: through,
+      minimumDifference: ranking.achievementParameters['elo_upset'] ?? 200.0,
+    ).toDouble();
+    values[AchievementMetric
+        .consecutiveWinsAgainstLowerElo] = _consecutiveWinsAgainstLowerElo(
+      profileId,
+      tournaments,
+      eloSnapshot,
+      through: through,
+      minimumDifference: ranking.achievementParameters['elo_upset'] ?? 200.0,
     ).toDouble();
     values[AchievementMetric.rankingGold] = 0;
     values[AchievementMetric.rankingSilver] = 0;
@@ -651,8 +751,10 @@ class RankingAchievementService {
   int _eloUpsetWins(
     String profileId,
     List<CreatedTournament> tournaments,
-    LocalEloSnapshot? snapshot,
-  ) {
+    LocalEloSnapshot? snapshot, {
+    DateTime? through,
+    required double minimumDifference,
+  }) {
     if (snapshot == null) return 0;
     var upsetWins = 0;
     for (final tournament in tournaments) {
@@ -662,6 +764,10 @@ class RankingAchievementService {
         if (!match.countsForStatistics ||
             match.homePlayer == null ||
             match.awayPlayer == null) {
+          continue;
+        }
+        if (through != null &&
+            (match.finishedAt ?? tournament.effectiveDate).isAfter(through)) {
           continue;
         }
         final homeId = match.homePlayer!.profileId ?? match.homePlayer!.name;
@@ -681,17 +787,83 @@ class RankingAchievementService {
         if (homeHistory == null || awayHistory == null) continue;
         final difference = homeHistory.ratingBefore - awayHistory.ratingBefore;
         if (match.winner == match.homePlayer &&
-            difference <= -200 &&
+            difference <= -minimumDifference &&
             homeId == profileId) {
           upsetWins++;
         } else if (match.winner == match.awayPlayer &&
-            difference >= 200 &&
+            difference >= minimumDifference &&
             awayId == profileId) {
           upsetWins++;
         }
       }
     }
     return upsetWins;
+  }
+
+  int _consecutiveWinsAgainstLowerElo(
+    String profileId,
+    List<CreatedTournament> tournaments,
+    LocalEloSnapshot? snapshot, {
+    DateTime? through,
+    required double minimumDifference,
+  }) {
+    if (snapshot == null) return 0;
+    final events = <(DateTime, bool, int)>[];
+    var sequence = 0;
+    for (final tournament in tournaments) {
+      for (final entry in _orderedMatches(tournament).indexed) {
+        final match = entry.$2;
+        if (!match.countsForStatistics ||
+            match.homePlayer == null ||
+            match.awayPlayer == null) {
+          continue;
+        }
+        if (through != null &&
+            (match.finishedAt ?? tournament.effectiveDate).isAfter(through)) {
+          continue;
+        }
+        final homeId = match.homePlayer!.profileId ?? match.homePlayer!.name;
+        final awayId = match.awayPlayer!.profileId ?? match.awayPlayer!.name;
+        if (homeId != profileId && awayId != profileId) continue;
+        final playerIsHome = homeId == profileId;
+        final playerHistory = _historyForMatch(
+          snapshot,
+          profileId,
+          tournament.id,
+          entry.$1,
+        );
+        final opponentHistory = _historyForMatch(
+          snapshot,
+          playerIsHome ? awayId : homeId,
+          tournament.id,
+          entry.$1,
+        );
+        final hasLowerRatedOpponent =
+            playerHistory != null &&
+            opponentHistory != null &&
+            playerHistory.ratingBefore - opponentHistory.ratingBefore >=
+                minimumDifference;
+        final won = playerIsHome
+            ? match.winner == match.homePlayer
+            : match.winner == match.awayPlayer;
+        events.add((
+          match.finishedAt ?? tournament.effectiveDate,
+          won && hasLowerRatedOpponent,
+          sequence++,
+        ));
+      }
+    }
+    events.sort((left, right) {
+      final byDate = left.$1.compareTo(right.$1);
+      return byDate != 0 ? byDate : left.$3.compareTo(right.$3);
+    });
+    var currentStreak = 0;
+    var longestStreak = 0;
+    for (final event in events) {
+      currentStreak = event.$2 ? currentStreak + 1 : 0;
+      if (currentStreak > longestStreak) longestStreak = currentStreak;
+    }
+    return longestStreak;
   }
 
   LocalEloHistoryItem? _historyForMatch(
@@ -1041,12 +1213,97 @@ class RankingAchievementService {
     return date != 0 ? date : left.id.compareTo(right.id);
   }
 
+  Future<Map<String, DateTime>> _historicalUnlockDates({
+    required LocalRanking ranking,
+    required String profileId,
+    required List<CreatedTournament> tournaments,
+    required List<PlayerMonthlyPerformance> monthlyPerformance,
+    required List<AchievementDefinition> definitions,
+    required LocalEloSnapshot? eloSnapshot,
+  }) async {
+    final timestamps = <DateTime>{};
+    for (final tournament in tournaments) {
+      timestamps.add(
+        tournament.startedAt ??
+            tournament.tournamentDate ??
+            tournament.createdAt,
+      );
+      if (tournament.finishedAt != null) {
+        timestamps.add(tournament.finishedAt!);
+      }
+      for (final match in _matches(tournament)) {
+        final timestamp = match.finishedAt ?? match.startedAt;
+        if (timestamp != null) timestamps.add(timestamp);
+      }
+    }
+    for (final entry in monthlyPerformance) {
+      if (!_rankingIncludesMonth(entry.year, entry.month, ranking)) continue;
+      timestamps.add(DateTime(entry.year, entry.month + 1, 0, 23, 59, 59));
+    }
+    final orderedTimestamps = timestamps.toList()..sort();
+    final unlockedAt = <String, DateTime>{};
+    DateTime? rankingCompletedAt;
+    int? finalPosition;
+    Set<String> mvpPlayerIds = const {};
+    if (ranking.isCompleted && tournaments.isNotEmpty) {
+      rankingCompletedAt = tournaments
+          .map(
+            (tournament) => tournament.finishedAt ?? tournament.effectiveDate,
+          )
+          .reduce((left, right) => left.isAfter(right) ? left : right);
+      if (tournaments.any(
+        (tournament) => _containsPlayer(tournament.players, profileId),
+      )) {
+        finalPosition = await _rankingPosition(ranking, profileId, tournaments);
+        mvpPlayerIds = await _rankingMvpPlayerIds(
+          ranking,
+          await _eligibleRankingPlayerIds(ranking),
+          tournaments,
+        );
+      }
+    }
+    for (final timestamp in orderedTimestamps) {
+      final values = _calculateMetrics(
+        ranking,
+        profileId,
+        tournaments,
+        monthlyPerformance,
+        eloSnapshot: eloSnapshot,
+        through: timestamp,
+      );
+      final rankingCompletedByDate =
+          rankingCompletedAt != null && !rankingCompletedAt.isAfter(timestamp);
+      if (rankingCompletedByDate) {
+        values[AchievementMetric.rankingGold] = finalPosition == 1 ? 1 : 0;
+        values[AchievementMetric.rankingSilver] = finalPosition == 2 ? 1 : 0;
+        values[AchievementMetric.rankingBronze] = finalPosition == 3 ? 1 : 0;
+        values[AchievementMetric.rankingMvp] = mvpPlayerIds.contains(profileId)
+            ? 1
+            : 0;
+      }
+      final evaluation = const AchievementEngine().evaluate(
+        values: values,
+        rankingCompleted: rankingCompletedByDate,
+        definitions: definitions,
+      );
+      for (final progress in evaluation.progress.values) {
+        if (!progress.isCompleted ||
+            progress.definition.requiresCompletedRanking) {
+          continue;
+        }
+        unlockedAt.putIfAbsent(progress.definition.id, () => timestamp);
+      }
+    }
+    return unlockedAt;
+  }
+
   String _fingerprint(
     LocalRanking ranking,
     List<CreatedTournament> tournaments,
     List<PlayerMonthlyPerformance> monthlyPerformance,
   ) {
     final source = jsonEncode({
+      'achievementCalculationVersion': 2,
       'ranking': ranking.toJson(),
       'tournaments': [for (final item in tournaments) item.toJson()],
       'monthlyPerformance': [
@@ -1081,15 +1338,22 @@ class RankingAchievementService {
     final isPermanentMilestone =
         completed && _isPerformanceMilestone(definition);
     final previousUnlockedAt = previous?['unlocked_at'] as String?;
-    final unlockedAt = wasFinal
-        ? previousUnlockedAt
-        : completed
-        ? previousUnlockedAt ?? now.toIso8601String()
-        : null;
+    final recalculatedUnlockedAt = progress.unlockedAt
+        ?.toUtc()
+        .toIso8601String();
+    final unlockedAt =
+        recalculatedUnlockedAt ??
+        (wasFinal
+            ? previousUnlockedAt
+            : completed
+            ? previousUnlockedAt ?? now.toIso8601String()
+            : null);
     return {
       'achievement_id': definition.id,
       'current_value': progress.currentValue,
+      'alternative_current_value': progress.alternativeCurrentValue,
       'target_value': definition.target,
+      'alternative_target_value': definition.alternativeTarget ?? 0,
       'status': progress.status.name,
       'unlocked_at': unlockedAt,
       'explanation': definition.description,
@@ -1103,6 +1367,8 @@ class RankingAchievementService {
     Map<String, Object?>? row,
   ) {
     final currentValue = (row?['current_value'] as num?)?.toDouble() ?? 0;
+    final alternativeCurrentValue =
+        (row?['alternative_current_value'] as num?)?.toDouble() ?? 0;
     final status = AchievementStatus.values.firstWhere(
       (value) => value.name == row?['status'],
       orElse: () => AchievementStatus.locked,
@@ -1113,6 +1379,7 @@ class RankingAchievementService {
     return AchievementProgress(
       definition: definition,
       currentValue: currentValue,
+      alternativeCurrentValue: alternativeCurrentValue,
       status: status,
       unlockedAt: unlockedAt,
     );

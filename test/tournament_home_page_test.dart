@@ -90,9 +90,11 @@ void main() {
       players: const [],
       stages: const [],
       runStages: const [],
+      tournamentDate: DateTime(2026, 8, 15),
     )..finishedAt = DateTime(2026, 8, 15, 18);
     storage.tournaments.add(tournament);
     await showPage(tester);
+    expect(find.text('15.08.2026'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Turnieraktionen'));
     await tester.pumpAndSettle();
@@ -109,6 +111,64 @@ void main() {
     expect(tournament.finishedAt, DateTime(2026, 8, 20, 18));
     expect(storage.tournaments.single.finishedAt, DateTime(2026, 8, 20, 18));
   });
+
+  testWidgets(
+    'setting an old end date shifts match timestamps and keeps times',
+    (tester) async {
+      final home = TournamentPlayer(name: 'Home', isGenerated: false);
+      final away = TournamentPlayer(name: 'Away', isGenerated: false);
+      final firstMatch = GroupMatch(
+        homePlayer: home,
+        awayPlayer: away,
+        round: 1,
+        startedAt: DateTime(2026, 11, 6, 15, 20),
+        finishedAt: DateTime(2026, 11, 6, 15, 42),
+      );
+      final secondMatch = GroupMatch(
+        homePlayer: away,
+        awayPlayer: home,
+        round: 2,
+        startedAt: DateTime(2026, 11, 6, 16, 5),
+        finishedAt: DateTime(2026, 11, 6, 16, 31),
+      );
+      final tournament = CreatedTournament(
+        id: 'imported-historic',
+        name: 'Vereinsheim Unzenberg 2026 - 17. Spieltag',
+        players: [home, away],
+        stages: const [],
+        runStages: [
+          KnockoutTournamentRunStage(
+            name: 'KO',
+            rounds: [
+              [firstMatch, secondMatch],
+            ],
+          ),
+        ],
+        tournamentDate: DateTime(2026, 5, 6),
+        startedAt: DateTime(2026, 11, 6, 14),
+        finishedAt: DateTime(2026, 5, 6, 18),
+      );
+      storage.tournaments.add(tournament);
+      await showPage(tester);
+
+      await tester.tap(find.byTooltip('Turnieraktionen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enddatum festlegen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('6').last);
+      await tester.tap(find.text('Weiter'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Speichern'));
+      await tester.pumpAndSettle();
+
+      expect(tournament.startedAt, DateTime(2026, 5, 6, 14));
+      expect(tournament.finishedAt, DateTime(2026, 5, 6, 18));
+      expect(firstMatch.startedAt, DateTime(2026, 5, 6, 15, 20));
+      expect(firstMatch.finishedAt, DateTime(2026, 5, 6, 15, 42));
+      expect(secondMatch.startedAt, DateTime(2026, 5, 6, 16, 5));
+      expect(secondMatch.finishedAt, DateTime(2026, 5, 6, 16, 31));
+    },
+  );
 
   testWidgets('deleting a tournament requires name-specific confirmation', (
     tester,

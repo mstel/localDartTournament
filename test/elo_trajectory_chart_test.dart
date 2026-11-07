@@ -38,7 +38,7 @@ void main() {
     await tester.tapAt(tester.getTopLeft(chart) + const Offset(308, 90));
     await tester.pump();
 
-    expect(find.textContaining('Vereinspokal'), findsOneWidget);
+    expect(find.textContaining('Vereinspokal'), findsNWidgets(2));
     expect(find.textContaining('1234 Elo (+24)'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

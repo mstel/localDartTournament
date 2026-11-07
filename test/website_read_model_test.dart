@@ -562,6 +562,8 @@ void main() {
       name: 'Vereinsrangliste',
       achievementsEnabled: true,
       achievementTargets: {'tournament_participation_5': 9},
+      achievementAlternativeTargets: {'legs_lost_10': 8},
+      achievementParameters: {'elo_upset': 350},
     );
     await database.saveLocalRanking(ranking);
     await database.setRankingPlayers(ranking.id, [player.id]);
@@ -599,6 +601,14 @@ void main() {
           (achievement) => achievement['id'] == 'tournament_participation_5',
         );
     expect(participation['target'], 9);
+    final lossAlternative = (players.single['achievements'] as List)
+        .cast<Map<String, dynamic>>()
+        .singleWhere((achievement) => achievement['id'] == 'legs_lost_10');
+    expect(lossAlternative['alternativeTarget'], 8);
+    expect(
+      lossAlternative['alternativeDescription'],
+      'Gewinne 8 Matches zu Null.',
+    );
     expect(achievements['schemaVersion'], 2);
     expect(achievements['resource'], 'achievements');
   });

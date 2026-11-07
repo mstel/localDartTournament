@@ -140,9 +140,24 @@ void main() {
     );
     expect(first.evaluation.progress['score170_checkout']!.isCompleted, isTrue);
     expect(first.evaluation.progress['first_score180']!.isCompleted, isTrue);
+    expect(
+      first.evaluation.progress['first_score180']!.unlockedAt,
+      DateTime(2026, 4, 10, 21),
+    );
     expect(first.evaluation.progress['ranking_mvp']!.isCompleted, isFalse);
     expect(first.evaluation.progress['ranking_gold']!.isCompleted, isFalse);
     expect(first.evaluation.progress['legs_won_10']!.currentValue, 6);
+    expect(
+      first
+          .evaluation
+          .progress['losses_to_same_opponent_10']!
+          .alternativeCurrentValue,
+      6,
+    );
+    expect(
+      first.evaluation.progress['legs_lost_10']!.alternativeCurrentValue,
+      0,
+    );
     expect(first.evaluation.progress['training_sessions_10']!.currentValue, 1);
     expect(
       opponentAchievements
@@ -212,6 +227,21 @@ void main() {
     );
     expect(
       adjustedProgress.evaluation.progress['legs_won_10']!.isCompleted,
+      isTrue,
+    );
+    final adjustedAlternativeRanking = ranking.copyWith(
+      achievementAlternativeTargets: const {'losses_to_same_opponent_10': 6},
+    );
+    final adjustedAlternativeProgress = await service.refreshPlayer(
+      ranking: adjustedAlternativeRanking,
+      playerProfileId: winnerProfile.id,
+      tournaments: [restoredTournament],
+    );
+    expect(
+      adjustedAlternativeProgress
+          .evaluation
+          .progress['losses_to_same_opponent_10']!
+          .isCompleted,
       isTrue,
     );
     final stored = await database.loadRankingAchievementProgress(

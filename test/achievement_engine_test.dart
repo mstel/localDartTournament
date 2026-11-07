@@ -132,6 +132,7 @@ void main() {
       'legs_won_10': 3,
       'legs_won_25': 7,
     });
+
     final result = engine.evaluate(
       values: {AchievementMetric.legsWon: 5},
       rankingCompleted: false,
@@ -142,6 +143,42 @@ void main() {
     expect(result.progress['legs_won_10']!.isCompleted, isTrue);
     expect(result.progress['legs_won_25']!.definition.target, 7);
     expect(result.progress['legs_won_25']!.isCompleted, isFalse);
+  });
+
+  test(
+    'alternative achievement conditions unlock and accept custom targets',
+    () {
+      final definitions = AchievementCatalog.withTargets(
+        const {'legs_lost_10': 30},
+        alternativeTargets: const {'legs_lost_10': 4},
+      );
+      final result = engine.evaluate(
+        values: const {
+          AchievementMetric.legsLost: 2,
+          AchievementMetric.shutoutMatchWins: 4,
+        },
+        rankingCompleted: false,
+        definitions: definitions,
+      );
+      final progress = result.progress['legs_lost_10']!;
+
+      expect(progress.definition.target, 30);
+      expect(progress.definition.alternativeTarget, 4);
+      expect(progress.isCompleted, isTrue);
+      expect(progress.alternativeCurrentValue, 4);
+      expect(progress.fraction, 1);
+    },
+  );
+
+  test('Elo upset parameter updates both written conditions', () {
+    final achievement = AchievementCatalog.withTargets(
+      const {},
+      parameters: const {'elo_upset': 350},
+    ).singleWhere((definition) => definition.id == 'elo_upset');
+
+    expect(achievement.description, contains('350 ELO-Punkte'));
+    expect(achievement.alternativeDescription, contains('350 ELO-Punkte'));
+    expect(achievement.alternativeTarget, 5);
   });
 
   test('adjusted targets are reflected in achievement descriptions', () {

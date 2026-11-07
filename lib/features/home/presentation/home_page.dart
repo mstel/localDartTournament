@@ -297,6 +297,39 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     }
   }
 
+  List<GroupMatch> _matchesWithTimestamps(CreatedTournament tournament) {
+    final matches = <GroupMatch>{};
+    for (final stage in tournament.runStages) {
+      if (stage is KnockoutTournamentRunStage) {
+        matches.addAll(stage.matches);
+      } else if (stage is GroupTournamentRunStage) {
+        for (final group in stage.groups) {
+          matches
+            ..addAll(group.matches)
+            ..addAll(group.knockoutRounds.expand((round) => round))
+            ..addAll(group.placementMatches);
+        }
+      }
+    }
+    return matches
+        .where((match) => match.startedAt != null || match.finishedAt != null)
+        .toList();
+  }
+
+  DateTime _shiftTimestampDate(DateTime timestamp, int dayOffset) {
+    final local = timestamp.toLocal();
+    return DateTime(
+      local.year,
+      local.month,
+      local.day + dayOffset,
+      local.hour,
+      local.minute,
+      local.second,
+      local.millisecond,
+      local.microsecond,
+    );
+  }
+
   Future<void> _editTournamentEndTime(CreatedTournament tournament) async {
     final current = tournament.finishedAt ?? tournament.createdAt;
     final date = await showDatePicker(
@@ -325,8 +358,30 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
       time.minute,
     );
     final previous = tournament.finishedAt;
-    if (tournament.startedAt != null &&
-        endTime.isBefore(tournament.startedAt!)) {
+    final previousStartedAt = tournament.startedAt;
+    final matches = _matchesWithTimestamps(tournament);
+    final previousMatchTimes = {
+      for (final match in matches) match: (match.startedAt, match.finishedAt),
+    };
+    final latestMatchTimestamp = matches
+        .expand((match) => [match.startedAt, match.finishedAt])
+        .whereType<DateTime>()
+        .fold<DateTime?>(null, (latest, timestamp) {
+          if (latest == null || timestamp.isAfter(latest)) return timestamp;
+          return latest;
+        });
+    final timestampAnchor =
+        latestMatchTimestamp ??
+        tournament.finishedAt ??
+        tournament.startedAt ??
+        tournament.createdAt;
+    final dayOffset = DateUtils.dateOnly(
+      endTime,
+    ).difference(DateUtils.dateOnly(timestampAnchor.toLocal())).inDays;
+    final shiftedStart = tournament.startedAt == null
+        ? null
+        : _shiftTimestampDate(tournament.startedAt!, dayOffset);
+    if (shiftedStart != null && endTime.isBefore(shiftedStart)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Das Turnierende muss nach dem Turnierstart liegen.'),
@@ -335,7 +390,17 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
       return;
     }
     try {
-      tournament.finishedAt = endTime;
+      tournament
+        ..startedAt = shiftedStart
+        ..finishedAt = endTime;
+      for (final match in matches) {
+        if (match.startedAt != null) {
+          match.startedAt = _shiftTimestampDate(match.startedAt!, dayOffset);
+        }
+        if (match.finishedAt != null) {
+          match.finishedAt = _shiftTimestampDate(match.finishedAt!, dayOffset);
+        }
+      }
       await _storage.saveTournament(tournament);
       if (mounted) {
         _reloadTournaments();
@@ -344,7 +409,14 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
         );
       }
     } catch (error) {
-      tournament.finishedAt = previous;
+      tournament
+        ..startedAt = previousStartedAt
+        ..finishedAt = previous;
+      for (final entry in previousMatchTimes.entries) {
+        entry.key
+          ..startedAt = entry.value.$1
+          ..finishedAt = entry.value.$2;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

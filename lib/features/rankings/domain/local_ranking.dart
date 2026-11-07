@@ -26,6 +26,8 @@ class LocalRanking {
     this.enableTiers = false,
     this.achievementsEnabled = false,
     this.achievementTargets = const {},
+    this.achievementParameters = const {},
+    this.achievementAlternativeTargets = const {},
     this.isCompleted = false,
     this.tierBands,
     this.requireMinimumParticipations = false,
@@ -63,6 +65,8 @@ class LocalRanking {
   final bool enableTiers;
   final bool achievementsEnabled;
   final Map<String, double> achievementTargets;
+  final Map<String, double> achievementParameters;
+  final Map<String, double> achievementAlternativeTargets;
   final bool isCompleted;
   final List<EloTier>? tierBands;
   List<EloTier> get effectiveTierBands =>
@@ -118,6 +122,8 @@ class LocalRanking {
     'enableTiers': enableTiers,
     'achievementsEnabled': achievementsEnabled,
     'achievementTargets': achievementTargets,
+    'achievementParameters': achievementParameters,
+    'achievementAlternativeTargets': achievementAlternativeTargets,
     'isCompleted': isCompleted,
     if (tierBands != null)
       'tierBands': [for (final tier in tierBands!) tier.toJson()],
@@ -160,6 +166,17 @@ class LocalRanking {
     achievementsEnabled: json['achievementsEnabled'] as bool? ?? false,
     achievementTargets: {
       for (final entry in (json['achievementTargets'] as Map? ?? {}).entries)
+        if (entry.key is String && entry.value is num)
+          entry.key as String: (entry.value as num).toDouble(),
+    },
+    achievementAlternativeTargets: {
+      for (final entry
+          in (json['achievementAlternativeTargets'] as Map? ?? {}).entries)
+        if (entry.key is String && entry.value is num)
+          entry.key as String: (entry.value as num).toDouble(),
+    },
+    achievementParameters: {
+      for (final entry in (json['achievementParameters'] as Map? ?? {}).entries)
         if (entry.key is String && entry.value is num)
           entry.key as String: (entry.value as num).toDouble(),
     },
@@ -209,6 +226,8 @@ class LocalRanking {
     bool? enableTiers,
     bool? achievementsEnabled,
     Map<String, double>? achievementTargets,
+    Map<String, double>? achievementParameters,
+    Map<String, double>? achievementAlternativeTargets,
     bool? isCompleted,
     List<EloTier>? tierBands,
     bool? requireMinimumParticipations,
@@ -245,6 +264,9 @@ class LocalRanking {
     enableTiers: enableTiers ?? this.enableTiers,
     achievementsEnabled: achievementsEnabled ?? this.achievementsEnabled,
     achievementTargets: achievementTargets ?? this.achievementTargets,
+    achievementParameters: achievementParameters ?? this.achievementParameters,
+    achievementAlternativeTargets:
+        achievementAlternativeTargets ?? this.achievementAlternativeTargets,
     isCompleted: isCompleted ?? this.isCompleted,
     tierBands: tierBands ?? this.tierBands,
     requireMinimumParticipations:

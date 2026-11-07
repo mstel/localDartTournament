@@ -244,6 +244,13 @@ void main() {
 
     expect(rankingField.initialValue?.id, 'default');
     expect(yearField.initialValue, 2026);
+    expect(find.text('Jahr'), findsOneWidget);
+    expect(
+      tester.getBottomLeft(find.text('Jahr')).dy,
+      lessThan(
+        tester.getTopLeft(find.byType(DropdownButtonFormField<int?>)).dy,
+      ),
+    );
     expect(tester.takeException(), isNull);
   });
 

@@ -187,7 +187,8 @@ class LocalAppDatabase {
     final database = await _openDatabase();
     try {
       final rows = database.select(
-        '''SELECT achievement_id, current_value, target_value, status,
+        '''SELECT achievement_id, current_value, alternative_current_value,
+                  target_value, alternative_target_value, status,
                   unlocked_at, explanation, is_final, source_hash
            FROM ranking_achievement_progress
            WHERE ranking_id = ? AND player_profile_id = ?''',
@@ -218,12 +219,15 @@ class LocalAppDatabase {
             '''INSERT INTO ranking_achievement_progress(
                  ranking_id, player_profile_id, achievement_id,
                  current_value, target_value, status, unlocked_at,
-                 explanation, is_final, source_hash
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 explanation, is_final, source_hash,
+                 alternative_current_value, alternative_target_value
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(ranking_id, player_profile_id, achievement_id)
                DO UPDATE SET
                  current_value = excluded.current_value,
+                 alternative_current_value = excluded.alternative_current_value,
                  target_value = excluded.target_value,
+                 alternative_target_value = excluded.alternative_target_value,
                  status = excluded.status,
                  unlocked_at = excluded.unlocked_at,
                  explanation = excluded.explanation,
@@ -231,6 +235,8 @@ class LocalAppDatabase {
                  source_hash = excluded.source_hash
                WHERE current_value IS NOT excluded.current_value
                   OR target_value IS NOT excluded.target_value
+                  OR alternative_current_value IS NOT excluded.alternative_current_value
+                  OR alternative_target_value IS NOT excluded.alternative_target_value
                   OR status IS NOT excluded.status
                   OR unlocked_at IS NOT excluded.unlocked_at
                   OR explanation IS NOT excluded.explanation
@@ -247,6 +253,8 @@ class LocalAppDatabase {
               item['explanation'],
               item['is_final'],
               item['source_hash'],
+              item['alternative_current_value'] ?? 0,
+              item['alternative_target_value'] ?? 0,
             ],
           );
           changed =
@@ -938,7 +946,11 @@ class LocalAppDatabase {
           REFERENCES player_profiles(id) ON DELETE CASCADE,
         achievement_id TEXT NOT NULL,
         current_value REAL NOT NULL CHECK (current_value >= 0),
+        alternative_current_value REAL NOT NULL DEFAULT 0
+          CHECK (alternative_current_value >= 0),
         target_value REAL NOT NULL CHECK (target_value >= 0),
+        alternative_target_value REAL NOT NULL DEFAULT 0
+          CHECK (alternative_target_value >= 0),
         status TEXT NOT NULL
           CHECK (status IN ('locked', 'inProgress', 'completed')),
         unlocked_at TEXT,
@@ -951,6 +963,22 @@ class LocalAppDatabase {
       CREATE INDEX IF NOT EXISTS idx_ranking_achievement_player
         ON ranking_achievement_progress(player_profile_id, ranking_id);
     ''');
+    final columns = database
+        .select('PRAGMA table_info(ranking_achievement_progress)')
+        .map((row) => row['name'] as String)
+        .toSet();
+    if (!columns.contains('alternative_current_value')) {
+      database.execute(
+        'ALTER TABLE ranking_achievement_progress '
+        'ADD COLUMN alternative_current_value REAL NOT NULL DEFAULT 0',
+      );
+    }
+    if (!columns.contains('alternative_target_value')) {
+      database.execute(
+        'ALTER TABLE ranking_achievement_progress '
+        'ADD COLUMN alternative_target_value REAL NOT NULL DEFAULT 0',
+      );
+    }
   }
 }
 

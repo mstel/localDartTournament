@@ -3,7 +3,7 @@ enum AnnouncementNameFormat { fullName, firstNameLastInitial }
 class TournamentSettings {
   const TournamentSettings({
     this.playerMatchDeficitThreshold = 2,
-    this.groupMatchDeficitThreshold = 1,
+    this.groupMatchDeficitThreshold = 3,
     this.usePercentageForGroups = false,
     this.soundModeEnabled = false,
     this.announceHintsAudibly = false,
@@ -93,7 +93,7 @@ class TournamentSettings {
       ),
       groupMatchDeficitThreshold: _boundedInt(
         json['groupMatchDeficitThreshold'],
-        fallback: 1,
+        fallback: 3,
         minimum: minimumThreshold,
         maximum: maximumThreshold,
       ),

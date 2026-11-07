@@ -196,9 +196,13 @@ class WebsiteReadModelService {
                     'id': progress.definition.id,
                     'name': progress.definition.name,
                     'description': progress.definition.description,
+                    'alternativeDescription':
+                        progress.definition.alternativeDescription,
                     'category': progress.definition.category.name,
                     'currentValue': progress.currentValue,
+                    'alternativeCurrentValue': progress.alternativeCurrentValue,
                     'target': progress.definition.target,
+                    'alternativeTarget': progress.definition.alternativeTarget,
                     'status': progress.status.name,
                     'isCompleted': progress.isCompleted,
                     'experiencePoints': progress.definition.experiencePoints,

@@ -50,7 +50,7 @@ void main() {
   testWidgets('saves adjusted thresholds and can restore defaults', (
     tester,
   ) async {
-    Map<String, double>? result;
+    AchievementTargetValues? result;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -59,7 +59,7 @@ void main() {
               builder: (dialogContext) => TextButton(
                 key: const ValueKey('open-dialog'),
                 onPressed: () async {
-                  result = await showDialog<Map<String, double>>(
+                  result = await showDialog<AchievementTargetValues>(
                     context: dialogContext,
                     builder: (_) => const AchievementTargetDialog(targets: {}),
                   );
@@ -82,7 +82,7 @@ void main() {
     await tester.enterText(targetField, '20');
     await tester.tap(find.text('Speichern'));
     await tester.pumpAndSettle();
-    expect(result, {'tournament_participation_5': 20});
+    expect(result?.primary, {'tournament_participation_5': 20});
 
     await tester.pumpWidget(
       MaterialApp(
@@ -91,7 +91,7 @@ void main() {
             body: TextButton(
               key: const ValueKey('open-dialog'),
               onPressed: () async {
-                result = await showDialog<Map<String, double>>(
+                result = await showDialog<AchievementTargetValues>(
                   context: context,
                   builder: (_) => const AchievementTargetDialog(
                     targets: {'tournament_participation_5': 20},
@@ -118,7 +118,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Wiederherstellen'));
     await tester.pumpAndSettle();
-    expect(result, isEmpty);
+    expect(result?.primary, isEmpty);
+    expect(result?.parameters, isEmpty);
+    expect(result?.alternative, isEmpty);
   });
 
   testWidgets('updates helper description when an achievement target changes', (
@@ -149,5 +151,51 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Gewinne insgesamt 9 Legs.'), findsOneWidget);
+  });
+
+  testWidgets('Elo and alternative achievement targets can be edited', (
+    tester,
+  ) async {
+    AchievementTargetValues? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const ValueKey('open-dialog'),
+              onPressed: () async {
+                result = await showDialog<AchievementTargetValues>(
+                  context: context,
+                  builder: (_) => const AchievementTargetDialog(targets: {}),
+                );
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-dialog')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Rivalitäten & Comebacks'));
+    await tester.tap(find.text('Rivalitäten & Comebacks'));
+    await tester.pumpAndSettle();
+
+    final eloThreshold = find.byKey(
+      const ValueKey('achievement-parameter-elo_upset'),
+    );
+    final alternativeTarget = find.byKey(
+      const ValueKey('achievement-alternative-target-elo_upset'),
+    );
+    expect(eloThreshold, findsOneWidget);
+    expect(alternativeTarget, findsOneWidget);
+    await tester.ensureVisible(eloThreshold);
+    await tester.enterText(eloThreshold, '350');
+    await tester.tap(find.text('Speichern'));
+    await tester.pumpAndSettle();
+
+    expect(result?.parameters, {'elo_upset': 350});
+    expect(result?.alternative, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 }

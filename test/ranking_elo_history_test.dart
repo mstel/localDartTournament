@@ -53,8 +53,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Start'), findsOneWidget);
-    expect(find.text('1000 → 1030 Elo'), findsNWidgets(2));
+    expect(find.text('Start'), findsNWidgets(2));
+    expect(find.text('1000 → 1030 Elo'), findsOneWidget);
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });

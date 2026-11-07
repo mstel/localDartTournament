@@ -228,8 +228,14 @@ class _TournamentDirectorDashboardState
     if (dueBoards.isEmpty) return;
     for (final board in dueBoards) {
       _idleBoardLastAlert[board] = now;
+      final elapsed = now.difference(_idleBoardSince[board]!);
+      unawaited(
+        _audio.speakGerman(
+          '${widget.tournament.boardDisplayName(board)} seit '
+          '${elapsed.inMinutes} Minuten frei',
+        ),
+      );
     }
-    _playAlert();
   }
 
   void _playAlert() {
