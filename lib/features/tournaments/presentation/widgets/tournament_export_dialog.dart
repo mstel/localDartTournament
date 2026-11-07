@@ -102,10 +102,7 @@ class TournamentExportDialog {
           FilledButton.icon(
             onPressed: () async {
               final bytes = await const TournamentCompletionImageGenerator()
-                  .generatePortraitPng(
-                    data: imageData,
-                    colorScheme: Theme.of(context).colorScheme,
-                  );
+                  .generatePortraitPng(data: imageData);
               if (!context.mounted) return;
               await exportPngImage(
                 context,

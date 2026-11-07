@@ -227,7 +227,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Board Belegung'), findsOneWidget);
+    expect(find.text('Board Belegung & aktive Partien'), findsOneWidget);
     expect(find.textContaining('JETZT LIVE · BOARD 1'), findsOneWidget);
     expect(
       find.byKey(
@@ -363,6 +363,20 @@ void main() {
       find.byTooltip('Marvin hat seine letzten 3 Matches in Folge gewonnen.'),
       findsWidgets,
     );
+    final insightsPanel = find.byKey(
+      const ValueKey('second-screen-player-insights'),
+    );
+    expect(insightsPanel, findsOneWidget);
+    expect(
+      tester.getBottomLeft(insightsPanel).dy,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey('second-screen-director-board-1')),
+            )
+            .dy,
+      ),
+    );
 
     tournament.showPlayerInsights = false;
     await tester.pumpWidget(
@@ -379,6 +393,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Hot Streak'), findsNothing);
+    expect(insightsPanel, findsNothing);
 
     tournament.showPlayerInsights = true;
     await tester.pumpWidget(

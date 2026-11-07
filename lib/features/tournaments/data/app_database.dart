@@ -18,7 +18,7 @@ import '../../statistics/domain/player_monthly_performance.dart';
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 14;
+  static const schemaVersion = 15;
 
   final Directory? _baseDirectory;
 
@@ -771,7 +771,10 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion == 13) {
+      if (currentVersion == 14) {
+        _createRankingAchievementProgressTable(database);
+      } else if (currentVersion == 13) {
+        _createRankingAchievementProgressTable(database);
         _createMonthlyPlayerStatisticsTable(database);
       } else if (currentVersion == 12) {
         _createRankingAchievementProgressTable(database);

@@ -28,6 +28,25 @@ void main() {
     );
   });
 
+  testWidgets('bogey-opponent insight does not use a warning icon', (
+    tester,
+  ) async {
+    const insight = PlayerInsight(
+      type: PlayerInsightType.bogeyOpponent,
+      playerId: 'player',
+      explanation: 'Zwei Niederlagen gegen denselben Gegner.',
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: PlayerInsightBadgeRow(insights: [insight])),
+      ),
+    );
+
+    expect(find.byIcon(Icons.sports), findsOneWidget);
+    expect(find.byIcon(Icons.warning_amber), findsNothing);
+  });
+
   test('match insights include only generic and matching-rival badges', () {
     final home = TournamentPlayer(
       profileId: 'home',

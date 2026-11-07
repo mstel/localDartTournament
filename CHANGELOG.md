@@ -1,3 +1,19 @@
+# 2.6.0+80
+
+- Migriert lokale SQLite-Datenbanken von Schema 14 auf 15 und ergänzt fehlende
+  alternative Achievement-Fortschrittsspalten, ohne Profile, Ranglisten,
+  bestehende Erfolge oder Monatsstatistiken zu löschen. Vor der Migration
+  erstellt die App automatisch eine versionsbezogene Datenbanksicherung.
+- Behebt dadurch das Laden von Spielerprofil-Statistiken und die
+  Achievement-Aktualisierung nach Änderungen an Turnierteilnehmern und
+  Etappen.
+- Zeigt Insights im Zweitmonitor über der Board-Belegung und benennt den
+  Abschnitt in „Board Belegung & aktive Partien“ um.
+- Entfernt das irreführende Warnsymbol beim Angstgegner-Insight und verhindert
+  den goldenen Theme-Kachel-Hintergrund im exportierten Turnierbild.
+- Behält das Website-Read-Model und die V2-Ressourcenverträge unverändert
+  kompatibel bei.
+
 # 2.5.9+79
 
 - Behebt die Ermittlung von Spieler-Insights für das laufende Turnier und

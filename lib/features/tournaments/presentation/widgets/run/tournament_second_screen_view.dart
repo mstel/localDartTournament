@@ -3806,6 +3806,8 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (widget.tournament.directorModeEnabled)
+          _buildPlayerInsightsAtBoardOccupancy(context, t),
         if (widget.tournament.directorModeEnabled ||
             runningMatches.isNotEmpty) ...[
           Row(
@@ -3818,7 +3820,7 @@ class _TournamentSecondScreenViewState
               const SizedBox(width: 8),
               Text(
                 widget.tournament.directorModeEnabled
-                    ? 'Board Belegung'
+                    ? 'Board Belegung & aktive Partien'
                     : 'Aktuelle Partien (${runningMatches.length})',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
@@ -3931,6 +3933,100 @@ class _TournamentSecondScreenViewState
       ],
     );
   }
+
+  Widget _buildPlayerInsightsAtBoardOccupancy(
+    BuildContext context,
+    CreatedTournament tournament,
+  ) => FutureBuilder<Map<String, List<PlayerInsight>>>(
+    future: _playerInsights,
+    builder: (context, snapshot) {
+      final playerInsights = snapshot.data;
+      if (playerInsights == null || playerInsights.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      final playerNames = {
+        for (final player in tournament.players.expand(
+          (item) => item.individuals,
+        ))
+          player.profileId ?? 'name:${player.name.trim().toLowerCase()}':
+              player.name,
+      };
+      final entries =
+          playerInsights.entries
+              .where((entry) => entry.value.isNotEmpty)
+              .toList()
+            ..sort(
+              (left, right) => (playerNames[left.key] ?? left.key).compareTo(
+                playerNames[right.key] ?? right.key,
+              ),
+            );
+      if (entries.isEmpty) return const SizedBox.shrink();
+
+      return Padding(
+        key: const ValueKey('second-screen-player-insights'),
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Insights',
+              style: TextStyle(
+                color: TournamentDisplayPalette.text,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 6),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = constraints.maxWidth >= 740
+                    ? 340.0
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    for (final entry in entries)
+                      SizedBox(
+                        width: itemWidth,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: TournamentDisplayPalette.card,
+                            border: Border.all(
+                              color: TournamentDisplayPalette.border,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  playerNames[entry.key] ?? entry.key,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: TournamentDisplayPalette.text,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                PlayerInsightBadgeRow(insights: entry.value),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  );
 
   String _displayGroupLabel(String? groupKey) {
     if (groupKey == null || groupKey.trim().isEmpty) return '';
