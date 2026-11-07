@@ -1,3 +1,17 @@
+# 2.5.8+78
+
+- Ergänzt alternative Achievement-Erfüllungswege mit ranglistenspezifischen
+  Zielwerten und berechnet Freischaltdaten anhand der historischen Turnier-
+  und Spielergebnisse.
+- Verschiebt beim Ändern des Turnier-Enddatums die Match-Zeitstempel auf den
+  gewählten Kalendertag, ohne Uhrzeiten und Reihenfolge zu verändern.
+- Zeigt Performance-Kategorien in eigenen Diagrammen und ergänzt eine
+  Turnier-Zeitleiste für Elo-Verläufe.
+- Ordnet Turnierleiter-, Board-, Tonmodus- und Hinweiseinstellungen neu;
+  erweitert freie-Board-Anzeigen und akustische Hinweise.
+- Aktualisiert Achievement-Daten und alternative Bedingungen im Website-
+  Read-Model der App.
+
 # 2.5.6+76
 
 - Ermöglicht Drag-and-drop-Seeding für Turniere ohne Gruppen und schützt
