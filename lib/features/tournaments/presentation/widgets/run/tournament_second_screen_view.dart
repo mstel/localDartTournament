@@ -3643,8 +3643,6 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.tournament.directorModeEnabled)
-          _buildPlayerInsightsAtBoardOccupancy(context, t),
         if (widget.tournament.directorModeEnabled ||
             runningMatches.isNotEmpty) ...[
           Row(
@@ -3669,57 +3667,63 @@ class _TournamentSecondScreenViewState
           ),
           const SizedBox(height: 8),
           if (widget.tournament.directorModeEnabled)
-            LayoutBuilder(
-              builder: (context, constraints) {
-                const spacing = 10.0;
-                final columns = constraints.maxWidth >= 740
-                    ? 4
-                    : constraints.maxWidth >= 460
-                    ? 2
-                    : 1;
-                final width =
-                    (constraints.maxWidth - spacing * (columns - 1)) / columns;
-                final snapshot = TournamentDirectorSnapshot(
-                  widget.tournament,
-                  activeIndex,
-                );
-                return Wrap(
-                  spacing: spacing,
-                  runSpacing: spacing,
-                  children: [
-                    for (
-                      var board = 1;
-                      board <= widget.tournament.boardCount;
-                      board++
-                    )
-                      Builder(
-                        builder: (context) {
-                          final running = runningMatches
-                              .where(
-                                (entry) => entry.match.boardNumber == board,
-                              )
-                              .firstOrNull;
-                          return running == null
-                              ? _buildFreeBoardOccupancyTile(
-                                  context,
-                                  board: board,
-                                  since: _freeBoardSince(
-                                    snapshot,
-                                    widget.tournament,
-                                    board,
-                                  ),
-                                  width: width,
+            FutureBuilder<Map<String, List<PlayerInsight>>>(
+              future: _playerInsights,
+              builder: (context, insightSnapshot) => LayoutBuilder(
+                builder: (context, constraints) {
+                  const spacing = 10.0;
+                  final columns = constraints.maxWidth >= 740
+                      ? 4
+                      : constraints.maxWidth >= 460
+                      ? 2
+                      : 1;
+                  final width =
+                      (constraints.maxWidth - spacing * (columns - 1)) /
+                      columns;
+                  final snapshot = TournamentDirectorSnapshot(
+                    widget.tournament,
+                    activeIndex,
+                  );
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: [
+                      for (
+                        var board = 1;
+                        board <= widget.tournament.boardCount;
+                        board++
+                      )
+                        Builder(
+                          builder: (context) {
+                            final running = runningMatches
+                                .where(
+                                  (entry) => entry.match.boardNumber == board,
                                 )
-                              : _buildRunningMatchTile(
-                                  context,
-                                  running,
-                                  width: width,
-                                );
-                        },
-                      ),
-                  ],
-                );
-              },
+                                .firstOrNull;
+                            return running == null
+                                ? _buildFreeBoardOccupancyTile(
+                                    context,
+                                    board: board,
+                                    since: _freeBoardSince(
+                                      snapshot,
+                                      widget.tournament,
+                                      board,
+                                    ),
+                                    width: width,
+                                  )
+                                : _buildRunningMatchTile(
+                                    context,
+                                    running,
+                                    width: width,
+                                    playerInsights:
+                                        insightSnapshot.data ?? const {},
+                                  );
+                          },
+                        ),
+                    ],
+                  );
+                },
+              ),
             )
           else
             LayoutBuilder(
@@ -3771,100 +3775,6 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  Widget _buildPlayerInsightsAtBoardOccupancy(
-    BuildContext context,
-    CreatedTournament tournament,
-  ) => FutureBuilder<Map<String, List<PlayerInsight>>>(
-    future: _playerInsights,
-    builder: (context, snapshot) {
-      final playerInsights = snapshot.data;
-      if (playerInsights == null || playerInsights.isEmpty) {
-        return const SizedBox.shrink();
-      }
-
-      final playerNames = {
-        for (final player in tournament.players.expand(
-          (item) => item.individuals,
-        ))
-          player.profileId ?? 'name:${player.name.trim().toLowerCase()}':
-              player.name,
-      };
-      final entries =
-          playerInsights.entries
-              .where((entry) => entry.value.isNotEmpty)
-              .toList()
-            ..sort(
-              (left, right) => (playerNames[left.key] ?? left.key).compareTo(
-                playerNames[right.key] ?? right.key,
-              ),
-            );
-      if (entries.isEmpty) return const SizedBox.shrink();
-
-      return Padding(
-        key: const ValueKey('second-screen-player-insights'),
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Insights',
-              style: TextStyle(
-                color: TournamentDisplayPalette.text,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 6),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final itemWidth = constraints.maxWidth >= 740
-                    ? 340.0
-                    : constraints.maxWidth;
-                return Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    for (final entry in entries)
-                      SizedBox(
-                        width: itemWidth,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: TournamentDisplayPalette.card,
-                            border: Border.all(
-                              color: TournamentDisplayPalette.border,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  playerNames[entry.key] ?? entry.key,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: TournamentDisplayPalette.text,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                PlayerInsightBadgeRow(insights: entry.value),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      );
-    },
-  );
-
   String _displayGroupLabel(String? groupKey) {
     if (groupKey == null || groupKey.trim().isEmpty) return '';
     final cleaned = groupKey.trim();
@@ -3883,6 +3793,7 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     PlayEntry entry, {
     required double width,
+    Map<String, List<PlayerInsight>> playerInsights = const {},
   }) {
     final match = entry.match;
     return Container(
@@ -3906,19 +3817,87 @@ class _TournamentSecondScreenViewState
             startedAt: match.startedAt,
           ),
           const SizedBox(height: 6),
-          Text(
-            '${match.homePlayer?.shortDisplayName ?? "Offen"} - '
-            '${match.awayPlayer?.shortDisplayName ?? "Offen"}',
-            style: const TextStyle(
-              color: TournamentDisplayPalette.text,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          Row(
+            children: [
+              Expanded(
+                child: _runningPlayerName(
+                  match.homePlayer,
+                  match.awayPlayer,
+                  playerInsights,
+                  textAlign: TextAlign.start,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Text(
+                  '-',
+                  style: TextStyle(
+                    color: TournamentDisplayPalette.mutedText,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _runningPlayerName(
+                  match.awayPlayer,
+                  match.homePlayer,
+                  playerInsights,
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _runningPlayerName(
+    TournamentPlayer? player,
+    TournamentPlayer? opponent,
+    Map<String, List<PlayerInsight>> playerInsights, {
+    required TextAlign textAlign,
+  }) {
+    if (player == null) {
+      return const Text(
+        'Offen',
+        style: TextStyle(
+          color: TournamentDisplayPalette.text,
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+      );
+    }
+    final playerId =
+        player.profileId ?? 'name:${player.name.trim().toLowerCase()}';
+    final opponentId = opponent == null
+        ? null
+        : opponent.profileId ?? 'name:${opponent.name.trim().toLowerCase()}';
+    final List<PlayerInsight> insights =
+        (playerInsights[playerId] ?? const <PlayerInsight>[])
+            .where(
+              (insight) =>
+                  insight.rivalId == null || insight.rivalId == opponentId,
+            )
+            .take(3)
+            .toList();
+    final name = Text(
+      player.shortDisplayName,
+      style: const TextStyle(
+        color: TournamentDisplayPalette.text,
+        fontWeight: FontWeight.bold,
+        fontSize: 16,
+      ),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      textAlign: textAlign,
+    );
+    if (insights.isEmpty) return name;
+    return Tooltip(
+      message: insights
+          .map((insight) => '${insight.type.label}: ${insight.explanation}')
+          .join('\n'),
+      child: name,
     );
   }
 

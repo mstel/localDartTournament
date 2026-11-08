@@ -198,4 +198,46 @@ void main() {
     expect(result?.alternative, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('alternative requirement preview updates with its target', (
+    tester,
+  ) async {
+    AchievementTargetValues? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const ValueKey('open-dialog'),
+              onPressed: () async {
+                result = await showDialog<AchievementTargetValues>(
+                  context: context,
+                  builder: (_) => const AchievementTargetDialog(targets: {}),
+                );
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-dialog')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Spielbetrieb'));
+    await tester.tap(find.text('Spielbetrieb'));
+    await tester.pumpAndSettle();
+
+    final alternativeTarget = find.byKey(
+      const ValueKey('achievement-alternative-target-legs_lost_50'),
+    );
+    await tester.ensureVisible(alternativeTarget);
+    await tester.enterText(alternativeTarget, '50');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gewinne 50 Matches zu Null.'), findsOneWidget);
+    await tester.tap(find.text('Speichern'));
+    await tester.pumpAndSettle();
+    expect(result?.alternative, {'legs_lost_50': 50});
+    expect(tester.takeException(), isNull);
+  });
 }

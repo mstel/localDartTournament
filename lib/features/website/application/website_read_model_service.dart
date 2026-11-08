@@ -268,7 +268,19 @@ class WebsiteReadModelService {
       ],
       'rankings': [
         for (final ranking in rankings)
-          {'id': ranking.id, 'name': ranking.name, 'type': ranking.type.name},
+          {
+            'id': ranking.id,
+            'name': ranking.name,
+            'type': ranking.type.name,
+            'requireMinimumParticipations':
+                ranking.requireMinimumParticipations,
+            'minimumParticipations': ranking.minimumParticipations,
+            'achievementsEnabled': ranking.achievementsEnabled,
+            'achievementTargets': ranking.achievementTargets,
+            'achievementParameters': ranking.achievementParameters,
+            'achievementAlternativeTargets':
+                ranking.achievementAlternativeTargets,
+          },
       ],
       'rankingStandings': rankingStandings,
       'eloHistory': eloHistory,

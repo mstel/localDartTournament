@@ -145,7 +145,17 @@ void main() {
         },
       ]);
       expect(model['rankings'], [
-        {'id': ranking.id, 'name': ranking.name, 'type': 'series'},
+        {
+          'id': ranking.id,
+          'name': ranking.name,
+          'type': 'series',
+          'requireMinimumParticipations': false,
+          'minimumParticipations': 1,
+          'achievementsEnabled': false,
+          'achievementTargets': const <String, double>{},
+          'achievementParameters': const <String, double>{},
+          'achievementAlternativeTargets': const <String, double>{},
+        },
       ]);
       expect(model['rankingStandings'], [
         {
@@ -664,6 +674,8 @@ void main() {
       achievementTargets: {'tournament_participation_5': 9},
       achievementAlternativeTargets: {'legs_lost_10': 8},
       achievementParameters: {'elo_upset': 350},
+      requireMinimumParticipations: true,
+      minimumParticipations: 4,
     );
     await database.saveLocalRanking(ranking);
     await database.setRankingPlayers(ranking.id, [player.id]);
@@ -686,6 +698,22 @@ void main() {
     final model = await service.create();
     final resources = await service.createVersion2Resources(model);
     final achievements = resources['achievements']!;
+    final rankingsResource = resources['rankings']!;
+    final rankings = (rankingsResource['rankings'] as List)
+        .cast<Map<String, dynamic>>();
+    final publishedRanking = rankings.singleWhere(
+      (item) => item['id'] == ranking.id,
+    );
+    expect(publishedRanking['requireMinimumParticipations'], isTrue);
+    expect(publishedRanking['minimumParticipations'], 4);
+    expect(publishedRanking['achievementsEnabled'], isTrue);
+    expect(publishedRanking['achievementTargets'], {
+      'tournament_participation_5': 9,
+    });
+    expect(publishedRanking['achievementAlternativeTargets'], {
+      'legs_lost_10': 8,
+    });
+    expect(publishedRanking['achievementParameters'], {'elo_upset': 350});
     final standings =
         achievements['rankingAchievements'] as List<Map<String, dynamic>>;
 

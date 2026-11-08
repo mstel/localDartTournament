@@ -276,7 +276,19 @@ class _AchievementTargetDialogState extends State<AchievementTargetDialog> {
                                     ),
                                 decoration: InputDecoration(
                                   labelText: '${definition.name} · Alternative',
-                                  helperText: definition.alternativeDescription,
+                                  helperText: definition
+                                      .copyWith(
+                                        alternativeTarget:
+                                            _value(
+                                              _alternativeControllers[definition
+                                                      .id]!
+                                                  .text,
+                                            ) ??
+                                            (widget.alternativeTargets[definition
+                                                    .id] ??
+                                                definition.alternativeTarget!),
+                                      )
+                                      .alternativeDescription,
                                   border: const OutlineInputBorder(),
                                 ),
                                 onChanged: (_) => setState(() {}),

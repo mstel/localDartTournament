@@ -462,12 +462,25 @@ void main() {
       startRating: 1200,
       newPlayerK: 30,
       matchesBeforeNormal: 12,
+      achievementsEnabled: true,
+      achievementTargets: {'legs_lost_50': 60},
+      achievementAlternativeTargets: {'legs_lost_50': 50},
+      achievementParameters: {'elo_upset': 350},
+      requireMinimumParticipations: true,
+      minimumParticipations: 4,
     );
 
     await database.saveLocalRanking(ranking);
     await database.setRankingPlayers(ranking.id, [player.id]);
 
-    expect((await database.loadLocalRankings()).single.startRating, 1200);
+    final loadedRanking = (await database.loadLocalRankings()).single;
+    expect(loadedRanking.startRating, 1200);
+    expect(loadedRanking.achievementsEnabled, isTrue);
+    expect(loadedRanking.achievementTargets, {'legs_lost_50': 60});
+    expect(loadedRanking.achievementAlternativeTargets, {'legs_lost_50': 50});
+    expect(loadedRanking.achievementParameters, {'elo_upset': 350});
+    expect(loadedRanking.requireMinimumParticipations, isTrue);
+    expect(loadedRanking.minimumParticipations, 4);
     expect(await database.loadRankingPlayerIds(ranking.id), [player.id]);
     expect(
       (await database.loadRankingsForPlayer(player.id)).single.name,

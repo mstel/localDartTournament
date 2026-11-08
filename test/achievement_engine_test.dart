@@ -181,6 +181,40 @@ void main() {
     expect(achievement.alternativeTarget, 5);
   });
 
+  test(
+    'alternative target edits update the matching requirement and metric',
+    () {
+      final definitions = AchievementCatalog.withTargets(
+        const {},
+        alternativeTargets: const {'legs_lost_50': 50},
+      );
+      final achievement = definitions.singleWhere(
+        (definition) => definition.id == 'legs_lost_50',
+      );
+
+      expect(achievement.alternativeDescription, 'Gewinne 50 Matches zu Null.');
+      final belowTarget = engine.evaluate(
+        values: const {
+          AchievementMetric.shutoutMatchWins: 25,
+          AchievementMetric.legsLost: 0,
+        },
+        rankingCompleted: false,
+        definitions: definitions,
+      );
+      expect(belowTarget.progress['legs_lost_50']!.isCompleted, isFalse);
+
+      final atTarget = engine.evaluate(
+        values: const {
+          AchievementMetric.shutoutMatchWins: 50,
+          AchievementMetric.legsLost: 0,
+        },
+        rankingCompleted: false,
+        definitions: definitions,
+      );
+      expect(atTarget.progress['legs_lost_50']!.isCompleted, isTrue);
+    },
+  );
+
   test('adjusted targets are reflected in achievement descriptions', () {
     final achievement = AchievementCatalog.withTargets({
       'legs_won_10': 9,

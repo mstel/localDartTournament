@@ -2768,9 +2768,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  void _advanceKnockoutWinners() {
+  void _advanceKnockoutWinners({int startStageIndex = 0}) {
     if (widget.tournament.withdrawals.isEmpty) {
-      _advanceWithoutWithdrawals();
+      _advanceWithoutWithdrawals(startStageIndex: startStageIndex);
       return;
     }
     // Propagate forfeits through newly populated rounds until stable.
@@ -2787,8 +2787,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  void _advanceWithoutWithdrawals() {
-    for (final stage in widget.tournament.runStages) {
+  void _advanceWithoutWithdrawals({int startStageIndex = 0}) {
+    for (final stage in widget.tournament.runStages.skip(startStageIndex)) {
       if (stage is KnockoutTournamentRunStage && !stage.isKratzer) {
         if (stage.eliminationLossLimit == 2) {
           if (_preserveCompletedImportedDoubleElimination(stage)) continue;
@@ -2903,8 +2903,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  void _ensureGroupDeciders() {
-    for (final stage in widget.tournament.runStages) {
+  void _ensureGroupDeciders({int startStageIndex = 0}) {
+    for (final stage in widget.tournament.runStages.skip(startStageIndex)) {
       if (stage is! GroupTournamentRunStage) {
         continue;
       }
@@ -4745,27 +4745,27 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _reopenPreviousStage() async {
     if (!_canReopenPreviousStage) return;
+    final previousStageIndex = _activeStageIndex - 1;
     setState(() {
-      final prevIndex = _activeStageIndex - 1;
-      _activeStageIndex = prevIndex;
-      _viewStageIndex = prevIndex;
-      _completedStageIndexes.removeWhere((i) => i >= prevIndex);
+      _activeStageIndex = previousStageIndex;
+      _viewStageIndex = previousStageIndex;
+      _completedStageIndexes.removeWhere((i) => i >= previousStageIndex);
       widget.tournament.completedStageIndexes.removeWhere(
-        (i) => i >= prevIndex,
+        (i) => i >= previousStageIndex,
       );
       widget.tournament.reopenedForCorrections = true;
       widget.tournament.finishedAt = null;
 
       for (final match in _matchesForStage(
-        widget.tournament.runStages[prevIndex],
+        widget.tournament.runStages[previousStageIndex],
       )) {
         if (match.isAnnulled && !match.hasScore) {
           match.isAnnulled = false;
         }
       }
     });
-    _advanceKnockoutWinners();
-    _ensureGroupDeciders();
+    _advanceKnockoutWinners(startStageIndex: previousStageIndex);
+    _ensureGroupDeciders(startStageIndex: previousStageIndex);
     await _saveTournamentProgress();
   }
 
@@ -4805,9 +4805,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     );
     if (confirmed != true) return;
 
-    final resetStageName = widget.tournament.runStages[_activeStageIndex].name;
+    final resetStageIndex = _activeStageIndex;
+    final resetStageName = widget.tournament.runStages[resetStageIndex].name;
     setState(() {
-      final currentStage = widget.tournament.runStages[_activeStageIndex];
+      final currentStage = widget.tournament.runStages[resetStageIndex];
       for (final match in _matchesForStage(currentStage)) {
         match.homeLegs = null;
         match.awayLegs = null;
@@ -4833,15 +4834,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           }
         }
       }
-      _completedStageIndexes.remove(_activeStageIndex);
-      widget.tournament.completedStageIndexes.remove(_activeStageIndex);
+      _completedStageIndexes.remove(resetStageIndex);
+      widget.tournament.completedStageIndexes.remove(resetStageIndex);
       widget.tournament.addActivity(
         'stage_reset',
         'Etappe zurückgesetzt: $resetStageName',
       );
     });
-    _advanceKnockoutWinners();
-    _ensureGroupDeciders();
+    _advanceKnockoutWinners(startStageIndex: resetStageIndex);
+    _ensureGroupDeciders(startStageIndex: resetStageIndex);
     await _saveTournamentProgress();
   }
 

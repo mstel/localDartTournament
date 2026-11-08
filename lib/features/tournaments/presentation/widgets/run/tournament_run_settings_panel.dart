@@ -354,8 +354,8 @@ class _TournamentRunSettingsPanelState
             ),
         ],
         if (widget.showPrioritySettings ||
-            widget.showAudioSettings ||
-            widget.showHintAudioSettings)
+            widget.showHintAudioSettings ||
+            (widget.showAudioSettings && settings.soundModeEnabled))
           FilledButton.icon(
             onPressed: _saving ? null : _saveNumberSettings,
             icon: const Icon(Icons.save_outlined),

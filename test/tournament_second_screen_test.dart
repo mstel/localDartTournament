@@ -358,24 +358,51 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Hot Streak'), findsWidgets);
+    expect(find.text('Insights'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('second-screen-player-insights')),
+      findsNothing,
+    );
+    expect(find.text('Hot Streak'), findsOneWidget);
     expect(
       find.byTooltip('Marvin hat seine letzten 3 Matches in Folge gewonnen.'),
-      findsWidgets,
+      findsOneWidget,
     );
-    final insightsPanel = find.byKey(
-      const ValueKey('second-screen-player-insights'),
-    );
-    expect(insightsPanel, findsOneWidget);
+
+    final runningMatch =
+        (tournament.runStages.single as GroupTournamentRunStage)
+            .groups
+            .single
+            .matches
+            .last;
     expect(
-      tester.getBottomLeft(insightsPanel).dy,
-      lessThan(
-        tester
-            .getTopLeft(
-              find.byKey(const ValueKey('second-screen-director-board-1')),
-            )
-            .dy,
+      const OrderOfPlayController().start(tournament, 0, runningMatch, 1),
+      isTrue,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+            database: _PlayerInsightTestDatabase(),
+          ),
+        ),
       ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Hot Streak'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Tooltip &&
+            (widget.message?.startsWith(
+                  'Hot Streak: Marvin hat seine letzten 3 Matches in Folge gewonnen.',
+                ) ??
+                false),
+      ),
+      findsOneWidget,
     );
 
     tournament.showPlayerInsights = false;
@@ -393,7 +420,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Hot Streak'), findsNothing);
-    expect(insightsPanel, findsNothing);
+    expect(
+      find.byTooltip(
+        'Hot Streak: Marvin hat seine letzten 3 Matches in Folge gewonnen.',
+      ),
+      findsNothing,
+    );
 
     tournament.showPlayerInsights = true;
     await tester.pumpWidget(

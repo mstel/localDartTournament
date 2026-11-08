@@ -11,6 +11,141 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'reopening and resetting a late stage stays responsive in a large copied tournament',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final players = [
+        for (var index = 1; index <= 8; index++)
+          TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+      ];
+      const historyStageCount = 40;
+      final tournament = CreatedTournament(
+        name: 'Kopiertes Turnier',
+        players: players,
+        stages: [
+          for (var stageIndex = 0; stageIndex < historyStageCount; stageIndex++)
+            TournamentStage(
+              name: 'Etappe ${stageIndex + 1}',
+              type: 'groups',
+              groupSizes: const [8],
+            ),
+        ],
+        runStages: [
+          for (var stageIndex = 0; stageIndex < historyStageCount; stageIndex++)
+            GroupTournamentRunStage(
+              name: 'Etappe ${stageIndex + 1}',
+              groupPlayType: 'round_robin',
+              qualificationPlan: null,
+              tieBreakers: defaultGroupTieBreakers,
+              groups: [
+                TournamentGroup(
+                  name: 'Gruppe A',
+                  playType: 'round_robin',
+                  players: players,
+                  matches: [
+                    for (
+                      var homeIndex = 0;
+                      homeIndex < players.length;
+                      homeIndex++
+                    )
+                      for (
+                        var awayIndex = homeIndex + 1;
+                        awayIndex < players.length;
+                        awayIndex++
+                      )
+                        GroupMatch(
+                          homePlayer: players[homeIndex],
+                          awayPlayer: players[awayIndex],
+                          round: homeIndex + 1,
+                          homeLegs: stageIndex == historyStageCount - 1
+                              ? null
+                              : 3,
+                          awayLegs: stageIndex == historyStageCount - 1
+                              ? null
+                              : 0,
+                        ),
+                  ],
+                ),
+              ],
+            ),
+        ],
+        directorModeEnabled: true,
+        boardCount: 4,
+        activeStageIndex: historyStageCount - 1,
+        completedStageIndexes: {
+          for (var index = 0; index < historyStageCount - 1; index++) index,
+        },
+      );
+      final originalEarlierStageResults = [
+        for (final match
+            in (tournament.runStages.first as GroupTournamentRunStage)
+                .groups
+                .single
+                .matches)
+          (match.homeLegs, match.awayLegs),
+      ];
+      final storage = _MemoryTournamentStorage();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TournamentRunPage(
+            tournament: tournament,
+            runController: _RecordingRunController(storage),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Vorherige Etappe wieder öffnen'), findsOneWidget);
+
+      final reopenTimer = Stopwatch()..start();
+      await tester.tap(find.text('Vorherige Etappe wieder öffnen'));
+      await tester.pumpAndSettle();
+      reopenTimer.stop();
+      expect(tournament.activeStageIndex, historyStageCount - 2);
+      expect(
+        reopenTimer.elapsed,
+        lessThan(const Duration(seconds: 2)),
+        reason: 'Opening a previous stage should complete promptly.',
+      );
+
+      await tester.ensureVisible(find.text('Etappe zurücksetzen'));
+      await tester.tap(find.text('Etappe zurücksetzen'));
+      await tester.pumpAndSettle();
+      final resetTimer = Stopwatch()..start();
+      await tester.tap(find.text('Zurücksetzen'));
+      await tester.pumpAndSettle();
+      resetTimer.stop();
+      final resetMatches =
+          (tournament.runStages[historyStageCount - 2]
+                  as GroupTournamentRunStage)
+              .groups
+              .single
+              .matches;
+      expect(resetMatches.every((match) => !match.hasResult), isTrue);
+      expect(
+        resetTimer.elapsed,
+        lessThan(const Duration(seconds: 10)),
+        reason: 'Resetting a stage should complete promptly.',
+      );
+      expect([
+        for (final match
+            in (tournament.runStages.first as GroupTournamentRunStage)
+                .groups
+                .single
+                .matches)
+          (match.homeLegs, match.awayLegs),
+      ], originalEarlierStageResults);
+      expect(tester.takeException(), isNull);
+      debugPrint(
+        '40-stage copy: reopen ${reopenTimer.elapsed.inMilliseconds} ms, '
+        'reset ${resetTimer.elapsed.inMilliseconds} ms.',
+      );
+    },
+  );
+
   test(
     'accepted group draw survives the production storage roundtrip',
     () async {

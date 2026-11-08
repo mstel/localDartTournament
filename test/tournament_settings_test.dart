@@ -110,6 +110,40 @@ void main() {
     },
   );
 
+  testWidgets(
+    'alternative recommendation number button follows voice assistant mode',
+    (tester) async {
+      final tournament = _tournament();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                TournamentRunSettingsPanel(
+                  tournament: tournament,
+                  onChanged: () async {},
+                  showPrioritySettings: false,
+                  showHintAudioSettings: false,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Zahlenwerte speichern'), findsNothing);
+      await tester.tap(find.text('Sprachassistenz aktivieren'));
+      await tester.pumpAndSettle();
+      expect(find.text('Zahlenwerte speichern'), findsOneWidget);
+
+      await tester.tap(find.text('Sprachassistenz aktivieren'));
+      await tester.pumpAndSettle();
+      expect(find.text('Zahlenwerte speichern'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('tournament settings remain usable across responsive widths', (
     tester,
   ) async {

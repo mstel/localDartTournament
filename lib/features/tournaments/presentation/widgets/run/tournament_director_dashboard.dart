@@ -1155,6 +1155,77 @@ class _TournamentDirectorDashboardState
         .where((entry) => entry.match.hasPlayers)
         .length;
 
+    final hasStageActions =
+        widget.onCompleteStage != null ||
+        widget.onFinishEarly != null ||
+        (widget.onReopenPreviousStage != null &&
+            widget.canReopenPreviousStage) ||
+        (widget.onResetCurrentStage != null && widget.canResetCurrentStage);
+    final Widget? stageActions = hasStageActions
+        ? Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (widget.onReopenPreviousStage != null &&
+                  widget.canReopenPreviousStage)
+                OutlinedButton.icon(
+                  onPressed: widget.onReopenPreviousStage,
+                  icon: const Icon(Icons.undo),
+                  label: const Text('Vorherige Etappe wieder öffnen'),
+                ),
+              if (widget.onResetCurrentStage != null &&
+                  widget.canResetCurrentStage)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  onPressed: widget.onResetCurrentStage,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Etappe zurücksetzen'),
+                ),
+              if (widget.onFinishEarly != null)
+                OutlinedButton.icon(
+                  onPressed: !widget.canCompleteStage
+                      ? widget.onFinishEarly
+                      : null,
+                  icon: const Icon(Icons.block_outlined),
+                  label: const Text('Vorzeitig beenden'),
+                ),
+              if (widget.onCompleteStage != null)
+                FilledButton.icon(
+                  onPressed: widget.canCompleteStage
+                      ? widget.onCompleteStage
+                      : null,
+                  icon: Icon(
+                    widget.isLastStage
+                        ? Icons.check_circle_outline
+                        : Icons.arrow_forward,
+                  ),
+                  label: Text(
+                    widget.isLastStage
+                        ? 'Turnier abschließen'
+                        : 'Etappe abschließen',
+                  ),
+                ),
+              if (_hasNextKnockoutStage(t))
+                OutlinedButton.icon(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (context) => Dialog.fullscreen(
+                      child: TournamentSecondScreenView(
+                        tournament: t,
+                        isStandaloneWindow: true,
+                        showNextStagePreviewInitially: true,
+                        onClose: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.account_tree_outlined),
+                  label: const Text('Vorschau nächste Etappe'),
+                ),
+            ],
+          )
+        : null;
     final status = _box([
       Wrap(
         alignment: WrapAlignment.spaceBetween,
@@ -1171,75 +1242,7 @@ class _TournamentDirectorDashboardState
               ),
             ],
           ),
-          if (widget.onCompleteStage != null ||
-              widget.onFinishEarly != null ||
-              (widget.onReopenPreviousStage != null &&
-                  widget.canReopenPreviousStage) ||
-              (widget.onResetCurrentStage != null &&
-                  widget.canResetCurrentStage))
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (widget.onReopenPreviousStage != null &&
-                    widget.canReopenPreviousStage)
-                  OutlinedButton.icon(
-                    onPressed: widget.onReopenPreviousStage,
-                    icon: const Icon(Icons.undo),
-                    label: const Text('Vorherige Etappe wieder öffnen'),
-                  ),
-                if (widget.onResetCurrentStage != null &&
-                    widget.canResetCurrentStage)
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                    onPressed: widget.onResetCurrentStage,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Etappe zurücksetzen'),
-                  ),
-                if (widget.onFinishEarly != null)
-                  OutlinedButton.icon(
-                    onPressed: !widget.canCompleteStage
-                        ? widget.onFinishEarly
-                        : null,
-                    icon: const Icon(Icons.block_outlined),
-                    label: const Text('Vorzeitig beenden'),
-                  ),
-                if (widget.onCompleteStage != null)
-                  FilledButton.icon(
-                    onPressed: widget.canCompleteStage
-                        ? widget.onCompleteStage
-                        : null,
-                    icon: Icon(
-                      widget.isLastStage
-                          ? Icons.check_circle_outline
-                          : Icons.arrow_forward,
-                    ),
-                    label: Text(
-                      widget.isLastStage
-                          ? 'Turnier abschließen'
-                          : 'Etappe abschließen',
-                    ),
-                  ),
-                if (_hasNextKnockoutStage(t))
-                  OutlinedButton.icon(
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (context) => Dialog.fullscreen(
-                        child: TournamentSecondScreenView(
-                          tournament: t,
-                          isStandaloneWindow: true,
-                          showNextStagePreviewInitially: true,
-                          onClose: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-                    ),
-                    icon: const Icon(Icons.account_tree_outlined),
-                    label: const Text('Vorschau nächste Etappe'),
-                  ),
-              ],
-            ),
+          ?stageActions,
         ],
       ),
       const SizedBox(height: 12),
@@ -1432,6 +1435,10 @@ class _TournamentDirectorDashboardState
       children: [
         notices,
         const SizedBox(height: 12),
+        if (widget.directorModeEnabled && stageActions != null) ...[
+          _box([stageActions]),
+          const SizedBox(height: 12),
+        ],
         if (!widget.directorModeEnabled) ...[
           status,
           const SizedBox(height: 12),
