@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('historical tournament end time can be set directly', (
+  testWidgets('historical tournament end time is not manually editable', (
     tester,
   ) async {
     final tournament = CreatedTournament(
@@ -21,13 +21,12 @@ void main() {
             tournament: tournament,
             onStart: () async {},
             onEditTimes: (_, _) async {},
-            allowEndTimeEdit: true,
           ),
         ),
       ),
     );
 
-    expect(find.text('Endzeit festlegen'), findsOneWidget);
+    expect(find.text('Endzeit festlegen'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

@@ -44,6 +44,67 @@ class TournamentTiming {
             .map((e) => e.match)
             .toList();
 
+  /// Moves all recorded match timestamps by a whole number of local calendar
+  /// days, preserving the time of day and the matches' relative ordering.
+  static int shiftMatchDates(
+    CreatedTournament tournament,
+    DateTime targetDate,
+  ) {
+    final games = matches(tournament).toSet();
+    final timestamps = [
+      for (final match in games) ...[
+        if (match.startedAt != null) match.startedAt!,
+        if (match.finishedAt != null) match.finishedAt!,
+      ],
+    ];
+    if (timestamps.isEmpty) return 0;
+    timestamps.sort();
+    final firstLocal = timestamps.first.toLocal();
+    final sourceDate = DateTime(
+      firstLocal.year,
+      firstLocal.month,
+      firstLocal.day,
+    );
+    final sourceDateUtc = DateTime.utc(
+      sourceDate.year,
+      sourceDate.month,
+      sourceDate.day,
+    );
+    final normalizedTargetUtc = DateTime.utc(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+    );
+    final dayOffset = normalizedTargetUtc.difference(sourceDateUtc).inDays;
+    if (dayOffset == 0) return 0;
+
+    DateTime shift(DateTime timestamp) {
+      final local = timestamp.toLocal();
+      final shifted = DateTime(
+        local.year,
+        local.month,
+        local.day + dayOffset,
+        local.hour,
+        local.minute,
+        local.second,
+        local.millisecond,
+        local.microsecond,
+      );
+      return timestamp.isUtc ? shifted.toUtc() : shifted;
+    }
+
+    var changed = 0;
+    for (final match in games) {
+      final startedAt = match.startedAt;
+      final finishedAt = match.finishedAt;
+      if (startedAt == null && finishedAt == null) continue;
+      if (startedAt != null) match.startedAt = shift(startedAt);
+      if (finishedAt != null) match.finishedAt = shift(finishedAt);
+      changed++;
+    }
+    return changed;
+  }
+
   static bool startFromFirstResult(
     CreatedTournament tournament,
     TournamentPlanningParameters parameters,

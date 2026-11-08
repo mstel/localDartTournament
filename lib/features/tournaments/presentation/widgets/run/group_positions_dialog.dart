@@ -13,11 +13,13 @@ class GroupPositionsDialog extends StatefulWidget {
     super.key,
     required this.stage,
     this.ratings = const {},
+    this.loadRatings,
     this.loadCatalogProfiles,
   });
 
   final GroupTournamentRunStage stage;
   final Map<String, int> ratings;
+  final Future<Map<String, int>> Function()? loadRatings;
   final Future<List<PlayerProfile>> Function()? loadCatalogProfiles;
 
   @override
@@ -29,6 +31,8 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
   GroupPlayerAllocationMode _mode = GroupPlayerAllocationMode.manual;
   _GroupPlayerPosition? _selected;
   final _playerReplacements = <TournamentPlayer, TournamentPlayer>{};
+  late Map<String, int> _ratings = widget.ratings;
+  bool _isAllocating = false;
 
   @override
   void initState() {
@@ -66,17 +70,26 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
     _swap(selected, position);
   }
 
-  void _allocate(GroupPlayerAllocationMode mode) {
+  Future<void> _allocate(GroupPlayerAllocationMode mode) async {
+    if (_isAllocating || mode == GroupPlayerAllocationMode.manual) return;
     setState(() {
+      _isAllocating = true;
       _mode = mode;
       _selected = null;
-      if (mode == GroupPlayerAllocationMode.manual) return;
+    });
+    try {
+      if (mode != GroupPlayerAllocationMode.random &&
+          _ratings.isEmpty &&
+          widget.loadRatings != null) {
+        _ratings = await widget.loadRatings!();
+        if (!mounted) return;
+      }
       final players = _groups.expand((group) => group).toList();
       final arranged = const GroupPlayerAllocationEngine().allocate(
         players: players,
         groupSizes: [for (final group in _groups) group.length],
         mode: mode,
-        ratings: widget.ratings,
+        ratings: _ratings,
         random: Random(),
       );
       var offset = 0;
@@ -85,8 +98,12 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
         nextGroups.add(arranged.skip(offset).take(group.length).toList());
         offset += group.length;
       }
-      _groups = nextGroups;
-    });
+      setState(() => _groups = nextGroups);
+    } catch (error) {
+      _showError('Gruppen konnten nicht neu eingeteilt werden: $error');
+    } finally {
+      if (mounted) setState(() => _isAllocating = false);
+    }
   }
 
   Future<void> _copyAssignment() async {
@@ -375,7 +392,9 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
                           ),
                         ],
                         onChanged: (mode) {
-                          if (mode != null) setState(() => _mode = mode);
+                          if (mode != null && !_isAllocating) {
+                            setState(() => _mode = mode);
+                          }
                         },
                       );
                   if (constraints.maxWidth < 560) {
@@ -386,10 +405,20 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
                       Expanded(child: picker),
                       const SizedBox(width: 12),
                       FilledButton.icon(
-                        onPressed: _mode == GroupPlayerAllocationMode.manual
+                        onPressed:
+                            _isAllocating ||
+                                _mode == GroupPlayerAllocationMode.manual
                             ? null
                             : () => _allocate(_mode),
-                        icon: const Icon(Icons.shuffle),
+                        icon: _isAllocating
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.shuffle),
                         label: const Text('Neu einteilen'),
                       ),
                     ],
@@ -401,10 +430,18 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: FilledButton.icon(
-                    onPressed: _mode == GroupPlayerAllocationMode.manual
+                    onPressed:
+                        _isAllocating ||
+                            _mode == GroupPlayerAllocationMode.manual
                         ? null
                         : () => _allocate(_mode),
-                    icon: const Icon(Icons.shuffle),
+                    icon: _isAllocating
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.shuffle),
                     label: const Text('Neu einteilen'),
                   ),
                 ),

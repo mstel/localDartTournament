@@ -3,11 +3,9 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show ProductionTournamentRuntime;
-import 'package:flutter/services.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../../../../../shared/theme/tournament_display_palette.dart';
 
@@ -40,16 +38,13 @@ import 'recent_match_result_card.dart';
 import '../../../../league/presentation/league_overview.dart';
 
 const Map<String, String> _monitorWidgetTitles = {
-  'standings': 'Tabellen & Zwischenstände',
   'combined': 'Tabellen/Siegprognose mit Umschalter',
   'recent': 'Zuletzt beendete Matches',
   'boards': 'Boards & nächste Begegnungen',
-  'liveBoard': 'Live Board Ansicht',
   'stageProgress': 'Fortschritt nach Etappen',
   'highlights': 'Bestleistungen & Highlights',
   'ranking': 'Rangliste',
   'teamComparison': 'Mannschaftsvergleich',
-  'nextStagePreview': 'Vorschau nächste Etappe',
   'kratzerLives': 'Leben-Übersicht',
   'kratzerHandicaps': 'Handicaps',
 };
@@ -75,7 +70,7 @@ const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
     columnIndex: 0,
   ),
   SecondScreenWidgetPlacement(
-    widgetId: 'standings',
+    widgetId: 'combined',
     widthUnits: 2,
     heightUnits: 2,
     columnIndex: 1,
@@ -117,7 +112,6 @@ class TournamentSecondScreenView extends StatefulWidget {
 class _TournamentSecondScreenViewState
     extends State<TournamentSecondScreenView> {
   bool _showNextStagePreview = false;
-  bool _showInlineNextStagePreview = false;
   bool _showOnlyRankingParticipants = false;
   _StandingsDisplayMode _standingsDisplayMode = _StandingsDisplayMode.standings;
   final _previewVerticalController = ScrollController();
@@ -172,32 +166,43 @@ class _TournamentSecondScreenViewState
         ? null
         : widget.tournament.secondScreenLayouts[activeName];
     final placements = saved ?? _defaultMonitorLayout;
-    final hasCombinedWidget = placements.any(
-      (placement) => placement.widgetId == 'combined',
-    );
+    final normalized = <SecondScreenWidgetPlacement>[];
+    for (final placement in placements) {
+      if (placement.widgetId == 'liveBoard' ||
+          placement.widgetId == 'nextStagePreview') {
+        continue;
+      }
+      final widgetId = switch (placement.widgetId) {
+        'forecast' || 'standings' => 'combined',
+        _ => placement.widgetId,
+      };
+      if (widgetId == 'combined' &&
+          normalized.any((item) => item.widgetId == 'combined')) {
+        continue;
+      }
+      normalized.add(
+        widgetId == placement.widgetId
+            ? placement
+            : SecondScreenWidgetPlacement(
+                widgetId: widgetId,
+                widthUnits: placement.widthUnits,
+                heightUnits: placement.heightUnits,
+                startsNewRow: placement.startsNewRow,
+                columnIndex: placement.columnIndex,
+              ),
+      );
+    }
     return _withIndependentColumns(
-      placements
-          .where(
-            (placement) =>
-                placement.widgetId != 'forecast' || !hasCombinedWidget,
-          )
-          .map(
-            (placement) => placement.widgetId == 'forecast'
-                ? SecondScreenWidgetPlacement(
-                    widgetId: 'combined',
-                    widthUnits: placement.widthUnits,
-                    heightUnits: placement.heightUnits,
-                    startsNewRow: placement.startsNewRow,
-                    columnIndex: placement.columnIndex,
-                  )
-                : placement,
-          )
-          .where(_isMonitorWidgetAvailable)
-          .toList(),
+      normalized.where(_isMonitorWidgetAvailable).toList(),
     );
   }
 
   bool _isMonitorWidgetAvailable(SecondScreenWidgetPlacement placement) {
+    if (placement.widgetId == 'standings' ||
+        placement.widgetId == 'liveBoard' ||
+        placement.widgetId == 'nextStagePreview') {
+      return false;
+    }
     if (placement.widgetId == 'ranking') {
       return widget.tournament.leagueMatch == null &&
           widget.tournament.countsForRanking &&
@@ -205,9 +210,6 @@ class _TournamentSecondScreenViewState
     }
     if (placement.widgetId == 'teamComparison') {
       return widget.tournament.leagueMatch != null;
-    }
-    if (placement.widgetId == 'nextStagePreview') {
-      return widget.tournament.runStages.length > 1;
     }
     if (placement.widgetId == 'kratzerLives') {
       return widget.tournament.runStages.any(
@@ -252,16 +254,88 @@ class _TournamentSecondScreenViewState
         .where(_isMonitorWidgetAvailable)
         .toList();
     unawaited(_removeUnavailableRankingWidgets());
-    final fingerprint = jsonEncode(widget.tournament.toJson());
-    if (fingerprint != _eloInputFingerprint) {
-      _refreshEloChanges(fingerprint: fingerprint);
+    final resultFingerprint = _resultsInputFingerprint(widget.tournament);
+    if (resultFingerprint != _eloInputFingerprint) {
+      _refreshEloChanges(fingerprint: resultFingerprint);
       _refreshRankingStandings();
       _refreshPlayerInsights();
     }
-    if (fingerprint != _forecastFingerprint) {
-      _refreshAdvancementForecast(fingerprint: fingerprint);
+    final forecastFingerprint = _calculationFingerprint(widget.tournament);
+    if (forecastFingerprint != _forecastFingerprint) {
+      _refreshAdvancementForecast(fingerprint: forecastFingerprint);
     }
   }
+
+  String _resultsInputFingerprint(CreatedTournament tournament) => jsonEncode({
+    'id': tournament.id,
+    'countsForRanking': tournament.countsForRanking,
+    'rankingIds': tournament.rankingIds,
+    'showPlayerInsights': tournament.showPlayerInsights,
+    'tournamentDate': tournament.tournamentDate?.toIso8601String(),
+    'startedAt': tournament.startedAt?.toIso8601String(),
+    'finishedAt': tournament.finishedAt?.toIso8601String(),
+    'players': [
+      for (final player in tournament.players)
+        for (final individual in player.individuals)
+          [individual.profileId, individual.name],
+    ],
+    'results': [
+      for (final stage in tournament.runStages)
+        for (final match in _matchesOf(stage))
+          if (match.hasResult)
+            {
+              'round': match.round,
+              'placementKey': match.placementKey,
+              'label': match.label,
+              'isKratzer': match.isKratzer,
+              'participants': [
+                for (final player in [
+                  if (match.homePlayer != null) match.homePlayer!,
+                  if (match.awayPlayer != null) match.awayPlayer!,
+                  ...match.players,
+                ])
+                  for (final individual in player.individuals)
+                    [individual.profileId, individual.name],
+              ],
+              'scratchedPlayer': [
+                match.scratchedPlayer?.profileId,
+                match.scratchedPlayer?.name,
+              ],
+              'homeLegs': match.homeLegs,
+              'awayLegs': match.awayLegs,
+              'homeSets': match.homeSets,
+              'awaySets': match.awaySets,
+              'withdrawalSignature': match.withdrawalSignature,
+              'withdrawalHadResult': match.withdrawalHadResult,
+              'startedAt': match.startedAt?.toIso8601String(),
+              'finishedAt': match.finishedAt?.toIso8601String(),
+              'annulled': match.isAnnulled,
+              'withdrawalIgnored': match.withdrawalIgnored,
+              'bestPerformances': [
+                for (final performance in match.bestPerformances)
+                  performance.toJson(),
+              ],
+            },
+    ],
+  });
+
+  String _calculationFingerprint(CreatedTournament tournament) => jsonEncode({
+    'id': tournament.id,
+    'countsForRanking': tournament.countsForRanking,
+    'rankingIds': tournament.rankingIds,
+    'showPlayerInsights': tournament.showPlayerInsights,
+    'tournamentDate': tournament.tournamentDate?.toIso8601String(),
+    'startedAt': tournament.startedAt?.toIso8601String(),
+    'finishedAt': tournament.finishedAt?.toIso8601String(),
+    'stages': [
+      for (final stage in tournament.runStages)
+        switch (stage) {
+          GroupTournamentRunStage() => stage.toJson(),
+          KnockoutTournamentRunStage() => stage.toJson(),
+          _ => {'name': stage.name},
+        },
+    ],
+  });
 
   Future<void> _removeUnavailableRankingWidgets() async {
     if (widget.tournament.leagueMatch == null &&
@@ -310,7 +384,7 @@ class _TournamentSecondScreenViewState
 
   void _refreshEloChanges({String? fingerprint}) {
     _eloInputFingerprint =
-        fingerprint ?? jsonEncode(widget.tournament.toJson());
+        fingerprint ?? _resultsInputFingerprint(widget.tournament);
     _eloChanges = TournamentMatchEloService(
       database: _database,
       tournamentStorage: _storage,
@@ -426,7 +500,7 @@ class _TournamentSecondScreenViewState
 
   void _refreshAdvancementForecast({String? fingerprint}) {
     _forecastFingerprint =
-        fingerprint ?? jsonEncode(widget.tournament.toJson());
+        fingerprint ?? _calculationFingerprint(widget.tournament);
     _advancementForecast = null;
   }
 
@@ -642,16 +716,6 @@ class _TournamentSecondScreenViewState
       builder: (context, constraints) {
         final wide =
             constraints.maxWidth >= 1000 && constraints.maxHeight >= 620;
-        final allTournamentMatches = TournamentTiming.matches(t);
-        final playedCount = allTournamentMatches
-            .where((match) => match.hasPlayers && match.hasResult)
-            .length;
-        final totalMatchCount = t.runStages.isEmpty
-            ? allTournamentMatches.where((match) => match.hasPlayers).length
-            : t.runStages.fold(
-                0,
-                (total, stage) => total + _countMatchesForProgress(stage),
-              );
         final stageMatchCounts = activeStage == null
             ? null
             : _matchesOf(activeStage);
@@ -727,36 +791,17 @@ class _TournamentSecondScreenViewState
                         activeIndex,
                         activeStage,
                         expand: true,
-                        showPreviewButton: false,
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 6,
-                    child: _buildRecentMatchesAndEloPanel(
-                      context,
-                      t,
-                      playedMatches,
-                      expand: false,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 5,
-                    child: _buildOverviewPreviewAction(
-                      context,
-                      t,
-                      activeIndex,
-                      activeStage,
-                    ),
-                  ),
-                ],
+              _buildRecentMatchesAndEloPanel(
+                context,
+                t,
+                playedMatches,
+                expand: false,
               ),
             ],
           );
@@ -773,13 +818,6 @@ class _TournamentSecondScreenViewState
                 runSpacing: 4,
                 children: [
                   _MonitorTournamentClock(tournament: t),
-                  Text(
-                    '$playedCount/$totalMatchCount gespielt',
-                    style: const TextStyle(
-                      color: Color(0xFF70E0BA),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                   if (stageMatchCounts != null &&
                       activeStage is KnockoutTournamentRunStage)
                     Text(
@@ -788,6 +826,16 @@ class _TournamentSecondScreenViewState
                       style: const TextStyle(color: Colors.white70),
                     ),
                   if (widget.isStandaloneWindow) ...[
+                    if (_nextKnockoutStage(t, activeIndex, activeStage) != null)
+                      OutlinedButton.icon(
+                        key: const ValueKey(
+                          'monitor-next-stage-preview-header-button',
+                        ),
+                        onPressed: () =>
+                            setState(() => _showNextStagePreview = true),
+                        icon: const Icon(Icons.account_tree_outlined),
+                        label: const Text('Vorschau nächste Etappe'),
+                      ),
                     OutlinedButton.icon(
                       onPressed: _startMonitorLayoutEditing,
                       icon: const Icon(Icons.dashboard_customize),
@@ -843,6 +891,8 @@ class _TournamentSecondScreenViewState
                   _buildCustomLayoutToolbar(
                     context,
                     t,
+                    activeIndex,
+                    activeStage,
                     toolbarConstraints.maxWidth,
                   ),
             ),
@@ -883,16 +933,6 @@ class _TournamentSecondScreenViewState
     CreatedTournament tournament,
     TournamentRunStage? activeStage,
   ) {
-    final matches = TournamentTiming.matches(tournament);
-    final playedCount = matches
-        .where((match) => match.hasPlayers && match.hasResult)
-        .length;
-    final totalMatchCount = tournament.runStages.isEmpty
-        ? matches.where((match) => match.hasPlayers).length
-        : tournament.runStages.fold(
-            0,
-            (total, stage) => total + _countMatchesForProgress(stage),
-          );
     final knockoutStage = activeStage is KnockoutTournamentRunStage
         ? activeStage
         : null;
@@ -904,13 +944,6 @@ class _TournamentSecondScreenViewState
         runSpacing: 4,
         children: [
           _MonitorTournamentClock(tournament: tournament),
-          Text(
-            '$playedCount/$totalMatchCount gespielt',
-            style: const TextStyle(
-              color: Color(0xFF70E0BA),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
           if (knockoutStage != null)
             Text(
               '${knockoutStage.name}: '
@@ -1119,6 +1152,8 @@ class _TournamentSecondScreenViewState
   Widget _buildCustomLayoutToolbar(
     BuildContext context,
     CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? activeStage,
     double width,
   ) {
     final compact =
@@ -1129,6 +1164,12 @@ class _TournamentSecondScreenViewState
         runSpacing: 4,
         alignment: WrapAlignment.end,
         children: [
+          if (_nextKnockoutStage(tournament, activeIndex, activeStage) != null)
+            OutlinedButton.icon(
+              onPressed: () => setState(() => _showNextStagePreview = true),
+              icon: const Icon(Icons.account_tree_outlined),
+              label: const Text('Vorschau nächste Etappe'),
+            ),
           if (_isEditingLayout)
             FilledButton.icon(
               onPressed: _applyMonitorLayout,
@@ -1180,6 +1221,12 @@ class _TournamentSecondScreenViewState
       runSpacing: 4,
       alignment: WrapAlignment.end,
       children: [
+        if (_nextKnockoutStage(tournament, activeIndex, activeStage) != null)
+          OutlinedButton.icon(
+            onPressed: () => setState(() => _showNextStagePreview = true),
+            icon: const Icon(Icons.account_tree_outlined),
+            label: const Text('Vorschau nächste Etappe'),
+          ),
         if (_isEditingLayout) ...[
           OutlinedButton.icon(
             onPressed: _addMonitorWidget,
@@ -1599,9 +1646,7 @@ class _TournamentSecondScreenViewState
           expand: true,
         );
       case 'liveBoard':
-        return SingleChildScrollView(
-          child: _buildLiveBoardsPanel(context, tournament),
-        );
+        return const SizedBox.shrink();
       case 'stageProgress':
         return SingleChildScrollView(
           child: _buildStageProgressPanel(context, tournament),
@@ -1620,17 +1665,7 @@ class _TournamentSecondScreenViewState
             ? const SizedBox.shrink()
             : SingleChildScrollView(child: LeagueOverview(league: league));
       case 'nextStagePreview':
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 240),
-            child: FilledButton.icon(
-              key: const ValueKey('monitor-next-stage-preview-button'),
-              onPressed: () => setState(() => _showNextStagePreview = true),
-              icon: const Icon(Icons.account_tree_outlined),
-              label: const Text('Nächste Etappe', textAlign: TextAlign.center),
-            ),
-          ),
-        );
+        return const SizedBox.shrink();
       case 'kratzerLives':
         return SingleChildScrollView(
           child: _buildKratzerLivesPanel(tournament, activeStage),
@@ -2443,148 +2478,13 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  Widget _buildLiveBoardsPanel(
-    BuildContext context,
-    CreatedTournament tournament,
-  ) {
-    final boards = [
-      for (var board = 1; board <= tournament.boardCount; board++)
-        if (_validLiveBoardUri(tournament.directorBoardLiveUrls[board])
-            case final uri?)
-          (board: board, uri: uri),
-    ];
-    if (boards.isEmpty) {
-      return const Center(
-        child: Text(
-          'Für kein Board ist eine gültige Live Board URL hinterlegt.',
-          style: TextStyle(color: Colors.white70),
-        ),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final item in boards)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(tournament.boardDisplayName(item.board)),
-                    ),
-                    IconButton(
-                      tooltip: 'Live Board vergrößern',
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 48,
-                      ),
-                      onPressed: () => _showExpandedLiveBoard(
-                        tournament.boardDisplayName(item.board),
-                        item.uri,
-                      ),
-                      icon: const Icon(Icons.open_in_full),
-                    ),
-                  ],
-                ),
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Tooltip(
-                      message: 'Tippen, um das Live Board zu vergrößern',
-                      child: GestureDetector(
-                        onTap: () => _showExpandedLiveBoard(
-                          tournament.boardDisplayName(item.board),
-                          item.uri,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: _liveBoardBrowser(
-                            item.uri,
-                            key: ValueKey(
-                              'live-board-${item.board}-${item.uri}',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Uri? _validLiveBoardUri(String? rawUrl) {
-    if (rawUrl == null || rawUrl.trim().isEmpty) return null;
-    final uri = Uri.tryParse(rawUrl.trim());
-    if (uri == null ||
-        !uri.hasAuthority ||
-        !['http', 'https'].contains(uri.scheme.toLowerCase())) {
-      return null;
-    }
-    return uri;
-  }
-
-  Future<void> _showExpandedLiveBoard(String title, Uri uri) =>
-      showDialog<void>(
-        context: context,
-        builder: (context) => Dialog.fullscreen(
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(title),
-              leading: IconButton(
-                tooltip: 'Live Board verkleinern',
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close_fullscreen),
-              ),
-            ),
-            body: SafeArea(child: _liveBoardBrowser(uri)),
-          ),
-        ),
-      );
-
-  Widget _liveBoardBrowser(Uri uri, {Key? key}) {
-    if (Theme.of(context).platform == TargetPlatform.linux) {
-      return Center(
-        child: FilledButton.icon(
-          onPressed: () async {
-            if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
-                mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Live Board konnte nicht geöffnet werden.'),
-                ),
-              );
-            }
-          },
-          icon: const Icon(Icons.open_in_browser),
-          label: const Text('Live Board im Browser öffnen'),
-        ),
-      );
-    }
-    return InAppWebView(
-      key: key,
-      initialUrlRequest: URLRequest(url: WebUri(uri.toString())),
-      initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
-    );
-  }
-
   Widget _buildStandingsAndPreviewControl(
     BuildContext context,
     CreatedTournament t,
     int activeIndex,
     TournamentRunStage? stage, {
     bool expand = true,
-    bool showPreviewButton = true,
   }) {
-    final hasNextKnockout = _nextKnockoutStage(t, activeIndex, stage) != null;
-    final showInlinePreview = _showInlineNextStagePreview && hasNextKnockout;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2595,32 +2495,17 @@ class _TournamentSecondScreenViewState
         const SizedBox(height: 8),
         if (expand)
           Expanded(
-            child: showInlinePreview
-                ? _buildInlineNextStagePreview(context, t, activeIndex, stage)
-                : SingleChildScrollView(
-                    child: _buildStandingsDisplayPanel(
-                      context,
-                      t,
-                      activeIndex,
-                      stage,
-                    ),
-                  ),
+            child: SingleChildScrollView(
+              child: _buildStandingsDisplayPanel(
+                context,
+                t,
+                activeIndex,
+                stage,
+              ),
+            ),
           )
         else
           _buildStandingsDisplayPanel(context, t, activeIndex, stage),
-        if (hasNextKnockout && !showInlinePreview && showPreviewButton) ...[
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            onPressed: () => setState(() => _showInlineNextStagePreview = true),
-            icon: const Icon(Icons.account_tree_outlined),
-            label: const Text('Vorschau für die nächste Etappe'),
-          ),
-        ],
-        if (!expand && showInlinePreview)
-          SizedBox(
-            height: 620,
-            child: _buildInlineNextStagePreview(context, t, activeIndex, stage),
-          ),
       ],
     );
   }
@@ -2723,35 +2608,6 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  Widget _buildOverviewPreviewAction(
-    BuildContext context,
-    CreatedTournament tournament,
-    int activeIndex,
-    TournamentRunStage? stage,
-  ) {
-    final hasNextKnockout =
-        _nextKnockoutStage(tournament, activeIndex, stage) != null;
-    if (!hasNextKnockout || _showInlineNextStagePreview) {
-      return const SizedBox.shrink();
-    }
-    return Align(
-      alignment: Alignment.centerRight,
-      child: FilledButton.icon(
-        onPressed: () => setState(
-          () => _showInlineNextStagePreview = !_showInlineNextStagePreview,
-        ),
-        icon: Icon(
-          _showInlineNextStagePreview ? Icons.expand_less : Icons.account_tree,
-        ),
-        label: Text(
-          _showInlineNextStagePreview
-              ? 'Vorschau schließen'
-              : 'Vorschau für die nächste Etappe',
-        ),
-      ),
-    );
-  }
-
   KnockoutTournamentRunStage? _nextKnockoutStage(
     CreatedTournament t,
     int activeIndex,
@@ -2825,30 +2681,6 @@ class _TournamentSecondScreenViewState
           onPressed: _returnFromPreview,
           icon: const Icon(Icons.arrow_back),
           label: const Text('Zur Übersichtsansicht zurückkehren'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInlineNextStagePreview(
-    BuildContext context,
-    CreatedTournament t,
-    int activeIndex,
-    TournamentRunStage? activeStage,
-  ) {
-    final stage = _nextKnockoutStage(t, activeIndex, activeStage);
-    final stageIndex = _nextKnockoutStageIndex(t, activeIndex, activeStage);
-    if (stage == null) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(child: _buildBracketPreview(t, stage, stageIndex)),
-        const SizedBox(height: 6),
-        OutlinedButton.icon(
-          onPressed: () => setState(() => _showInlineNextStagePreview = false),
-          icon: const Icon(Icons.expand_less),
-          label: const Text('Vorschau schließen'),
         ),
       ],
     );
@@ -3744,10 +3576,15 @@ class _TournamentSecondScreenViewState
                     ),
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.priority_high,
-                          size: 18,
-                          color: TournamentDisplayPalette.accent,
+                        const Tooltip(
+                          message:
+                              'Prioritätshinweis: Diese Gruppe oder Spieler '
+                              'liegen im Spielplan zurück.',
+                          child: Icon(
+                            Icons.priority_high,
+                            size: 18,
+                            color: TournamentDisplayPalette.accent,
+                          ),
                         ),
                         const SizedBox(width: 6),
                         Expanded(
@@ -4093,9 +3930,10 @@ class _TournamentSecondScreenViewState
   }) => Container(
     width: width,
     key: ValueKey('second-screen-free-board-$board'),
+    constraints: const BoxConstraints(minHeight: 88),
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: const Color(0xFF144D34),
+      color: TournamentDisplayPalette.card,
       border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
       borderRadius: BorderRadius.circular(10),
     ),
@@ -4304,96 +4142,10 @@ class _TournamentSecondScreenViewState
                     ),
                 ],
               ),
-              _buildCompactLiveBoardFrames(context, tournament),
             ],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildCompactLiveBoardFrames(
-    BuildContext context,
-    CreatedTournament tournament,
-  ) {
-    final boards = [
-      for (var board = 1; board <= tournament.boardCount; board++)
-        if (_validLiveBoardUri(tournament.directorBoardLiveUrls[board])
-            case final uri?)
-          (board: board, uri: uri),
-    ];
-    if (boards.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Live Board Ansicht',
-            style: TextStyle(
-              color: TournamentDisplayPalette.text,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          for (final item in boards)
-            Card(
-              clipBehavior: Clip.antiAlias,
-              margin: const EdgeInsets.only(bottom: 10),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(tournament.boardDisplayName(item.board)),
-                        ),
-                        IconButton(
-                          tooltip: 'Live Board vergrößern',
-                          constraints: const BoxConstraints(
-                            minWidth: 48,
-                            minHeight: 48,
-                          ),
-                          onPressed: () => _showExpandedLiveBoard(
-                            tournament.boardDisplayName(item.board),
-                            item.uri,
-                          ),
-                          icon: const Icon(Icons.open_in_full),
-                        ),
-                      ],
-                    ),
-                    AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Tooltip(
-                          message: 'Tippen, um das Live Board zu vergrößern',
-                          child: GestureDetector(
-                            onTap: () => _showExpandedLiveBoard(
-                              tournament.boardDisplayName(item.board),
-                              item.uri,
-                            ),
-                            child: MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: _liveBoardBrowser(
-                                item.uri,
-                                key: ValueKey(
-                                  'board-queue-live-${item.board}-${item.uri}',
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 

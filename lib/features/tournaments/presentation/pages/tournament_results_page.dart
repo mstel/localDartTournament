@@ -256,7 +256,6 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               onEditTimes: _saveTimingEdits,
               allowManualStart: false,
               allowStartTimeEdit: true,
-              allowEndTimeEdit: true,
             ),
             const SizedBox(height: 16),
             SportMenuGroup(

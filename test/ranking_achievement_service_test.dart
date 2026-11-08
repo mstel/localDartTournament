@@ -171,6 +171,13 @@ void main() {
       opponentAchievements.evaluation.progress['high_finish_1']!.currentValue,
       1,
     );
+    expect(
+      opponentAchievements
+          .evaluation
+          .progress['first_tournament_win']!
+          .isCompleted,
+      isFalse,
+    );
     expect(second.evaluation.totalExperiencePoints, 202);
     final completedRanking = ranking.copyWith(isCompleted: true);
     final finalized = await service.refreshPlayer(
@@ -953,4 +960,110 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'loss milestones unlock at the losing match, not as win streaks',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'ranking_achievement_loss_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+
+      final database = LocalAppDatabase(baseDirectory: directory);
+      final loserProfile = await database.createPlayerProfile(
+        displayName: 'Verlierer',
+      );
+      final winnerProfile = await database.createPlayerProfile(
+        displayName: 'Gewinner',
+      );
+      const ranking = LocalRanking(
+        id: 'loss-timing',
+        name: 'Verlust-Regression',
+        achievementsEnabled: true,
+        achievementTargets: {'legs_lost_10': 10},
+      );
+      await database.saveLocalRanking(ranking);
+      await database.setRankingPlayers(ranking.id, [
+        loserProfile.id,
+        winnerProfile.id,
+      ]);
+
+      final loser = TournamentPlayer(
+        profileId: loserProfile.id,
+        name: loserProfile.displayName,
+        isGenerated: false,
+      );
+      final winner = TournamentPlayer(
+        profileId: winnerProfile.id,
+        name: winnerProfile.displayName,
+        isGenerated: false,
+      );
+      final matches = [
+        for (var index = 0; index < 4; index++)
+          GroupMatch(
+            homePlayer: loser,
+            awayPlayer: winner,
+            round: index + 1,
+            homeLegs: 0,
+            awayLegs: 3,
+            finishedAt: DateTime(2026, 8, 1, 18 + index),
+          ),
+      ];
+      final tournament = CreatedTournament(
+        id: 'loss-event',
+        name: 'Verlust-Regression',
+        tournamentDate: DateTime(2026, 8, 1),
+        players: [loser, winner],
+        stages: const [],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppe',
+            groupPlayType: 'round_robin',
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: [loser, winner],
+                matches: matches,
+              ),
+            ],
+            qualificationPlan: null,
+            tieBreakers: const ['points', 'legDifference', 'legsFor'],
+          ),
+        ],
+        rankingIds: [ranking.id],
+        finishedAt: DateTime(2026, 8, 1, 22),
+        completedStageIndexes: {0},
+      );
+      final service = RankingAchievementService(database: database);
+
+      final lossProgress = await service.refreshPlayer(
+        ranking: ranking,
+        playerProfileId: loserProfile.id,
+        tournaments: [tournament],
+      );
+      final winProgress = await service.refreshPlayer(
+        ranking: ranking,
+        playerProfileId: winnerProfile.id,
+        tournaments: [tournament],
+      );
+
+      expect(
+        lossProgress.evaluation.progress['legs_lost_10']!.isCompleted,
+        isTrue,
+      );
+      expect(
+        lossProgress.evaluation.progress['legs_lost_10']!.unlockedAt,
+        DateTime(2026, 8, 1, 21),
+      );
+      expect(
+        lossProgress.evaluation.progress['match_win_streak_3']!.isCompleted,
+        isFalse,
+      );
+      expect(
+        winProgress.evaluation.progress['match_win_streak_3']!.isCompleted,
+        isTrue,
+      );
+    },
+  );
 }

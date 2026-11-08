@@ -1107,45 +1107,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  Future<void> _saveDirectorBoardSettings(
-    int board,
-    String name,
-    String liveUrl,
-  ) async {
-    final names = widget.tournament.directorBoardNames;
-    final urls = widget.tournament.directorBoardLiveUrls;
-    final previousName = names[board];
-    final previousUrl = urls[board];
-    setState(() {
-      if (name.isEmpty) {
-        names.remove(board);
-      } else {
-        names[board] = name;
-      }
-      if (liveUrl.isEmpty) {
-        urls.remove(board);
-      } else {
-        urls[board] = liveUrl;
-      }
-    });
-    try {
-      await _saveTournamentProgress(propagateError: true);
-    } catch (_) {
-      if (previousName == null) {
-        names.remove(board);
-      } else {
-        names[board] = previousName;
-      }
-      if (previousUrl == null) {
-        urls.remove(board);
-      } else {
-        urls[board] = previousUrl;
-      }
-      if (mounted) setState(() {});
-      rethrow;
-    }
-  }
-
   bool _isBracketEditMode = false;
   bool _isApplyingStartDraw = false;
   final Set<int> _completedStageIndexes = {};
@@ -1228,6 +1189,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         previous.day == normalized.day) {
       return;
     }
+
     widget.tournament.tournamentDate = normalized;
     widget.tournament.addActivity(
       'tournament_date_changed',
@@ -1248,6 +1210,40 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         );
         setState(() {});
       }
+    }
+  }
+
+  Future<int> _shiftTournamentMatchDates(DateTime targetDate) async {
+    final tournament = widget.tournament;
+    final matches = TournamentTiming.matches(tournament).toSet();
+    final previousTimestamps = {
+      for (final match in matches)
+        match: (startedAt: match.startedAt, finishedAt: match.finishedAt),
+    };
+    final changedMatches = TournamentTiming.shiftMatchDates(
+      tournament,
+      targetDate,
+    );
+    if (changedMatches == 0) return 0;
+    final previousActivityCount = tournament.activityLog.length;
+    tournament.addActivity(
+      'match_dates_shifted',
+      'Begegnungsdaten auf ${MaterialLocalizations.of(context).formatMediumDate(targetDate)} verschoben',
+    );
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (mounted) setState(() {});
+      return changedMatches;
+    } catch (_) {
+      for (final entry in previousTimestamps.entries) {
+        entry.key
+          ..startedAt = entry.value.startedAt
+          ..finishedAt = entry.value.finishedAt;
+      }
+      if (tournament.activityLog.length > previousActivityCount) {
+        tournament.activityLog.removeLast();
+      }
+      rethrow;
     }
   }
 
@@ -1577,7 +1573,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
-  Future<void> _saveTournamentProgress({bool propagateError = false}) async {
+  Future<void> _saveTournamentProgress({
+    bool propagateError = false,
+    GroupMatch? achievementMatch,
+  }) async {
     var achievementInputsChanged = false;
     try {
       _leagueRuntime?.writeTo(widget.tournament);
@@ -1598,20 +1597,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         () => _directorSaveError =
             'Änderungen sind noch nicht sicher gespeichert. Bitte erneut speichern.',
       );
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Änderungen konnten nicht gespeichert werden.'),
-          action: SnackBarAction(
-            label: 'Erneut versuchen',
-            onPressed: _saveTournamentProgress,
-          ),
+          duration: const Duration(seconds: 6),
+          showCloseIcon: true,
+          closeIconColor: Theme.of(context).colorScheme.onInverseSurface,
         ),
       );
       if (propagateError) rethrow;
     }
     if (achievementInputsChanged) {
       try {
-        await _refreshAchievementsForTournament();
+        _queueAchievementRefresh(achievementMatch);
       } catch (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1635,65 +1634,43 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       'rankingIds': [...widget.tournament.rankingIds]..sort(),
       'countsForRanking': widget.tournament.countsForRanking,
       'effectiveDate': widget.tournament.effectiveDate.toIso8601String(),
+      'finishedAt': widget.tournament.finishedAt?.toIso8601String(),
+      'completedStages': widget.tournament.completedStageIndexes.toList()
+        ..sort(),
       'players': [
         for (final player in widget.tournament.players)
           for (final individual in player.individuals)
             individual.profileId ?? individual.name,
       ],
-      'stageSettings': [
-        for (final stage in widget.tournament.runStages)
-          if (stage is GroupTournamentRunStage)
-            {
-              'tieBreakers': stage.tieBreakers,
-              'groups': [
-                for (final group in stage.groups)
-                  {
-                    'name': group.name,
-                    'players': [
-                      for (final player in group.players)
-                        for (final individual in player.individuals)
-                          individual.profileId ?? individual.name,
-                    ],
-                  },
-              ],
-            }
-          else if (stage is KnockoutTournamentRunStage)
+      'matches': [
+        for (final match in matches)
+          if (match.hasResult)
             {
               'participants': [
-                for (final player in stage.participants)
+                for (final player in [
+                  if (match.homePlayer != null) match.homePlayer!,
+                  if (match.awayPlayer != null) match.awayPlayer!,
+                  ...match.players,
+                ])
                   for (final individual in player.individuals)
                     individual.profileId ?? individual.name,
               ],
+              'scratchedPlayer':
+                  match.scratchedPlayer?.profileId ??
+                  match.scratchedPlayer?.name,
+              'homeLegs': match.homeLegs,
+              'awayLegs': match.awayLegs,
+              'homeSets': match.homeSets,
+              'awaySets': match.awaySets,
+              'startedAt': match.startedAt?.toIso8601String(),
+              'finishedAt': match.finishedAt?.toIso8601String(),
+              'annulled': match.isAnnulled,
+              'withdrawalIgnored': match.withdrawalIgnored,
+              'bestPerformances': [
+                for (final performance in match.bestPerformances)
+                  performance.toJson(),
+              ],
             },
-      ],
-      'finishedAt': widget.tournament.finishedAt?.toIso8601String(),
-      'completedStages': widget.tournament.completedStageIndexes.toList()
-        ..sort(),
-      'matches': [
-        for (final match in matches)
-          {
-            'participants': [
-              for (final player in [
-                if (match.homePlayer != null) match.homePlayer!,
-                if (match.awayPlayer != null) match.awayPlayer!,
-                ...match.players,
-              ])
-                for (final individual in player.individuals)
-                  individual.profileId ?? individual.name,
-            ],
-            'scratchedPlayer':
-                match.scratchedPlayer?.profileId ?? match.scratchedPlayer?.name,
-            'homeLegs': match.homeLegs,
-            'awayLegs': match.awayLegs,
-            'homeSets': match.homeSets,
-            'awaySets': match.awaySets,
-            'annulled': match.isAnnulled,
-            'withdrawalIgnored': match.withdrawalIgnored,
-            'bestPerformances': [
-              for (final performance in match.bestPerformances)
-                performance.toJson(),
-            ],
-          },
       ],
     });
     var hash = 0x811c9dc5;
@@ -1703,7 +1680,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     return hash.toRadixString(16);
   }
 
-  Future<void> _refreshAchievementsForTournament() async {
+  Future<void> _refreshAchievementsForTournament(
+    GroupMatch? achievementMatch,
+  ) async {
     final tournament = widget.tournament;
     if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) return;
     final rankings = (await _localRankings).where(
@@ -1714,88 +1693,116 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (rankings.isEmpty) return;
     final tournaments = await _tournamentStorage.loadTournaments();
     final database = LocalAppDatabase();
+    final catalogPlayerIds = (await database.loadPlayerProfiles())
+        .map((profile) => profile.id)
+        .toSet();
     final service = RankingAchievementService(
       database: database,
       tournamentStorage: _tournamentStorage,
     );
-    final achievementNotices = <TournamentAchievementNotice>[];
+    final achievementNotices =
+        <({TournamentAchievementNotice notice, DateTime? unlockedAt})>[];
+    final tournamentPlayerIds = {
+      for (final player in tournament.players.expand(
+        (player) => player.individuals,
+      ))
+        if (player.profileId != null) player.profileId!,
+    };
+    final matchPlayerIds = {
+      if (achievementMatch != null)
+        for (final player in [
+          if (achievementMatch.homePlayer != null) achievementMatch.homePlayer!,
+          if (achievementMatch.awayPlayer != null) achievementMatch.awayPlayer!,
+          ...achievementMatch.players,
+        ])
+          for (final individual in player.individuals)
+            if (individual.profileId != null) individual.profileId!,
+    };
     for (final ranking in rankings) {
+      final rankingPlayerIds = await database.loadRankingPlayerIds(ranking.id);
+      final affectedPlayerIds = rankingPlayerIds.where((playerId) {
+        if (!catalogPlayerIds.contains(playerId)) return false;
+        final refreshTournament =
+            achievementMatch == null || tournament.finishedAt != null;
+        return refreshTournament
+            ? tournamentPlayerIds.contains(playerId)
+            : matchPlayerIds.contains(playerId);
+      }).toList();
+      if (affectedPlayerIds.isEmpty) continue;
+      final eloSnapshot = ranking.type == RankingType.elo
+          ? await LocalRankingEloService(
+              database: database,
+              tournamentStorage: _tournamentStorage,
+            ).calculate(ranking, tournaments: tournaments)
+          : null;
+      final snapshots = <String, RankingAchievementSnapshot>{};
       final previousProgress = <String, Map<String, Map<String, Object?>>>{};
-      for (final playerId in await database.loadRankingPlayerIds(ranking.id)) {
+      for (final playerId in affectedPlayerIds) {
         previousProgress[playerId] = await database
             .loadRankingAchievementProgress(ranking.id, playerId);
+        snapshots[playerId] = await service.refreshPlayer(
+          ranking: ranking,
+          playerProfileId: playerId,
+          tournaments: tournaments,
+          eloSnapshot: eloSnapshot,
+        );
       }
-      final snapshots = await service.refreshRanking(
-        ranking,
-        tournaments: tournaments,
-      );
       for (final entry in snapshots.entries) {
         final previous = previousProgress[entry.key] ?? const {};
         for (final progress in entry.value.evaluation.progress.values) {
           if (progress.isCompleted &&
               previous[progress.definition.id]?['status'] != 'completed') {
-            achievementNotices.add(
-              TournamentAchievementNotice(
+            achievementNotices.add((
+              notice: TournamentAchievementNotice(
                 playerProfileId: entry.key,
                 playerName: _tournamentPlayerName(tournament, entry.key),
                 achievementName: progress.definition.name,
                 explanation: service.notificationExplanation(progress),
                 rankingName: ranking.name,
               ),
-            );
+              unlockedAt: progress.unlockedAt,
+            ));
           }
         }
       }
     }
-    var matchNotices = <TournamentAchievementNotice>[];
-    if (achievementNotices.isNotEmpty) {
-      final recentMatches =
-          <GroupMatch>[
-            for (final stage in tournament.runStages)
-              ..._achievementMatchesForStage(stage),
-          ].where((match) => match.countsForStatistics).toList()..sort((
-            left,
-            right,
-          ) {
-            final leftDate =
-                left.finishedAt ?? left.startedAt ?? tournament.effectiveDate;
-            final rightDate =
-                right.finishedAt ?? right.startedAt ?? tournament.effectiveDate;
-            return rightDate.compareTo(leftDate);
-          });
-      if (recentMatches.isNotEmpty) {
-        final recentMatch = recentMatches.first;
-        final recentParticipantIds = {
-          for (final player in [
-            if (recentMatch.homePlayer != null) recentMatch.homePlayer!,
-            if (recentMatch.awayPlayer != null) recentMatch.awayPlayer!,
-            ...recentMatch.players,
-          ])
-            for (final individual in player.individuals)
-              individual.profileId ?? individual.name,
-        };
-        matchNotices = achievementNotices
-            .where(
-              (item) => recentParticipantIds.contains(item.playerProfileId),
-            )
-            .toList();
-        for (final notice in matchNotices) {
-          if (!recentMatch.achievementNotifications.any(
-            (existing) =>
-                existing.playerProfileId == notice.playerProfileId &&
-                existing.playerName == notice.playerName &&
-                existing.achievementName == notice.achievementName &&
-                existing.rankingName == notice.rankingName,
-          )) {
-            recentMatch.achievementNotifications.add(notice);
-          }
-        }
-        await _runController.saveProgress(
-          tournament: tournament,
-          activeStageIndex: _activeStageIndex,
-          completedStageIndexes: _completedStageIndexes,
-        );
+    final matches = {
+      for (final stage in tournament.runStages)
+        ..._achievementMatchesForStage(stage),
+    };
+    final matchNotices = <TournamentAchievementNotice>[];
+    var changed = false;
+    for (final unlock in achievementNotices) {
+      final targetMatch = const AchievementMatchResolver().resolve(
+        playerProfileId: unlock.notice.playerProfileId,
+        unlockedAt: unlock.unlockedAt,
+        matches: matches,
+        tournamentDate: tournament.effectiveDate,
+        tournamentFinishedAt: tournament.finishedAt,
+        fallbackMatch: achievementMatch,
+      );
+      if (targetMatch == null) continue;
+      final notice = unlock.notice;
+      final alreadyRecorded = targetMatch.achievementNotifications.any(
+        (existing) =>
+            existing.playerProfileId == notice.playerProfileId &&
+            existing.playerName == notice.playerName &&
+            existing.achievementName == notice.achievementName &&
+            existing.rankingName == notice.rankingName,
+      );
+      if (alreadyRecorded) continue;
+      targetMatch.achievementNotifications.add(notice);
+      changed = true;
+      if (identical(targetMatch, achievementMatch)) {
+        matchNotices.add(notice);
       }
+    }
+    if (changed) {
+      await _runController.saveProgress(
+        tournament: tournament,
+        activeStageIndex: _activeStageIndex,
+        completedStageIndexes: _completedStageIndexes,
+      );
     }
     if (!tournament.showAchievementNotifications ||
         matchNotices.isEmpty ||
@@ -1817,6 +1824,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         ),
       ),
     );
+  }
+
+  Future<void> _achievementRefreshQueue = Future<void>.value();
+
+  void _queueAchievementRefresh(GroupMatch? match) {
+    _achievementRefreshQueue = _achievementRefreshQueue.then((_) async {
+      if (!mounted) return;
+      try {
+        await _refreshAchievementsForTournament(match);
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Achievement-Fortschritt konnte nicht aktualisiert werden: $error',
+              ),
+              duration: const Duration(seconds: 6),
+              showCloseIcon: true,
+            ),
+          );
+        }
+      }
+    });
   }
 
   String _tournamentPlayerName(CreatedTournament tournament, String profileId) {
@@ -2431,12 +2461,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           : '${match.homePlayer?.name ?? 'Heim'} ${result.homeLegs ?? 0}:${result.awayLegs ?? 0} ${match.awayPlayer?.name ?? 'Gast'}';
       widget.tournament.addActivity(
         'result_entered',
-        'Ergebnis eingetragen · $stageName · $description',
+        'Ergebnis eingetragen · $stageName'
+            '${match.boardNumber == null ? '' : ' · ${widget.tournament.boardDisplayName(match.boardNumber!)}'}'
+            ' · $description',
       );
     });
     onLocalUpdate?.call();
     try {
-      await _saveTournamentProgress(propagateError: true);
+      await _saveTournamentProgress(
+        propagateError: true,
+        achievementMatch: match,
+      );
     } catch (_) {
       return;
     }
@@ -2477,27 +2512,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         widget.tournament.runStages[_activeStageIndex] != stage) {
       return;
     }
-    Map<String, int> ratings = const {};
-    try {
-      ratings = await GroupPlayerRatingService().calculate(
-        tournament: widget.tournament,
-        stage: stage,
-      );
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ELO-Wertungen konnten nicht geladen werden: $error'),
-          ),
-        );
-      }
-    }
-    if (!mounted) return;
     final result = await showDialog<GroupPositionsResult>(
       context: context,
       builder: (_) => GroupPositionsDialog(
         stage: stage,
-        ratings: ratings,
+        loadRatings: () => GroupPlayerRatingService().calculate(
+          tournament: widget.tournament,
+          stage: stage,
+        ),
         loadCatalogProfiles: () => LocalAppDatabase().loadPlayerProfiles(),
       ),
     );
@@ -4945,6 +4967,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         onPauseClock: _toggleClockPause,
                         onEditTimes: _editTournamentTimes,
                         onResetClock: _resetTournamentClock,
+                        onChangeTournamentDate: _saveTournamentDate,
+                        onShiftMatchDates: _shiftTournamentMatchDates,
                         onChange: () async {
                           setState(() {});
                           await _saveTournamentProgress(propagateError: true);
@@ -5050,13 +5074,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 ],
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          TournamentDatePickerField(
-                            value: DateUtils.dateOnly(
-                              widget.tournament.effectiveDate.toLocal(),
-                            ),
-                            onChanged: _saveTournamentDate,
                           ),
                           const SizedBox(height: 12),
                           Card(
@@ -5250,34 +5267,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          ExpansionTile(
-                                            key: const ValueKey(
-                                              'advanced-board-settings',
-                                            ),
-                                            leading: const Icon(
-                                              Icons.tune_outlined,
-                                            ),
-                                            title: const Text(
-                                              'Erweiterte Board Einstellungen',
-                                            ),
-                                            subtitle: const Text(
-                                              'Namen und optionale Live-Board-URLs',
-                                            ),
-                                            children: [
-                                              DirectorBoardSettingsEditor(
-                                                tournament: widget.tournament,
-                                                onSave: (board, name, liveUrl) =>
-                                                    _handleDirectorSettings(
-                                                      () =>
-                                                          _saveDirectorBoardSettings(
-                                                            board,
-                                                            name,
-                                                            liveUrl,
-                                                          ),
-                                                    ),
-                                              ),
-                                            ],
-                                          ),
                                         ],
                                       ),
                                     ),
@@ -5319,6 +5308,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 onPauseToggle: _toggleClockPause,
                                 onEditTimes: _editTournamentTimes,
                                 onResetClock: _resetTournamentClock,
+                                onChangeTournamentDate: _saveTournamentDate,
+                                onShiftMatchDates: _shiftTournamentMatchDates,
                               ),
                             ),
                           ),

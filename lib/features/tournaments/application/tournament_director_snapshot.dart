@@ -23,6 +23,19 @@ class TournamentDirectorSnapshot {
   final int stage;
   final BoardSchedule schedule;
   late final List<PlayEntry> entries, ready;
+  late final Set<GroupMatch> _prioritizedMatches =
+      TournamentFlowPriority.forStage(
+        tournament.runStages[stage],
+        settings: TournamentFlowPrioritySettings(
+          playerMatchDeficitThreshold:
+              tournament.tournamentSettings.playerMatchDeficitThreshold,
+          groupMatchDeficitThreshold:
+              tournament.tournamentSettings.groupMatchDeficitThreshold,
+          usePercentageForGroups:
+              tournament.tournamentSettings.usePercentageForGroups,
+        ),
+      ).prioritizedMatches;
+
   List<BoardAssignment> upcomingForBoard(int board) => schedule.planned
       .where(
         (assignment) =>
@@ -51,15 +64,38 @@ class TournamentDirectorSnapshot {
 
   TournamentDirectorBoardRecommendation? recommendationForBoard(int board) {
     if (!freeBoards.contains(board)) return null;
-    final next = upcomingForBoard(board).firstOrNull;
-    if (next == null) return null;
-    final alternative = selectableForBoard(board)
+    final boardQueue = upcomingForBoard(board);
+    final boardGroup = boardQueue.firstOrNull?.entry.groupKey;
+    final candidates = selectableForBoard(board)
         .where(
           (assignment) =>
-              assignment.board != board &&
-              !identical(assignment.entry.match, next.entry.match),
+              boardGroup == null || assignment.entry.groupKey == boardGroup,
         )
-        .firstOrNull;
+        .toList();
+    if (candidates.isEmpty) return null;
+    final originalOrder = {
+      for (var index = 0; index < candidates.length; index++)
+        candidates[index]: index,
+    };
+    candidates.sort((a, b) {
+      final aPriority = _prioritizedMatches.contains(a.entry.match);
+      final bPriority = _prioritizedMatches.contains(b.entry.match);
+      if (aPriority != bPriority) return aPriority ? -1 : 1;
+      final blockOrder = a.block.compareTo(b.block);
+      return blockOrder != 0
+          ? blockOrder
+          : originalOrder[a]!.compareTo(originalOrder[b]!);
+    });
+    final recommended = candidates.first;
+    final next = BoardAssignment(recommended.entry, recommended.block, board);
+    final alternativeCandidate = candidates.skip(1).firstOrNull;
+    final alternative = alternativeCandidate == null
+        ? null
+        : BoardAssignment(
+            alternativeCandidate.entry,
+            alternativeCandidate.block,
+            board,
+          );
     return TournamentDirectorBoardRecommendation(
       next: next,
       alternative: alternative,

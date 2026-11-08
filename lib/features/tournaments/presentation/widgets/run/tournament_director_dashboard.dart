@@ -35,6 +35,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
     this.onPauseClock,
     this.onEditTimes,
     this.onResetClock,
+    this.onChangeTournamentDate,
+    this.onShiftMatchDates,
     this.saveError,
     this.canOperate = true,
     this.onCompleteStage,
@@ -61,6 +63,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final Future<void> Function(DateTime? startedAt, DateTime? finishedAt)?
   onEditTimes;
   final Future<void> Function()? onResetClock;
+  final ValueChanged<DateTime>? onChangeTournamentDate;
+  final Future<int> Function(DateTime date)? onShiftMatchDates;
   final String? saveError;
   final bool canOperate;
   final VoidCallback? onCompleteStage;
@@ -1319,6 +1323,8 @@ class _TournamentDirectorDashboardState
         onPauseToggle: widget.onPauseClock,
         onEditTimes: widget.onEditTimes,
         onResetClock: widget.onResetClock,
+        onChangeTournamentDate: widget.onChangeTournamentDate,
+        onShiftMatchDates: widget.onShiftMatchDates,
         allowManualStart: widget.onStartClock != null,
       ),
     ]);

@@ -177,6 +177,34 @@ void main() {
     expect(match.finishedAt, start.add(const Duration(minutes: 12)));
     expect(TournamentTiming.snapshot(t, resetAt).elapsed, Duration.zero);
   });
+  test('shifting match dates preserves local times and match durations', () {
+    final t = fixture();
+    final match = TournamentTiming.matches(t).single
+      ..startedAt = DateTime(2026, 10, 3, 12, 15)
+      ..finishedAt = DateTime(2026, 10, 3, 12, 55)
+      ..homeLegs = 2
+      ..awayLegs = 1;
+    final startTime = match.startedAt!;
+    final finishTime = match.finishedAt!;
+
+    expect(TournamentTiming.shiftMatchDates(t, DateTime(2026, 9, 10)), 1);
+
+    expect(match.startedAt!.year, 2026);
+    expect(match.startedAt!.month, 9);
+    expect(match.startedAt!.day, 10);
+    expect(match.startedAt!.hour, startTime.hour);
+    expect(match.startedAt!.minute, startTime.minute);
+    expect(match.finishedAt!.year, 2026);
+    expect(match.finishedAt!.month, 9);
+    expect(match.finishedAt!.day, 10);
+    expect(match.finishedAt!.hour, finishTime.hour);
+    expect(match.finishedAt!.minute, finishTime.minute);
+    expect(
+      match.finishedAt!.difference(match.startedAt!),
+      finishTime.difference(startTime),
+    );
+    expect(TournamentTiming.shiftMatchDates(t, DateTime(2026, 9, 10)), 0);
+  });
   test(
     'starting a match without a result does not start the tournament clock',
     () async {

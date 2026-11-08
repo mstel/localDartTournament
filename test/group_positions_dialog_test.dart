@@ -55,6 +55,49 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('loads ELO ratings only when strength allocation is requested', (
+    tester,
+  ) async {
+    var ratingLoads = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => GroupPositionsDialog(
+                  stage: fixture(),
+                  loadRatings: () async {
+                    ratingLoads++;
+                    return const {'spieler 1': 1200};
+                  },
+                ),
+              ),
+              child: const Text('Öffnen'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Öffnen'));
+    await tester.pumpAndSettle();
+    expect(ratingLoads, 0);
+
+    await tester.tap(
+      find.byWidgetPredicate((widget) => widget is DropdownButtonFormField),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stärke ausgeglichen verteilen').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Neu einteilen'));
+    await tester.pumpAndSettle();
+
+    expect(ratingLoads, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('keeps edits open until confirmation at large text sizes', (
     tester,
   ) async {

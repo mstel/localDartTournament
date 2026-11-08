@@ -44,10 +44,10 @@ void main() {
     expect(find.text('Startzeitpunkt neu festlegen'), findsOneWidget);
     await tester.tap(find.text('Startzeitpunkt neu festlegen'));
     await tester.pumpAndSettle();
-    expect(find.text('Datum auswählen'), findsOneWidget);
+    expect(find.text('Startdatum auswählen'), findsOneWidget);
     await tester.tap(find.text('OK').last);
     await tester.pumpAndSettle();
-    expect(find.text('Uhrzeit auswählen'), findsOneWidget);
+    expect(find.text('Startuhrzeit auswählen'), findsOneWidget);
     await tester.tap(find.text('OK').last);
     await tester.pumpAndSettle();
     expect(savedStart, isNotNull);
@@ -101,7 +101,7 @@ void main() {
       );
       await tester.tap(find.text('Turnieruhr starten'));
       await tester.pump();
-      expect(find.text('Turnieruhr'), findsOneWidget);
+      expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
       expect(find.text('Läuft'), findsOneWidget);
       expect(find.text('Laufzeit 0 h 0 min'), findsOneWidget);
       expect(find.textContaining('Start: '), findsOneWidget);
@@ -128,12 +128,9 @@ void main() {
         ),
       );
       await tester.pump(const Duration(seconds: 45));
-      expect(find.text('1 Spiele fertig · 2 laut Zeitplan'), findsOneWidget);
+      expect(find.textContaining('laut Zeitplan'), findsNothing);
+      expect(find.text('Zeitstatistik'), findsNothing);
       expect(find.textContaining('Voraussichtliches Ende:'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Zeitstatistik'));
-      await tester.pumpAndSettle();
-      expect(find.text('Zeitplan und Matchdauer'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

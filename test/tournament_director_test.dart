@@ -118,7 +118,7 @@ void main() {
     expect(find.byKey(const ValueKey('director-board-1')), findsNothing);
     expect(find.byKey(const ValueKey('director-player-search')), findsNothing);
     expect(find.textContaining('Schnellstart · Board'), findsNothing);
-    expect(find.text('Turnieruhr'), findsOneWidget);
+    expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -212,22 +212,29 @@ void main() {
   }
   const c = OrderOfPlayController();
   test(
-    'board recommendation reuses the visible queue and selectable alternatives',
+    'board recommendations show the best playable group match on each board',
     () {
       final t = fixture(boards: 3);
       final snapshot = TournamentDirectorSnapshot(t, 0);
 
-      final recommendation = snapshot.recommendationForBoard(1);
+      final boardOne = snapshot.recommendationForBoard(1);
+      final boardTwo = snapshot.recommendationForBoard(2);
 
-      expect(recommendation, isNotNull);
-      expect(recommendation!.next, same(snapshot.upcomingForBoard(1).first));
-      expect(recommendation.alternative, isNotNull);
-      expect(recommendation.alternative!.board, isNot(1));
+      expect(boardOne, isNotNull);
+      expect(boardTwo, isNotNull);
+      expect(boardOne!.next.entry.match, same(boardTwo!.next.entry.match));
+      expect(boardOne.next.board, 1);
+      expect(boardTwo.next.board, 2);
+      expect(boardOne.alternative, isNotNull);
+      expect(boardOne.alternative!.board, 1);
       expect(
         snapshot
             .selectableForBoard(1)
             .any(
-              (assignment) => identical(assignment, recommendation.alternative),
+              (assignment) => identical(
+                assignment.entry.match,
+                boardOne.alternative!.entry.match,
+              ),
             ),
         isTrue,
       );
@@ -995,7 +1002,7 @@ void main() {
       find.text(
         'Alternative: ${recommendation.alternative!.entry.match.participantShortLabel}',
       ),
-      findsOneWidget,
+      findsAtLeastNWidgets(2),
     );
 
     await tester.pumpWidget(const SizedBox());

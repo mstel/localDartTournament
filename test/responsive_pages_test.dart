@@ -1,7 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dart_tournament_manager/features/home/application/home_overview_service.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show HomePage;
+
+class _HomeOverviewSource implements HomeOverviewDataSource {
+  @override
+  Future<List<CreatedTournament>> loadTournaments() async => [
+    CreatedTournament(
+      id: 'active',
+      name: 'Laufendes Turnier',
+      players: const [],
+      stages: const [],
+      runStages: const [],
+      startedAt: DateTime(2026, 8, 1),
+    ),
+  ];
+
+  @override
+  Future<List<LocalRanking>> loadRankings() async => const [];
+
+  @override
+  Future<LocalEloSnapshot?> loadEloSnapshot(
+    LocalRanking ranking,
+    List<CreatedTournament> tournaments,
+  ) async => null;
+}
 
 void main() {
   for (final size in [
@@ -25,7 +52,9 @@ void main() {
             ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
-          home: const HomePage(),
+          home: HomePage(
+            homeOverviewService: HomeOverviewService(_HomeOverviewSource()),
+          ),
         ),
       );
       await tester.pumpAndSettle();

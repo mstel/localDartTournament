@@ -1,13 +1,22 @@
 part of '../../../tournament_workspace.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.homeOverviewService});
+
+  final HomeOverviewService? homeOverviewService;
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   final _tournamentStorage = TournamentStorage();
+  int _activityRevision = 0;
+
+  void _refreshActivity() {
+    if (!mounted) return;
+    setState(() => _activityRevision++);
+  }
 
   List<SportDestination> get _destinations => [
     SportDestination(
@@ -48,6 +57,7 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+    _refreshActivity();
   }
 
   Future<void> _openTournamentById(String tournamentId) async {
@@ -74,6 +84,7 @@ class _HomePageState extends State<HomePage> {
                 ),
         ),
       );
+      _refreshActivity();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -95,11 +106,14 @@ class _HomePageState extends State<HomePage> {
     selected: selected,
     child: page,
   );
-  void _createTournament() => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => _shell(const TournamentCreationPage(), 0),
-    ),
-  );
+  Future<void> _createTournament() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _shell(const TournamentCreationPage(), 0),
+      ),
+    );
+    _refreshActivity();
+  }
 
   @override
   Widget build(BuildContext context) => _shell(
@@ -145,6 +159,12 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 20),
+          HomeActivityPanel(
+            key: ValueKey(_activityRevision),
+            service: widget.homeOverviewService,
+            onOpenTournament: _openTournamentById,
           ),
         ],
       ),

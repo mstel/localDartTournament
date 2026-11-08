@@ -132,7 +132,7 @@ void main() {
     expect(find.text('Vereinsrangliste 2026'), findsOneWidget);
     expect(find.text('1 Siege · 0 Niederlagen · 3:1 Legs'), findsOneWidget);
     final exportButton = find.text('Turnier exportieren');
-    await tester.ensureVisible(exportButton);
+    await tester.scrollUntilVisible(exportButton, 500);
     await tester.pumpAndSettle();
     expect(exportButton, findsOneWidget);
     await tester.tap(exportButton);

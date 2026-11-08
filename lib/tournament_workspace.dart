@@ -15,6 +15,9 @@ import 'features/tournaments/presentation/widgets/tournament_date_picker_field.d
 import 'shared/widgets/sport_menu.dart';
 import 'app/navigation/sport_app_shell.dart';
 import 'features/home/presentation/widgets/sport_dashboard.dart';
+import 'features/home/presentation/widgets/home_activity_panel.dart';
+import 'features/home/application/home_overview_service.dart';
+import 'features/achievements/application/achievement_match_resolver.dart';
 import 'features/tournaments/presentation/widgets/creation/player_profile_picker_dialog.dart';
 import 'shared/widgets/adaptive_content.dart';
 import 'features/league/presentation/league_match_page.dart';
@@ -90,7 +93,6 @@ import 'features/tournaments/presentation/widgets/creation/group_player_allocati
 import 'features/tournaments/presentation/widgets/run/result_entry.dart';
 import 'features/tournaments/presentation/widgets/run/stage_controls.dart';
 import 'features/tournaments/presentation/widgets/run/stage_results_split_view.dart';
-import 'features/tournaments/presentation/widgets/run/director_board_settings_editor.dart';
 
 part 'features/home/presentation/home_page.dart';
 part 'features/dev_tools/application/production_tournament_runtime.dart';

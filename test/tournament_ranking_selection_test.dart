@@ -131,7 +131,7 @@ void main() {
         lessThan(tester.getRect(saveButton).left),
       );
       expect(find.text('Laufzeit 0 h 3 min'), findsOneWidget);
-      expect(find.text('Turnieruhr'), findsOneWidget);
+      expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
       expect(find.text('Prognose nach erstem Ergebnis'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

@@ -756,17 +756,17 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Vorschau für die nächste Etappe'), findsOneWidget);
-      await tester.tap(find.text('Vorschau für die nächste Etappe'));
+      expect(find.text('Vorschau nächste Etappe'), findsOneWidget);
+      await tester.tap(find.text('Vorschau nächste Etappe'));
       await tester.pump();
 
       expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
       expect(find.textContaining('A · gesetzt'), findsOneWidget);
       expect(find.textContaining('B · vorläufig'), findsOneWidget);
-      expect(find.text('Vorschau schließen'), findsOneWidget);
+      expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.text('Vorschau schließen'));
+      await tester.tap(find.text('Zur Übersichtsansicht zurückkehren'));
       await tester.pump();
       expect(find.text('Zuletzt beendete Matches'), findsOneWidget);
     },
@@ -824,7 +824,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('KO · Turnierbaum'), findsOneWidget);
-      expect(find.text('6/33 gespielt'), findsOneWidget);
+      expect(find.text('6/33 gespielt'), findsNothing);
       expect(find.text('KO: 0/3'), findsOneWidget);
       expect(
         find.text('Keine K.-o.-Etappe als Nächstes geplant.'),
@@ -866,7 +866,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tap(find.text('Vorschau für die nächste Etappe'));
+    await tester.tap(find.text('Vorschau nächste Etappe'));
     await tester.pump();
 
     expect(find.textContaining('A · gesetzt'), findsOneWidget);
@@ -923,12 +923,17 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: TournamentSecondScreenView(
-            tournament: CreatedTournament(
-              name: 'Widget-Auswahl',
-              players: const [],
-              stages: const [],
-              runStages: const [],
-            ),
+            tournament:
+                CreatedTournament(
+                    name: 'Widget-Auswahl',
+                    players: const [],
+                    stages: const [],
+                    runStages: const [],
+                  )
+                  ..secondScreenActiveLayout = 'Ohne Prognose'
+                  ..secondScreenLayouts['Ohne Prognose'] = const [
+                    SecondScreenWidgetPlacement(widgetId: 'boards'),
+                  ],
             isStandaloneWindow: true,
           ),
         ),
@@ -955,54 +960,103 @@ void main() {
       ),
       findsNothing,
     );
+    expect(
+      find.descendant(of: picker, matching: find.text('Live Board')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: picker, matching: find.text('Nächste Etappe')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'shows overall and per-group match counts without progress bars',
-    (tester) async {
-      tester.view.physicalSize = const Size(1440, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
+  testWidgets('legacy layouts hide retired second-screen widgets', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      final tournament = _tournament();
-      final stage = tournament.runStages.first as GroupTournamentRunStage;
-      stage.groups.add(
-        TournamentGroup(
-          name: 'Gruppe B',
-          playType: 'round_robin',
-          players: stage.groups.first.players,
-          matches: [
-            GroupMatch(
-              homePlayer: stage.groups.first.players[0],
-              awayPlayer: stage.groups.first.players[1],
-              round: 1,
-            ),
-          ],
-        ),
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TournamentSecondScreenView(
-              tournament: tournament,
-              isStandaloneWindow: true,
-            ),
+    final tournament = _tournament()
+      ..secondScreenActiveLayout = 'Alt'
+      ..secondScreenLayouts['Alt'] = const [
+        SecondScreenWidgetPlacement(widgetId: 'liveBoard'),
+        SecondScreenWidgetPlacement(widgetId: 'nextStagePreview'),
+        SecondScreenWidgetPlacement(widgetId: 'standings'),
+        SecondScreenWidgetPlacement(widgetId: 'forecast'),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
           ),
         ),
-      );
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
 
-      expect(find.text('3/9 gespielt'), findsOneWidget);
-      expect(find.text('3/6'), findsAtLeastNWidgets(2));
-      expect(find.text('0/1'), findsAtLeastNWidgets(2));
-      expect(find.text('Gesamt'), findsNothing);
-      expect(find.text('Fortschritt nach Etappen'), findsNothing);
-      expect(find.byType(LinearProgressIndicator), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(
+      find.byKey(const ValueKey('monitor-widget-liveBoard')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('monitor-widget-nextStagePreview')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('monitor-widget-combined')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('does not show stage progress counts or progress bars', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final tournament = _tournament();
+    final stage = tournament.runStages.first as GroupTournamentRunStage;
+    stage.groups.add(
+      TournamentGroup(
+        name: 'Gruppe B',
+        playType: 'round_robin',
+        players: stage.groups.first.players,
+        matches: [
+          GroupMatch(
+            homePlayer: stage.groups.first.players[0],
+            awayPlayer: stage.groups.first.players[1],
+            round: 1,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('3/9 gespielt'), findsNothing);
+    expect(find.text('Gesamt'), findsNothing);
+    expect(find.text('Fortschritt nach Etappen'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('recent results highlight winners and current qualification', (
     tester,
@@ -1141,7 +1195,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keeps full-height preview visible across right-side modes', (
+  testWidgets('next-stage preview can be expanded and returned from', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -1159,7 +1213,7 @@ void main() {
       ),
     );
     await tester.pump();
-    final previewButton = find.text('Vorschau für die nächste Etappe');
+    final previewButton = find.text('Vorschau nächste Etappe');
     await tester.ensureVisible(previewButton);
     await tester.tap(previewButton);
     await tester.pump();
@@ -1170,21 +1224,17 @@ void main() {
     await tester.tap(fullscreenButton);
     await tester.pumpAndSettle();
     expect(find.text('KO · Turnierbaum-Vorschau'), findsNWidgets(2));
-    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
-    await tester.tap(find.text('Zur Übersichtsansicht zurückkehren'));
+    expect(
+      find.text('Zur Übersichtsansicht zurückkehren'),
+      findsAtLeastNWidgets(1),
+    );
+    await tester.tap(find.text('Zur Übersichtsansicht zurückkehren').last);
     await tester.pumpAndSettle();
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-
-    final prognosisTab = find.text('Siegprognose & Weiterkommen');
-    await tester.ensureVisible(prognosisTab);
-    await tester.tap(prognosisTab);
-    await tester.pump();
-
-    expect(
-      find.byWidgetPredicate((widget) => widget is SegmentedButton),
-      findsOneWidget,
-    );
-    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    await tester.tap(find.text('Zur Übersichtsansicht zurückkehren').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Nächste Partien · Vorschläge'), findsOneWidget);
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -1284,7 +1334,7 @@ void main() {
       find.byKey(const ValueKey('monitor-widget-recent')),
     );
     final standings = tester.getRect(
-      find.byKey(const ValueKey('monitor-widget-standings')),
+      find.byKey(const ValueKey('monitor-widget-combined')),
     );
     final stageProgress = tester.getRect(
       find.byKey(const ValueKey('monitor-widget-stageProgress')),
@@ -1605,91 +1655,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'next-stage preview widget is only available for multi-stage tournaments',
-    (tester) async {
-      tester.view.physicalSize = const Size(1440, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('next-stage preview is a header action only when available', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      final singleStageTournament =
-          CreatedTournament.fromJson(_tournament().toJson())
-            ..stages.removeLast()
-            ..runStages.removeLast();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TournamentSecondScreenView(
-              key: const ValueKey('single-stage-monitor'),
-              tournament: singleStageTournament,
-              isStandaloneWindow: true,
-              storage: _MemoryTournamentStorage(),
-            ),
+    final singleStageTournament =
+        CreatedTournament.fromJson(_tournament().toJson())
+          ..stages.removeLast()
+          ..runStages.removeLast();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: singleStageTournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
           ),
         ),
-      );
-      await tester.pump();
-      await tester.tap(find.text('Layout anpassen'));
-      await tester.pump();
-      await tester.tap(find.text('Widget hinzufügen'));
-      await tester.pumpAndSettle();
-      expect(
-        find.descendant(
-          of: find.byType(SimpleDialog),
-          matching: find.text('Vorschau nächste Etappe'),
-        ),
-        findsNothing,
-      );
-      await tester.tapAt(const Offset(20, 20));
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('monitor-next-stage-preview-header-button')),
+      findsNothing,
+    );
 
-      final tournament = _tournament();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TournamentSecondScreenView(
-              key: const ValueKey('multi-stage-monitor'),
-              tournament: tournament,
-              isStandaloneWindow: true,
-              storage: _MemoryTournamentStorage(),
-            ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _tournament(),
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
           ),
         ),
-      );
-      await tester.pump();
-      await tester.tap(find.text('Layout anpassen'));
-      await tester.pump();
-      await tester.tap(find.text('Widget hinzufügen'));
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.descendant(
-          of: find.byType(SimpleDialog),
-          matching: find.text('Vorschau nächste Etappe'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Layout anwenden'));
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pump();
 
-      expect(
-        find.byKey(const ValueKey('monitor-next-stage-preview-button')),
-        findsOneWidget,
-      );
-      final previewButton = find.byKey(
-        const ValueKey('monitor-next-stage-preview-button'),
-      );
-      await tester.ensureVisible(previewButton);
-      final previewButtonRect = tester.getRect(previewButton);
-      expect(previewButtonRect.height, lessThanOrEqualTo(56));
-      expect(previewButtonRect.width, lessThanOrEqualTo(240));
-      await tester.tap(previewButton);
-      await tester.pumpAndSettle();
-      expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-      expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    final previewButton = find.byKey(
+      const ValueKey('monitor-next-stage-preview-header-button'),
+    );
+    expect(previewButton, findsOneWidget);
+    final previewRect = tester.getRect(previewButton);
+    final layoutRect = tester.getRect(find.text('Layout anpassen'));
+    expect(previewRect.right, lessThan(layoutRect.left));
+
+    await tester.tap(previewButton);
+    await tester.pumpAndSettle();
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('ranking widget shows selected ELO names and ratings', (
     tester,
@@ -1858,7 +1879,7 @@ void main() {
     final source = find.byKey(const ValueKey('monitor-widget-drag-boards'));
     final sourceRect = tester.getRect(source);
     final target = find.byKey(
-      const ValueKey('monitor-widget-drop-target-standings'),
+      const ValueKey('monitor-widget-drop-target-combined'),
     );
     final targetRect = tester.getRect(target);
     final start = sourceRect.topLeft + const Offset(80, 20);
@@ -1875,7 +1896,7 @@ void main() {
 
     final placements = tournament.secondScreenLayouts['Standard']!;
     expect(placements.map((placement) => placement.widgetId).toList(), [
-      'standings',
+      'combined',
       'boards',
       'recent',
       'stageProgress',
@@ -1924,7 +1945,7 @@ void main() {
     final source = find.byKey(const ValueKey('monitor-widget-drag-boards'));
     final sourceRect = tester.getRect(source);
     final target = find.byKey(
-      const ValueKey('monitor-widget-drop-target-standings'),
+      const ValueKey('monitor-widget-drop-target-combined'),
     );
     final targetRect = tester.getRect(target);
     final start = sourceRect.topLeft + const Offset(80, 20);
@@ -1951,7 +1972,7 @@ void main() {
     );
     expect(
       placements
-          .singleWhere((placement) => placement.widgetId == 'standings')
+          .singleWhere((placement) => placement.widgetId == 'combined')
           .columnIndex,
       0,
       reason: [
@@ -2027,12 +2048,12 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Tabellen & Zwischenstände'), findsOneWidget);
+    expect(find.text('Tabellen & Zwischenstände'), findsAtLeastNWidgets(2));
     expect(find.text('Nächste Partien · Vorschläge'), findsOneWidget);
     expect(find.text('Boards & nächste Begegnungen'), findsNothing);
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('monitor-widget-standings')),
+        of: find.byKey(const ValueKey('monitor-widget-combined')),
         matching: find.byType(Card),
       ),
       findsNothing,
@@ -2069,7 +2090,7 @@ void main() {
       find.byKey(const ValueKey('monitor-widget-boards')),
     );
     final standings = tester.getRect(
-      find.byKey(const ValueKey('monitor-widget-standings')),
+      find.byKey(const ValueKey('monitor-widget-combined')),
     );
     expect(boards.center.dy, closeTo(standings.center.dy, 1));
     expect(boards.right, lessThanOrEqualTo(standings.left));

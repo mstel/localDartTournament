@@ -100,17 +100,20 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       database: _database,
       tournamentStorage: _tournamentStorage,
     );
+    final tournaments = await _tournamentStorage.loadTournaments();
     for (final ranking in achievementRankings) {
       final assignedIds = await _database.loadRankingPlayerIds(ranking.id);
-      final refreshed = await achievementService.refreshRanking(ranking);
       for (final profileId in widget.profileIds.where(assignedIds.contains)) {
-        final evaluation = refreshed[profileId]?.evaluation;
-        if (evaluation == null) continue;
+        final snapshot = await achievementService.refreshPlayer(
+          ranking: ranking,
+          playerProfileId: profileId,
+          tournaments: tournaments,
+        );
         achievementViews.add(
           RankingAchievementView(
             ranking: ranking,
             playerProfileId: profileId,
-            evaluation: evaluation,
+            evaluation: snapshot.evaluation,
           ),
         );
       }
