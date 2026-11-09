@@ -4895,7 +4895,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           ],
         ),
         body: SafeArea(
-          child: CustomScrollView(
+          child: RepaintBoundary(
             key: ValueKey('stage-$_viewStageIndex-$_stageViewMode'),
             slivers: [
               SliverToBoxAdapter(
@@ -5958,7 +5958,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               isEditMode,
                               onSwapSlot,
                             ) {
-                              return _KnockoutBracketView(
+                              return RepaintBoundary(
+            child: _KnockoutBracketView(
                                 stage: stage,
                                 placementMatches: stage.placementMatches,
                                 qualifyingRank: qualifyingRank,

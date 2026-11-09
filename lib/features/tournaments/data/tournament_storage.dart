@@ -8,6 +8,18 @@ import '../../../shared/persistence/storage_access.dart';
 import '../domain/second_screen_widget_placement.dart';
 import '../domain/tournament_models.dart';
 
+class _TournamentStorageCacheEntry {
+  _TournamentStorageCacheEntry({
+    required this.lastModified,
+    required this.fileLength,
+    required this.document,
+  });
+
+  final DateTime lastModified;
+  final int fileLength;
+  final Map<String, dynamic> document;
+}
+
 /// Local, account-scoped tournament archive. Supabase synchronization is
 /// handled as a complete workspace backup by SupabaseWorkspaceSyncService.
 class TournamentStorage {
@@ -18,13 +30,47 @@ class TournamentStorage {
   static const _schemaVersion = 39;
   static const _maximumDocumentBytes = 128 * 1024 * 1024;
 
+  static final Map<String, _TournamentStorageCacheEntry> _cache = {};
+
+  @visibleForTesting
+  static void clearCache([String? path]) {
+    if (path != null) {
+      _cache.remove(path);
+    } else {
+      _cache.clear();
+    }
+  }
+
   Future<T> _locked<T>(Future<T> Function() action) =>
       StorageAccess.run(action);
 
+  Map<String, dynamic> _cloneDocument(Map<String, dynamic> source) {
+    final copy = Map<String, dynamic>.from(source);
+    final tournaments = source['tournaments'];
+    if (tournaments is List) {
+      copy['tournaments'] = [
+        for (final item in tournaments)
+          if (item is Map) Map<String, dynamic>.from(item),
+      ];
+    }
+    return copy;
+  }
+
   Future<Map<String, dynamic>> _readDocument() async {
     final file = await _storageFile();
-    if (!await file.exists()) return {};
-    if (await file.length() > _maximumDocumentBytes) {
+    if (!await file.exists()) {
+      _cache.remove(file.path);
+      return {};
+    }
+    final stat = await file.stat();
+    final cached = _cache[file.path];
+    if (cached != null &&
+        cached.lastModified == stat.modified &&
+        cached.fileLength == stat.size) {
+      return _cloneDocument(cached.document);
+    }
+
+    if (stat.size > _maximumDocumentBytes) {
       throw const FormatException(
         'Turnierspeicher überschreitet die maximale Dateigröße. '
         'Die Originaldatei wurde nicht verändert.',
@@ -55,7 +101,14 @@ class TournamentStorage {
             tournaments.any((item) => item is! Map<String, dynamic>))) {
       throw const FormatException('Beschädigte Turnierliste');
     }
-    return decoded;
+
+    _cache[file.path] = _TournamentStorageCacheEntry(
+      lastModified: stat.modified,
+      fileLength: stat.size,
+      document: decoded,
+    );
+
+    return _cloneDocument(decoded);
   }
 
   Future<void> _verifySchema24Backup(
@@ -132,7 +185,7 @@ class TournamentStorage {
     final file = await _storageFile();
     await file.parent.create(recursive: true);
     if (await file.exists()) {
-      final previous = await _readDocument();
+      final previous = _cache[file.path]?.document ?? await _readDocument();
       await file.copy('${file.path}.bak');
       final version = previous['schemaVersion'] ?? 1;
       final migrationBackup = File('${file.path}.v$version.bak');
@@ -147,6 +200,13 @@ class TournamentStorage {
       flush: true,
     );
     await temporary.rename(file.path);
+    final stat = await file.stat();
+
+    _cache[file.path] = _TournamentStorageCacheEntry(
+      lastModified: stat.modified,
+      fileLength: stat.size,
+      document: document,
+    );
   }
 
   Future<List<CreatedTournament>> loadTournaments() =>
@@ -219,7 +279,10 @@ class TournamentStorage {
         }
         tournaments[index] = tournament;
       }
-      final document = await _readDocument();
+      final file = await _storageFile();
+      final document = _cache[file.path]?.document != null
+          ? Map<String, dynamic>.from(_cache[file.path]!.document)
+          : await _readDocument();
       document['tournaments'] = tournaments
           .map((item) => item.toJson())
           .toList();
@@ -256,7 +319,10 @@ class TournamentStorage {
         tournaments[index] = latest;
       }
 
-      final document = await _readDocument();
+      final file = await _storageFile();
+      final document = _cache[file.path]?.document != null
+          ? Map<String, dynamic>.from(_cache[file.path]!.document)
+          : await _readDocument();
       document['tournaments'] = tournaments
           .map((item) => item.toJson())
           .toList();
@@ -280,7 +346,10 @@ class TournamentStorage {
     await _locked(() async {
       final tournaments = await _loadTournamentsUnlocked();
       tournaments.removeWhere((item) => item.id == id);
-      final document = await _readDocument();
+      final file = await _storageFile();
+      final document = _cache[file.path]?.document != null
+          ? Map<String, dynamic>.from(_cache[file.path]!.document)
+          : await _readDocument();
       document['tournaments'] = tournaments
           .map((item) => item.toJson())
           .toList();
