@@ -1,384 +1,241 @@
-# 🎯 DartTournamentPro
+# 🎯 DartTournamentPro (Dart Turnierverwaltung)
 
-**Die zentrale Plattform für Dartturniere, Spielerstatistiken und Ranglisten.**
+[![Version](https://img.shields.io/badge/version-2.6.3%2B83-blue.svg)](CHANGELOG.md)
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
+[![Plattformen](https://img.shields.io/badge/Plattformen-Windows%20|%20Android%20|%20Linux%20|%20macOS-success.svg)]()
 
-DartTournamentPro ist eine umfassende Turnierverwaltungsanwendung für den Steeldartsport. Sie vereint die Organisation und Durchführung von Turnieren, eine zentrale Spielerverwaltung, umfangreiche Statistiken und individuell konfigurierbare Ranglistensysteme in einer Anwendung.
+**Die professionelle Komplettlösung für Dartturniere, Vereinsbetrieb, Spielerstatistiken und Ranglisten.**
 
-Von klassischen Turnieren über mehrstufige Wettbewerbe bis hin zu langfristigen ELO-Ranglisten und saisonalen Turnierserien bietet DartTournamentPro zahlreiche Werkzeuge für einen strukturierten Spielbetrieb.
-
-## ✨ Funktionen im Überblick
-
-- **Turnierverwaltung:** Turniere erstellen, importieren, exportieren und live verwalten.
-- **KI-gestützter Turnierformfinder:** Geeignete Turnierformate anhand individueller Vorgaben und einer gewünschten Spieldauer ermitteln.
-- **Flexible Turnierformate:** Mehrstufige Turniere mit unterschiedlichen Spielsystemen kombinieren.
-- **Spielerverwaltung:** Zentrale Spielerkataloge mit umfangreichen Profilen und Statistiken.
-- **Ranglistensysteme:** Individuelle ELO- und Punkteranglisten mit konfigurierbaren Regeln.
-- **Statistiken und Jahresrückblicke:** Spielleistungen, Bestleistungen und Entwicklungen analysieren.
-- **Live-Dashboard:** Turnierfortschritt, Ergebnisse, Prognosen und organisatorische Hinweise verfolgen.
-- **Zwei-Monitor-Modus:** Separate Turnierinformationen auf einem zusätzlichen Bildschirm oder Fernseher anzeigen.
-- **Cloud-Synchronisation:** Daten über Supabase zwischen unterstützten Geräten synchronisieren.
-- **Website-Schnittstelle:** Ranglisten, Spielerprofile, Statistiken, Bestleistungen und abgeschlossene Turniere authentifiziert und schreibgeschützt bereitstellen. Details: [Supabase-API für die Website](docs/website_supabase_api.md).
-- **Updateverwaltung:** Nach neuen Versionen suchen und verfügbare Updates direkt in der Anwendung installieren.
-- **Werkzeuge und Integrationen:** Unter anderem Govee-Lichtsteuerung und Entwicklungswerkzeuge für Turnierformate.
+DartTournamentPro ist eine moderne, hochflexible Dartturnier- und Vereinsverwaltungsanwendung für den Steeldartsport. Sie vereint die Organisation und Durchführung von Turnieren mit automatischer Board-Zuweisung, Sprachansagen, einer zentralen Spielerverwaltung, detaillierten Statistiken, konfigurierbaren Elo- und Punkteranglisten sowie einem motivierenden Errungenschafts- und Levelsystem.
 
 ---
 
 ## 📋 Inhaltsverzeichnis
 
-1. [Hauptmenü](#-hauptmenü)
-2. [Turniere](#-turniere)
-3. [Spielerverwaltung](#-spielerverwaltung)
-4. [Statistiken und Jahresrückblicke](#-statistiken-und-jahresrückblicke)
-5. [Ranglisten](#-ranglisten)
-6. [Einstellungen und Verwaltung](#️-einstellungen-und-verwaltung)
-7. [Datenverwaltung und Synchronisation](#-datenverwaltung-und-synchronisation)
-8. [Integrationen und Schnittstellen](#-integrationen-und-schnittstellen)
+1. [Funktionen im Überblick](#-funktionen-im-überblick)
+2. [Menüstruktur & Navigation](#-menüstruktur--navigation)
+3. [Turnierverwaltung](#-turnierverwaltung)
+   - [Turniererstellung & KI-Formfinder](#turniererstellung--ki-formfinder)
+   - [Unterstützte Spielsysteme & Modi](#unterstützte-spielsysteme--modi)
+   - [Live-Turnierleitung & Board-Management](#live-turnierleitung--board-management)
+   - [Player Insights & Live-Statistiken](#player-insights--live-statistiken)
+   - [Sprachausgabe & Audio-Ansagen](#sprachausgabe--audio-ansagen)
+   - [Zweitmonitor, TV-Präsentation & Live-Ticker](#zweitmonitor-tv-präsentation--live-ticker)
+4. [Spielerverwaltung & Profile](#-spielerverwaltung--profile)
+5. [Statistiken & Jahresrückblicke](#-statistiken--jahresrückblicke)
+6. [Ranglisten & Wertungssysteme](#-ranglisten--wertungssysteme)
+7. [Errungenschaften & Levelsystem (Achievements)](#-errungenschaften--levelsystem-achievements)
+8. [Einstellungen & Werkzeuge](#-einstellungen--werkzeuge)
+9. [Schnittstellen & Cloud-Synchronisation](#-schnittstellen--cloud-synchronisation)
+10. [Entwicklung & Start](#-entwicklung--start)
+11. [Dokumentation](#-dokumentation)
 
 ---
 
-## 🧭 Hauptmenü
+## ✨ Funktionen im Überblick
 
-Das Hauptmenü ist in fünf zentrale Bereiche unterteilt:
+- **Vielseitige Spielsysteme:** Kombination von bis zu 3 Etappen (Gruppenphasen, Single KO, Double KO, Triple KO, Kratzer mit Bonusleben, Schweizer System, Ligaspiele und Freundschaftsspiele).
+- **KI-gestützter Turnierformfinder:** Berechnet anhand von Spieleranzahl, Scheiben und Zieldauer automatisch das optimale Turniermodell inklusive Leg-Distanzen.
+- **Turnierleiter-Dashboard:** Intelligente Scheibenzuweisung, automatisches Nachrücken freier Boards, Prioritätssteuerung bei Spielrückständen und Match-Empfehlungen.
+- **Text-to-Speech & Soundeffekte:** Automatische Audio-Ausrufe für aufgerufene Begegnungen ("Spieler A gegen Spieler B an Board X") und Erinnerungen bei freien Boards.
+- **Player Insights:** Live-Statistikbadges an Spielpaarungen (Siegesserien, Angstgegner, Rivalen, Decider-Stärke, Formkurven).
+- **Zweitmonitor-Modus & Standalone-App:** Vollbild-Präsentationsmodus für Fernseher oder Beamer im Vereinsheim mit aktiven Partien, Scheibenbelegung und QR-Code für Zuschauer.
+- **Errungenschaften & XP-System:** Über 8 Kategorien an Erfolgen mit Spieler-Levels, XP-Fortschritt und pro Rangliste individuell anpassbaren Zielwerten.
+- **Flexible Ranglisten:** ELO-Ranglisten mit Tiersystem (Divisionen) und interaktiven Trajektorien sowie klassische Punkteranglisten (Serienwertungen) mit Hochformat-PNG-Export.
+- **Zentrale Spielerverwaltung:** Spielerprofile mit Averages, aufklappbaren Bestleistungen mit Turnierlink, Monatsstatistiken und Performance-Diagrammen.
+- **Challonge-Import:** Nahtloser Import von Challonge-Turnieren inklusive Zuordnung zu Spielerkatalogen und rückwirkender Ranglistenberechnung.
+- **Supabase Cloud-Sync & Backups:** Kontobasierte Cloud-Sicherung, versionsbezogene SQLite-Sicherungen und lokaler Sicherheits-Reset.
+- **Website Read-Only API (v1 & v2):** Schreibgeschütztes Bereitstellen von Ranglisten, Profilen, Turnieren und Achievements für Vereinshomepages via Supabase Edge Function.
+- **Smart-Home-Licht (Govee):** Lichteffekte im Vereinsheim bei Aufrufen, Siegen oder Bestleistungen.
+- **In-App-Update:** Direkte Update-Installation für Windows und Android.
 
-| Bereich | Beschreibung |
+---
+
+## 🧭 Menüstruktur & Navigation
+
+Die Navigation passt sich automatisch an das Display an (Sidebar auf Desktop-Monitoren, mobiles Dropdown-Menü auf kompakten Bildschirmen):
+
+| Menüpunkt | Beschreibung |
 |---|---|
-| **Turniere** | Turniere erstellen, importieren, durchführen und auswerten |
-| **Spieler** | Spielerkatalog und individuelle Spielerprofile verwalten |
-| **Statistiken** | Spielerstatistiken und Jahresrückblicke analysieren |
-| **Ranglisten** | ELO- und Punkteranglisten konfigurieren und auswerten |
-| **Einstellungen** | Daten, Synchronisation, Darstellung, Updates und Werkzeuge verwalten |
-
-## 🏆 Turniere
-
-Der Turnierbereich bildet den zentralen Bestandteil der Anwendung. Er umfasst die Erstellung, Durchführung, Überwachung und nachträgliche Auswertung von Dartturnieren.
-
-### Turniere erstellen
-
-Turniere können individuell angelegt und unterschiedlichen Kategorien zugeordnet werden:
-
-- Normale Turniere
-- Ranglistenturniere
-- Ligaspiele
-- Freundschaftsspiele
-
-Bei der Erstellung stehen flexible Konfigurationsmöglichkeiten für den Ablauf und die Zusammensetzung des Turniers zur Verfügung.
-
-### KI-gestützter Turnierformfinder
-
-Der integrierte Turnierformfinder unterstützt bei der Auswahl eines geeigneten Turnierformats. Auf Basis der vom Nutzer eingegebenen Vorgaben und der gewünschten Gesamtdauer ermittelt er eine passende Turnierstruktur und übernimmt die ermittelten Einstellungen direkt in die Turniererstellung.
-
-Dabei können unter anderem organisatorische Anforderungen und zeitliche Rahmenbedingungen berücksichtigt werden.
-
-### Flexible Turnierformate
-
-Ein Turnier kann aus bis zu drei aufeinanderfolgenden Etappen bestehen. Die einzelnen Etappen lassen sich mit unterschiedlichen Formaten konfigurieren und miteinander kombinieren.
-
-Unterstützte Formate umfassen unter anderem:
-
-- Gruppenphasen
-- Kratzerturniere
-- Schweizer System (Swiss)
-- K.-o.-Phasen
-
-Dadurch lassen sich sowohl einfache Turniere als auch komplexere Wettbewerbe mit Vorrunden und anschließenden Finalphasen abbilden.
-
-Turniere können außerdem einer Rangliste zugeordnet werden, sodass ihre Ergebnisse in die entsprechende Wertung einfließen.
-
-### Spieler zuweisen
-
-Für die Teilnehmerverwaltung stehen zwei Möglichkeiten zur Verfügung:
-
-- Spieler direkt für ein Turnier anlegen.
-- Bereits vorhandene Spieler aus dem zentralen Spielerkatalog auswählen.
-
-Dadurch können Spielerdaten über mehrere Turniere hinweg wiederverwendet und Statistiken langfristig zusammengeführt werden.
-
-### Turnierimport und -export
-
-Turniere können importiert und exportiert werden. Zusätzlich steht ein Import für Challonge-Turniere zur Verfügung.
-
-Beim Challonge-Import können importierte Spielernamen mit Einträgen aus dem lokalen Spielerkatalog verknüpft werden. Auf diese Weise lassen sich historische Turnierergebnisse bestehenden Spielerprofilen zuordnen und rückwirkend in die Statistiken und Ranglisten integrieren.
-
-### Live-Turnierverwaltung
-
-Während eines laufenden Turniers stehen drei zentrale Ansichten zur Verfügung:
-
-- **Dashboard**
-- **Ergebnisse**
-- **Einstellungen**
-
-#### Dashboard
-
-Das Dashboard bietet einen zentralen Überblick über den aktuellen Turnierverlauf und unterstützt sowohl die sportliche als auch die organisatorische Durchführung.
-
-Je nach Turnierkonfiguration werden unter anderem folgende Informationen dargestellt:
-
-- Zuletzt absolvierte und bevorstehende Begegnungen
-- Aktuelle Tabellenstände innerhalb der Gruppen
-- Veränderungen der ELO-Werte und Auswirkungen auf Ranglisten
-- Turnierbestleistungen
-- Turnieruhr und zeitlicher Verlauf
-- Prozentualer Turnierfortschritt
-- Prognosen zum Turniersieger und zur voraussichtlichen Turnierdauer
-- Organisatorische Hinweise zur Unterstützung eines möglichst reibungslosen Turnierablaufs
-
-#### Zwei-Monitor-Modus
-
-Über einen separaten Anzeigemodus können ausgewählte Turnierinformationen auf einem zweiten Bildschirm oder Fernseher dargestellt werden.
-
-Dadurch lassen sich Informationen für Zuschauer und Teilnehmer bereitstellen, während die eigentliche Turnierverwaltung auf dem Hauptgerät geöffnet bleibt.
-
-#### Einstellungen während des Turniers
-
-Auch nach Turnierbeginn können wichtige Einstellungen angepasst werden. Dazu gehören beispielsweise:
-
-- Turniernamen ändern
-- Spieler aus dem Turnier entfernen
-- Gruppen bearbeiten
-- Weitere Turniereinstellungen anpassen
-
-Beim Entfernen von Spielern stehen zusätzliche Optionen zur Verfügung, mit denen festgelegt werden kann, ob ihre bisherige Wertung verloren gehen soll und ob ihre Begegnungen mit 0:0 gewertet werden sollen.
-
-### Turnierübersicht und Auswertung
-
-Nach einem Turnier bleiben die Ergebnisse und Auswertungen abrufbar.
-
-Die Turnierübersicht umfasst unter anderem:
-
-- Sämtliche Spielergebnisse und Begegnungen
-- Podium und Platzierungen
-- Auswirkungen auf zugeordnete Ranglisten
-- Turnierstatistiken
-- Bestleistungen
-- Exportmöglichkeiten
-
-Damit dient jedes abgeschlossene Turnier zugleich als Grundlage für die langfristige Dokumentation der sportlichen Entwicklung.
+| **Übersicht** | Startseite mit Schnellstart, Schnellzugriffen, Cloud-Status und dynamischen rotierenden Infokarten (Turniere, Ranglisten, Bestleistungen). |
+| **Turniere** | Übersicht gespeicherter Turniere, Schnellsuche, Filter, Neuanlage, Schnellbearbeitung, Challonge-Import und Archivierung. |
+| **Spieler** | Zentraler Spielerkatalog, externe Kennungen (Autodarts, Scolia, 3K), Challonge-Links und detaillierte Spielerprofile. |
+| **Statistiken** | Ranglisten- und Vereins-Jahresrückblicke, Head-to-Head Spieler-Vergleich und Leistungsdiagramme. |
+| **Ranglisten** | Elo- und Punkteranglisten, Tiersystem, chronologische Match-Historien, monatliche Vereinsperformance und PNG-Export. |
+| **Einstellungen** | Erreichbar über das Zahnrad oben rechts; unterteilt in *Daten*, *Updates*, *Darstellung* und *Sonstige Einstellungen*. |
 
 ---
 
-## 👥 Spielerverwaltung
+## 🏆 Turnierverwaltung
 
-Die Spielerverwaltung bietet einen zentralen Katalog aller hinterlegten Spieler. Die gespeicherten Informationen können für Turniere, Statistiken und Ranglisten wiederverwendet werden.
+### Turniererstellung & KI-Formfinder
 
-### Spielerdaten
+Turniere können flexibel für verschiedene Zwecke erstellt werden:
+- **Normales Turnier:** Freies Turnier ohne Ranglistenbezug.
+- **Ranglistenturnier:** Wertung für eine oder mehrere ausgewählte Ranglisten.
+- **Ligaspiel:** Spielbericht-Modus für Vereins-Ligabegegnungen (Einzel, Doppel, Board-Runtime).
+- **Freundschaftsspiel:** Schneller Wettkampf zweier Spieler.
+- **Turnierformfinder:** Ermittelt nach Angabe von Teilnehmerzahl, Boards und Wunschdauer (z. B. 3 Stunden) das am besten geeignete Format samt Best-of-Distanzen.
 
-Für jeden Spieler können unter anderem folgende Informationen hinterlegt werden:
+### Unterstützte Spielsysteme & Modi
 
-- Name
-- Spitzname
-- Geburtsdatum
-- Autodarts-Name
-- Scolia-ID
-- 3K-Darts-ID
-- Challonge-Verknüpfungen
+Bis zu **3 Etappen** können kombiniert werden (z. B. Gruppenphase gefolgt von K.-o.-Runde):
+- **Gruppenphase:** Round Robin (Einfach-/Mehrfachrunde), Mini-KO, Begrenzung der Spiele pro Spieler, konfigurierbare Tie-Breaker (Matchpunkte, Legdifferenz, gewonnene Legs, direkter Vergleich), Gruppen-Position-Editor.
+- **Single Knockout:** Klassischer K.-o.-Baum mit optionalem Spiel um Platz 3.
+- **Double Knockout:** Winner- und Loser-Bracket mit Re-Entry-Möglichkeit.
+- **Triple Knockout:** Drei Bracket-Ebenen (A-, B- und C-Bracket) für ausgedehnte Turniere.
+- **Kratzer-Turnier (Elimination):** Traditionelles Darts-Ausscheidungsverfahren mit Leben ("Kratzern"), Neuauslosung je Runde (3–6 Spieler pro Board), Option "Gleiche Kratzerzahl bevorzugen", Bonusleben bei 180ern und Zeitprognose.
+- **Schweizer System (Swiss):** Paarungen nach Zwischenstand mit Buchholz-Feinwertung.
 
-Die externen Kennungen ermöglichen die Zuordnung zu den jeweiligen Systemen und unterstützen die Zusammenführung von Spielerinformationen.
+### Live-Turnierleitung & Board-Management
 
-### Individuelle Spielerprofile
+Während des Turniers stehen dem Turnierleiter spezialisierte Ansichten zur Verfügung:
+- **Dashboard:** Live-Fortschritt, aktuelle Matches, Podiumsprognose und Gesamtzeitplan.
+- **Ergebnisse:** Interaktive Brackets und Tabellen, Bestleistungserfassung (180er, Shortlegs 10–18 Darts, High Finishes bis 170).
+- **Turnierleiter-Modus (Director Dashboard):**
+  - Schnelle Zuweisung und Überwachung aller Scheiben.
+  - Automatisches Nachrücken freier Boards.
+  - Prioritätssteuerung: Erkennt Gruppen mit Spielrückständen und empfiehlt Partien zur Vermeidung von Verzögerungen (absolut oder prozentual).
+  - Zeitverschiebung: Bei nachträglichen Datumskorrekturen werden Match-Zeitstempel konsistent verschoben, ohne Uhrzeiten oder Reihenfolge zu beeinträchtigen.
+  - Spieler-Rückzug (Player Withdrawal) mit konfigurierbarer Wertung (kampflos oder Streichung).
 
-Jeder Spieler verfügt über eine umfangreiche Statistikseite, auf der seine bisherige sportliche Entwicklung nachvollzogen werden kann.
+### Player Insights & Live-Statistiken
 
-Die Profile enthalten unter anderem:
+Direkt an den Spielpaarungen werden situative Badges eingeblendet:
+- **Hot Streak / Cold Streak:** Sieg- oder Niederlagenserien.
+- **Angstgegner & Rivalen:** Historische Duelle und ausgeglichene Bilanzen.
+- **Giant Slayer & Underdog:** Erfolge gegen signifikant höher platzierte Spieler.
+- **Decider-Stärke:** Besondere Nervenstärke im letzten Leg.
+- **Titelverteidiger & ELO Climber:** Formstarke Spieler im Aufwind.
 
-- Bisherige Turnierteilnahmen
-- Gespielte Legs und Ergebnisse
-- Erzielte Bestleistungen
-- Aktuelle Platzierungen und Wertungen in zugeordneten Ranglisten
-- Weitere verfügbare Leistungsstatistiken
+### Sprachausgabe & Audio-Ansagen
 
-Durch die Verknüpfung importierter Turniere mit dem Spielerkatalog können auch historische Daten in die langfristige Spielerstatistik einfließen.
+- Automatische Sprachansage (TTS) für aufgerufene Spiele: *„Spieler A gegen Spieler B an Board X“*.
+- Anpassbare Namensformate (voller Name oder Vorname + Nachnamenskürzel, Spitznamen bevorzugen).
+- Akustische Board-Leerlauf-Erinnerungen bei unbespielten Scheiben (Intervall 1–5 Minuten).
+- Ansage organisatorischer Verzögerungshinweise.
 
----
+### Zweitmonitor, TV-Präsentation & Live-Ticker
 
-## 📊 Statistiken und Jahresrückblicke
-
-Der Statistikbereich bietet einen Überblick über die sportlichen Leistungen und Entwicklungen innerhalb des Vereins oder einer ausgewählten Rangliste.
-
-Er gliedert sich in Spielerstatistiken und Jahresrückblicke.
-
-### Spielerstatistiken
-
-Die Spielerstatistiken ermöglichen die Auswertung individueller Leistungen auf Grundlage der erfassten Turnier- und Spielergebnisse.
-
-### Jahresrückblicke für Ranglisten
-
-Bei den Ranglisten-Jahresrückblicken kann zwischen einzelnen Jahresranglisten und dem gesamten verfügbaren Zeitraum unterschieden werden.
-
-Dadurch lassen sich sowohl einzelne Saisons als auch die langfristige Entwicklung einer Rangliste analysieren.
-
-Die Auswertungen umfassen beispielsweise:
-
-- Anzahl der gespielten Legs
-- Anzahl der absolvierten Turniere
-- Entwicklung der Turnieraktivität nach Monat und Jahr
-- Anzahl und Zusammensetzung der Bestleistungen
-- Weitere verfügbare Kennzahlen der jeweiligen Rangliste
-
-Bestleistungen werden nach Kategorien aufgeschlüsselt. Dazu gehören beispielsweise:
-
-- 180er
-- 170er
-- Shortlegs
-- High Finishes
-
-Ein beispielhafter Rückblick könnte 3.000 gespielte Legs und 90 Bestleistungen ausweisen, aufgeteilt in 30 maximale 180er, 20 Ergebnisse mit 170 Punkten, 30 Shortlegs und 10 High Finishes.
-
-Die Jahresrückblicke verfügen außerdem über Exportfunktionen, sodass Auswertungen außerhalb der Anwendung weiterverwendet werden können.
-
-### Jahresrückblicke für Spieler
-
-Zusätzlich können die Profilstatistiken einzelner Spieler nach Jahren gefiltert betrachtet werden.
-
-Dadurch lassen sich persönliche Entwicklungen und Leistungswerte über mehrere Spielzeiten hinweg vergleichen, ohne sämtliche Turniere einzeln öffnen zu müssen.
+- **Zweitmonitor-Modus (`TournamentSecondScreenView`):** Vollbildanzeige für Großbildschirme und Beamer.
+- **Standalone-App (`SecondScreenStandaloneApp`):** Kann unabhängig für reine Display-Terminals gestartet werden.
+- Zeigt bis zu **4 aktive Partien nebeneinander**, nächste Aufrufe und Brackets.
+- Player Insights erscheinen dezent beim Hover über Spielernamen.
+- QR-Code zur Anzeige des mobilen Live-Tickers für Besucher.
 
 ---
 
-## 📈 Ranglisten
+## 👥 Spielerverwaltung & Profile
 
-DartTournamentPro unterstützt unterschiedliche Ranglistensysteme, die an die Anforderungen verschiedener Wettbewerbe und Turnierserien angepasst werden können.
+- **Zentraler Katalog:** Spieler anlegen, suchen, filtern und für alle Turniere wiederverwenden.
+- **Externe Verknüpfungen:** Autodarts-Name, Scolia-ID, 3K-Darts-ID und Challonge-Aliases.
+- **Detailliertes Spielerprofil:**
+  - Gesamtbilanz (Spiele, Legs, Siege, Quoten).
+  - Aufklappbare Bestleistungen mit Direktlink zum Turnier.
+  - Monatsstatistiken mit Jahresfiltern, Jahressummen und Monatsnamen.
+  - Performance-Diagramme (Average-Kurven, Bestleistungen, Leistungsentwicklung).
+  - Achievement-Status mit Level und XP-Balken.
+  - Head-to-Head Spieler-Vergleichsseite.
+
+---
+
+## 📊 Statistiken & Jahresrückblicke
+
+- **Jahresrückblicke:**
+  - Analyse nach Rangliste oder individuellem Spieler.
+  - Gespielte Legs, Turnierteilnahmen, Monatsaktivität und Bestleistungen-Zusammensetzung.
+- **Historischer Statistik-Import:**
+  - Import historischer Monatsstatistiken (z. B. aus Excel-Archiven).
+  - Saubere Trennung von importierten Monatsaggregaten und tatsächlichen Einzelspielen.
+- **Bestleistungs-Katalog:** Strukturierte Übersicht aller 180er, Shortlegs und High Finishes mit Filter- und Suchfunktionen.
+
+---
+
+## 📈 Ranglisten & Wertungssysteme
 
 ### ELO-Ranglisten
+- Kontinuierliche Spielstärkeberechnung basierend auf echten Spielergebnissen.
+- Konfigurierbarer K-Faktor, Startwert (Standard: 1000) und Rundung.
+- **Tiersystem (Divisionen):** Einteilung der Spieler in Ränge (Bronze, Silber, Gold, Platin etc.).
+- **Chronologische Korrektheit:** Nachträglich importierte oder eingefügte Turniere berechnen die ELO-Kurve historisch exakt neu.
+- Interaktiver Elo-Trajektorien-Chart je Spieler.
 
-ELO-Ranglisten ermöglichen eine fortlaufende Bewertung der Spielstärke anhand der Ergebnisse.
-
-Bei der Erstellung einer Rangliste können unter anderem folgende Parameter konfiguriert werden:
-
-- K-Faktor für die Berechnung der ELO-Veränderungen
-- Einstufung beziehungsweise Kennzeichnung ab einem definierten Pro-Wert
-- Gültigkeits- oder Startdatum der Rangliste
-- Optionales Auf- und Abstiegssystem mit Rangstufen (Tiers)
-
-Das Tiersystem orientiert sich konzeptionell an Rangsystemen aus kompetitiven Spielen wie League of Legends. Es ermöglicht eine zusätzliche Einteilung der Spieler in definierte Leistungsstufen.
-
-### Punkteranglisten
-
-Neben ELO-Systemen können klassische Punkteranglisten angelegt werden, beispielsweise für Turnierserien oder Vereinsmeisterschaften.
-
-Die Punktevergabe lässt sich an die Anforderungen der jeweiligen Rangliste anpassen. Mögliche Bestandteile sind:
-
-- Punkte für die Teilnahme an Turnieren
-- Zusatzpunkte für Siege
-- Bonuspunkte für Bestleistungen
-- Weitere individuell definierte Wertungsbestandteile
-
-Damit lassen sich unterschiedliche Wettbewerbe abbilden, ohne für jede Turnierserie ein eigenes Verwaltungssystem zu benötigen.
-
-### Spieler und Turniere zuweisen
-
-Innerhalb einer Rangliste können Spieler und Turniere zugeordnet werden. Die Ergebnisse der zugewiesenen Turniere bilden die Grundlage für die jeweilige Ranglistenberechnung.
-
-### Chronologische Berechnung und historische Korrektheit
-
-Die ELO-Entwicklung wird chronologisch anhand der zugeordneten Turniere und Ergebnisse berechnet.
-
-Werden Turniere nachträglich importiert oder zeitlich zwischen bereits vorhandene Spieltage eingefügt, kann die Rangliste unter Berücksichtigung der zeitlichen Reihenfolge neu berechnet werden. Dadurch lassen sich auch historische Ranglistenstände nachvollziehen.
-
-### Detaillierter Ranglistenverlauf
-
-Beim Öffnen einer Rangliste werden die zugehörigen Spieler mit ihren aktuellen Wertungen angezeigt. Eine dedizierte Ansicht für die Punkteentwicklung nach einzelnen Spieltagen/Turnieren ist ebenfalls vorhanden.
-
-Für einzelne Spieler steht ein detaillierter Verlauf zur Verfügung, der unter anderem folgende Informationen umfasst:
-
-- ELO- beziehungsweise Punkteentwicklung über die Spieltage
-- Wertungsveränderungen durch einzelne Begegnungen
-- Verlauf über den ausgewählten Zeitraum
-- Interaktiver Graph zur visuellen Analyse der Entwicklung
-
-Damit können sowohl langfristige Trends als auch Veränderungen nach einzelnen Turnieren und Spielen untersucht werden.
+### Punkteranglisten (Serienwertungen)
+- Punkte für Teilnahmen, gewonnene Sets/Legs und Podestplätze (1., 2., 3. Platz).
+- Zusatzpunkte für erfasste Bestleistungen (180er, Shortlegs, High Finishes).
+- **Grafik-Export:** Ein-Klick-PNG-Export des Ranglistenstands im optimierten Hochformat zum Teilen auf Social Media oder Vereinsaushängen.
 
 ---
 
-## ⚙️ Einstellungen und Verwaltung
+## 🎖️ Errungenschaften & Levelsystem (Achievements)
 
-Die Einstellungen sind über das Zahnradsymbol im Hauptmenü erreichbar und in mehrere Bereiche unterteilt.
-
-### Daten
-
-Der Datenbereich bündelt wichtige Funktionen zur Verwaltung und Absicherung der Anwendungsdaten.
-
-Dazu gehören:
-
-- Backups erstellen
-- Supabase-Synchronisation aktivieren oder deaktivieren
-- Einloggen und Registrieren
-- Daten zurücksetzen
-
-### Updates
-
-Die integrierte Updateverwaltung bietet Zugriff auf das Git-Repository und ermöglicht die Suche nach neuen Versionen.
-
-Verfügbare Updates können direkt aus der Anwendung heruntergeladen und installiert werden.
-
-### Darstellung
-
-Im Darstellungsbereich können visuelle Einstellungen angepasst werden.
-
-Dazu gehören:
-
-- Seitenlogo auswählen beziehungsweise ändern
-- Theme auswählen
-- Dark Mode aktivieren
-
-### Werkzeuge und Verwaltung
-
-Dieser Bereich bündelt zusätzliche Integrationen und Funktionen für Administration, Entwicklung und Tests.
-
-#### Govee-Lichthub
-
-Über eine API-Integration können unterstützte smarte Beleuchtungssysteme von Govee gesteuert werden.
-
-Die Funktion ist insbesondere für den Einsatz in Vereinsheimen vorgesehen, in denen Beleuchtung zentral über die Anwendung bedient werden soll.
-
-#### Entwicklertools
-
-Die Anwendung enthält Werkzeuge zum Testen und Durchspielen von Turnierformaten. Damit lassen sich Konfigurationen überprüfen und Abläufe unter kontrollierten Bedingungen nachvollziehen.
-
-#### Konfiguration des Turnierformfinders
-
-Die Parameter des Turnierformfinders können angepasst werden, um die Berechnung der Turnierdauer und die Auswahl geeigneter Turnierformate auf unterschiedliche Anforderungen abzustimmen.
-
-Dazu gehören insbesondere Einstellungen für die zeitliche Kalkulation und die Formfindung.
+Das integrierte Achievement-System belohnt Aktivität, Spielstärke und Vereinsengagement:
+- **8 Kategorien:** *Turniererfolge*, *Spielbetrieb*, *Scoring & Specials*, *Checkout & Präzision*, *Konstanz & Performance*, *Aktivität & Vereinstreue*, *Rivalitäten & Comebacks* sowie *Ranglisten-Awards*.
+- **Individuelle Zielwerte:** Jede Rangliste kann eigene Zielvorgaben oder alternative Erfüllungswege definieren (z. B. andere Zielanzahl an 180ern für Hobbyligen).
+- **XP & Spieler-Level:** Transparente Erfahrungspunkte mit Levelaufstiegen.
+- **Live-Feedback:** Sofortige Freischalt-Benachrichtigungen beim Abschluss der Partie.
 
 ---
 
-## ☁️ Datenverwaltung und Synchronisation
+## ⚙️ Einstellungen & Werkzeuge
 
-DartTournamentPro unterstützt eine lokale Datenverwaltung sowie eine optionale Synchronisation über Supabase.
-
-Bei aktivierter Synchronisation werden unterstützte Daten zwischen verbundenen Geräten abgeglichen. Dadurch können beispielsweise Turniere, Spielerinformationen und Ranglisten mit demselben Benutzerkonto auf mehreren Geräten verwendet werden.
-
-Die Synchronisation kann in den Einstellungen aktiviert oder deaktiviert werden.
-
-Backups und die Möglichkeit zum Zurücksetzen der Daten sind ebenfalls im Datenbereich integriert.
-
-**Hinweis:** Welche Daten lokal oder über Supabase gespeichert werden und welche Funktionen ohne Verbindung verfügbar sind, hängt von der jeweiligen Implementierung und Konfiguration der Anwendung ab.
+Über das Zahnrad-Symbol oben rechts erreichbar:
+1. **Daten:** Supabase Cloud-Login, manuelle/automatische Backups, bytegetreue Sicherung und lokaler App-Reset (`ZURÜCKSETZEN`).
+2. **Updates:** Integrierter Updater für Windows (mit PowerShell-Prozessüberwachung) und Android.
+3. **Darstellung:** Eigenes Vereinslogo hochladen (bis 512 KB), Theme-Auswahl (Vereinsdesign oder Weihnachts-Theme mit Schneefall) und Dark Mode.
+4. **Sonstige Einstellungen:**
+   - **Player Insight Defaults:** Schwellenwerte für Siegesserien, Angstgegner und Rivalen.
+   - **Govee API-Key:** Steuerung vernetzter Vereinsheim-Lichter.
+   - **Auslosungsrad (Random Draw Tool):** Eigenständiges Rad für unabhängige Auslosungen.
+   - **Turnierformfinder-Parameter:** Anpassung von Leg- und Wurfzeiten für die Zeitkalkulation.
+   - **Tie-Breaker-Standardwerte:** Globale Reihenfolge bei Gleichstand.
+   - **Dev Tools:** Entwicklerwerkzeuge und Testdaten.
 
 ---
 
-## 🔗 Integrationen und Schnittstellen
+## 🔗 Schnittstellen & Cloud-Synchronisation
 
-DartTournamentPro verbindet die Turnierverwaltung mit weiteren Diensten und Werkzeugen aus dem Darts- und Vereinsumfeld.
-
-| Integration | Verwendungszweck |
+| Schnittstelle | Funktion |
 |---|---|
-| **Supabase** | Cloud-Datenbank und Synchronisation |
-| **Challonge** | Import von Turnieren und Zuordnung historischer Spielergebnisse |
-| **Autodarts** | Hinterlegung von Spielernamen und Kennungen |
-| **Scolia** | Verwaltung von Spielerkennungen |
-| **3K Darts** | Hinterlegung von Spielerkennungen |
-| **Govee** | Steuerung kompatibler Beleuchtung über eine API |
-| **Git-Repository** | Zugriff auf den Quellcode und Bereitstellung von Updates |
-
-Die Verfügbarkeit einzelner Funktionen hängt von der Konfiguration, den erforderlichen Zugangsdaten und den jeweiligen Schnittstellen ab.
+| **Supabase** | Multi-Device Cloud-Synchronisation und automatisches Backup im Storage-Bucket. |
+| **Website Read-Only API (v2)** | Supabase Edge Function zur schreibgeschützten Auslieferung von Ranglisten, Profilen, Turnieren und Achievements für Vereinshomepages. [Details](docs/website_supabase_api.md). |
+| **Challonge** | Import von Single KO, Double KO und Round Robin Turnieren inklusive Spieler-Matching. |
+| **Govee API** | Lichtsteuerung im Vereinsheim bei Turnierevents. |
+| **Autodarts / Scolia / 3K** | Hinterlegung und Verknüpfung externer Spieler-IDs. |
 
 ---
 
-## 🚀 Projektziel
+## 💻 Entwicklung & Start
 
-DartTournamentPro verfolgt das Ziel, die Organisation des Dartspielbetriebs in einer zentralen Anwendung zu bündeln.
+### Voraussetzungen
+- Flutter SDK (≥ 3.24)
+- Dart SDK (≥ 3.5)
 
-Statt Turniere, Spielerdaten, Ranglisten und Statistiken getrennt verwalten zu müssen, verbindet die Anwendung diese Bereiche miteinander. Ergebnisse aus Turnieren können dadurch langfristig für Spielerprofile, Ranglisten und statistische Auswertungen genutzt werden.
+### Starten
+```powershell
+# Abhängigkeiten laden
+flutter pub get
 
-Der modulare Aufbau ermöglicht sowohl den Einsatz bei einzelnen Hobbyturnieren als auch die kontinuierliche Verwaltung eines Vereins mit regelmäßigen Turnieren, unterschiedlichen Ranglistensystemen und langfristigen Spielerdaten.
+# Auf Desktop ausführen
+flutter run -d windows
+```
 
-**DartTournamentPro – von der Turnierplanung bis zur langfristigen Leistungsanalyse.**
+### Tests ausführen
+```powershell
+flutter test
+```
+
+---
+
+## 📖 Dokumentation
+
+- Ausführliches Handbuch: [`docs/APP_DOKUMENTATION.md`](docs/APP_DOKUMENTATION.md)
+- Architektur-Notiz: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Website-API-Spezifikation: [`docs/website_supabase_api.md`](docs/website_supabase_api.md)
+- Prioritätshinweise im Turnierbetrieb: [`docs/tournament_priority_hints.md`](docs/tournament_priority_hints.md)
+- Release-Notes & Historie: [`docs/releases/`](docs/releases/) und [`CHANGELOG.md`](CHANGELOG.md)
+
+---
+
+**DartTournamentPro – Dein Spiel. Dein Turnier.**
