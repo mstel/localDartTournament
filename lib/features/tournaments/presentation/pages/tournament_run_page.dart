@@ -4896,8 +4896,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         ),
         body: SafeArea(
           child: RepaintBoundary(
-            key: ValueKey('stage-$_viewStageIndex-$_stageViewMode'),
-            slivers: [
+            child: CustomScrollView(
+              key: ValueKey('stage-$_viewStageIndex-$_stageViewMode'),
+              slivers: [
               SliverToBoxAdapter(
                 child: TournamentRunHeader(
                   tournament: widget.tournament,
@@ -5967,7 +5968,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 canEditResults: canEditResults,
                                 isEditMode: isEditMode,
                                 onSwapSlot: onSwapSlot,
-                              );
+                              ),);
                             },
                       ),
                     ],
@@ -5992,6 +5993,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                 ),
               ],
             ],
+            ),
           ),
         ),
       ),
