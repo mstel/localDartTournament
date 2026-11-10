@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:dart_tournament_manager/features/challonge/domain/challonge_tournament.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
@@ -67,11 +68,7 @@ void main() {
           matching: find.byType(Scrollable),
         )
         .first;
-    await tester.scrollUntilVisible(
-      actions,
-      200,
-      scrollable: scrollable,
-    );
+    await tester.scrollUntilVisible(actions, 200, scrollable: scrollable);
     await tester.pumpAndSettle();
     await tester.tap(actions);
     await tester.pumpAndSettle();
@@ -98,6 +95,51 @@ void main() {
     expect(find.text('Noch keine Turniere gespeichert.'), findsOneWidget);
     expect(find.text('0 gespeicherte Turniere'), findsOneWidget);
     expect(find.text('Turniere konnten nicht geladen werden.'), findsNothing);
+  });
+
+  testWidgets('saved league matches open in the shared tournament run view', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final league = LeagueMatch.rhl(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: const ['H1', 'H2', 'H3', 'H4'],
+      awayPlayers: const ['G1', 'G2', 'G3', 'G4'],
+    );
+    storage.tournaments.add(
+      CreatedTournament(
+        name: 'Freundschaftsspiel',
+        players: [
+          for (final name in [...league.homePlayers, ...league.awayPlayers])
+            TournamentPlayer(name: name, isGenerated: false),
+        ],
+        stages: [],
+        runStages: [],
+        leagueMatch: league,
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentHomePage(storage: storage, leagueMatchesOnly: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Freundschaftsspiel'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TournamentRunPage), findsOneWidget);
+    expect(find.text('Dashboard'), findsWidgets);
+    expect(find.text('Ergebnisse'), findsOneWidget);
+    expect(find.text('Einstellungen'), findsOneWidget);
+    expect(find.text('Leitung'), findsOneWidget);
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Turnierleiter-Modus aktivieren'), findsNothing);
+    expect(find.text('2. Bildschirm (TV-Anzeige)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('completed tournament end date can be updated from overview', (

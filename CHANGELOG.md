@@ -1,3 +1,15 @@
+# 2.6.6+86
+
+- Behebt das Laden von Liga- und Freundschaftsspielen mit gespeicherten
+  Auswechslungen und unterstützt flexible Mannschaftskader mit mehr als sechs
+  Stammspielern sowie unterschiedlich großen Ersatzbänken.
+- Integriert aktive Mannschaftsspiele in die gemeinsame Laufzeitansicht mit
+  Dashboard, Ergebnissen, Einstellungen, Leitung, Zweitmonitor, Auswechslungen
+  und manueller Doppelpartner-Zuweisung.
+- Ergänzt die globale Navigation und Kategorie-Kurzbeschreibungen sowie
+  Anpassungen am Formatplaner und an der Turnierkonfiguration nach
+  Ergebniseingabe.
+
 # 2.6.0+80
 
 - Migriert lokale SQLite-Datenbanken von Schema 14 auf 15 und ergänzt fehlende

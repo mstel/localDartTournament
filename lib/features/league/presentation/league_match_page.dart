@@ -39,8 +39,9 @@ class LeagueMatchPage extends StatefulWidget {
   State<LeagueMatchPage> createState() => _LeagueMatchPageState();
 }
 
-class _LeagueSubstitutionDialog extends StatefulWidget {
-  const _LeagueSubstitutionDialog({
+class LeagueSubstitutionDialog extends StatefulWidget {
+  const LeagueSubstitutionDialog({
+    super.key,
     required this.league,
     required this.teamSide,
     required this.teamName,
@@ -51,11 +52,11 @@ class _LeagueSubstitutionDialog extends StatefulWidget {
   final String teamName;
 
   @override
-  State<_LeagueSubstitutionDialog> createState() =>
+  State<LeagueSubstitutionDialog> createState() =>
       _LeagueSubstitutionDialogState();
 }
 
-class _LeagueSubstitutionDialogState extends State<_LeagueSubstitutionDialog> {
+class _LeagueSubstitutionDialogState extends State<LeagueSubstitutionDialog> {
   int? _outPlayer;
   int? _inPlayer;
 
@@ -77,9 +78,7 @@ class _LeagueSubstitutionDialogState extends State<_LeagueSubstitutionDialog> {
   Color _statusColor(BuildContext context, String status) {
     if (status == 'Aktiv') return Theme.of(context).colorScheme.primary;
     if (status == 'Ersatzspieler') return Colors.orange.shade800;
-    return widget.league.allowReentry
-        ? Theme.of(context).colorScheme.onSurface
-        : Theme.of(context).colorScheme.error;
+    return Theme.of(context).colorScheme.error;
   }
 
   Widget _playerTile(
@@ -96,10 +95,22 @@ class _LeagueSubstitutionDialogState extends State<_LeagueSubstitutionDialog> {
       dense: true,
       selected: selected,
       title: Text(_roster[player]),
-      subtitle: Text(
-        status == 'Ersatzspieler' ? 'Ersatzbank' : status,
-        style: TextStyle(color: _statusColor(context, status)),
-      ),
+      subtitle: status == 'Ausgewechselt' && widget.league.allowReentry
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'Ausgewechselt',
+                style: TextStyle(color: Colors.white),
+              ),
+            )
+          : Text(
+              status == 'Ersatzspieler' ? 'Ersatzbank' : status,
+              style: TextStyle(color: _statusColor(context, status)),
+            ),
       trailing: selected
           ? const Icon(Icons.check_circle_outline)
           : const Icon(Icons.drag_indicator),
@@ -451,12 +462,13 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         min(_rosters[0].length, _rosters[1].length),
       );
       _maxReservePlayers = max(
-        _maxReservePlayers,
+        0,
         max(
           _rosters[0].length - _starterCount,
           _rosters[1].length - _starterCount,
         ),
       );
+      _substitutionLimit = min(_substitutionLimit, _maxReservePlayers);
       _doublesCount = min(_doublesCount, _starterCount ~/ 2);
       _error = null;
     });
@@ -746,7 +758,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     }
     final choice = await showDialog<(int, int)>(
       context: context,
-      builder: (context) => _LeagueSubstitutionDialog(
+      builder: (context) => LeagueSubstitutionDialog(
         league: league,
         teamSide: teamSide,
         teamName: teamSide == 0 ? league.homeTeam : league.awayTeam,
@@ -923,7 +935,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                   setState(() {
                     _starterCount = value;
                     _maxReservePlayers = max(
-                      _maxReservePlayers,
+                      0,
                       max(
                         _rosters[0].length - value,
                         _rosters[1].length - value,
@@ -955,7 +967,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                         _rosters[1].length - _starterCount,
                       ),
                     );
-                    count <= 8;
+                    count <= 16;
                     count++
                   )
                     DropdownMenuItem(value: count, child: Text('$count')),
@@ -1022,7 +1034,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                   labelText: 'Doppel je Mannschaft',
                 ),
                 items: [
-                  for (var count = 0; count <= _rosters[0].length ~/ 2; count++)
+                  for (var count = 0; count <= _starterCount ~/ 2; count++)
                     DropdownMenuItem(value: count, child: Text('$count')),
                 ],
                 onChanged: (value) {
@@ -1132,7 +1144,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                                 _rosters[team].length >=
                                     (_variant == LeagueMatchVariant.traditional
                                         ? 8
-                                        : _starterCount + _maxReservePlayers)
+                                        : 16)
                             ? null
                             : () => setState(() {
                                 final next = _rosters[team].length + 1;
@@ -1141,6 +1153,22 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                                     text: '${_teams[team].text} $next',
                                   ),
                                 );
+                                if (_variant == LeagueMatchVariant.adjusted) {
+                                  _maxReservePlayers = max(
+                                    _maxReservePlayers,
+                                    max(
+                                      0,
+                                      max(
+                                        _rosters[0].length - _starterCount,
+                                        _rosters[1].length - _starterCount,
+                                      ),
+                                    ),
+                                  );
+                                  _substitutionLimit = min(
+                                    _substitutionLimit,
+                                    _maxReservePlayers,
+                                  );
+                                }
                                 _error = null;
                               }),
                         icon: const Icon(Icons.person_add),

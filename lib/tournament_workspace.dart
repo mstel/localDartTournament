@@ -22,6 +22,7 @@ import 'features/achievements/application/achievement_match_resolver.dart';
 import 'features/tournaments/presentation/widgets/creation/player_profile_picker_dialog.dart';
 import 'shared/widgets/adaptive_content.dart';
 import 'features/league/presentation/league_match_page.dart';
+import 'features/league/presentation/league_team_dialogs.dart';
 import 'features/league/presentation/league_tournament_player_sections.dart';
 import 'features/league/application/league_board_runtime.dart';
 import 'features/tournaments/domain/engines/placement_engine.dart';

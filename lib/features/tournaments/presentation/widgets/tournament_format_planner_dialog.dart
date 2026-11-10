@@ -142,6 +142,7 @@ class _TournamentFormatPlannerDialogState
     required String value,
     required bool selected,
     required VoidCallback onPressed,
+    bool enabled = true,
   }) => Card(
     key: ValueKey(key),
     color: selected ? Theme.of(context).colorScheme.primaryContainer : null,
@@ -167,7 +168,9 @@ class _TournamentFormatPlannerDialogState
           const SizedBox(height: 8),
           Align(
             alignment: AlignmentDirectional.centerStart,
-            child: selected
+            child: !enabled
+                ? OutlinedButton(onPressed: null, child: const Text('Ändern'))
+                : selected
                 ? FilledButton.tonal(
                     onPressed: _calculating ? null : onPressed,
                     child: const Text('Ändern'),
@@ -582,6 +585,7 @@ class _TournamentFormatPlannerDialogState
                         '${_targetHours.text} Std. ${_targetMinutes.text.padLeft(2, '0')} Min. · Vorschläge nach Nähe',
                     selected: _useTargetDuration,
                     onPressed: _pickTargetDuration,
+                    enabled: !_considerBestWorstCase,
                   ),
                 ],
               ),

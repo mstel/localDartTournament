@@ -122,5 +122,12 @@ void main() {
     expect(find.textContaining('3 Std. 00 Min.'), findsOneWidget);
     expect(find.textContaining('2 Std. 00 Min.'), findsOneWidget);
     expect(find.textContaining('4 Std. 00 Min.'), findsOneWidget);
+    final targetButton = tester.widget<OutlinedButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey('planner-target-duration')),
+        matching: find.byType(OutlinedButton),
+      ),
+    );
+    expect(targetButton.onPressed, isNull);
   });
 }

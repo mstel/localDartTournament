@@ -3,8 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/league/presentation/league_match_page.dart';
 import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:dart_tournament_manager/features/league/presentation/league_team_dialogs.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/tournament_run_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/tournament_workspace.dart'
+    show TournamentRunPage;
 
 class _MemoryStorage extends TournamentStorage {
   CreatedTournament? saved;
@@ -160,6 +163,87 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('adjusted setup creates ten starters with an uneven bench', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final storage = _MemoryStorage();
+    await tester.pumpWidget(
+      MaterialApp(home: LeagueMatchPage(storage: storage)),
+    );
+    await tester.tap(find.text('Angepasst'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Angepasster Spielplan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Heimteam & Aufstellung'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Gastteam & Aufstellung'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Gastteam & Aufstellung'));
+    await tester.pumpAndSettle();
+
+    for (var player = 0; player < 4; player++) {
+      for (var team = 0; team < 2; team++) {
+        final addButtons = find.text('Spieler / Ersatzspieler hinzufügen');
+        await tester.scrollUntilVisible(
+          addButtons.at(team),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(addButtons.at(team));
+        await tester.pumpAndSettle();
+      }
+    }
+
+    final starterCount = find.byKey(const ValueKey('starter-count-4-10-10'));
+    await tester.scrollUntilVisible(
+      starterCount,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(starterCount);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('10').last);
+    await tester.pumpAndSettle();
+
+    final addButtons = find.text('Spieler / Ersatzspieler hinzufügen');
+    await tester.scrollUntilVisible(
+      addButtons.last,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(addButtons.last);
+    await tester.pumpAndSettle();
+
+    final createButton = find.text(
+      'Angepasstes Liga-/Freundschaftsspiel anlegen',
+    );
+    await tester.scrollUntilVisible(
+      createButton,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(createButton);
+    await tester.pumpAndSettle();
+
+    final createdLeague = storage.saved!.leagueMatch!;
+    expect(createdLeague.starterCount, 10);
+    expect(createdLeague.activePlayers(0), hasLength(10));
+    expect(createdLeague.activePlayers(1), hasLength(10));
+    expect(createdLeague.reservePlayers(0), isEmpty);
+    expect(createdLeague.reservePlayers(1), [10]);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('creates league and saves a team result', (tester) async {
     final storage = _MemoryStorage();
     await tester.pumpWidget(
@@ -220,8 +304,8 @@ void main() {
         for (final name in [...league.homePlayers, ...league.awayPlayers])
           TournamentPlayer(name: name, isGenerated: false),
       ],
-      stages: const [],
-      runStages: const [],
+      stages: [],
+      runStages: [],
       leagueMatch: league,
     );
     await tester.pumpWidget(
@@ -255,6 +339,89 @@ void main() {
 
     expect(storage.saved!.leagueMatch!.games[0].home, [4]);
     expect(storage.saved!.leagueMatch!.activePlayers(0), contains(4));
+    expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 1);
+    expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('league run settings expose and persist team substitutions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final storage = _MemoryStorage();
+    final league = LeagueMatch.rhl(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'],
+      awayPlayers: ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'],
+    );
+    final tournament = CreatedTournament(
+      name: 'Liga',
+      players: [
+        for (final name in [...league.homePlayers, ...league.awayPlayers])
+          TournamentPlayer(name: name, isGenerated: false),
+      ],
+      stages: [],
+      runStages: [],
+      leagueMatch: league,
+      directorModeEnabled: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: tournament,
+          tournamentStorage: storage,
+          runController: TournamentRunController(storage: storage),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('Leitung'), findsOneWidget);
+    expect(find.text('Ergebnisse'), findsOneWidget);
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Heimteam · Heim'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Heimteam · Heim'));
+    await tester.pumpAndSettle();
+    expect(find.text('Aktiv'), findsNWidgets(4));
+    expect(find.text('Ersatzspieler'), findsNWidgets(2));
+    await tester.scrollUntilVisible(
+      find.text('Teamoptionen'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Teamoptionen'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Auswechselungen Heimteam'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Auswechselungen Heimteam'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AlertDialog).last;
+    await tester.tap(find.descendant(of: dialog, matching: find.text('H1')));
+    await tester.tap(find.descendant(of: dialog, matching: find.text('H5')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.text('Auswechseln')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ja, auswechseln'));
+    await tester.pumpAndSettle();
+
+    expect(storage.saved!.leagueMatch!.games[0].home, [4]);
     expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 1);
     expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
     expect(tester.takeException(), isNull);

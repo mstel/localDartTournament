@@ -27,11 +27,15 @@ class LeagueTournamentPlayerSections extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _teamSection(
+          context: context,
+          teamSide: 0,
           title: 'Heimteam · ${leagueMatch.homeTeam}',
           players: homePlayers,
           playerTileBuilder: playerTileBuilder,
         ),
         _teamSection(
+          context: context,
+          teamSide: 1,
           title: 'Gastteam · ${leagueMatch.awayTeam}',
           players: awayPlayers,
           playerTileBuilder: playerTileBuilder,
@@ -41,16 +45,74 @@ class LeagueTournamentPlayerSections extends StatelessWidget {
   }
 
   Widget _teamSection({
+    required BuildContext context,
+    required int teamSide,
     required String title,
     required List<TournamentPlayer> players,
     required Widget Function(TournamentPlayer player) playerTileBuilder,
-  }) => Card(
-    child: ExpansionTile(
-      leading: const Icon(Icons.people_alt_outlined),
-      title: Text(title),
-      subtitle: Text('${players.length} Spieler'),
-      childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
-      children: [for (final player in players) playerTileBuilder(player)],
-    ),
-  );
+  }) {
+    final active = leagueMatch.activePlayers(teamSide).toSet();
+    final substitutions = leagueMatch.substitutions
+        .where((event) => event.teamSide == teamSide)
+        .toList();
+    return Card(
+      child: ExpansionTile(
+        leading: const Icon(Icons.people_alt_outlined),
+        title: Text(title),
+        subtitle: Text('${players.length} Spieler'),
+        childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          for (var index = 0; index < players.length; index++) ...[
+            playerTileBuilder(players[index]),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 72, bottom: 8),
+                child: _playerStatus(context, index, active, substitutions),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _playerStatus(
+    BuildContext context,
+    int playerIndex,
+    Set<int> active,
+    List<LeagueSubstitution> substitutions,
+  ) {
+    final wasSubstitutedOut = substitutions.any(
+      (event) => event.outPlayerIndex == playerIndex,
+    );
+    final status = active.contains(playerIndex)
+        ? 'Aktiv'
+        : wasSubstitutedOut
+        ? 'Ausgewechselt'
+        : 'Ersatzspieler';
+    final Color color;
+    if (status == 'Ersatzspieler') {
+      color = Colors.orange.shade800;
+    } else if (status == 'Ausgewechselt') {
+      color = leagueMatch.allowReentry
+          ? Theme.of(context).colorScheme.onSurface
+          : Theme.of(context).colorScheme.error;
+    } else {
+      color = Theme.of(context).colorScheme.primary;
+    }
+    if (status == 'Ausgewechselt' && leagueMatch.allowReentry) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Text(status, style: const TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+    return Text(status, style: TextStyle(color: color));
+  }
 }

@@ -43,6 +43,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _allowPop = false;
   bool _backgrounded = false;
   bool _savingRankingSelection = false;
+  bool _savingLeagueSettings = false;
   bool _savingTieBreakerSettings = false;
   bool _savingKratzerHandicapSettings = false;
   int? _tieBreakerDraftStageIndex;
@@ -414,6 +415,65 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         playerTileBuilder: (player) => _playerManagementTile(player),
       ),
     ];
+  }
+
+  Widget _leagueTeamSettingsCard() {
+    final league = widget.tournament.leagueMatch!;
+    return Card(
+      child: ExpansionTile(
+        leading: const Icon(Icons.groups_outlined),
+        title: const Text('Teamoptionen'),
+        subtitle: const Text('Auswechselungen und Doppelaufstellungen'),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          for (var teamSide = 0; teamSide < 2; teamSide++) ...[
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                teamSide == 0 ? league.homeTeam : league.awayTeam,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                '${league.substitutionsRemaining(teamSide)} Auswechselungen verfügbar',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _savingLeagueSettings
+                      ? null
+                      : () => _substituteLeagueTeam(teamSide),
+                  icon: const Icon(Icons.swap_horiz),
+                  label: Text(
+                    teamSide == 0
+                        ? 'Auswechselungen Heimteam'
+                        : 'Auswechselungen Gastteam',
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _savingLeagueSettings
+                      ? null
+                      : () => _assignLeagueDoublePartners(teamSide),
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: Text(
+                    teamSide == 0
+                        ? 'Doppelpartner zuweisen Heimteam'
+                        : 'Doppelpartner zuweisen Gastteam',
+                  ),
+                ),
+              ],
+            ),
+            if (teamSide == 0) const Divider(height: 24),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _withdrawPlayer([TournamentPlayer? selectedPlayer]) async {
@@ -1840,6 +1900,93 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<void> _substituteLeagueTeam(int teamSide) async {
+    final league = widget.tournament.leagueMatch;
+    if (league == null || _savingLeagueSettings) return;
+    final remaining = league.substitutionsRemaining(teamSide);
+    if (remaining < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Für dieses Team sind keine Auswechselungen mehr verfügbar.',
+          ),
+        ),
+      );
+      return;
+    }
+    final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
+    final choice = await showDialog<(int, int)>(
+      context: context,
+      builder: (context) => LeagueSubstitutionDialog(
+        league: league,
+        teamSide: teamSide,
+        teamName: teamName,
+      ),
+    );
+    if (choice == null || !mounted || _savingLeagueSettings) return;
+    _leagueRuntime?.writeTo(widget.tournament);
+    setState(() => _savingLeagueSettings = true);
+    try {
+      league.substitute(
+        teamSide: teamSide,
+        outPlayerIndex: choice.$1,
+        inPlayerIndex: choice.$2,
+      );
+      _leagueRuntime = LeagueBoardRuntime(widget.tournament)
+        ..installOn(widget.tournament);
+      setState(() {});
+      await _saveTournamentProgress(propagateError: true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Auswechselung fehlgeschlagen: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingLeagueSettings = false);
+    }
+  }
+
+  Future<void> _assignLeagueDoublePartners(int teamSide) async {
+    final league = widget.tournament.leagueMatch;
+    if (league == null || _savingLeagueSettings) return;
+    final assignments = await showDialog<Map<int, List<int>>>(
+      context: context,
+      builder: (context) =>
+          LeagueTeamPairingsDialog(league: league, teamSide: teamSide),
+    );
+    if (assignments == null || !mounted || _savingLeagueSettings) return;
+    _leagueRuntime?.writeTo(widget.tournament);
+    setState(() => _savingLeagueSettings = true);
+    try {
+      for (final entry in assignments.entries) {
+        if (entry.key < 0 ||
+            entry.key >= league.games.length ||
+            !league.games[entry.key].isDouble) {
+          throw const FormatException('Ungültige Doppelaufstellung.');
+        }
+        if (teamSide == 0) {
+          league.games[entry.key].home = List<int>.from(entry.value);
+        } else {
+          league.games[entry.key].away = List<int>.from(entry.value);
+        }
+      }
+      league.validate();
+      _leagueRuntime = LeagueBoardRuntime(widget.tournament)
+        ..installOn(widget.tournament);
+      setState(() {});
+      await _saveTournamentProgress(propagateError: true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Doppelaufstellung fehlgeschlagen: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingLeagueSettings = false);
+    }
+  }
+
   String _achievementResultSignature() {
     final matches = <GroupMatch>{};
     for (final stage in widget.tournament.runStages) {
@@ -2298,6 +2445,79 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     }
   }
+
+  Widget _rankingSettingsCard() => Card(
+    child: ExpansionTile(
+      initiallyExpanded: false,
+      leading: const Icon(Icons.leaderboard_outlined),
+      title: const Text('Ranglistenoptionen'),
+      subtitle: const Text('Wertung und zugewiesene Ranglisten'),
+      childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Für Rangliste berücksichtigen'),
+          subtitle: const Text(
+            'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
+          ),
+          value: widget.tournament.countsForRanking,
+          onChanged: _savingRankingSelection
+              ? null
+              : (value) => _saveRankingSelection(
+                  countsForRanking: value,
+                  rankingIds: value ? widget.tournament.rankingIds : const [],
+                ),
+        ),
+        if (_savingRankingSelection) const LinearProgressIndicator(),
+        if (widget.tournament.countsForRanking)
+          FutureBuilder<List<LocalRanking>>(
+            future: _localRankings,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text(
+                  'Ranglisten konnten nicht geladen werden: ${snapshot.error}',
+                );
+              }
+              if (!snapshot.hasData) {
+                return const LinearProgressIndicator();
+              }
+              final rankings = snapshot.data!;
+              if (rankings.isEmpty) {
+                return const Text(
+                  'Lege zuerst eine Rangliste im Hauptmenü an.',
+                );
+              }
+              return Column(
+                children: [
+                  for (final ranking in rankings)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(ranking.name),
+                      value: widget.tournament.rankingIds.contains(ranking.id),
+                      onChanged: _savingRankingSelection
+                          ? null
+                          : (selected) {
+                              final ids = List<String>.from(
+                                widget.tournament.rankingIds,
+                              );
+                              if (selected == true) {
+                                ids.add(ranking.id);
+                              } else {
+                                ids.remove(ranking.id);
+                              }
+                              _saveRankingSelection(
+                                countsForRanking: true,
+                                rankingIds: ids,
+                              );
+                            },
+                    ),
+                ],
+              );
+            },
+          ),
+      ],
+    ),
+  );
 
   List<String> _tieBreakersForActiveStage() {
     if (_activeStageIndex >= widget.tournament.stages.length) {
@@ -5168,7 +5388,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                     completedStages: _completedStageIndexes,
                     mode: _stageViewMode,
                     canLead: true,
-                    directorModeEnabled: widget.tournament.directorModeEnabled,
+                    directorModeEnabled:
+                        widget.tournament.leagueMatch != null ||
+                        widget.tournament.directorModeEnabled,
                     onStageChanged: (index) => setState(() {
                       _viewStageIndex = index;
                       _isBracketEditMode = false;
@@ -5221,9 +5443,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                           },
                           onBlock: _toggleBoardBlock,
                           directorModeEnabled:
-                              widget.tournament.directorModeEnabled &&
+                              (widget.tournament.leagueMatch != null ||
+                                  widget.tournament.directorModeEnabled) &&
                               _stageViewMode == StageViewMode.director,
                           showBoardNumber:
+                              widget.tournament.leagueMatch != null ||
                               widget.tournament.directorModeEnabled,
                           onStartOnBoard: _startRecommendedMatchOnBoard,
                           onResetMatch: _resetRunningMatch,
@@ -5333,7 +5557,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                             AlignmentDirectional.centerStart,
                                         child: OutlinedButton.icon(
                                           onPressed:
-                                              _editTournamentConfiguration,
+                                              _hasRecordedTournamentResults()
+                                              ? null
+                                              : _editTournamentConfiguration,
                                           icon: const Icon(Icons.edit_outlined),
                                           label: const Text(
                                             'Turnierkonfiguration bearbeiten',
@@ -5347,189 +5573,197 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             const SizedBox(height: 12),
                             _secondScreenSettingsCard(),
                             const SizedBox(height: 12),
-                            Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text(
-                                        'Turnierleiter-Modus aktivieren',
-                                      ),
-                                      subtitle: const Text(
-                                        'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.',
-                                      ),
-                                      value:
-                                          widget.tournament.directorModeEnabled,
-                                      onChanged: (enabled) async {
-                                        final strategy = widget
+                            if (widget.tournament.leagueMatch == null)
+                              Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      SwitchListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text(
+                                          'Turnierleiter-Modus aktivieren',
+                                        ),
+                                        subtitle: const Text(
+                                          'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.',
+                                        ),
+                                        value: widget
                                             .tournament
-                                            .directorSchedulingStrategy;
-                                        await _saveDirectorMode(
-                                          enabled: enabled,
-                                          strategy: strategy,
-                                        );
-                                      },
-                                    ),
-                                    if (widget.tournament.directorModeEnabled)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: DropdownButtonFormField<String>(
-                                          initialValue: widget
+                                            .directorModeEnabled,
+                                        onChanged: (enabled) async {
+                                          final strategy = widget
                                               .tournament
-                                              .directorSchedulingStrategy,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Board-Strategie',
-                                            border: OutlineInputBorder(),
-                                            suffixIcon: Tooltip(
-                                              message:
-                                                  'Gruppenbasiert: Jede Gruppe '
-                                                  'spielt nur auf den ihr '
-                                                  'zugewiesenen Boards. Global '
-                                                  'optimiert: Alle offenen '
-                                                  'Partien werden gemeinsam '
-                                                  'auf die Boards verteilt.',
-                                              child: Icon(Icons.help_outline),
-                                            ),
+                                              .directorSchedulingStrategy;
+                                          await _saveDirectorMode(
+                                            enabled: enabled,
+                                            strategy: strategy,
+                                          );
+                                        },
+                                      ),
+                                      if (widget.tournament.directorModeEnabled)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 8,
                                           ),
-                                          items: const [
-                                            DropdownMenuItem(
-                                              value: 'group',
-                                              child: Text('Gruppenbasiert'),
-                                            ),
-                                            DropdownMenuItem(
-                                              value: 'global',
-                                              child: Text('Global optimiert'),
-                                            ),
-                                          ],
-                                          onChanged: (value) async {
-                                            if (value == null) return;
-                                            final previous = widget
+                                          child: DropdownButtonFormField<String>(
+                                            initialValue: widget
                                                 .tournament
-                                                .directorSchedulingStrategy;
-                                            setState(() {
-                                              widget
-                                                      .tournament
-                                                      .directorSchedulingStrategy =
-                                                  value;
-                                            });
-                                            try {
-                                              await _saveTournamentProgress(
-                                                propagateError: true,
-                                              );
-                                            } catch (_) {
-                                              if (!mounted) return;
+                                                .directorSchedulingStrategy,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Board-Strategie',
+                                              border: OutlineInputBorder(),
+                                              suffixIcon: Tooltip(
+                                                message:
+                                                    'Gruppenbasiert: Jede Gruppe '
+                                                    'spielt nur auf den ihr '
+                                                    'zugewiesenen Boards. Global '
+                                                    'optimiert: Alle offenen '
+                                                    'Partien werden gemeinsam '
+                                                    'auf die Boards verteilt.',
+                                                child: Icon(Icons.help_outline),
+                                              ),
+                                            ),
+                                            items: const [
+                                              DropdownMenuItem(
+                                                value: 'group',
+                                                child: Text('Gruppenbasiert'),
+                                              ),
+                                              DropdownMenuItem(
+                                                value: 'global',
+                                                child: Text('Global optimiert'),
+                                              ),
+                                            ],
+                                            onChanged: (value) async {
+                                              if (value == null) return;
+                                              final previous = widget
+                                                  .tournament
+                                                  .directorSchedulingStrategy;
                                               setState(() {
                                                 widget
                                                         .tournament
                                                         .directorSchedulingStrategy =
-                                                    previous;
+                                                    value;
                                               });
-                                            }
-                                          },
+                                              try {
+                                                await _saveTournamentProgress(
+                                                  propagateError: true,
+                                                );
+                                              } catch (_) {
+                                                if (!mounted) return;
+                                                setState(() {
+                                                  widget
+                                                          .tournament
+                                                          .directorSchedulingStrategy =
+                                                      previous;
+                                                });
+                                              }
+                                            },
+                                          ),
                                         ),
-                                      ),
-                                    if (widget.tournament.directorModeEnabled &&
-                                        widget
-                                                .tournament
-                                                .directorSchedulingStrategy ==
-                                            'group')
-                                      _groupBoardAssignmentsSettings(),
-                                    if (widget.tournament.directorModeEnabled)
-                                      TournamentRunSettingsPanel(
-                                        tournament: widget.tournament,
-                                        onChanged: _saveTournamentSettings,
-                                        showAudioSettings: true,
-                                        showPrioritySettings: false,
-                                        showHintAudioSettings: false,
-                                      ),
-                                    if (widget.tournament.directorModeEnabled)
-                                      SwitchListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: const Text(
-                                          'Player Insights anzeigen',
+                                      if (widget
+                                              .tournament
+                                              .directorModeEnabled &&
+                                          widget
+                                                  .tournament
+                                                  .directorSchedulingStrategy ==
+                                              'group')
+                                        _groupBoardAssignmentsSettings(),
+                                      if (widget.tournament.directorModeEnabled)
+                                        TournamentRunSettingsPanel(
+                                          tournament: widget.tournament,
+                                          onChanged: _saveTournamentSettings,
+                                          showAudioSettings: true,
+                                          showPrioritySettings: false,
+                                          showHintAudioSettings: false,
                                         ),
-                                        subtitle: const Text(
-                                          'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
+                                      if (widget.tournament.directorModeEnabled)
+                                        SwitchListTile(
+                                          contentPadding: EdgeInsets.zero,
+                                          title: const Text(
+                                            'Player Insights anzeigen',
+                                          ),
+                                          subtitle: const Text(
+                                            'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
+                                          ),
+                                          value: widget
+                                              .tournament
+                                              .showPlayerInsights,
+                                          onChanged: _savePlayerInsightsSetting,
                                         ),
-                                        value: widget
-                                            .tournament
-                                            .showPlayerInsights,
-                                        onChanged: _savePlayerInsightsSetting,
-                                      ),
-                                    if (widget.tournament.directorModeEnabled)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 12),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            Text(
-                                              'Boards: ${widget.tournament.boardCount}',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.titleMedium,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: [
-                                                OutlinedButton.icon(
-                                                  onPressed:
-                                                      widget
-                                                              .tournament
-                                                              .boardCount <=
-                                                          1
-                                                      ? null
-                                                      : () => _handleDirectorSettings(
-                                                          () => _changeDirectorBoardCount(
-                                                            widget
-                                                                    .tournament
-                                                                    .boardCount -
-                                                                1,
+                                      if (widget.tournament.directorModeEnabled)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 12,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Text(
+                                                'Boards: ${widget.tournament.boardCount}',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.titleMedium,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: [
+                                                  OutlinedButton.icon(
+                                                    onPressed:
+                                                        widget
+                                                                .tournament
+                                                                .boardCount <=
+                                                            1
+                                                        ? null
+                                                        : () => _handleDirectorSettings(
+                                                            () => _changeDirectorBoardCount(
+                                                              widget
+                                                                      .tournament
+                                                                      .boardCount -
+                                                                  1,
+                                                            ),
                                                           ),
-                                                        ),
-                                                  icon: const Icon(
-                                                    Icons.remove,
+                                                    icon: const Icon(
+                                                      Icons.remove,
+                                                    ),
+                                                    label: const Text(
+                                                      'Board entfernen',
+                                                    ),
                                                   ),
-                                                  label: const Text(
-                                                    'Board entfernen',
-                                                  ),
-                                                ),
-                                                OutlinedButton.icon(
-                                                  onPressed:
-                                                      widget
-                                                              .tournament
-                                                              .boardCount >=
-                                                          64
-                                                      ? null
-                                                      : () => _handleDirectorSettings(
-                                                          () => _changeDirectorBoardCount(
-                                                            widget
-                                                                    .tournament
-                                                                    .boardCount +
-                                                                1,
+                                                  OutlinedButton.icon(
+                                                    onPressed:
+                                                        widget
+                                                                .tournament
+                                                                .boardCount >=
+                                                            64
+                                                        ? null
+                                                        : () => _handleDirectorSettings(
+                                                            () => _changeDirectorBoardCount(
+                                                              widget
+                                                                      .tournament
+                                                                      .boardCount +
+                                                                  1,
+                                                            ),
                                                           ),
-                                                        ),
-                                                  icon: const Icon(Icons.add),
-                                                  label: const Text(
-                                                    'Board hinzufügen',
+                                                    icon: const Icon(Icons.add),
+                                                    label: const Text(
+                                                      'Board hinzufügen',
+                                                    ),
                                                   ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 8),
-                                          ],
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
 
                             if (isViewingActiveStage &&
                                 activeStage is KnockoutTournamentRunStage &&
@@ -5790,104 +6024,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                             const SizedBox(height: 12),
                             if (widget.tournament.leagueMatch == null &&
-                                !widget.tournament.isKratzerTournament)
-                              Card(
-                                child: ExpansionTile(
-                                  initiallyExpanded: false,
-                                  leading: const Icon(
-                                    Icons.leaderboard_outlined,
-                                  ),
-                                  title: const Text('Ranglistenoptionen'),
-                                  subtitle: const Text(
-                                    'Wertung und zugewiesene Ranglisten',
-                                  ),
-                                  childrenPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  children: [
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text(
-                                        'Für Rangliste berücksichtigen',
-                                      ),
-                                      subtitle: const Text(
-                                        'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
-                                      ),
-                                      value: widget.tournament.countsForRanking,
-                                      onChanged: _savingRankingSelection
-                                          ? null
-                                          : (value) => _saveRankingSelection(
-                                              countsForRanking: value,
-                                              rankingIds: value
-                                                  ? widget.tournament.rankingIds
-                                                  : const [],
-                                            ),
-                                    ),
-                                    if (_savingRankingSelection)
-                                      const LinearProgressIndicator(),
-                                    if (widget.tournament.countsForRanking)
-                                      FutureBuilder<List<LocalRanking>>(
-                                        future: _localRankings,
-                                        builder: (context, snapshot) {
-                                          if (snapshot.hasError) {
-                                            return Text(
-                                              'Ranglisten konnten nicht geladen werden: ${snapshot.error}',
-                                            );
-                                          }
-                                          if (!snapshot.hasData) {
-                                            return const LinearProgressIndicator();
-                                          }
-                                          final rankings = snapshot.data!;
-                                          if (rankings.isEmpty) {
-                                            return const Text(
-                                              'Lege zuerst eine Rangliste im Hauptmenü an.',
-                                            );
-                                          }
-                                          return Column(
-                                            children: [
-                                              for (final ranking in rankings)
-                                                CheckboxListTile(
-                                                  contentPadding:
-                                                      EdgeInsets.zero,
-                                                  title: Text(ranking.name),
-                                                  value: widget
-                                                      .tournament
-                                                      .rankingIds
-                                                      .contains(ranking.id),
-                                                  onChanged:
-                                                      _savingRankingSelection
-                                                      ? null
-                                                      : (selected) {
-                                                          final ids =
-                                                              List<String>.from(
-                                                                widget
-                                                                    .tournament
-                                                                    .rankingIds,
-                                                              );
-                                                          if (selected ==
-                                                              true) {
-                                                            ids.add(ranking.id);
-                                                          } else {
-                                                            ids.remove(
-                                                              ranking.id,
-                                                            );
-                                                          }
-                                                          _saveRankingSelection(
-                                                            countsForRanking:
-                                                                true,
-                                                            rankingIds: ids,
-                                                          );
-                                                        },
-                                                ),
-                                            ],
-                                          );
-                                        },
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            const SizedBox(height: 12),
-                            if (widget.tournament.leagueMatch == null &&
                                 _activeStageIndex <
                                     widget.tournament.stages.length &&
                                 widget
@@ -5955,8 +6091,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                             if (widget.tournament.leagueMatch == null)
                               const SizedBox(height: 12),
+                            if (widget.tournament.leagueMatch != null) ...[
+                              const SizedBox(height: 12),
+                              _leagueTeamSettingsCard(),
+                            ],
                             // 4. Spieler verwalten
                             ..._playerManagementSections(),
+                            if (widget.tournament.leagueMatch == null &&
+                                !widget.tournament.isKratzerTournament) ...[
+                              const SizedBox(height: 12),
+                              _rankingSettingsCard(),
+                            ],
                             if (widget.tournament.leagueMatch == null &&
                                 !widget.tournament.isKratzerTournament)
                               const GoveeAmbiencePanel(),

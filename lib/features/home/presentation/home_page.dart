@@ -30,19 +30,24 @@ class _HomePageState extends State<HomePage> {
       () => _open(const TournamentHomePage(), 1),
     ),
     SportDestination(
+      'Freundschafts- & Ligaspiele',
+      Icons.sports,
+      () => _open(const TournamentHomePage(leagueMatchesOnly: true), 2),
+    ),
+    SportDestination(
       'Spieler',
       Icons.groups_outlined,
-      () => _open(const PlayersPage(), 2),
+      () => _open(const PlayersPage(), 3),
     ),
     SportDestination(
       'Statistiken',
       Icons.bar_chart_outlined,
-      () => _open(const PlayersPage(statisticsOnly: true), 3),
+      () => _open(const PlayersPage(statisticsOnly: true), 4),
     ),
     SportDestination(
       'Ranglisten',
       Icons.leaderboard_outlined,
-      () => _open(RankingsPage(onOpenTournament: _openTournamentById), 4),
+      () => _open(RankingsPage(onOpenTournament: _openTournamentById), 5),
     ),
   ];
 
@@ -97,7 +102,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openTournamentArea() => _open(const TournamentHomePage(), 1);
-  void _openPlayersArea() => _open(const PlayersPage(), 2);
+  void _openPlayersArea() => _open(const PlayersPage(), 3);
   void _openSettings() => Navigator.of(
     context,
   ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
@@ -139,6 +144,7 @@ class _HomePageState extends State<HomePage> {
               SportMenuAction(
                 label: 'Turniere',
                 icon: Icons.emoji_events_outlined,
+                description: 'Planung, Ergebnisse und Ranglisten für Turniere.',
                 onTap: _openTournamentArea,
               ),
               SportMenuAction(
@@ -146,24 +152,27 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.sports,
                 description: 'Eigenständige Übersicht für Mannschaftsspiele.',
                 onTap: () =>
-                    _open(const TournamentHomePage(leagueMatchesOnly: true), 1),
+                    _open(const TournamentHomePage(leagueMatchesOnly: true), 2),
               ),
               SportMenuAction(
                 label: 'Spieler',
                 icon: Icons.groups_outlined,
+                description: 'Spielerkartei und persönliche Daten verwalten.',
                 onTap: _openPlayersArea,
               ),
               SportMenuAction(
                 label: 'Statistiken',
                 icon: Icons.bar_chart_outlined,
-                onTap: () => _open(const PlayersPage(statisticsOnly: true), 3),
+                description: 'Leistungen und Verläufe der Spieler auswerten.',
+                onTap: () => _open(const PlayersPage(statisticsOnly: true), 4),
               ),
               SportMenuAction(
                 label: 'Ranglisten',
                 icon: Icons.leaderboard_outlined,
+                description: 'Ranglisten führen und Platzierungen verfolgen.',
                 onTap: () => _open(
                   RankingsPage(onOpenTournament: _openTournamentById),
-                  4,
+                  5,
                 ),
               ),
             ],
@@ -252,9 +261,23 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
 
   Future<void> _openCreationPage() async {
     if (widget.leagueMatchesOnly) {
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const LeagueMatchPage()));
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (leaguePageContext) => LeagueMatchPage(
+            storage: _storage,
+            onCreated: (tournament) {
+              Navigator.of(leaguePageContext).pushReplacement(
+                MaterialPageRoute<void>(
+                  builder: (_) => TournamentRunPage(
+                    tournament: tournament,
+                    tournamentStorage: _storage,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
     } else {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -299,13 +322,16 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
   }
 
   Widget _tournamentPageFor(CreatedTournament tournament) {
-    if (tournament.leagueMatch != null) {
-      return LeagueMatchPage(tournament: tournament, storage: _storage);
-    }
     final lastStageIndex = tournament.runStages.length - 1;
     if (lastStageIndex >= 0 &&
         tournament.completedStageIndexes.contains(lastStageIndex)) {
       return TournamentResultsPage(tournament: tournament, storage: _storage);
+    }
+    if (tournament.leagueMatch != null) {
+      return TournamentRunPage(
+        tournament: tournament,
+        tournamentStorage: _storage,
+      );
     }
     return TournamentRunPage(
       tournament: tournament,

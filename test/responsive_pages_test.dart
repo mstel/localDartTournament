@@ -66,11 +66,27 @@ void main() {
 
       for (final label in [
         'Turniere',
+        'Freundschafts- & Ligaspiele',
         'Spieler',
         'Statistiken',
         'Ranglisten',
       ]) {
         expect(find.text(label), findsWidgets);
+      }
+      if (size.width < 1100) {
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+      }
+      await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+      await tester.pumpAndSettle();
+      for (final description in [
+        'Planung, Ergebnisse und Ranglisten für Turniere.',
+        'Eigenständige Übersicht für Mannschaftsspiele.',
+        'Spielerkartei und persönliche Daten verwalten.',
+        'Leistungen und Verläufe der Spieler auswerten.',
+        'Ranglisten führen und Platzierungen verfolgen.',
+      ]) {
+        expect(find.text(description), findsOneWidget);
       }
       expect(tester.takeException(), isNull);
     });

@@ -145,6 +145,47 @@ void main() {
     expect(reentry.substitutionsUsed(0), 2);
     expect(LeagueMatch.fromJson(reentry.toJson()).allowReentry, isTrue);
   });
+  test(
+    'adjusted match with substituted singles remains loadable from storage',
+    () async {
+      final league = LeagueMatch.adjusted(
+        homeTeam: 'Heim',
+        awayTeam: 'Gast',
+        homePlayers: ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'],
+        awayPlayers: ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'],
+        starterCount: 4,
+        maxReservePlayers: 2,
+        substitutionLimit: 2,
+        singlesPerPlayer: 2,
+        doublesCount: 2,
+      );
+      league.substitute(teamSide: 0, outPlayerIndex: 0, inPlayerIndex: 4);
+      final tournament = CreatedTournament(
+        id: 'substituted-match',
+        name: 'Freundschaftsspiel',
+        players: [],
+        stages: const [],
+        runStages: const [],
+        leagueMatch: league,
+      );
+
+      final directory = Directory.systemTemp.createTempSync('league_reload_');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final file = File('${directory.path}/tournaments.json');
+      await file.writeAsString(
+        jsonEncode({
+          'schemaVersion': 39,
+          'tournaments': [tournament.toJson()],
+        }),
+      );
+      final restored = (await TournamentStorage(
+        file: file,
+      ).loadTournaments()).single;
+
+      expect(restored.leagueMatch!.games[0].home, [4]);
+      expect(restored.leagueMatch!.substitutions, hasLength(1));
+    },
+  );
   test('adjusted games use equal starter count with unequal roster sizes', () {
     final league = LeagueMatch.adjusted(
       homeTeam: 'Heim',
@@ -162,6 +203,27 @@ void main() {
     expect(league.games.expand((game) => game.away).toSet(), {0, 1, 2, 3});
     expect(league.substitutionsRemaining(0), 3);
     expect(league.substitutionsRemaining(1), 2);
+  });
+  test('adjusted games support ten starters and an uneven reserve bench', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: List.generate(10, (index) => 'H${index + 1}'),
+      awayPlayers: List.generate(11, (index) => 'G${index + 1}'),
+      starterCount: 10,
+      maxReservePlayers: 1,
+      substitutionLimit: 1,
+      singlesPerPlayer: 2,
+      doublesCount: 5,
+    );
+
+    expect(league.games, hasLength(25));
+    expect(league.games.where((game) => !game.isDouble), hasLength(20));
+    expect(league.activePlayers(0), hasLength(10));
+    expect(league.activePlayers(1), hasLength(10));
+    expect(league.reservePlayers(0), isEmpty);
+    expect(league.reservePlayers(1), [10]);
+    expect(LeagueMatch.fromJson(league.toJson()).awayPlayers, hasLength(11));
   });
   test('match points, draw, winner, deletion and invalid results', () {
     final league = fixture();

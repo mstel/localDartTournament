@@ -477,38 +477,25 @@ class LeagueMatch {
           games.where((g) => g.isDouble).length != doublesCount) {
         throw const FormatException('Ungültiger angepasster Spielplan.');
       }
-      for (var player = 0; player < starterCount; player++) {
-        if (games
-                    .where(
-                      (game) => !game.isDouble && game.home.contains(player),
-                    )
-                    .length !=
-                singlesPerPlayer ||
-            games
-                    .where(
-                      (game) => !game.isDouble && game.away.contains(player),
-                    )
-                    .length !=
-                singlesPerPlayer) {
-          throw const FormatException(
-            'Die Einzel müssen gleichmäßig auf alle Spieler verteilt sein.',
-          );
-        }
-        if (games
-                    .where(
-                      (game) => game.isDouble && game.home.contains(player),
-                    )
-                    .length >
-                1 ||
-            games
-                    .where(
-                      (game) => game.isDouble && game.away.contains(player),
-                    )
-                    .length >
-                1) {
-          throw const FormatException(
-            'Ein Spieler darf höchstens ein Doppel bestreiten.',
-          );
+      // Substitutions intentionally change the scheduled player distribution.
+      if (substitutions.isEmpty) {
+        for (var player = 0; player < starterCount; player++) {
+          if (games
+                      .where(
+                        (game) => !game.isDouble && game.home.contains(player),
+                      )
+                      .length !=
+                  singlesPerPlayer ||
+              games
+                      .where(
+                        (game) => !game.isDouble && game.away.contains(player),
+                      )
+                      .length !=
+                  singlesPerPlayer) {
+            throw const FormatException(
+              'Die Einzel müssen gleichmäßig auf alle Spieler verteilt sein.',
+            );
+          }
         }
       }
     }
