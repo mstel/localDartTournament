@@ -78,7 +78,7 @@ class ExpandedFormatPlanner {
               ),
     ];
     ConfigurationEstimate? estimate(TournamentStage stage) => cache.putIfAbsent(
-      '${stage.type}:${stage.knockoutParticipantCount}:${stage.groupSizes}:${stage.groupPlayType}:${stage.groupMaxGamesPerPlayer}:${stage.qualifiedParticipantCount}:${stage.knockoutLives}:${stage.groupRoundRobinRepeats}:${stage.fixedQualifiersByGroup}',
+      '${stage.type}:${stage.knockoutParticipantCount}:${stage.knockoutAdvancingCount}:${stage.groupSizes}:${stage.groupPlayType}:${stage.groupMaxGamesPerPlayer}:${stage.qualifiedParticipantCount}:${stage.knockoutLives}:${stage.groupRoundRobinRepeats}:${stage.fixedQualifiersByGroup}',
       () => const ConfigurationDurationEstimator().preview(
         [stage],
         request.boards,
@@ -137,7 +137,7 @@ class ExpandedFormatPlanner {
               break;
             }
             final elimination =
-                stages[i].type != 'groups' ||
+                !stages[i].isGroupStage ||
                 !['round_robin', 'swiss'].contains(stages[i].groupPlayType);
             if (legs.isEven && elimination) legs++;
             final format = TournamentGameFormat(
@@ -169,19 +169,10 @@ class ExpandedFormatPlanner {
               minutes += parameters.boardIdleMinutes;
             }
             final stage = stages[i];
-            final isRoundRobin =
-                stage.type == 'groups' &&
-                (stage.groupPlayTypes.isEmpty
-                    ? stage.groupPlayType == 'round_robin'
-                    : stage.groupPlayTypes.every(
-                        (playType) => playType == 'round_robin',
-                      ));
-            final baseMatchMinutes = isRoundRobin
-                ? planner.estimatedMatchMinutes(stage.gameFormat)
-                : planner.estimatedWorstCaseMatchMinutes(stage.gameFormat);
-            final matchMinutes = isRoundRobin
-                ? planner.estimatedMatchMinutes(formats[i])
-                : planner.estimatedWorstCaseMatchMinutes(formats[i]);
+            final baseMatchMinutes = planner.estimatedMatchMinutes(
+              stage.gameFormat,
+            );
+            final matchMinutes = planner.estimatedMatchMinutes(formats[i]);
             minutes +=
                 (sample.minutes - sample.waitMinutes) /
                     baseMatchMinutes *
@@ -281,7 +272,7 @@ class ExpandedFormatPlanner {
           prefix.isEmpty ? request.manualQualifiers : null,
         )) {
           if (stage.type == 'kratzer' && prefix.isNotEmpty) continue;
-          final mode = stage.type == 'groups'
+          final mode = stage.isGroupStage
               ? (stage.groupRoundRobinRepeats.isNotEmpty &&
                         stage.groupRoundRobinRepeats.first == 2)
                     ? 'groups:double_round_robin'
@@ -313,7 +304,7 @@ class ExpandedFormatPlanner {
           if (!terminal && depth == request.maximumStages - 1) continue;
           if (terminal &&
               request.requireGroupPhase &&
-              !path.any((s) => s.type == 'groups')) {
+              !path.any((s) => s.isGroupStage)) {
             continue;
           }
           if (terminal &&
@@ -332,8 +323,13 @@ class ExpandedFormatPlanner {
         // Keep the dialog responsive while the production runtime is sampled.
         await Future<void>.delayed(Duration.zero);
       }
-      next.sort((a, b) => a.$2.compareTo(b.$2));
-      frontier = next.take(48).map((e) => e.$1).toList();
+      final eligibleNext = request.requireGroupPhase && depth == 0
+          ? next
+                .where((entry) => entry.$1.any((stage) => stage.isGroupStage))
+                .toList()
+          : next;
+      eligibleNext.sort((a, b) => a.$2.compareTo(b.$2));
+      frontier = eligibleNext.take(48).map((entry) => entry.$1).toList();
     }
     final fitting = finalists.where((s) => !s.isClosestAlternative).toList();
     final ranked = request.considerBestWorstCase
@@ -423,9 +419,6 @@ class ExpandedFormatPlanner {
         'double_round_robin',
         if (sizes.any((size) => size > 6)) 'limited_round_robin',
         'swiss',
-        'mini_knockout',
-        'double_knockout',
-        'triple_knockout',
       ]) {
         final List<(int, List<int>)> qualifierPlans;
         if (manualQualifiers != null) {
@@ -470,11 +463,7 @@ class ExpandedFormatPlanner {
               ? 'Schweizer System'
               : play == 'round_robin'
               ? 'Jeder gegen jeden'
-              : play == 'mini_knockout'
-              ? 'Mini-KO'
-              : play == 'double_knockout'
-              ? 'Mini-Doppel-KO'
-              : 'Mini-Triple-KO';
+              : 'maximal 5 Spiele pro Spieler';
           final sizeDesc = sizes.first == sizes.last
               ? '${sizes.first}'
               : '${sizes.last}–${sizes.first}';
@@ -485,7 +474,7 @@ class ExpandedFormatPlanner {
               play == 'limited_round_robin' || play == 'double_round_robin';
           yield TournamentStage(
             name: '$groupDesc ($label)',
-            type: 'groups',
+            type: play == 'swiss' ? 'swiss' : 'groups',
             groupCount: groups,
             groupSizes: sizes,
             groupPlayType: isRoundRobinVariant ? 'round_robin' : play,

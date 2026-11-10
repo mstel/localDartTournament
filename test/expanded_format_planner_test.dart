@@ -38,7 +38,7 @@ void main() {
         expect(result.minimumMatchesPerPlayer, greaterThanOrEqualTo(2));
         expect(result.configurations.length, lessThanOrEqualTo(4));
         for (final stage in result.configurations) {
-          if (stage.type != 'groups' ||
+          if (!stage.isGroupStage ||
               !['round_robin', 'swiss'].contains(stage.groupPlayType)) {
             expect(stage.gameFormat.allowsDraws, isFalse);
           }
@@ -84,18 +84,26 @@ void main() {
         results
             .where((s) => s.configurations.first.type == 'groups')
             .map((s) => s.configurations.first.groupPlayType),
-        containsAll([
-          'round_robin',
-          'mini_knockout',
-          'double_knockout',
-          'triple_knockout',
-        ]),
+        contains('round_robin'),
+      );
+      expect(
+        TournamentPlanningRequest.modeLabels.keys,
+        isNot(contains('groups:mini_knockout')),
+      );
+      expect(
+        TournamentPlanningRequest.modeLabels.keys,
+        isNot(contains('groups:double_knockout')),
+      );
+      expect(
+        TournamentPlanningRequest.modeLabels.keys,
+        isNot(contains('groups:triple_knockout')),
       );
       for (final result in results) {
         final estimate = const ConfigurationDurationEstimator().preview(
           result.configurations,
           2,
           parameters,
+          finalQualifiers: result.configurations.last.qualifiedParticipantCount,
         )!;
         expect(result.totalMatches, estimate.totalMatches);
         expect(result.estimatedMinutes, estimate.minutes);
@@ -117,7 +125,7 @@ void main() {
       );
     }
   });
-  test('Swiss recommendations use the synchronous-round worst case', () async {
+  test('Swiss recommendations preserve synchronous round waiting', () async {
     final swissParameters = TournamentPlanningParameters.fromValues({
       PlanningParameter.maximumSuggestions: 64,
       PlanningParameter.minutes501DoubleOut: 10,
@@ -147,10 +155,16 @@ void main() {
     expect(results, hasLength(1));
     final swiss = results.single;
     expect(swiss.configurations.single.groupPlayType, 'swiss');
-    expect(swiss.estimatedMinutes, 284);
+    expect(swiss.estimatedMinutes, 244);
     expect(
       const ConfigurationDurationEstimator()
-          .preview(swiss.configurations, 4, swissParameters)!
+          .preview(
+            swiss.configurations,
+            4,
+            swissParameters,
+            finalQualifiers:
+                swiss.configurations.last.qualifiedParticipantCount,
+          )!
           .minutes,
       swiss.estimatedMinutes,
     );
@@ -201,7 +215,7 @@ void main() {
     () async {
       final results = await ExpandedFormatPlanner(
         parameters: parameters,
-      ).suggest(request(stages: 3, groups: true));
+      ).suggest(request(stages: 3, groups: true), allResults: true);
       expect(results, isNotEmpty);
       expect(results.any((s) => s.configurations.length == 3), isTrue);
       for (final result in results) {
@@ -209,10 +223,11 @@ void main() {
           result.configurations,
           2,
           parameters,
+          finalQualifiers: result.configurations.last.qualifiedParticipantCount,
         )!;
         expect(result.totalMatches, estimate.totalMatches);
         expect(result.estimatedMinutes, estimate.minutes);
-        expect(result.configurations.any((s) => s.type == 'groups'), isTrue);
+        expect(result.configurations.any((s) => s.isGroupStage), isTrue);
         final t = CreatedTournament(
           name: 'Finder',
           players: [],
@@ -226,7 +241,7 @@ void main() {
         );
         for (var i = 0; i < t.stages.length; i++) {
           final stage = t.stages[i];
-          if (stage.type == 'groups') {
+          if (stage.isGroupStage) {
             expect(stage.groupCount, lessThanOrEqualTo(2));
           }
           if (i > 0) {

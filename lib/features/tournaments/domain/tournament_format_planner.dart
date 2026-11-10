@@ -19,9 +19,6 @@ class TournamentPlanningRequest {
     'groups:limited_round_robin':
         'Gruppen: Rundenformat mit max. 5 Begegnungen pro Spieler',
     'groups:swiss': 'Schweizer System',
-    'groups:mini_knockout': 'Gruppen: Mini-KO',
-    'groups:double_knockout': 'Gruppen: Mini-Doppel-KO',
-    'groups:triple_knockout': 'Gruppen: Mini-Triple-KO',
   };
   const TournamentPlanningRequest({
     required this.players,

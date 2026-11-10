@@ -122,7 +122,7 @@ class PlanningSuggestionCard extends StatelessWidget {
                             final stage = suggestion.configurations[i];
                             final isLast =
                                 i == suggestion.configurations.length - 1;
-                            final participants = stage.type == 'groups'
+                            final participants = stage.isGroupStage
                                 ? stage.groupSizes.fold<int>(0, (a, b) => a + b)
                                 : stage.knockoutParticipantCount;
                             // Fix 1.4: Kein "→ X weiter" bei der letzten Etappe

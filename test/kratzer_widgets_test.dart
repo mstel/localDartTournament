@@ -9,8 +9,11 @@ void main() {
       await tester.pumpWidget(const DartTournamentApp());
       await tester.tap(find.text('Turnier erstellen'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Normales- oder Ranglistenturnier erstellen'));
-      await tester.pumpAndSettle();
+      final normal = find.text('Normales- oder Ranglistenturnier erstellen');
+      if (normal.evaluate().isNotEmpty) {
+        await tester.tap(normal);
+        await tester.pumpAndSettle();
+      }
       final workflow = find.text('2 · Turnierablauf');
       for (
         var attempt = 0;
@@ -59,6 +62,9 @@ void main() {
             .value,
         isTrue,
       );
+      await tester.tap(find.byKey(const ValueKey('final-ends-tournament')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('kratzer-lives-3')), findsNothing);
       await tester.tap(type);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Kratzer-Modus').last);

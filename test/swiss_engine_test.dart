@@ -61,17 +61,52 @@ void main() {
       );
       expect(results, isNotEmpty);
       for (final result in results) {
+        expect(result.configurations.single.type, 'swiss');
         expect(result.configurations.single.groupPlayType, 'swiss');
         final estimate = const ConfigurationDurationEstimator().preview(
           result.configurations,
           3,
           const TournamentPlanningParameters(),
+          finalQualifiers:
+              result.configurations.single.qualifiedParticipantCount,
         )!;
         expect(result.estimatedMinutes, estimate.minutes);
         expect(result.totalMatches, estimate.totalMatches);
       }
     },
   );
+  test('Swiss stages have a distinct type and migrate legacy group stages', () {
+    const swiss = TournamentStage(
+      name: 'Schweizer System',
+      type: 'swiss',
+      groupCount: 1,
+      groupSizes: [8],
+      groupPlayType: 'swiss',
+      groupPlayTypes: ['swiss'],
+      groupRoundRobinRepeats: [3],
+      qualifiedParticipantCount: 4,
+    );
+    final restored = TournamentStage.fromJson(swiss.toJson());
+    final migrated = TournamentStage.fromJson({
+      ...swiss.toJson(),
+      'type': 'groups',
+    });
+
+    expect(swiss.isGroupStage, isTrue);
+    expect(
+      const TournamentStage(name: 'Swiss', type: 'swiss').groupPlayType,
+      'swiss',
+    );
+    expect(restored.type, 'swiss');
+    expect(migrated.type, 'swiss');
+    expect(migrated.toJson()['type'], 'swiss');
+    expect(
+      const ConfigurationDurationEstimator()
+          .preview([restored], 3, const TournamentPlanningParameters())!
+          .totalMatches,
+      12,
+    );
+  });
   test(
     'waits for entire round; correcting a result clears dependent rounds',
     () {
@@ -137,7 +172,7 @@ void main() {
     () {
       const config = TournamentStage(
         name: 'Swiss',
-        type: 'groups',
+        type: 'swiss',
         groupCount: 1,
         groupSizes: [8],
         groupPlayType: 'swiss',
@@ -156,10 +191,10 @@ void main() {
       expect(three.waitMinutes, 10);
       expect(
         three.minutes,
-        190,
-      ); // 3 rounds × 2 full-distance batches + 2 Swiss-round waits.
-      expect(four.minutes, 100); // 3 full-distance rounds + 2 round changes.
-      expect(four.matchEndSeconds.last, 100 * 60);
+        160,
+      ); // 3 rounds × 2 average-duration batches + 2 Swiss-round waits.
+      expect(four.minutes, 85); // 3 average-duration rounds + 2 round changes.
+      expect(four.matchEndSeconds.last, 85 * 60);
     },
   );
 }

@@ -12,6 +12,7 @@ void main() {
       await tester.ensureVisible(normal);
       await tester.tap(normal);
       await tester.pumpAndSettle();
+    }
       final workflow = find.text('2 · Turnierablauf');
       for (
         var attempt = 0;
@@ -27,7 +28,6 @@ void main() {
         await tester.pumpAndSettle();
       }
     }
-  }
 
   Future<void> revealPlayerGenerator(WidgetTester tester) async {
     final target = find.text('Spieler erzeugen');
@@ -230,18 +230,11 @@ void main() {
     expect(find.text('Zufall'), findsOneWidget);
     expect(find.text('Cross seeded'), findsNothing);
 
-    await tester.scrollUntilVisible(
-      find.byTooltip('Etappe hinzufügen'),
-      -400,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
+    await tester.ensureVisible(find.byTooltip('Etappe hinzufügen'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Etappe hinzufügen'));
+    final saveStageButton = find.byKey(const ValueKey('save-stage-button'));
+    await tester.ensureVisible(saveStageButton);
+    await tester.tap(saveStageButton);
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -261,20 +254,9 @@ void main() {
     await tester.tap(find.byTooltip('Etappe bearbeiten'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
+    expect(
       find.byKey(const ValueKey('stage-name-field'), skipOffstage: false),
-      -400,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('stage-name-field'), skipOffstage: false),
-      'KO pur',
+      findsNothing,
     );
     await tester.ensureVisible(
       find.byTooltip('Etappe speichern', skipOffstage: false),
@@ -284,7 +266,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('KO pur'),
+      find.text('K.-o.-Runde 1'),
       500,
       scrollable: find
           .descendant(
@@ -295,7 +277,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('KO pur'), findsOneWidget);
+    expect(find.text('K.-o.-Runde 1'), findsOneWidget);
 
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
@@ -399,24 +381,12 @@ void main() {
     await tester.tap(find.text('Gruppenphase').last);
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('group-play-type-field')),
-      400,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
+    expect(
+      find.byKey(const ValueKey('group-play-type-field'), skipOffstage: false),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Jeder gegen jeden').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Doppel-KO in der Gruppe'), findsWidgets);
-    expect(find.text('Triple-KO in der Gruppe'), findsWidgets);
-    await tester.tap(find.text('Triple-KO in der Gruppe').last);
-    await tester.pumpAndSettle();
+    expect(find.text('Doppel-KO in der Gruppe'), findsNothing);
+    expect(find.text('Triple-KO in der Gruppe'), findsNothing);
   });
 
   testWidgets('double knockout run starts with round one title', (
@@ -1165,7 +1135,7 @@ void main() {
     );
   });
 
-  testWidgets('creates mini knockout groups', (tester) async {
+  testWidgets('group stages always use round robin', (tester) async {
     await tester.pumpWidget(const DartTournamentApp());
 
     await openTournamentCreation(tester);
@@ -1176,7 +1146,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('group-play-type-field')),
+      find.byKey(const ValueKey('group-count-field')),
       400,
       scrollable: find
           .descendant(
@@ -1186,23 +1156,20 @@ void main() {
           .first,
     );
     await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('group-play-type-field')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mini-KO in der Gruppe').last);
-    await tester.pumpAndSettle();
-
     await tester.enterText(
       find.byKey(const ValueKey('group-count-field')),
       '2',
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Begegnungen pro Paar'), findsNothing);
     expect(
-      find.text('0 Spiele in dieser Etappe', skipOffstage: false),
-      findsOneWidget,
+      find.byKey(const ValueKey('group-play-type-field'), skipOffstage: false),
+      findsNothing,
     );
+    expect(find.text('Mini-KO in der Gruppe'), findsNothing);
+    expect(find.text('Doppel-KO in der Gruppe'), findsNothing);
+    expect(find.text('Triple-KO in der Gruppe'), findsNothing);
+    expect(find.text('6 Spiele in dieser Etappe'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.byTooltip('Etappe hinzufügen'),
@@ -1217,54 +1184,23 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Etappe hinzufügen'));
     await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(
-      find.text('1 Etappen im Turnier'),
-      400,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Mini-KO in der Gruppe'), findsOneWidget);
-
-    await openReviewSection(tester);
-    await tester.dragUntilVisible(
-      find.text('Turnier anlegen'),
-      find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-      const Offset(0, -120),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Turnier anlegen'));
-    await pumpUntilRunPage(tester);
-
-    expect(find.byType(TournamentRunPage), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    expect(find.text('Gruppenphase 1'), findsOneWidget);
   });
 
-  testWidgets('mini knockout preview handles top three from five players', (
+  testWidgets('Swiss system is selectable as a separate stage type', (
     tester,
   ) async {
     await tester.pumpWidget(const DartTournamentApp());
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '5');
+    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '6');
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Spieler erzeugen'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('group-play-type-field')),
+      find.byKey(const ValueKey('stage-type-field')),
       400,
       scrollable: find
           .descendant(
@@ -1275,53 +1211,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('group-play-type-field')));
+    await tester.tap(find.byKey(const ValueKey('stage-type-field')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Mini-KO in der Gruppe').last);
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byKey(const ValueKey('group-count-field')),
-      '1',
-    );
-    await tester.scrollUntilVisible(
-      find.byKey(
-        const ValueKey('group-qualifier-count-field'),
-        skipOffstage: false,
-      ),
-      250,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(
-        const ValueKey('group-qualifier-count-field'),
-        skipOffstage: false,
-      ),
-      '3',
-    );
-
-    expect(tester.takeException(), isNull);
-
-    await revealInCurrentForm(tester, find.byTooltip('Etappe hinzufügen'));
-    await tester.tap(find.byTooltip('Etappe hinzufügen'));
+    await tester.tap(find.text('Schweizer System').last);
     await tester.pumpAndSettle();
 
-    await openReviewSection(tester);
-    await revealInCurrentForm(tester, find.text('Turnier anlegen'));
-    await tester.tap(find.widgetWithText(FilledButton, 'Turnier anlegen'));
-    await pumpUntilRunPage(tester);
+    expect(find.textContaining('Schweizer System 1'), findsOneWidget);
+    expect(find.textContaining('Ein Schweizer System mit 6'), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-count-field')), findsNothing);
+    expect(find.byKey(const ValueKey('group-play-type-field')), findsNothing);
+    expect(find.text('Rundenanzahl'), findsOneWidget);
 
-    expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('sets play type for a single group', (tester) async {
+  testWidgets('group stages are named in sequence automatically', (
+    tester,
+  ) async {
     await tester.pumpWidget(const DartTournamentApp());
 
     await openTournamentCreation(tester);
@@ -1348,26 +1254,8 @@ void main() {
       '2',
     );
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(
-        const ValueKey('group-play-type-2-round_robin'),
-        skipOffstage: false,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('group-play-type-2-round_robin')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mini-KO').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('3 Spiele in dieser Etappe'), findsOneWidget);
     expect(
-      find.byKey(
-        const ValueKey('round-robin-repeat-plus-2'),
-        skipOffstage: false,
-      ),
+      find.byKey(const ValueKey('group-play-type-field'), skipOffstage: false),
       findsNothing,
     );
 
@@ -1384,6 +1272,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Etappe hinzufügen'));
     await tester.pumpAndSettle();
+    expect(find.text('Gruppenphase 1'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('1 Etappen im Turnier'),
@@ -1396,14 +1285,21 @@ void main() {
           .first,
     );
     await tester.pumpAndSettle();
-
-    expect(
-      find.textContaining(
-        'Spieltypen: Gruppe A Jeder gegen jeden, '
-        'Gruppe B Mini-KO in der Gruppe',
-      ),
-      findsOneWidget,
+    await tester.scrollUntilVisible(
+      find.byTooltip('Etappe hinzufügen'),
+      -400,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Etappe hinzufügen'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gruppenphase 2'), findsOneWidget);
   });
 
   testWidgets('cross seed gives byes to top group winners', (tester) async {
@@ -1690,9 +1586,12 @@ void main() {
     expect(find.text('4 Spieler'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('group-play-type-field'), skipOffstage: false),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Jeder gegen jeden', skipOffstage: false), findsWidgets);
+    expect(
+      find.text('Mini-KO in der Gruppe', skipOffstage: false),
+      findsNothing,
+    );
 
     await tester.scrollUntilVisible(
       find.byKey(
@@ -1738,8 +1637,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Zusatz aus Gruppe A'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
+    expect(
       find.byKey(const ValueKey('stage-name-field'), skipOffstage: false),
+      findsNothing,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('stage-type-field'), skipOffstage: false),
       -400,
       scrollable: find
           .descendant(
@@ -1749,11 +1652,22 @@ void main() {
           .first,
     );
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('stage-name-field'), skipOffstage: false),
-      'Vorrunde',
+    final saveStageButton = find.byKey(
+      const ValueKey('save-stage-form-button'),
+      skipOffstage: false,
     );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.scrollUntilVisible(
+      saveStageButton,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(saveStageButton);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('1 Etappen im Turnier'),
@@ -1768,7 +1682,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('1 Etappen im Turnier'), findsOneWidget);
-    expect(find.text('Vorrunde'), findsOneWidget);
+    expect(find.text('Gruppenphase 1'), findsOneWidget);
     expect(find.textContaining('12 Spiele'), findsWidgets);
     expect(find.textContaining('Beste 1 der 2. Plätze'), findsWidgets);
 
@@ -1799,11 +1713,22 @@ void main() {
     expect(find.text('Finale'), findsOneWidget);
     expect(find.text('1. Gruppe A'), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('stage-name-field'), skipOffstage: false),
-      'Endrunde',
+    final saveStageFormButton = find.byKey(
+      const ValueKey('save-stage-form-button'),
+      skipOffstage: false,
     );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.scrollUntilVisible(
+      saveStageFormButton,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(saveStageFormButton);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('2 Etappen im Turnier'),
@@ -1818,7 +1743,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2 Etappen im Turnier'), findsOneWidget);
-    expect(find.text('Endrunde'), findsOneWidget);
+    expect(find.text('K.-o.-Runde 1'), findsOneWidget);
     expect(find.textContaining('K.-o.-Runde'), findsWidgets);
 
     await openReviewSection(tester);
@@ -1832,13 +1757,13 @@ void main() {
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
     expect(find.text('Runde 1'), findsNothing);
 
-    await selectTournamentStage(tester, '2. Endrunde');
+    await selectTournamentStage(tester, '2. K.-o.-Runde 1');
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(find.text('Turnieransicht'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await selectTournamentStage(tester, '1. Vorrunde');
+    await selectTournamentStage(tester, '1. Gruppenphase 1');
     await selectTournamentResults(tester);
 
     expect(find.textContaining('Offene Spiele'), findsOneWidget);
@@ -1906,7 +1831,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Endrunde'), findsWidgets);
+    expect(find.textContaining('K.-o.-Runde'), findsWidgets);
     expect(find.text('Spielplan'), findsOneWidget);
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
   });

@@ -237,6 +237,18 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
+    name: 'Doppel-KO mit Platzierungsspielen fuer Rang 5 und 7',
+    playerCount: 8,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Doppel-KO',
+        qualifiers: 1,
+        lossLimit: 2,
+        placementPlaces: [5, 7],
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
     name: 'Triple-KO mit entscheidendem Finale',
     playerCount: 7,
     stages: [
@@ -245,6 +257,18 @@ const tournamentDevelopmentScenarios = [
         qualifiers: 1,
         lossLimit: 3,
         finalEndsTournament: true,
+      ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Triple-KO mit Platzierungsspiel fuer Rang 5',
+    playerCount: 8,
+    stages: [
+      SimulationEliminationStageSpec(
+        name: 'Triple-KO',
+        qualifiers: 1,
+        lossLimit: 3,
+        placementPlaces: [5],
       ),
     ],
   ),

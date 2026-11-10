@@ -1,4 +1,5 @@
 import 'package:dart_tournament_manager/features/tournaments/modes/triple_ko/triple_ko_engine.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/stage_controls.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/mini_knockout_group_run_section.dart';
 import 'dart:io';
@@ -244,6 +245,123 @@ void main() {
         },
       );
     }
+
+    testWidgets('running tournament settings follow the requested menu order', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final directory = Directory.systemTemp.createTempSync(
+        'tournament_settings_order_',
+      );
+      final previous = PathProviderPlatform.instance;
+      PathProviderPlatform.instance = _Paths(directory.path);
+      addTearDown(() {
+        PathProviderPlatform.instance = previous;
+        directory.deleteSync(recursive: true);
+      });
+
+      final players = List.generate(
+        4,
+        (index) => TournamentPlayer.generated(index + 1),
+      );
+      final tournament = CreatedTournament(
+        name: 'Ranglistenturnier',
+        players: players,
+        stages: const [
+          TournamentStage(
+            name: 'Gruppenphase',
+            type: 'group',
+            groupCount: 1,
+            groupSizes: [4],
+          ),
+        ],
+        boardCount: 1,
+        countsForRanking: true,
+        rankingIds: const ['ranking-id'],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppenphase',
+            groupPlayType: 'round_robin',
+            qualificationPlan: null,
+            tieBreakers: defaultGroupTieBreakers,
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: players,
+                matches: [
+                  GroupMatch(
+                    homePlayer: players[0],
+                    awayPlayer: players[1],
+                    round: 1,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: TournamentRunPage(tournament: tournament)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Einstellungen'));
+      await tester.pumpAndSettle();
+      final labels = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data)
+          .toList();
+      int position(String label) => labels.indexOf(label);
+
+      expect(
+        position('2. Bildschirm (TV-Anzeige)'),
+        lessThan(position('Turnierleiter-Modus aktivieren')),
+      );
+      expect(
+        position('Errungenschaften'),
+        lessThan(position('Hinweiseinstellungen')),
+      );
+      expect(
+        position('Hinweiseinstellungen'),
+        lessThan(position('Uhr & Zeiteinstellungen')),
+      );
+      expect(
+        position('Uhr & Zeiteinstellungen'),
+        lessThan(position('Turnierlog anzeigen')),
+      );
+      expect(tester.takeException(), isNull);
+
+      final league = LeagueMatch.rhl(
+        homeTeam: 'Heim',
+        awayTeam: 'Gast',
+        homePlayers: const ['H1', 'H2', 'H3', 'H4'],
+        awayPlayers: const ['G1', 'G2', 'G3', 'G4'],
+      );
+      final leagueTournament = CreatedTournament(
+        name: 'Freundschaftsspiel',
+        players: players,
+        stages: tournament.stages,
+        boardCount: 1,
+        leagueMatch: league,
+        runStages: tournament.runStages,
+        countsForRanking: true,
+        rankingIds: const ['league-ranking'],
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: TournamentRunPage(tournament: leagueTournament)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Einstellungen'));
+      await tester.pumpAndSettle();
+      expect(find.text('Errungenschaften'), findsNothing);
+      expect(find.text('Hinweiseinstellungen'), findsNothing);
+      expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
+      expect(find.text('Turnierlog anzeigen'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   }
   testWidgets('Mini knockout matches remain editable on phones', (
     tester,

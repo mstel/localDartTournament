@@ -25,9 +25,11 @@ void main() {
     await tester.tap(find.text('Turnier erstellen'));
     await tester.pumpAndSettle();
     final create = find.text('Normales- oder Ranglistenturnier erstellen');
-    await reveal(create);
-    await tester.tap(create);
-    await tester.pumpAndSettle();
+    if (create.evaluate().isNotEmpty) {
+      await reveal(create);
+      await tester.tap(create);
+      await tester.pumpAndSettle();
+    }
 
     final workflow = find.text('2 · Turnierablauf');
     await reveal(workflow);

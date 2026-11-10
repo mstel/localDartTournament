@@ -98,18 +98,18 @@ void main() {
     );
   });
 
-  test('set estimate multiplies average sets by average legs per set', () {
+  test('set estimate averages minimum and maximum total legs', () {
     expect(
       PlanningDuration.estimatedMatchLegs(
         const TournamentGameFormat(bestOfSets: 3, bestOfLegs: 3),
       ),
-      6.25,
+      6.5,
     );
     expect(
       PlanningDuration.estimatedMatchLegs(
         const TournamentGameFormat(bestOfSets: 5, bestOfLegs: 3),
       ),
-      10,
+      10.5,
     );
     expect(TournamentGameFormat.fromJson({'bestOfLegs': 5}).bestOfSets, 1);
     const f = TournamentGameFormat(x01Score: 301, bestOfSets: 3, bestOfLegs: 5);

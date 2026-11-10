@@ -109,6 +109,35 @@ class LeagueGame {
 
 enum LeagueMatchVariant { traditional, adjusted }
 
+class LeagueSubstitution {
+  const LeagueSubstitution({
+    required this.teamSide,
+    required this.outPlayerIndex,
+    required this.inPlayerIndex,
+    required this.occurredAt,
+  });
+
+  final int teamSide;
+  final int outPlayerIndex;
+  final int inPlayerIndex;
+  final DateTime occurredAt;
+
+  Map<String, Object?> toJson() => {
+    'teamSide': teamSide,
+    'outPlayerIndex': outPlayerIndex,
+    'inPlayerIndex': inPlayerIndex,
+    'occurredAt': occurredAt.toIso8601String(),
+  };
+
+  factory LeagueSubstitution.fromJson(Map<String, dynamic> json) =>
+      LeagueSubstitution(
+        teamSide: json['teamSide'] as int,
+        outPlayerIndex: json['outPlayerIndex'] as int,
+        inPlayerIndex: json['inPlayerIndex'] as int,
+        occurredAt: DateTime.parse(json['occurredAt'] as String),
+      );
+}
+
 /// A league match supports the fixed traditional format and an even-roster
 /// adjusted format. Each fixture awards one team point.
 class LeagueMatch {
@@ -122,7 +151,18 @@ class LeagueMatch {
     this.variant = LeagueMatchVariant.traditional,
     this.singlesPerPlayer = 4,
     this.doublesCount = 2,
-  });
+    int? starterCount,
+    this.maxReservePlayers = 4,
+    int? substitutionLimit,
+    this.allowReentry = false,
+    List<LeagueSubstitution>? substitutions,
+  }) : starterCount =
+           starterCount ??
+           (variant == LeagueMatchVariant.traditional ? 4 : homePlayers.length),
+       substitutionLimit =
+           substitutionLimit ??
+           (variant == LeagueMatchVariant.traditional ? 4 : maxReservePlayers),
+       substitutions = substitutions ?? [];
   final String homeTeam;
   final String awayTeam;
   final List<String> homePlayers;
@@ -132,6 +172,133 @@ class LeagueMatch {
   final LeagueMatchVariant variant;
   final int singlesPerPlayer;
   final int doublesCount;
+  final int starterCount;
+  final int maxReservePlayers;
+  final int substitutionLimit;
+  final bool allowReentry;
+  final List<LeagueSubstitution> substitutions;
+
+  List<int> activePlayers(int teamSide) {
+    _validateTeamSide(teamSide);
+    final active = <int>{
+      for (var index = 0; index < starterCount; index++) index,
+    };
+    for (final substitution in substitutions.where(
+      (item) => item.teamSide == teamSide,
+    )) {
+      active
+        ..remove(substitution.outPlayerIndex)
+        ..add(substitution.inPlayerIndex);
+    }
+    return active.toList()..sort();
+  }
+
+  List<int> reservePlayers(int teamSide) {
+    _validateTeamSide(teamSide);
+    final roster = teamSide == 0 ? homePlayers : awayPlayers;
+    final firstReserve = starterCount;
+    final reserveLimit = (starterCount + maxReservePlayers).clamp(
+      firstReserve,
+      roster.length,
+    );
+    final reserves = <int>{
+      for (var index = firstReserve; index < reserveLimit; index++) index,
+    };
+    if (allowReentry) {
+      reserves.addAll(
+        substitutions
+            .where(
+              (item) =>
+                  item.teamSide == teamSide &&
+                  item.outPlayerIndex < starterCount,
+            )
+            .map((item) => item.outPlayerIndex),
+      );
+    }
+    return reserves.toList()..sort();
+  }
+
+  int substitutionsUsed(int teamSide) {
+    _validateTeamSide(teamSide);
+    return substitutions.where((item) => item.teamSide == teamSide).length;
+  }
+
+  int substitutionsRemaining(int teamSide) {
+    _validateTeamSide(teamSide);
+    final active = activePlayers(teamSide).toSet();
+    final availableReserveCount = reservePlayers(teamSide)
+        .where(
+          (player) =>
+              !active.contains(player) &&
+              (allowReentry ||
+                  !substitutions.any(
+                    (event) =>
+                        event.teamSide == teamSide &&
+                        event.outPlayerIndex == player,
+                  )),
+        )
+        .length;
+    return (substitutionLimit - substitutionsUsed(teamSide)).clamp(
+      0,
+      availableReserveCount,
+    );
+  }
+
+  void substitute({
+    required int teamSide,
+    required int outPlayerIndex,
+    required int inPlayerIndex,
+    DateTime? occurredAt,
+  }) {
+    _validateTeamSide(teamSide);
+    final roster = teamSide == 0 ? homePlayers : awayPlayers;
+    final active = activePlayers(teamSide);
+    final reserves = reservePlayers(teamSide);
+    if (outPlayerIndex < 0 ||
+        outPlayerIndex >= roster.length ||
+        inPlayerIndex < 0 ||
+        inPlayerIndex >= roster.length ||
+        !active.contains(outPlayerIndex) ||
+        !reserves.contains(inPlayerIndex) ||
+        active.contains(inPlayerIndex)) {
+      throw const FormatException('Ungültiger Spielerwechsel.');
+    }
+    if (substitutionsRemaining(teamSide) < 1) {
+      throw const FormatException('Keine Auswechselungen mehr verfügbar.');
+    }
+    final alreadySubstitutedOut = substitutions.any(
+      (item) =>
+          item.teamSide == teamSide && item.outPlayerIndex == inPlayerIndex,
+    );
+    if (alreadySubstitutedOut && !allowReentry) {
+      throw const FormatException(
+        'Bereits ausgewechselte Spieler dürfen nicht erneut eingewechselt werden.',
+      );
+    }
+
+    for (final game in games) {
+      if (game.complete || game.runtime?['startedAt'] != null) continue;
+      final side = teamSide == 0 ? game.home : game.away;
+      for (var index = 0; index < side.length; index++) {
+        if (side[index] == outPlayerIndex) side[index] = inPlayerIndex;
+      }
+    }
+    substitutions.add(
+      LeagueSubstitution(
+        teamSide: teamSide,
+        outPlayerIndex: outPlayerIndex,
+        inPlayerIndex: inPlayerIndex,
+        occurredAt: occurredAt ?? DateTime.now(),
+      ),
+    );
+  }
+
+  void _validateTeamSide(int teamSide) {
+    if (teamSide != 0 && teamSide != 1) {
+      throw ArgumentError.value(teamSide, 'teamSide');
+    }
+  }
+
   int get homePoints => games
       .where(
         (g) =>
@@ -158,6 +325,14 @@ class LeagueMatch {
     required List<String> awayPlayers,
     TournamentGameFormat gameFormat = const TournamentGameFormat(bestOfLegs: 5),
   }) {
+    if (homePlayers.length < 4 ||
+        awayPlayers.length < 4 ||
+        homePlayers.length > 8 ||
+        awayPlayers.length > 8) {
+      throw const FormatException(
+        'Traditionelle Mannschaften benötigen 4 bis 8 Spieler.',
+      );
+    }
     final match = LeagueMatch(
       homeTeam: homeTeam.trim(),
       awayTeam: awayTeam.trim(),
@@ -174,6 +349,9 @@ class LeagueMatch {
       variant: LeagueMatchVariant.traditional,
       singlesPerPlayer: 4,
       doublesCount: 2,
+      starterCount: 4,
+      maxReservePlayers: 4,
+      substitutionLimit: 4,
     );
     match.validate();
     return match;
@@ -186,11 +364,22 @@ class LeagueMatch {
     required List<String> awayPlayers,
     required int singlesPerPlayer,
     required int doublesCount,
+    int? starterCount,
+    int maxReservePlayers = 2,
+    int? substitutionLimit,
+    bool allowReentry = false,
     TournamentGameFormat gameFormat = const TournamentGameFormat(bestOfLegs: 5),
   }) {
-    if (homePlayers.length != awayPlayers.length || homePlayers.isEmpty) {
+    final starters =
+        starterCount ??
+        (homePlayers.length < awayPlayers.length
+            ? homePlayers.length
+            : awayPlayers.length);
+    if (homePlayers.length < starters ||
+        awayPlayers.length < starters ||
+        starters < 1) {
       throw const FormatException(
-        'Im angepassten Modus müssen beide Teams gleich viele Spieler haben.',
+        'Beide Teams benötigen mindestens so viele Spieler wie Stammplätze.',
       );
     }
     if (singlesPerPlayer < 1) {
@@ -198,19 +387,23 @@ class LeagueMatch {
         'Jeder Spieler muss mindestens ein Einzel spielen.',
       );
     }
-    if (doublesCount < 0 || doublesCount > homePlayers.length ~/ 2) {
+    if (maxReservePlayers < 0 ||
+        homePlayers.length > starters + maxReservePlayers ||
+        awayPlayers.length > starters + maxReservePlayers) {
+      throw const FormatException(
+        'Die Mannschaftskader überschreiten die erlaubte Anzahl Ersatzspieler.',
+      );
+    }
+    if (doublesCount < 0 || doublesCount > starters ~/ 2) {
       throw const FormatException(
         'Die Anzahl der Doppel darf höchstens der Hälfte der Spieler je Team entsprechen.',
       );
     }
     final games = <LeagueGame>[];
     for (var round = 0; round < singlesPerPlayer; round++) {
-      for (var player = 0; player < homePlayers.length; player++) {
+      for (var player = 0; player < starters; player++) {
         games.add(
-          LeagueGame(
-            home: [player],
-            away: [(player + round) % awayPlayers.length],
-          ),
+          LeagueGame(home: [player], away: [(player + round) % starters]),
         );
       }
     }
@@ -232,6 +425,10 @@ class LeagueMatch {
       variant: LeagueMatchVariant.adjusted,
       singlesPerPlayer: singlesPerPlayer,
       doublesCount: doublesCount,
+      starterCount: starters,
+      maxReservePlayers: maxReservePlayers,
+      substitutionLimit: substitutionLimit ?? maxReservePlayers,
+      allowReentry: allowReentry,
     );
     match.validate();
     return match;
@@ -242,14 +439,29 @@ class LeagueMatch {
       throw const FormatException('Mannschaftsnamen fehlen.');
     }
     for (final roster in [homePlayers, awayPlayers]) {
-      if (roster.length < (variant == LeagueMatchVariant.traditional ? 4 : 1) ||
-          roster.any((p) => p.trim().isEmpty)) {
+      if (roster.length < starterCount || roster.any((p) => p.trim().isEmpty)) {
         throw FormatException(
           variant == LeagueMatchVariant.traditional
-              ? 'Je Mannschaft werden mindestens 4 Spieler benötigt.'
+              ? 'Je Mannschaft werden mindestens 4 Stammspieler benötigt.'
               : 'Spielernamen dürfen nicht leer sein.',
         );
       }
+    }
+    if (starterCount < 1 ||
+        maxReservePlayers < 0 ||
+        substitutionLimit < 0 ||
+        homePlayers.length > starterCount + maxReservePlayers ||
+        awayPlayers.length > starterCount + maxReservePlayers) {
+      throw const FormatException('Ungültige Kader- oder Wechselregeln.');
+    }
+    if (variant == LeagueMatchVariant.traditional &&
+        (starterCount != 4 ||
+            homePlayers.length > 8 ||
+            awayPlayers.length > 8 ||
+            maxReservePlayers != 4)) {
+      throw const FormatException(
+        'Ungültiger traditioneller Mannschaftskader.',
+      );
     }
     if (variant == LeagueMatchVariant.traditional &&
         (games.length != 18 || games.where((g) => g.isDouble).length != 2)) {
@@ -260,14 +472,12 @@ class LeagueMatch {
     if (variant == LeagueMatchVariant.adjusted) {
       if (singlesPerPlayer < 1 ||
           doublesCount < 0 ||
-          doublesCount > homePlayers.length ~/ 2 ||
-          homePlayers.length != awayPlayers.length ||
-          games.length !=
-              homePlayers.length * singlesPerPlayer + doublesCount ||
+          doublesCount > starterCount ~/ 2 ||
+          games.length != starterCount * singlesPerPlayer + doublesCount ||
           games.where((g) => g.isDouble).length != doublesCount) {
         throw const FormatException('Ungültiger angepasster Spielplan.');
       }
-      for (var player = 0; player < homePlayers.length; player++) {
+      for (var player = 0; player < starterCount; player++) {
         if (games
                     .where(
                       (game) => !game.isDouble && game.home.contains(player),
@@ -312,13 +522,39 @@ class LeagueMatch {
         throw const FormatException('Ungültige Aufstellung.');
       }
     }
+    for (var index = 0; index < substitutions.length; index++) {
+      final event = substitutions[index];
+      final roster = event.teamSide == 0 ? homePlayers : awayPlayers;
+      final isReentry =
+          allowReentry &&
+          substitutions
+              .take(index)
+              .any(
+                (previous) =>
+                    previous.teamSide == event.teamSide &&
+                    previous.outPlayerIndex == event.inPlayerIndex,
+              );
+      if (event.teamSide < 0 ||
+          event.teamSide > 1 ||
+          event.outPlayerIndex < 0 ||
+          event.outPlayerIndex >= roster.length ||
+          (event.inPlayerIndex < starterCount && !isReentry) ||
+          event.inPlayerIndex >= roster.length) {
+        throw const FormatException('Ungültiger gespeicherter Spielerwechsel.');
+      }
+    }
   }
 
   Map<String, dynamic> toJson() => {
-    'version': 4,
+    'version': 5,
     'preset': 'rhl',
+    'variant': variant.name,
+    'starterCount': starterCount,
+    'maxReservePlayers': maxReservePlayers,
+    'substitutionLimit': substitutionLimit,
+    'allowReentry': allowReentry,
+    'substitutions': substitutions.map((event) => event.toJson()).toList(),
     if (variant == LeagueMatchVariant.adjusted) ...{
-      'variant': variant.name,
       'singlesPerPlayer': singlesPerPlayer,
       'doublesCount': doublesCount,
     },
@@ -330,7 +566,7 @@ class LeagueMatch {
     'games': games.map((g) => g.toJson()).toList(),
   };
   factory LeagueMatch.fromJson(Map<String, dynamic> json) {
-    if (![1, 2, 3, 4].contains(json['version']) || json['preset'] != 'rhl') {
+    if (![1, 2, 3, 4, 5].contains(json['version']) || json['preset'] != 'rhl') {
       throw const FormatException('Nicht unterstützte Ligaspiel-Version.');
     }
     final gameFormat = json['gameFormat'] is Map
@@ -357,6 +593,19 @@ class LeagueMatch {
           : LeagueMatchVariant.traditional,
       singlesPerPlayer: json['singlesPerPlayer'] as int? ?? 4,
       doublesCount: json['doublesCount'] as int? ?? 2,
+      starterCount: json['starterCount'] as int?,
+      maxReservePlayers:
+          json['maxReservePlayers'] as int? ??
+          (json['variant'] == LeagueMatchVariant.adjusted.name ? 0 : 4),
+      substitutionLimit: json['substitutionLimit'] as int?,
+      allowReentry: json['allowReentry'] as bool? ?? false,
+      substitutions: (json['substitutions'] as List? ?? const [])
+          .map(
+            (item) => LeagueSubstitution.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
     );
     match.validate();
     return match;

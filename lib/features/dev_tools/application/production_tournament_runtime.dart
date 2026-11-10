@@ -55,6 +55,7 @@ class ProductionTournamentRuntime {
           stage.eliminationLossLimit,
           fallbackPlayers: players,
           finalEndsTournament: stage.finalEndsTournament,
+          placementMatches: stage.placementMatches,
         )
       : _state._knockoutRanking(
           stage.rounds,

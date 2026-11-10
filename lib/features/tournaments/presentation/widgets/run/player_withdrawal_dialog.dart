@@ -7,9 +7,11 @@ class PlayerWithdrawalDialog extends StatefulWidget {
   const PlayerWithdrawalDialog({
     super.key,
     required this.tournament,
+    required this.stageIndex,
     this.initialPlayer,
   });
   final CreatedTournament tournament;
+  final int stageIndex;
   final TournamentPlayer? initialPlayer;
   @override
   State<PlayerWithdrawalDialog> createState() => _WithdrawalState();
@@ -26,7 +28,8 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
   }
 
   String _modeLabel(WithdrawalResultMode value) => switch (value) {
-    WithdrawalResultMode.loseOpen => 'Offene Spiele als Niederlage zu null werten',
+    WithdrawalResultMode.loseOpen =>
+      'Offene Spiele als Niederlage zu null werten',
     WithdrawalResultMode.loseAll => 'Alle Spiele als Niederlage zu null werten',
     WithdrawalResultMode.ignoreOpen =>
       'Nur offene Spiele von der Ranglistenwertung ausschließen',
@@ -116,6 +119,7 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
                   playerKey: PlayerWithdrawalService.key(player!),
                   mode: mode,
                   createdAt: DateTime.now(),
+                  stageIndex: widget.stageIndex,
                   countForRanking: ranking,
                   countOpponentsForRanking: opponents,
                 ),

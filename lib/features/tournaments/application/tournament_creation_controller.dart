@@ -172,8 +172,8 @@ class TournamentCreationController {
       if (index >= stages.length) break;
       final oldStage = existing.stages[index];
       final newStage = stages[index];
-      if (oldStage.type == 'groups' &&
-          newStage.type == 'groups' &&
+      if (oldStage.isGroupStage &&
+          newStage.isGroupStage &&
           jsonEncode(oldStage.toJson()) != jsonEncode(newStage.toJson())) {
         updated.addActivity(
           'groups_changed',

@@ -152,30 +152,58 @@ void main() {
     expect(tournament.plannedMinutes, 112);
     expect(tournament.plannedMatchEndSeconds, [1500, 3240, 4980, 6720]);
   });
-  test('reset clock restarts at the new time without clearing match data', () {
-    final t = fixture()
-      ..startedAt = start
-      ..pausedAt = start.add(const Duration(minutes: 8))
-      ..totalPausedSeconds = 120
-      ..plannedMinutes = 75;
-    final match = TournamentTiming.matches(t).single
-      ..startedAt = start
-      ..finishedAt = start.add(const Duration(minutes: 12))
-      ..homeLegs = 2
-      ..awayLegs = 0;
-    final resetAt = start.add(const Duration(hours: 2));
+  test(
+    'reset clock uses the selected tournament date without clearing matches',
+    () {
+      final t = fixture()
+        ..startedAt = start
+        ..pausedAt = start.add(const Duration(minutes: 8))
+        ..totalPausedSeconds = 120
+        ..plannedMinutes = 75;
+      final match = TournamentTiming.matches(t).single
+        ..startedAt = start
+        ..finishedAt = start.add(const Duration(minutes: 12))
+        ..homeLegs = 2
+        ..awayLegs = 0;
+      final resetAt = start.add(const Duration(hours: 2));
+
+      TournamentTiming.resetClock(t, resetAt);
+
+      expect(t.startedAt, resetAt);
+      expect(t.tournamentDate, isNull);
+      expect(t.finishedAt, isNull);
+      expect(t.pausedAt, isNull);
+      expect(t.totalPausedSeconds, 0);
+      expect(t.plannedMinutes, 75);
+      expect(match.hasResult, isTrue);
+      expect(match.startedAt, start);
+      expect(match.finishedAt, start.add(const Duration(minutes: 12)));
+      expect(
+        TournamentTiming.snapshot(
+          t,
+          resetAt.add(const Duration(hours: 1)),
+        ).elapsed,
+        const Duration(hours: 1),
+      );
+    },
+  );
+  test('reset clock honors a past tournament date', () {
+    final t = fixture()..tournamentDate = DateTime(2026, 5, 1);
+    final resetAt = DateTime(2026, 10, 3, 12);
+    TournamentTiming.resetClock(t, resetAt);
+
+    expect(t.startedAt, resetAt);
+    expect(t.tournamentDate, DateTime(2026, 5, 1));
+    expect(TournamentTiming.snapshot(t, resetAt).elapsed, Duration.zero);
+  });
+  test('reset clock uses today when no tournament date was selected', () {
+    final t = fixture();
+    final resetAt = DateTime(2026, 10, 3, 12);
 
     TournamentTiming.resetClock(t, resetAt);
 
     expect(t.startedAt, resetAt);
-    expect(t.finishedAt, isNull);
-    expect(t.pausedAt, isNull);
-    expect(t.totalPausedSeconds, 0);
-    expect(t.plannedMinutes, 75);
-    expect(match.hasResult, isTrue);
-    expect(match.startedAt, start);
-    expect(match.finishedAt, start.add(const Duration(minutes: 12)));
-    expect(TournamentTiming.snapshot(t, resetAt).elapsed, Duration.zero);
+    expect(t.tournamentDate, isNull);
   });
   test('shifting match dates preserves local times and match durations', () {
     final t = fixture();

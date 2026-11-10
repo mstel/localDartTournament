@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/planning_duration.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_format_planner.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_planning_parameters.dart';
 
 void main() {
@@ -34,6 +35,12 @@ void main() {
     'uses midpoint of minimum and maximum without rounding individual matches',
     () {
       expect(PlanningDuration.estimatedLegs(3), 2.5);
+      expect(
+        PlanningDuration.estimatedMatchLegs(
+          const TournamentGameFormat(bestOfLegs: 3, bestOfSets: 3),
+        ),
+        6.5,
+      );
       expect(PlanningDuration.estimatedLegs(5), 4);
       expect(PlanningDuration.estimatedLegs(7), 5.5);
       expect(PlanningDuration.estimatedLegs(1), 1);

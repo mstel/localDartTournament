@@ -102,4 +102,16 @@ void main() {
       });
     }
   }
+
+  testWidgets('direct tournament creation skips the entry menu', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: TournamentCreationPage(skipEntryChoices: true)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Wie möchtest du dein Turnier erstellen?'), findsNothing);
+    expect(find.text('Passende Turnierform finden'), findsOneWidget);
+  });
 }

@@ -67,7 +67,7 @@ class ConfigurationDurationEstimator {
     var hasScheduledBlocks = false;
     for (var index = 0; index < stages.length; index++) {
       final config = stages[index];
-      final count = config.type == 'groups'
+      final count = config.isGroupStage
           ? config.groupSizes.fold<int>(0, (sum, size) => sum + size)
           : config.knockoutParticipantCount ?? 0;
       if (count < 2) return null;
@@ -90,7 +90,7 @@ class ConfigurationDurationEstimator {
       }
       if (index + 1 < stages.length) {
         final next = stages[index + 1];
-        final nextCount = next.type == 'groups'
+        final nextCount = next.isGroupStage
             ? next.groupSizes.fold<int>(0, (a, b) => a + b)
             : next.knockoutParticipantCount ?? 0;
         allParticipantsReachStage =
@@ -109,9 +109,7 @@ class ConfigurationDurationEstimator {
                 .toSet()
                 .toList()
               ..sort();
-        final matchMinutes = planner.estimatedWorstCaseMatchMinutes(
-          config.gameFormat,
-        );
+        final matchMinutes = planner.estimatedMatchMinutes(config.gameFormat);
         for (final round in rounds) {
           final matchesPerRound = stage.groups
               .where(
@@ -231,9 +229,7 @@ class ConfigurationDurationEstimator {
             : 0;
         minutes += boardWait;
         waitMinutes += boardWait;
-        final matchMinutes = planner.estimatedWorstCaseMatchMinutes(
-          config.gameFormat,
-        );
+        final matchMinutes = planner.estimatedMatchMinutes(config.gameFormat);
         minutes += matchMinutes;
         for (final assignment in batch) {
           matchEndSeconds.add((minutes * 60).round());
@@ -301,7 +297,8 @@ class ConfigurationDurationEstimator {
     }
     return _minimumEliminationMatches(
       config.knockoutParticipantCount ?? 0,
-      (config.qualifiedParticipantCount ?? 1).clamp(1, 1000000),
+      (config.knockoutAdvancingCount ?? config.qualifiedParticipantCount ?? 1)
+          .clamp(1, 1000000),
       config.lossLimit,
     );
   }
@@ -366,7 +363,8 @@ class ConfigurationDurationEstimator {
     }
     return _eliminationMinimum(
       config.knockoutParticipantCount ?? 0,
-      (config.qualifiedParticipantCount ?? 1).clamp(1, 1000000),
+      (config.knockoutAdvancingCount ?? config.qualifiedParticipantCount ?? 1)
+          .clamp(1, 1000000),
       config.lossLimit,
       config.finalEndsTournament,
     );

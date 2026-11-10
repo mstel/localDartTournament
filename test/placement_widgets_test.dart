@@ -9,8 +9,6 @@ void main() {
     await tester.pumpWidget(const DartTournamentApp());
     await tester.tap(find.text('Turnier erstellen'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Normales- oder Ranglistenturnier erstellen'));
-    await tester.pumpAndSettle();
     final workflow = find.text('2 · Turnierablauf');
     for (
       var attempt = 0;
@@ -80,6 +78,71 @@ void main() {
           .selected,
       isFalse,
     );
+  });
+
+  testWidgets('double knockout exposes additional placement playoffs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const DartTournamentApp());
+    await tester.tap(find.text('Turnier erstellen'));
+    await tester.pumpAndSettle();
+    final workflow = find.text('2 · Turnierablauf');
+    for (
+      var attempt = 0;
+      attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    if (find.byKey(const ValueKey('stage-type-field')).evaluate().isEmpty &&
+        workflow.hitTestable().evaluate().isNotEmpty) {
+      await tester.tap(workflow);
+      await tester.pumpAndSettle();
+    }
+    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '16');
+    final generatePlayers = find.text('Spieler erzeugen');
+    for (
+      var attempt = 0;
+      attempt < 8 && generatePlayers.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    await tester.scrollUntilVisible(
+      generatePlayers,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(generatePlayers);
+    await tester.pumpAndSettle();
+
+    final type = find.byKey(const ValueKey('stage-type-field'));
+    for (
+      var attempt = 0;
+      attempt < 12 && type.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(type.hitTestable());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Doppel-KO').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Optionale Platzierungsspiele'), findsOneWidget);
+    final fifthPlace = find.widgetWithText(FilterChip, 'Platz 5');
+    await tester.ensureVisible(fifthPlace);
+    await tester.tap(fifthPlace);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(fifthPlace).selected, isTrue);
   });
 
   testWidgets('placement tree renders beyond seventh place after restoring', (

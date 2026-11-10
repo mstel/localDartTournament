@@ -7,10 +7,12 @@ class TournamentCreationPage extends StatefulWidget {
     super.key,
     this.tournamentStorage,
     this.existingTournament,
+    this.skipEntryChoices = false,
   });
 
   final TournamentStorage? tournamentStorage;
   final CreatedTournament? existingTournament;
+  final bool skipEntryChoices;
 
   @override
   State<TournamentCreationPage> createState() => _TournamentCreationPageState();
@@ -24,7 +26,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final _tournamentNameController = TextEditingController();
   final _playerNameController = TextEditingController();
   final _playerCountController = TextEditingController(text: '8');
-  final _stageNameController = TextEditingController();
   final _groupCountController = TextEditingController(text: '2');
   final _groupQualifierCountController = TextEditingController(text: '8');
   final _bestOfQualifierCountController = TextEditingController(text: '0');
@@ -59,25 +60,20 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
     _groupMaxGamesPerPlayer[index] = limit;
   });
-  final List<String> _groupPlayTypes = [];
   final List<int> _fixedQualifiersByGroup = [];
   int? _manualExtraRank;
   int? _manualExtraCount;
   bool _autoAdjustQualification = true;
   int? _editingStageIndex;
-  String _groupPlayType = 'round_robin';
   GroupPlayerAllocationMode _groupAllocationMode =
       GroupPlayerAllocationMode.strengthLevels;
   List<int?>? _manualGroupSlotOrder;
   List<int?>? _manualKnockoutSlotOrder;
   final Set<int> _placementPlaces = {};
   bool _finalEndsTournament = true;
+  int? _knockoutAdvancingCount;
   int _kratzerLives = 3;
-  int get _selectedLossLimit =>
-      _selectedStageType == 'kratzer' ||
-          (!_finalEndsTournament &&
-              _isKnockoutStageType(_selectedStageType) &&
-              _selectedStageType != 'single_knockout')
+  int get _selectedLossLimit => _selectedStageType == 'kratzer'
       ? _kratzerLives
       : _lossLimitForStageType(_selectedStageType);
   bool get _canEditKratzerStartingScratches {
@@ -92,6 +88,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   String _selectedStageType = 'groups';
+  bool get _isGroupStageForm =>
+      _selectedStageType == 'groups' || _selectedStageType == 'swiss';
+  String get _selectedGroupPlayType =>
+      _selectedStageType == 'swiss' ? 'swiss' : 'round_robin';
   String _knockoutSeedingMode = 'cross';
   bool _groupDrawOnStart = false;
   String _kratzerBoardDistribution = 'balanced';
@@ -100,7 +100,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   bool _kratzerBonusLifeFor180 = false;
   bool _kratzerBonusLifeForHighFinish = false;
   bool _kratzerHandicapsEnabled = false;
-  bool _stageNameWasEdited = false;
   bool _isOpeningPlayerPicker = false;
   bool _isCreatingTournament = false;
   DateTime _tournamentDate = DateUtils.dateOnly(DateTime.now());
@@ -109,7 +108,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   @override
   void initState() {
     super.initState();
-    _stageNameController.text = _defaultStageName();
+    _showEntryChoices = !widget.skipEntryChoices;
     final existing = widget.existingTournament;
     if (existing != null) {
       _showEntryChoices = false;
@@ -275,7 +274,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _tournamentNameController.dispose();
     _playerNameController.dispose();
     _playerCountController.dispose();
-    _stageNameController.dispose();
     _groupCountController.dispose();
     _groupQualifierCountController.dispose();
     _bestOfQualifierCountController.dispose();
@@ -283,6 +281,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   List<int> _calculateGroupSizes() {
+    if (_selectedStageType == 'swiss') {
+      final participantCount = _inheritedParticipantCount() ?? _players.length;
+      return participantCount > 0 ? [participantCount] : const [];
+    }
+
     final groupCount = int.tryParse(_groupCountController.text);
     if (groupCount == null || groupCount < 1 || _players.isEmpty) {
       return const [];
@@ -414,36 +417,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   List<String> _playTypesForGroupSizes(List<int> groupSizes) {
-    return [
-      for (var index = 0; index < groupSizes.length; index++)
-        index < _groupPlayTypes.length
-            ? _groupPlayTypes[index]
-            : _groupPlayType,
-    ];
-  }
-
-  void _setDefaultGroupPlayType(String playType) {
-    final groupSizes = _calculateGroupSizes();
-    setState(() {
-      _groupPlayType = playType;
-      _groupPlayTypes
-        ..clear()
-        ..addAll(List.filled(groupSizes.length, playType));
-    });
-  }
-
-  void _setGroupPlayType(int groupIndex, String playType) {
-    final groupSizes = _calculateGroupSizes();
-    if (groupIndex < 0 || groupIndex >= groupSizes.length) {
-      return;
-    }
-
-    setState(() {
-      while (_groupPlayTypes.length < groupSizes.length) {
-        _groupPlayTypes.add(_groupPlayType);
-      }
-      _groupPlayTypes[groupIndex] = playType;
-    });
+    return List.filled(groupSizes.length, _selectedGroupPlayType);
   }
 
   void _changeGroupRoundRobinRepeats(int groupIndex, int delta) {
@@ -472,16 +446,35 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       );
     }
     if (_isKnockoutStageType(_selectedStageType)) {
-      return _eliminationMatchEstimate(
-            _knockoutParticipantCount() ?? 0,
-            _selectedLossLimit,
-          ) +
-          (_selectedLossLimit == 1
-              ? _optionalPlacementMatchCount(
-                  _knockoutParticipantCount() ?? 0,
-                  _placementPlaces,
-                )
-              : 0);
+      final participantCount = _knockoutParticipantCount() ?? 0;
+      final placementMatchCount = switch (_selectedLossLimit) {
+        1 => _optionalPlacementMatchCount(participantCount, _placementPlaces),
+        2 => PlacementEngine.buildDoubleElimination(
+          _buildDoubleEliminationRounds(
+            List.generate(
+              participantCount,
+              (index) => TournamentPlayer.generated(index + 1),
+            ),
+            slotOrder: _knockoutSlotOrder(),
+          ),
+          _placementPlaces,
+        ).length,
+        >= 3 => PlacementEngine.buildTripleElimination(
+          _buildTripleEliminationRounds(
+            List.generate(
+              participantCount,
+              (index) => TournamentPlayer.generated(index + 1),
+            ),
+            lossLimit: _selectedLossLimit,
+            slotOrder: _knockoutSlotOrder(),
+          ),
+          _placementPlaces,
+          lossLimit: _selectedLossLimit,
+        ).length,
+        _ => 0,
+      };
+      return _eliminationMatchEstimate(participantCount, _selectedLossLimit) +
+          placementMatchCount;
     }
 
     final groupSizes = _calculateGroupSizes();
@@ -756,7 +749,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     final previousStage = _previousStageForCurrentForm();
     final groupPlan = _storedGroupQualificationPlan(previousStage);
     if (previousStage == null ||
-        previousStage.type != 'groups' ||
+        !previousStage.isGroupStage ||
         previousStage.groupSizes.isEmpty) {
       return [
         for (var seed = 1; seed <= participantCount; seed++)
@@ -921,7 +914,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       return List<int?>.from(manualOrder);
     }
 
-    return _automaticKnockoutSlotOrder(participantCount, bracketSize);
+    final automaticOrder = _automaticKnockoutSlotOrder(
+      participantCount,
+      bracketSize,
+    );
+    if (seedingMode == 'random') {
+      _manualKnockoutSlotOrder = List<int?>.from(automaticOrder);
+    }
+    return automaticOrder;
   }
 
   bool _slotOrderAvoidsByePair(List<int?> slotOrder) {
@@ -944,7 +944,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     final previousStage = _previousStageForCurrentForm();
     final groupPlan = _storedGroupQualificationPlan(previousStage);
     if (previousStage == null ||
-        previousStage.type != 'groups' ||
+        !previousStage.isGroupStage ||
         previousStage.groupSizes.isEmpty) {
       return [
         for (var index = 0; index < participantCount; index++)
@@ -1043,7 +1043,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   bool _hasGroupSeedSources() {
     final previousStage = _previousStageForCurrentForm();
     return previousStage != null &&
-        previousStage.type == 'groups' &&
+        previousStage.isGroupStage &&
         previousStage.groupSizes.isNotEmpty;
   }
 
@@ -1089,7 +1089,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     final endIndex = _editingStageIndex ?? _stages.length;
     for (var index = endIndex - 1; index >= 0; index--) {
       final stage = _stages[index];
-      if (stage.type == 'groups' && stage.groupSizes.isNotEmpty) {
+      if (stage.isGroupStage && stage.groupSizes.isNotEmpty) {
         return stage;
       }
     }
@@ -1108,6 +1108,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
   String _stageTypeLabel(String type) {
     return switch (type) {
+      'swiss' => 'Schweizer System',
       'single_knockout' => 'K.-o.-Runde',
       'double_knockout' => 'Doppel-K.-o.',
       'triple_knockout' => 'Triple-K.-o.',
@@ -1119,19 +1120,17 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   String _defaultStageName([String? stageType]) {
     final type = stageType ?? _selectedStageType;
     final baseName = _stageTypeLabel(type);
-    final sameTypeCount = _stages.where((stage) => stage.type == type).length;
-    return sameTypeCount == 0 ? baseName : '$baseName ${sameTypeCount + 1}';
-  }
-
-  void _setDefaultStageNameIfNeeded([String? stageType]) {
-    if (_stageNameWasEdited && _stageNameController.text.trim().isNotEmpty) {
-      return;
+    var sameTypeCount = 0;
+    for (var index = 0; index < _stages.length; index++) {
+      final stage = _stages[index];
+      final stageType = stage.isGroupStage && stage.groupPlayType == 'swiss'
+          ? 'swiss'
+          : stage.type;
+      if (index != _editingStageIndex && stageType == type) {
+        sameTypeCount++;
+      }
     }
-
-    _stageNameController.text = _defaultStageName(stageType);
-    _stageNameController.selection = TextSelection.collapsed(
-      offset: _stageNameController.text.length,
-    );
+    return '$baseName ${sameTypeCount + 1}';
   }
 
   QualificationPlan? _qualificationPlanForGroupSizes(
@@ -1532,6 +1531,17 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       );
       return;
     }
+    if (_selectedStageType == 'swiss' &&
+        (_calculateGroupSizes().firstOrNull ?? 0) < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Für ein Schweizer System werden zwei Spieler benötigt.',
+          ),
+        ),
+      );
+      return;
+    }
     final groupSizes = _calculateGroupSizes();
     final participantCount = groupSizes.fold<int>(0, (sum, size) => sum + size);
     final manualOrder = _manualGroupSlotOrder;
@@ -1557,12 +1567,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       return;
     }
     if (_stageGameFormat.bestOfLegs.isEven &&
-        (_stageGameFormat.bestOfSets > 1 ||
-            _selectedStageType != 'groups' ||
-            !['round_robin', 'swiss'].contains(_groupPlayType) ||
-            _groupPlayTypes.any(
-              (type) => !['round_robin', 'swiss'].contains(type),
-            ))) {
+        (_stageGameFormat.bestOfSets > 1 || !_isGroupStageForm)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -1572,11 +1577,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       );
       return;
     }
-    final stageName = _stageNameController.text.trim();
-    if (stageName.isEmpty) {
-      return;
-    }
-
     setState(() {
       final stage = _currentStageConfiguration();
 
@@ -1593,17 +1593,19 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
   TournamentStage _currentStageConfiguration() {
     final latestGroupStage = _latestGroupStage();
-    final groupQualificationPlan = _selectedStageType == 'groups'
+    final groupQualificationPlan = _isGroupStageForm
         ? _groupQualificationPlan()
         : null;
     final inheritedQualificationPlan = _isKnockoutStageType(_selectedStageType)
         ? _storedGroupQualificationPlan(latestGroupStage)
         : null;
     return TournamentStage(
-      name: _stageNameController.text.trim(),
+      name: _defaultStageName(),
       type: _selectedStageType,
       placementPlaces:
           (_selectedStageType == 'single_knockout' ||
+              _selectedStageType == 'double_knockout' ||
+              _selectedStageType == 'triple_knockout' ||
               _selectedStageType == 'groups')
           ? (_placementPlaces.toList()..sort())
           : const [],
@@ -1630,25 +1632,19 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       kratzerHandicapsEnabled: _selectedStageType == 'kratzer'
           ? _kratzerHandicapsEnabled
           : false,
-      groupCount: _selectedStageType == 'groups'
-          ? _calculateGroupSizes().length
-          : null,
-      groupSizes: _selectedStageType == 'groups'
-          ? _calculateGroupSizes()
-          : const [],
-      groupPlayType: _selectedStageType == 'groups'
-          ? _groupPlayType
-          : 'round_robin',
-      groupPlayTypes: _selectedStageType == 'groups'
+      groupCount: _isGroupStageForm ? _calculateGroupSizes().length : null,
+      groupSizes: _isGroupStageForm ? _calculateGroupSizes() : const [],
+      groupPlayType: _isGroupStageForm ? _selectedGroupPlayType : 'round_robin',
+      groupPlayTypes: _isGroupStageForm
           ? _playTypesForGroupSizes(_calculateGroupSizes())
           : const [],
-      groupRoundRobinRepeats: _selectedStageType == 'groups'
+      groupRoundRobinRepeats: _isGroupStageForm
           ? _roundRobinRepeatsForGroupSizes(_calculateGroupSizes())
           : const [],
-      groupTieBreakers: _selectedStageType == 'groups'
+      groupTieBreakers: _isGroupStageForm
           ? List.unmodifiable(_groupTieBreakers)
           : defaultGroupTieBreakers,
-      groupMaxGamesPerPlayer: _selectedStageType == 'groups'
+      groupMaxGamesPerPlayer: _isGroupStageForm
           ? _gameLimitsForGroupSizes(_calculateGroupSizes())
           : const [],
       groupDrawOnStart: _selectedStageType == 'groups'
@@ -1661,6 +1657,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           : const [],
       knockoutParticipantCount: _isKnockoutStageType(_selectedStageType)
           ? _knockoutParticipantCount()
+          : null,
+      knockoutAdvancingCount:
+          _isKnockoutStageType(_selectedStageType) &&
+              _selectedStageType != 'kratzer'
+          ? _knockoutAdvancingCount
           : null,
       knockoutBracketSize: _isKnockoutStageType(_selectedStageType)
           ? _knockoutBracketSize()
@@ -1675,25 +1676,25 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ? _effectiveKnockoutSeedingMode()
           : 'cross',
       knockoutDrawOnStart: false,
-      qualifiersByGroup: _selectedStageType == 'groups'
+      qualifiersByGroup: _isGroupStageForm
           ? groupQualificationPlan?.extraGroups ?? const []
           : const [],
-      fixedQualifiersByGroup: _selectedStageType == 'groups'
+      fixedQualifiersByGroup: _isGroupStageForm
           ? groupQualificationPlan?.fixedByGroup ?? const []
           : const [],
-      extraQualifierRank: _selectedStageType == 'groups'
+      extraQualifierRank: _isGroupStageForm
           ? groupQualificationPlan?.extraRank
           : null,
-      extraQualifierCount: _selectedStageType == 'groups'
+      extraQualifierCount: _isGroupStageForm
           ? groupQualificationPlan?.extraCount
           : null,
-      qualificationAutoAdjust: _selectedStageType == 'groups'
+      qualificationAutoAdjust: _isGroupStageForm
           ? _autoAdjustQualification
           : true,
-      qualifiedParticipantCount: _selectedStageType == 'groups'
+      qualifiedParticipantCount: _isGroupStageForm
           ? groupQualificationPlan?.totalQualifiers
           : null,
-      qualificationSummary: _selectedStageType == 'groups'
+      qualificationSummary: _isGroupStageForm
           ? groupQualificationPlan?.summary
           : inheritedQualificationPlan?.summary,
       gameFormat: _stageGameFormat,
@@ -1702,10 +1703,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
   void _resetStageForm() {
     _editingStageIndex = null;
-    _stageNameWasEdited = false;
     _selectedStageType = 'groups';
     _placementPlaces.clear();
     _finalEndsTournament = true;
+    _knockoutAdvancingCount = null;
     _kratzerLives = 3;
     _kratzerBoardDistribution = 'balanced';
     _kratzerPreferSameScratchCount = false;
@@ -1713,8 +1714,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _kratzerBonusLifeFor180 = false;
     _kratzerBonusLifeForHighFinish = false;
     _kratzerHandicapsEnabled = false;
-    _groupPlayType = 'round_robin';
-    _groupPlayTypes.clear();
     _groupRoundRobinRepeats.clear();
     _groupMaxGamesPerPlayer.clear();
     _fixedQualifiersByGroup.clear();
@@ -1735,18 +1734,20 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
     _kratzerBoardDistribution = 'balanced';
     _stageGameFormat = const TournamentGameFormat();
-    _setDefaultStageNameIfNeeded();
   }
 
   void _editStage(int index) {
     final stage = _stages[index];
     setState(() {
       _editingStageIndex = index;
-      _selectedStageType = stage.type;
+      _selectedStageType = stage.isGroupStage && stage.groupPlayType == 'swiss'
+          ? 'swiss'
+          : stage.type;
       _placementPlaces
         ..clear()
         ..addAll(stage.placementPlaces);
       _finalEndsTournament = stage.finalEndsTournament;
+      _knockoutAdvancingCount = stage.knockoutAdvancingCount;
       _kratzerLives = stage.lossLimit;
       _kratzerBoardDistribution =
           stage.kratzerPlayersPerBoard?.toString() ?? 'balanced';
@@ -1755,24 +1756,15 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       _kratzerBonusLifeFor180 = stage.kratzerBonusLifeFor180;
       _kratzerBonusLifeForHighFinish = stage.kratzerBonusLifeForHighFinish;
       _kratzerHandicapsEnabled = stage.kratzerHandicapsEnabled;
-      _stageNameController.text = stage.name;
-      _stageNameController.selection = TextSelection.collapsed(
-        offset: _stageNameController.text.length,
-      );
-      _stageNameWasEdited = true;
       _stageGameFormat = stage.gameFormat;
 
-      if (stage.type == 'groups') {
+      if (stage.isGroupStage) {
         _groupCountController.text = '${stage.groupSizes.length}';
         _groupQualifierCountController.text =
             '${stage.qualifiedParticipantCount ?? stage.groupSizes.fold<int>(0, (sum, size) => sum + size)}';
         _selectedExtraGroups
           ..clear()
           ..addAll(stage.qualifiersByGroup);
-        _groupPlayType = stage.groupPlayType;
-        _groupPlayTypes
-          ..clear()
-          ..addAll(stage.groupPlayTypes);
         _groupRoundRobinRepeats
           ..clear()
           ..addAll(stage.groupRoundRobinRepeats);
@@ -1803,7 +1795,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         }
       } else {
         _selectedExtraGroups.clear();
-        _groupPlayTypes.clear();
         _groupRoundRobinRepeats.clear();
         _groupMaxGamesPerPlayer.clear();
         _fixedQualifiersByGroup.clear();
@@ -2000,8 +1991,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   Future<void> _createTournament() async {
     if (_isCreatingTournament) return;
     if (_stages.any(
-      (stage) =>
-          stage.type == 'groups' && !hasValidGroupSizes(stage.groupSizes),
+      (stage) => stage.isGroupStage && !hasValidGroupSizes(stage.groupSizes),
     )) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2049,6 +2039,21 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         );
         return;
       }
+    }
+    if (_countsForRanking &&
+        _localRankingIds.isNotEmpty &&
+        _players.every((player) => player.profileId == null)) {
+      setState(() {
+        _countsForRanking = false;
+        _localRankingIds.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ohne lokale Spielerprofile wird das Turnier als normales Turnier angelegt.',
+          ),
+        ),
+      );
     }
 
     setState(() => _isCreatingTournament = true);
@@ -2240,7 +2245,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         incomingPlayers.length,
         stages: sourceStages,
       );
-      if (stage.type == 'groups') {
+      if (stage.isGroupStage) {
         final groupParticipantCount = stage.groupSizes.fold<int>(
           0,
           (sum, size) => sum + size,
@@ -2365,6 +2370,21 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                               requiredRank < participants.length)
                             requiredRank,
                         })
+                : lossLimit == 2
+                ? PlacementEngine.buildDoubleElimination(
+                    rounds,
+                    stage.placementPlaces.where(
+                      (place) => place < participants.length,
+                    ),
+                  )
+                : lossLimit >= 3
+                ? PlacementEngine.buildTripleElimination(
+                    rounds,
+                    stage.placementPlaces.where(
+                      (place) => place < participants.length,
+                    ),
+                    lossLimit: lossLimit,
+                  )
                 : const [],
             eliminationLossLimit: lossLimit,
             finalEndsTournament: stage.finalEndsTournament,
@@ -2391,7 +2411,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
 
     final nextStage = sourceStages[stageIndex + 1];
-    final requiredPlayers = nextStage.type == 'groups'
+    final requiredPlayers = nextStage.isGroupStage
         ? nextStage.groupSizes.fold<int>(0, (sum, size) => sum + size)
         : nextStage.knockoutParticipantCount ?? availablePlayers;
     return requiredPlayers.clamp(1, availablePlayers).toInt();
@@ -2947,22 +2967,12 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       'Ein Kratzer-Turnier besteht nur aus dieser einen Etappe. Entferne oder bearbeite sie, um die Konfiguration zu ändern.',
                     ),
                   ),
-                _responsiveFormRow(
-                  alignTrailingEndOnNarrow: true,
-                  leading: TextField(
-                    key: const ValueKey('stage-name-field'),
-                    controller: _stageNameController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Etappenname',
-                      prefixIcon: Icon(Icons.flag_outlined),
-                    ),
-                    onChanged: (_) {
-                      _stageNameWasEdited = true;
-                    },
-                    onSubmitted: (_) => _saveStage(),
-                  ),
-                  trailing: IconButton.filled(
+                Text('Name: ${_defaultStageName()}'),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: IconButton.filled(
+                    key: const ValueKey('save-stage-button'),
                     onPressed:
                         _stages.any((stage) => stage.type == 'kratzer') &&
                             _editingStageIndex == null
@@ -2992,6 +3002,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     const DropdownMenuItem(
                       value: 'groups',
                       child: Text('Gruppenphase'),
+                    ),
+                    const DropdownMenuItem(
+                      value: 'swiss',
+                      child: Text('Schweizer System'),
                     ),
                     if (_stages.isEmpty ||
                         (_editingStageIndex != null &&
@@ -3032,51 +3046,42 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                             _kratzerLives = _lossLimitForStageType(
                               value,
                             ).clamp(2, 10);
-                            _setDefaultStageNameIfNeeded(value);
                           });
                         },
                 ),
                 const SizedBox(height: 12),
-                if ((_isKnockoutStageType(_selectedStageType) &&
-                        _selectedStageType != 'single_knockout') ||
-                    (_selectedStageType == 'groups' &&
-                        (_lossLimitForGroupPlayType(_groupPlayType) > 1 ||
-                            _groupPlayTypes.any(
-                              (t) => _lossLimitForGroupPlayType(t) > 1,
-                            )))) ...[
-                  if (_selectedStageType != 'kratzer')
-                    SwitchListTile(
-                      key: const ValueKey('final-ends-tournament'),
-                      title: const Text('Ein großes Finale entscheidet'),
-                      subtitle: const Text(
-                        'Der Verlierer des großen Finales scheidet unabhängig von übrigen Leben aus.',
-                      ),
-                      value: _finalEndsTournament,
-                      onChanged: (value) =>
-                          setState(() => _finalEndsTournament = value),
+                if (_selectedStageType == 'double_knockout' ||
+                    _selectedStageType == 'triple_knockout')
+                  SwitchListTile(
+                    key: const ValueKey('final-ends-tournament'),
+                    title: const Text('Ein großes Finale entscheidet'),
+                    subtitle: const Text(
+                      'Der Verlierer des großen Finales scheidet unabhängig von übrigen Leben aus.',
                     ),
-                  if (_selectedStageType == 'kratzer' ||
-                      (!_finalEndsTournament && _selectedStageType != 'groups'))
-                    DropdownButtonFormField<int>(
-                      isExpanded: true,
-                      isDense: false,
-                      itemHeight: null,
-                      key: ValueKey('kratzer-lives-$_kratzerLives'),
-                      initialValue: _kratzerLives,
-                      decoration: const InputDecoration(
-                        labelText: 'Kratzer-Modus: Leben',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (var lives = 2; lives <= 10; lives++)
-                          DropdownMenuItem(
-                            value: lives,
-                            child: Text('$lives Leben'),
-                          ),
-                      ],
-                      onChanged: (value) => _setKratzerLives(value ?? 3),
+                    value: _finalEndsTournament,
+                    onChanged: (value) =>
+                        setState(() => _finalEndsTournament = value),
+                  ),
+                if (_selectedStageType == 'kratzer')
+                  DropdownButtonFormField<int>(
+                    isExpanded: true,
+                    isDense: false,
+                    itemHeight: null,
+                    key: ValueKey('kratzer-lives-$_kratzerLives'),
+                    initialValue: _kratzerLives,
+                    decoration: const InputDecoration(
+                      labelText: 'Kratzer-Modus: Leben',
+                      border: OutlineInputBorder(),
                     ),
-                ],
+                    items: [
+                      for (var lives = 2; lives <= 10; lives++)
+                        DropdownMenuItem(
+                          value: lives,
+                          child: Text('$lives Leben'),
+                        ),
+                    ],
+                    onChanged: (value) => _setKratzerLives(value ?? 3),
+                  ),
                 if (_selectedStageType == 'kratzer') ...[
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -3248,9 +3253,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   ),
                 ],
                 if (_selectedStageType == 'single_knockout' ||
-                    (_selectedStageType == 'groups' &&
-                        (_groupPlayType == 'mini_knockout' ||
-                            _groupPlayTypes.contains('mini_knockout'))))
+                    _selectedStageType == 'double_knockout' ||
+                    _selectedStageType == 'triple_knockout')
                   _placementSelection(),
                 ExpertSetupSection(
                   title: 'Spielregeln anpassen',
@@ -3263,166 +3267,127 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     ),
                   ],
                 ),
-                if (_selectedStageType == 'groups') ...[
+                if (_isGroupStageForm) ...[
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    isDense: false,
-                    itemHeight: null,
-                    key: const ValueKey('group-play-type-field'),
-                    initialValue: _groupPlayType,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Spieltyp',
-                      prefixIcon: Icon(Icons.sports_score_outlined),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'swiss',
-                        child: Text('Schweizer System'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'round_robin',
-                        child: Text('Jeder gegen jeden'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'mini_knockout',
-                        child: Text('Mini-KO in der Gruppe'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'double_knockout',
-                        child: Text('Doppel-KO in der Gruppe'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'triple_knockout',
-                        child: Text('Triple-KO in der Gruppe'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-
-                      _setDefaultGroupPlayType(value);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _responsiveFormRow(
-                    leading: TextField(
-                      key: const ValueKey('group-count-field'),
-                      controller: _groupCountController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Gruppen',
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    trailing: Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: GroupSizePreview(groupSizes: groupSizes),
-                    ),
-                    breakpoint: 520,
-                  ),
-                  const SizedBox(height: 12),
-                  ExpertSetupSection(
-                    title: 'Gruppenoptionen',
-                    summary: 'Verteilung, Spieltypen und Wiederholungen',
-                    initiallyExpanded: true,
-                    children: [
-                      DropdownButtonFormField<GroupPlayerAllocationMode>(
-                        key: const ValueKey('group-player-allocation'),
-                        isExpanded: true,
-                        initialValue: _groupAllocationMode,
+                  if (_selectedStageType == 'groups')
+                    _responsiveFormRow(
+                      leading: TextField(
+                        key: const ValueKey('group-count-field'),
+                        controller: _groupCountController,
+                        keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
-                          labelText: 'Gruppeneinteilung',
-                          prefixIcon: Icon(Icons.groups_2_outlined),
+                          labelText: 'Gruppen',
                         ),
-                        items: [
-                          DropdownMenuItem(
-                            value: GroupPlayerAllocationMode.strengthLevels,
-                            child: Text('Wertungsstufen bündeln'),
-                          ),
-                          DropdownMenuItem(
-                            value: GroupPlayerAllocationMode.balanced,
-                            child: Text('Stärken gleichmäßig verteilen'),
-                          ),
-                          DropdownMenuItem(
-                            value: GroupPlayerAllocationMode.random,
-                            child: Text('Zufällig verteilen'),
-                          ),
-                          DropdownMenuItem(
-                            value: GroupPlayerAllocationMode.manual,
-                            enabled: canConfigureManualGroups,
-                            child: Text('Benutzerdefinierte Gruppen'),
-                          ),
-                        ],
-                        onChanged: (mode) {
-                          if (mode != null) {
-                            unawaited(_selectGroupAllocationMode(mode));
-                          }
-                        },
+                        onChanged: (_) => setState(() {}),
                       ),
-                      if (_groupAllocationMode ==
-                          GroupPlayerAllocationMode.manual) ...[
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: AlignmentDirectional.centerStart,
-                          child: OutlinedButton.icon(
-                            key: const ValueKey('edit-custom-groups'),
-                            onPressed: canConfigureManualGroups
-                                ? () => unawaited(
-                                    _selectGroupAllocationMode(
-                                      GroupPlayerAllocationMode.manual,
-                                    ),
-                                  )
-                                : null,
-                            icon: const Icon(Icons.drag_indicator),
-                            label: Text(
-                              _manualGroupSlotOrder == null
-                                  ? 'Gruppen einteilen'
-                                  : 'Gruppeneinteilung bearbeiten',
+                      trailing: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: GroupSizePreview(groupSizes: groupSizes),
+                      ),
+                      breakpoint: 520,
+                    )
+                  else
+                    Text(
+                      'Ein Schweizer System mit ${groupSizes.isEmpty ? 0 : groupSizes.first} Teilnehmenden.',
+                    ),
+                  const SizedBox(height: 12),
+                  ExpertSetupSection(
+                    title: _selectedStageType == 'swiss'
+                        ? 'Swiss-Einstellungen'
+                        : 'Gruppenoptionen',
+                    summary: _selectedStageType == 'swiss'
+                        ? 'Rundenanzahl'
+                        : 'Verteilung und Wiederholungen',
+                    initiallyExpanded: true,
+                    children: [
+                      if (_selectedStageType == 'groups') ...[
+                        DropdownButtonFormField<GroupPlayerAllocationMode>(
+                          key: const ValueKey('group-player-allocation'),
+                          isExpanded: true,
+                          initialValue: _groupAllocationMode,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'Gruppeneinteilung',
+                            prefixIcon: Icon(Icons.groups_2_outlined),
+                          ),
+                          items: [
+                            DropdownMenuItem(
+                              value: GroupPlayerAllocationMode.strengthLevels,
+                              child: Text('Wertungsstufen bündeln'),
+                            ),
+                            DropdownMenuItem(
+                              value: GroupPlayerAllocationMode.balanced,
+                              child: Text('Stärken gleichmäßig verteilen'),
+                            ),
+                            DropdownMenuItem(
+                              value: GroupPlayerAllocationMode.random,
+                              child: Text('Zufällig verteilen'),
+                            ),
+                            DropdownMenuItem(
+                              value: GroupPlayerAllocationMode.manual,
+                              enabled: canConfigureManualGroups,
+                              child: Text('Benutzerdefinierte Gruppen'),
+                            ),
+                          ],
+                          onChanged: (mode) {
+                            if (mode != null) {
+                              unawaited(_selectGroupAllocationMode(mode));
+                            }
+                          },
+                        ),
+                        if (_groupAllocationMode ==
+                            GroupPlayerAllocationMode.manual) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: OutlinedButton.icon(
+                              key: const ValueKey('edit-custom-groups'),
+                              onPressed: canConfigureManualGroups
+                                  ? () => unawaited(
+                                      _selectGroupAllocationMode(
+                                        GroupPlayerAllocationMode.manual,
+                                      ),
+                                    )
+                                  : null,
+                              icon: const Icon(Icons.drag_indicator),
+                              label: Text(
+                                _manualGroupSlotOrder == null
+                                    ? 'Gruppen einteilen'
+                                    : 'Gruppeneinteilung bearbeiten',
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                      if (!_canConfigureManualGroups)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Manuelle Gruppen sind für die erste Gruppenetappe verfügbar. '
-                            'Spätere Etappen können nach der Qualifikation angepasst werden.',
+                        ],
+                        if (!_canConfigureManualGroups)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Manuelle Gruppen sind für die erste Gruppenetappe verfügbar. '
+                              'Spätere Etappen können nach der Qualifikation angepasst werden.',
+                            ),
                           ),
-                        ),
-                      const SizedBox(height: 8),
-                      Text(switch (_groupAllocationMode) {
-                        GroupPlayerAllocationMode.strengthLevels =>
-                          'Nach Wertung sortieren und nacheinander Gruppenblöcke bilden. '
-                              'Die stärksten Wertungen starten in der ersten Gruppe.',
-                        GroupPlayerAllocationMode.balanced =>
-                          'Nach Wertung sortieren und abwechselnd auf die Gruppen verteilen.',
-                        GroupPlayerAllocationMode.random =>
-                          'Spieler zufällig auf die Gruppen verteilen.',
-                        GroupPlayerAllocationMode.manual =>
-                          'Spieler per Drag-and-drop den gewünschten Gruppen zuordnen.',
-                      }),
-                      const SizedBox(height: 12),
-                      GroupPlayTypeSetup(
+                        const SizedBox(height: 8),
+                        Text(switch (_groupAllocationMode) {
+                          GroupPlayerAllocationMode.strengthLevels =>
+                            'Nach Wertung sortieren und nacheinander Gruppenblöcke bilden. '
+                                'Die stärksten Wertungen starten in der ersten Gruppe.',
+                          GroupPlayerAllocationMode.balanced =>
+                            'Nach Wertung sortieren und abwechselnd auf die Gruppen verteilen.',
+                          GroupPlayerAllocationMode.random =>
+                            'Spieler zufällig auf die Gruppen verteilen.',
+                          GroupPlayerAllocationMode.manual =>
+                            'Spieler per Drag-and-drop den gewünschten Gruppen zuordnen.',
+                        }),
+                        const SizedBox(height: 12),
+                      ],
+                      RoundRobinRepeatsSetup(
                         groupSizes: groupSizes,
                         playTypes: _playTypesForGroupSizes(groupSizes),
-                        onChanged: _setGroupPlayType,
+                        repeats: _roundRobinRepeatsForGroupSizes(groupSizes),
+                        onChangeRepeats: _changeGroupRoundRobinRepeats,
                       ),
-                      if (_playTypesForGroupSizes(groupSizes).any(
-                        (type) => type == 'round_robin' || type == 'swiss',
-                      )) ...[
-                        const SizedBox(height: 12),
-                        RoundRobinRepeatsSetup(
-                          groupSizes: groupSizes,
-                          playTypes: _playTypesForGroupSizes(groupSizes),
-                          repeats: _roundRobinRepeatsForGroupSizes(groupSizes),
-                          onChangeRepeats: _changeGroupRoundRobinRepeats,
-                        ),
+                      if (_selectedStageType == 'groups')
                         GroupGameLimitSetup(
                           groupSizes: groupSizes,
                           playTypes: _playTypesForGroupSizes(groupSizes),
@@ -3430,7 +3395,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           limits: _gameLimitsForGroupSizes(groupSizes),
                           onChanged: _setGroupGameLimit,
                         ),
-                      ],
                       const SizedBox(height: 12),
                     ],
                   ),
@@ -3487,6 +3451,35 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 if (_isKnockoutStageType(_selectedStageType) &&
                     _selectedStageType != 'kratzer') ...[
                   const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: _knockoutAdvancingCount ?? 0,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Weiterkommende',
+                      helperText:
+                          'Optional: Etappe beenden, sobald nur noch die '
+                          'gewählte Anzahl im K.-o.-System aktiv ist.',
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: 0,
+                        child: Text('Turnierform vollständig ausspielen'),
+                      ),
+                      for (
+                        var count = 2;
+                        count < (knockoutParticipantCount ?? 0);
+                        count++
+                      )
+                        DropdownMenuItem(
+                          value: count,
+                          child: Text('$count Spieler weiterkommen lassen'),
+                        ),
+                    ],
+                    onChanged: (value) => setState(
+                      () => _knockoutAdvancingCount = value == 0 ? null : value,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   _InheritedKnockoutSetup(
                     placementPlaces: _placementPlaces.toList(),
                     previousStage: _previousStageForCurrentForm(),
@@ -3514,6 +3507,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 ],
                 const SizedBox(height: 16),
                 FilledButton.icon(
+                  key: const ValueKey('save-stage-form-button'),
                   onPressed:
                       _stages.any((stage) => stage.type == 'kratzer') &&
                           _editingStageIndex == null

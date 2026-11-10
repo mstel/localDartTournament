@@ -13,6 +13,7 @@ class TournamentFormatPlannerDialog extends StatefulWidget {
     this.initialMaximumStages,
     this.initialRequireGroupPhase = false,
     this.lockBoardCount = false,
+    this.initialPreferredFinalStage = 'single_knockout',
     this.initialGameFormat,
   });
 
@@ -26,6 +27,7 @@ class TournamentFormatPlannerDialog extends StatefulWidget {
   final int? initialMaximumStages;
   final bool initialRequireGroupPhase;
   final bool lockBoardCount;
+  final String? initialPreferredFinalStage;
   final TournamentGameFormat? initialGameFormat;
 
   @override
@@ -108,18 +110,80 @@ class _TournamentFormatPlannerDialogState
     'groups:swiss':
         'Schweizer System:\n\n'
         'In jeder Spielrunde werden Teilnehmer mit identischem oder ähnlichem Punktestand gegeneinander gepaart. Niemand scheidet vorzeitig aus, und die Spiele bleiben durch das dynamische Nachrücken bis zum Ende ausgeglichen.',
-    'groups:mini_knockout':
-        'Gruppenphase: Mini-K.-o.:\n\n'
-        'Innerhalb der Gruppe wird ein kleines K.-o.-Raster (z. B. 4 Spieler: Halbfinale und Finale) gespielt. Die Sieger qualifizieren sich direkt für die nächste Turnieretappe.',
-    'groups:double_knockout':
-        'Gruppenphase: Mini-Doppel-K.-o.:\n\n'
-        'Wie das Mini-K.-o., jedoch mit Verlierer-Runde innerhalb der Gruppe (Double Elimination). Erst zwei Gruppen-Niederlagen führen zum Ausscheiden.',
-    'groups:triple_knockout':
-        'Gruppenphase: Mini-Triple-K.-o.:\n\n'
-        'Gruppenentscheidung mit drei Leben: Erst nach der dritten Niederlage in der Gruppe steht das Ausscheiden fest.',
   };
 
+  void _activateDurationRange() {
+    setState(() {
+      _useTargetDuration = false;
+      _targetHours.text = '3';
+      _targetMinutes.text = '0';
+      _targetError = null;
+      _suggestions = null;
+    });
+  }
+
+  void _activateTargetDuration() {
+    setState(() {
+      _useTargetDuration = true;
+      _considerBestWorstCase = false;
+      _minHours.text = '2';
+      _minMinutes.text = '0';
+      _maxHours.text = '4';
+      _maxMinutes.text = '0';
+      _durationError = null;
+      _suggestions = null;
+    });
+  }
+
+  Widget _durationOptionCard({
+    required String key,
+    required IconData icon,
+    required String title,
+    required String value,
+    required bool selected,
+    required VoidCallback onPressed,
+  }) => Card(
+    key: ValueKey(key),
+    color: selected ? Theme.of(context).colorScheme.primaryContainer : null,
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(value),
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: selected
+                ? FilledButton.tonal(
+                    onPressed: _calculating ? null : onPressed,
+                    child: const Text('Ändern'),
+                  )
+                : OutlinedButton(
+                    onPressed: _calculating ? null : onPressed,
+                    child: const Text('Ändern'),
+                  ),
+          ),
+        ],
+      ),
+    ),
+  );
+
   Future<void> _pickMinDuration() async {
+    _activateDurationRange();
     final curH = int.tryParse(_minHours.text) ?? 2;
     final curM = int.tryParse(_minMinutes.text) ?? 0;
     final picked = await showTimePicker(
@@ -146,6 +210,7 @@ class _TournamentFormatPlannerDialogState
   }
 
   Future<void> _pickMaxDuration() async {
+    _activateDurationRange();
     final curH = int.tryParse(_maxHours.text) ?? 4;
     final curM = int.tryParse(_maxMinutes.text) ?? 0;
     final picked = await showTimePicker(
@@ -172,6 +237,7 @@ class _TournamentFormatPlannerDialogState
   }
 
   Future<void> _pickTargetDuration() async {
+    _activateTargetDuration();
     final curH = int.tryParse(_targetHours.text) ?? 3;
     final curM = int.tryParse(_targetMinutes.text) ?? 0;
     final picked = await showTimePicker(
@@ -226,6 +292,12 @@ class _TournamentFormatPlannerDialogState
       _maxHours.text = '${maxDurationMinutes ~/ 60}';
       _maxMinutes.text = '${maxDurationMinutes % 60}';
     }
+    if (_useTargetDuration) {
+      _minHours.text = '2';
+      _minMinutes.text = '0';
+      _maxHours.text = '4';
+      _maxMinutes.text = '0';
+    }
     if (widget.initialEnabledModes != null &&
         widget.initialEnabledModes!.isNotEmpty) {
       _enabledModes
@@ -236,6 +308,7 @@ class _TournamentFormatPlannerDialogState
       1,
       4,
     );
+    _preferredFinalStage = widget.initialPreferredFinalStage;
     _requireGroupPhase = widget.initialRequireGroupPhase;
     final gameFormat = widget.initialGameFormat;
     if (gameFormat != null) {
@@ -480,28 +553,41 @@ class _TournamentFormatPlannerDialogState
                 ],
               ),
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              AdaptiveTileLayout(
+                minTileWidth: 220,
                 children: [
-                  for (final target in [false, true])
-                    ChoiceChip(
-                      label: Text(target ? 'Wunschdauer' : 'Zeitfenster'),
-                      selected: _useTargetDuration == target,
-                      padding: const EdgeInsets.all(12),
-                      onSelected: _calculating
-                          ? null
-                          : (_) => setState(() {
-                              _useTargetDuration = target;
-                              _suggestions = null;
-                              _targetError = null;
-                              _durationError = null;
-                            }),
-                    ),
+                  _durationOptionCard(
+                    key: 'planner-min-duration',
+                    icon: Icons.hourglass_top_outlined,
+                    title: 'Mindestdauer',
+                    value:
+                        '${_minHours.text} Std. ${_minMinutes.text.padLeft(2, '0')} Min.',
+                    selected: false,
+                    onPressed: _pickMinDuration,
+                  ),
+                  _durationOptionCard(
+                    key: 'planner-max-duration',
+                    icon: Icons.hourglass_bottom_outlined,
+                    title: 'Maximaldauer',
+                    value:
+                        '${_maxHours.text} Std. ${_maxMinutes.text.padLeft(2, '0')} Min.',
+                    selected: false,
+                    onPressed: _pickMaxDuration,
+                  ),
+                  _durationOptionCard(
+                    key: 'planner-target-duration',
+                    icon: Icons.timer_outlined,
+                    title: 'Wunschdauer',
+                    value:
+                        '${_targetHours.text} Std. ${_targetMinutes.text.padLeft(2, '0')} Min. · Vorschläge nach Nähe',
+                    selected: _useTargetDuration,
+                    onPressed: _pickTargetDuration,
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               CheckboxListTile(
+                key: const ValueKey('planner-best-worst-case'),
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Best/Worst Case berücksichtigen?'),
                 subtitle: const Text(
@@ -512,101 +598,26 @@ class _TournamentFormatPlannerDialogState
                     ? null
                     : (val) => setState(() {
                         _considerBestWorstCase = val ?? false;
+                        if (_considerBestWorstCase) {
+                          _useTargetDuration = false;
+                          _targetHours.text = '3';
+                          _targetMinutes.text = '0';
+                          _targetError = null;
+                        }
                         _suggestions = null;
                       }),
               ),
-              const SizedBox(height: 8),
-              if (_useTargetDuration) ...[
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.timer_outlined),
-                    title: const Text('Wunschdauer festlegen'),
-                    subtitle: Text(
-                      '${_targetHours.text} Std. ${_targetMinutes.text.padLeft(2, '0')} Min. (Vorschläge sortiert nach Nähe)',
+              if (_targetError != null || _durationError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 12),
+                  child: Text(
+                    _targetError ?? _durationError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
                     ),
-                    trailing: FilledButton.tonalIcon(
-                      onPressed: _calculating ? null : _pickTargetDuration,
-                      icon: const Icon(Icons.access_time),
-                      label: const Text('Ändern'),
-                    ),
-                    onTap: _calculating ? null : _pickTargetDuration,
                   ),
                 ),
-                if (_targetError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6, left: 12),
-                    child: Text(
-                      _targetError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-              ] else ...[
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isNarrow = constraints.maxWidth < 450;
-                    final minWidget = Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.hourglass_top_outlined),
-                        title: const Text('Mindestdauer'),
-                        subtitle: Text(
-                          '${_minHours.text} Std. ${_minMinutes.text.padLeft(2, '0')} Min.',
-                        ),
-                        trailing: OutlinedButton.icon(
-                          onPressed: _calculating ? null : _pickMinDuration,
-                          icon: const Icon(Icons.access_time),
-                          label: const Text('Ändern'),
-                        ),
-                        onTap: _calculating ? null : _pickMinDuration,
-                      ),
-                    );
-                    final maxWidget = Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.hourglass_bottom_outlined),
-                        title: const Text('Maximaldauer'),
-                        subtitle: Text(
-                          '${_maxHours.text} Std. ${_maxMinutes.text.padLeft(2, '0')} Min.',
-                        ),
-                        trailing: OutlinedButton.icon(
-                          onPressed: _calculating ? null : _pickMaxDuration,
-                          icon: const Icon(Icons.access_time),
-                          label: const Text('Ändern'),
-                        ),
-                        onTap: _calculating ? null : _pickMaxDuration,
-                      ),
-                    );
-                    if (isNarrow) {
-                      return Column(
-                        children: [
-                          minWidget,
-                          const SizedBox(height: 8),
-                          maxWidget,
-                        ],
-                      );
-                    }
-                    return Row(
-                      children: [
-                        Expanded(child: minWidget),
-                        const SizedBox(width: 8),
-                        Expanded(child: maxWidget),
-                      ],
-                    );
-                  },
-                ),
-                if (_durationError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6, left: 12),
-                    child: Text(
-                      _durationError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-              ],
               const SizedBox(height: 16),
 
               SportSettingsSection(

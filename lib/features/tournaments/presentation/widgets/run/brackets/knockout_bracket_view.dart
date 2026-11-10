@@ -22,7 +22,18 @@ class _KnockoutBracketView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (placementMatches.any((m) => m.placementKey != null)) {
-      final edges = PlacementEngine.sources(stage.rounds, placementMatches);
+      final edges = stage.eliminationLossLimit == 2
+          ? PlacementEngine.doubleEliminationSources(
+              stage.rounds,
+              placementMatches,
+            )
+          : stage.eliminationLossLimit >= 3
+          ? PlacementEngine.tripleEliminationSources(
+              stage.rounds,
+              placementMatches,
+              lossLimit: stage.eliminationLossLimit,
+            )
+          : PlacementEngine.sources(stage.rounds, placementMatches);
       final rounds = <List<GroupMatch>>[
         for (final number
             in placementMatches.map((m) => m.round).toSet().toList()..sort())

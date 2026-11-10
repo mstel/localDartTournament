@@ -1,4 +1,4 @@
-import 'dart:math' show min;
+import 'dart:math' show max, min;
 
 import '../../../shared/widgets/sport_settings_section.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +19,7 @@ import '../domain/league_match.dart';
 import '../../settings/data/planning_settings_storage.dart';
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'league_pairing_dialog.dart';
+import 'league_team_dialogs.dart';
 import '../../statistics/domain/tournament_player_statistics.dart';
 import '../../statistics/presentation/tournament_statistics_view.dart';
 
@@ -36,6 +37,227 @@ class LeagueMatchPage extends StatefulWidget {
   final ValueChanged<CreatedTournament>? onCreated;
   @override
   State<LeagueMatchPage> createState() => _LeagueMatchPageState();
+}
+
+class _LeagueSubstitutionDialog extends StatefulWidget {
+  const _LeagueSubstitutionDialog({
+    required this.league,
+    required this.teamSide,
+    required this.teamName,
+  });
+
+  final LeagueMatch league;
+  final int teamSide;
+  final String teamName;
+
+  @override
+  State<_LeagueSubstitutionDialog> createState() =>
+      _LeagueSubstitutionDialogState();
+}
+
+class _LeagueSubstitutionDialogState extends State<_LeagueSubstitutionDialog> {
+  int? _outPlayer;
+  int? _inPlayer;
+
+  List<String> get _roster => widget.teamSide == 0
+      ? widget.league.homePlayers
+      : widget.league.awayPlayers;
+
+  bool _wasSubstitutedOut(int player) => widget.league.substitutions.any(
+    (event) =>
+        event.teamSide == widget.teamSide && event.outPlayerIndex == player,
+  );
+
+  String _status(int player, Set<int> active) {
+    if (active.contains(player)) return 'Aktiv';
+    if (_wasSubstitutedOut(player)) return 'Ausgewechselt';
+    return 'Ersatzspieler';
+  }
+
+  Color _statusColor(BuildContext context, String status) {
+    if (status == 'Aktiv') return Theme.of(context).colorScheme.primary;
+    if (status == 'Ersatzspieler') return Colors.orange.shade800;
+    return widget.league.allowReentry
+        ? Theme.of(context).colorScheme.onSurface
+        : Theme.of(context).colorScheme.error;
+  }
+
+  Widget _playerTile(
+    BuildContext context,
+    int player,
+    Set<int> active, {
+    required bool lineup,
+  }) {
+    final status = _status(player, active);
+    final canSelect =
+        lineup || widget.league.allowReentry || !_wasSubstitutedOut(player);
+    final selected = lineup ? _outPlayer == player : _inPlayer == player;
+    final content = ListTile(
+      dense: true,
+      selected: selected,
+      title: Text(_roster[player]),
+      subtitle: Text(
+        status == 'Ersatzspieler' ? 'Ersatzbank' : status,
+        style: TextStyle(color: _statusColor(context, status)),
+      ),
+      trailing: selected
+          ? const Icon(Icons.check_circle_outline)
+          : const Icon(Icons.drag_indicator),
+      onTap: canSelect
+          ? () => setState(() {
+              if (lineup) {
+                _outPlayer = player;
+              } else {
+                _inPlayer = player;
+              }
+            })
+          : null,
+    );
+    return DragTarget<int>(
+      onWillAcceptWithDetails: (details) => lineup
+          ? !active.contains(details.data) &&
+                (widget.league.allowReentry ||
+                    !_wasSubstitutedOut(details.data))
+          : active.contains(details.data),
+      onAcceptWithDetails: (details) => setState(() {
+        if (lineup) {
+          _inPlayer = details.data;
+        } else {
+          _outPlayer = details.data;
+        }
+      }),
+      builder: (context, candidates, rejected) {
+        final tile = Card(
+          color: candidates.isEmpty
+              ? null
+              : Theme.of(context).colorScheme.secondaryContainer,
+          child: content,
+        );
+        if (!canSelect) return tile;
+        return Draggable<int>(
+          data: player,
+          feedback: Material(
+            elevation: 4,
+            child: Chip(label: Text(_roster[player])),
+          ),
+          childWhenDragging: Opacity(opacity: 0.35, child: tile),
+          child: tile,
+        );
+      },
+    );
+  }
+
+  Widget _playerList(
+    BuildContext context,
+    String title,
+    List<int> players,
+    Set<int> active, {
+    required bool lineup,
+  }) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          for (final player in players)
+            _playerTile(context, player, active, lineup: lineup),
+          if (players.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Keine Spieler in diesem Bereich.'),
+            ),
+        ],
+      ),
+    ),
+  );
+
+  Future<void> _confirmSubstitution() async {
+    final outPlayer = _outPlayer;
+    final inPlayer = _inPlayer;
+    if (outPlayer == null || inPlayer == null) return;
+    final remaining = widget.league.substitutionsRemaining(widget.teamSide) - 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Auswechseln bestätigen?'),
+        content: Text(
+          'Ihre Mannschaft hat danach noch $remaining Auswechselungen. '
+          '${widget.league.allowReentry ? 'Bereits ausgewechselte Spieler dürfen wieder eingewechselt werden.' : 'Ausgewechselte Spieler können nicht erneut eingewechselt werden.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Nein'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ja, auswechseln'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      Navigator.of(context).pop((outPlayer, inPlayer));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final league = widget.league;
+    final active = league.activePlayers(widget.teamSide).toSet();
+    final reserves = league.reservePlayers(widget.teamSide);
+    final width = MediaQuery.sizeOf(context).width;
+    return AlertDialog(
+      title: Text('Auswechselungen · ${widget.teamName}'),
+      content: SizedBox(
+        width: width > 900 ? 760 : width * 0.9,
+        child: SingleChildScrollView(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final lineup = _playerList(
+                context,
+                'Aktuelle Aufstellung',
+                active.toList()..sort(),
+                active,
+                lineup: true,
+              );
+              final bench = _playerList(
+                context,
+                'Ersatzbank',
+                reserves,
+                active,
+                lineup: false,
+              );
+              return constraints.maxWidth > 560
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: lineup),
+                        const Icon(Icons.swap_horiz, size: 32),
+                        Expanded(child: bench),
+                      ],
+                    )
+                  : Column(children: [lineup, bench]);
+            },
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          onPressed: _outPlayer == null || _inPlayer == null
+              ? null
+              : _confirmSubstitution,
+          child: const Text('Auswechseln'),
+        ),
+      ],
+    );
+  }
 }
 
 List<(int, int)> _validScores(LeagueMatch league) {
@@ -149,6 +371,10 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
   TournamentGameFormat _gameFormat = const TournamentGameFormat(bestOfLegs: 5);
   int _singlesPerPlayer = 2;
   int _doublesCount = 2;
+  int _starterCount = 4;
+  int _maxReservePlayers = 2;
+  int _substitutionLimit = 2;
+  bool _allowReentry = false;
   TournamentPlanningParameters _planningParameters =
       const TournamentPlanningParameters();
 
@@ -186,30 +412,59 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
             );
           }
         }
+        _starterCount = 4;
+        _maxReservePlayers = 4;
+        _substitutionLimit = 4;
+        _allowReentry = false;
         _singlesPerPlayer = 4;
         _doublesCount = 2;
       } else {
+        _starterCount = 4;
+        _maxReservePlayers = 2;
+        _substitutionLimit = 2;
+        _allowReentry = false;
         _singlesPerPlayer = 2;
-        _doublesCount = min(_doublesCount, _rosters.first.length ~/ 2);
+        _doublesCount = min(_doublesCount, _starterCount ~/ 2);
+        for (var team = 0; team < _rosters.length; team++) {
+          while (_rosters[team].length > _starterCount + _maxReservePlayers) {
+            _rosters[team].removeLast().dispose();
+          }
+        }
       }
     });
   }
 
   Future<void> _removeLastPlayer(int team) async {
-    if (_busy || _rosters[team].length <= 1) return;
+    if (_busy ||
+        _rosters[team].length <=
+            (_variant == LeagueMatchVariant.traditional ? 4 : _starterCount)) {
+      return;
+    }
     final slot = _rosters[team].length - 1;
     final key = '$team:$slot';
     setState(() {
       _profiles.remove(key);
       _rosters[team].removeLast().dispose();
       _singlesPerPlayer = min(_singlesPerPlayer, _rosters[0].length);
-      _doublesCount = min(_doublesCount, _rosters[0].length ~/ 2);
+      _starterCount = min(
+        _starterCount,
+        min(_rosters[0].length, _rosters[1].length),
+      );
+      _maxReservePlayers = max(
+        _maxReservePlayers,
+        max(
+          _rosters[0].length - _starterCount,
+          _rosters[1].length - _starterCount,
+        ),
+      );
+      _doublesCount = min(_doublesCount, _starterCount ~/ 2);
       _error = null;
     });
   }
 
   int? _estimatedAdjustedMinutes() {
-    if (_rosters[0].length != _rosters[1].length || _rosters[0].isEmpty) {
+    if (_rosters[0].length < _starterCount ||
+        _rosters[1].length < _starterCount) {
       return null;
     }
     try {
@@ -227,6 +482,10 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         awayTeam: _teams[1].text,
         homePlayers: names[0],
         awayPlayers: names[1],
+        starterCount: _starterCount,
+        maxReservePlayers: _maxReservePlayers,
+        substitutionLimit: _substitutionLimit,
+        allowReentry: _allowReentry,
         singlesPerPlayer: _singlesPerPlayer,
         doublesCount: _doublesCount,
         gameFormat: _gameFormat,
@@ -354,22 +613,13 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     }
     if (!_form.currentState!.validate()) return;
     if (_variant == LeagueMatchVariant.adjusted &&
-        _rosters[0].length != _rosters[1].length) {
-      setState(
-        () => _error =
-            'Für den angepassten Spielplan müssen beide Teams gleich viele Spieler haben.',
-      );
+        (_starterCount > _rosters[0].length ||
+            _starterCount > _rosters[1].length)) {
+      setState(() => _error = 'Beide Teams benötigen alle Stammspieler.');
       return;
     }
-    final playerLimit = _variant == LeagueMatchVariant.traditional ? 6 : null;
-    final homePlayers = _rosters[0]
-        .take(playerLimit ?? _rosters[0].length)
-        .map((c) => c.text)
-        .toList();
-    final awayPlayers = _rosters[1]
-        .take(playerLimit ?? _rosters[1].length)
-        .map((c) => c.text)
-        .toList();
+    final homePlayers = _rosters[0].map((c) => c.text.trim()).toList();
+    final awayPlayers = _rosters[1].map((c) => c.text.trim()).toList();
     final league = _variant == LeagueMatchVariant.traditional
         ? LeagueMatch.rhl(
             homeTeam: _teams[0].text,
@@ -382,6 +632,10 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
             awayTeam: _teams[1].text,
             homePlayers: homePlayers,
             awayPlayers: awayPlayers,
+            starterCount: _starterCount,
+            maxReservePlayers: _maxReservePlayers,
+            substitutionLimit: _substitutionLimit,
+            allowReentry: _allowReentry,
             singlesPerPlayer: _singlesPerPlayer,
             doublesCount: _doublesCount,
             gameFormat: _gameFormat,
@@ -390,7 +644,11 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       name: _name.text.trim(),
       players: [
         for (var team = 0; team < 2; team++)
-          for (var slot = 0; slot < homePlayers.length; slot++)
+          for (
+            var slot = 0;
+            slot < (team == 0 ? homePlayers.length : awayPlayers.length);
+            slot++
+          )
             _profiles['$team:$slot'] ??
                 TournamentPlayer(
                   name: _rosters[team][slot].text.trim(),
@@ -475,6 +733,81 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     await _save(next);
   }
 
+  Future<void> _substitutePlayers(int teamSide) async {
+    final tournament = _tournament;
+    if (tournament == null || _busy) return;
+    final league = tournament.leagueMatch!;
+    if (league.substitutionsRemaining(teamSide) < 1) {
+      setState(
+        () => _error =
+            'Für dieses Team sind keine Auswechselungen mehr verfügbar.',
+      );
+      return;
+    }
+    final choice = await showDialog<(int, int)>(
+      context: context,
+      builder: (context) => _LeagueSubstitutionDialog(
+        league: league,
+        teamSide: teamSide,
+        teamName: teamSide == 0 ? league.homeTeam : league.awayTeam,
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final next = CreatedTournament.fromJson(tournament.toJson());
+    try {
+      next.leagueMatch!.substitute(
+        teamSide: teamSide,
+        outPlayerIndex: choice.$1,
+        inPlayerIndex: choice.$2,
+      );
+      await _save(next, rethrowError: true);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = 'Auswechselung fehlgeschlagen: $error');
+      }
+    }
+  }
+
+  Future<void> _showTeamRoster(int teamSide) async {
+    final league = _tournament?.leagueMatch;
+    if (league == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) =>
+          LeagueRosterDialog(league: league, teamSide: teamSide),
+    );
+  }
+
+  Future<void> _assignDoublePartners(int teamSide) async {
+    final tournament = _tournament;
+    if (tournament == null || _busy) return;
+    final assignments = await showDialog<Map<int, List<int>>>(
+      context: context,
+      builder: (context) => LeagueTeamPairingsDialog(
+        league: tournament.leagueMatch!,
+        teamSide: teamSide,
+      ),
+    );
+    if (assignments == null || !mounted) return;
+    final next = CreatedTournament.fromJson(tournament.toJson());
+    final league = next.leagueMatch!;
+    for (final entry in assignments.entries) {
+      final game = league.games[entry.key];
+      if (teamSide == 0) {
+        game.home = entry.value;
+      } else {
+        game.away = entry.value;
+      }
+    }
+    try {
+      await _save(next, rethrowError: true);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = 'Doppelaufstellung fehlgeschlagen: $error');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return _content(context);
@@ -500,8 +833,8 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
           if (_tournament == null)
             Text(
               _variant == LeagueMatchVariant.traditional
-                  ? 'Traditioneller Spielplan mit 16 Einzeln und 2 Doppeln. Pro Team vier Spieler und zwei Ersatzspieler erfassen.'
-                  : 'Im angepassten Spielplan werden Einzel gleichmäßig auf alle Spieler verteilt. Doppelpartner kommen je Team nur einmal zum Einsatz.',
+                  ? 'Traditioneller Spielplan mit 16 Einzeln und 2 Doppeln. Je Team vier Stammspieler sowie bis zu vier Ersatzspieler erfassen.'
+                  : 'Der angepasste Spielplan wird mit der festgelegten Anzahl Stammspieler erstellt; zusätzliche Kaderspieler bleiben Ersatzspieler.',
             ),
           const SizedBox(height: 16),
           if (_error != null)
@@ -571,6 +904,100 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
             children: [
               DropdownButtonFormField<int>(
                 key: ValueKey(
+                  'starter-count-$_starterCount-${_rosters[0].length}-${_rosters[1].length}',
+                ),
+                initialValue: _starterCount,
+                decoration: const InputDecoration(
+                  labelText: 'Stammspieler je Team',
+                ),
+                items: [
+                  for (
+                    var count = 1;
+                    count <= min(_rosters[0].length, _rosters[1].length);
+                    count++
+                  )
+                    DropdownMenuItem(value: count, child: Text('$count')),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _starterCount = value;
+                    _maxReservePlayers = max(
+                      _maxReservePlayers,
+                      max(
+                        _rosters[0].length - value,
+                        _rosters[1].length - value,
+                      ),
+                    );
+                    _doublesCount = min(_doublesCount, value ~/ 2);
+                    _singlesPerPlayer = min(_singlesPerPlayer, value);
+                    _substitutionLimit = min(
+                      _substitutionLimit,
+                      _maxReservePlayers,
+                    );
+                  });
+                },
+              ),
+              DropdownButtonFormField<int>(
+                key: ValueKey(
+                  'maximum-reserves-$_maxReservePlayers-$_starterCount-${_rosters[0].length}-${_rosters[1].length}',
+                ),
+                initialValue: _maxReservePlayers,
+                decoration: const InputDecoration(
+                  labelText: 'Maximale Ersatzspieler je Team',
+                ),
+                items: [
+                  for (
+                    var count = max(
+                      0,
+                      max(
+                        _rosters[0].length - _starterCount,
+                        _rosters[1].length - _starterCount,
+                      ),
+                    );
+                    count <= 8;
+                    count++
+                  )
+                    DropdownMenuItem(value: count, child: Text('$count')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _maxReservePlayers = value;
+                      _substitutionLimit = min(_substitutionLimit, value);
+                    });
+                  }
+                },
+              ),
+              DropdownButtonFormField<int>(
+                key: ValueKey(
+                  'substitution-limit-$_substitutionLimit-$_maxReservePlayers',
+                ),
+                initialValue: _substitutionLimit,
+                decoration: const InputDecoration(
+                  labelText: 'Mögliche Auswechselungen je Team',
+                ),
+                items: [
+                  for (var count = 0; count <= _maxReservePlayers; count++)
+                    DropdownMenuItem(value: count, child: Text('$count')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _substitutionLimit = value);
+                  }
+                },
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Bereits ausgewechselte Spieler dürfen wieder eingewechselt werden',
+                ),
+                value: _allowReentry,
+                onChanged: (value) =>
+                    setState(() => _allowReentry = value ?? false),
+              ),
+              DropdownButtonFormField<int>(
+                key: ValueKey(
                   'singles-per-player-$_singlesPerPlayer-${_rosters[0].length}',
                 ),
                 initialValue: _singlesPerPlayer,
@@ -612,20 +1039,17 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
               Builder(
                 builder: (context) {
                   final duration = _estimatedAdjustedMinutes();
-                  final teamsMatch = _rosters[0].length == _rosters[1].length;
                   final matches =
-                      _rosters[0].length * _singlesPerPlayer + _doublesCount;
+                      _starterCount * _singlesPerPlayer + _doublesCount;
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.schedule_outlined),
                       title: Text(
-                        teamsMatch
-                            ? '$matches Begegnungen'
-                            : 'Teamgrößen angleichen',
+                        '$matches Begegnungen · $_starterCount Stammspieler je Team',
                       ),
                       subtitle: Text(
                         duration == null
-                            ? 'Dauer wird berechnet, sobald beide Teams gleich viele Spieler haben.'
+                            ? 'Dauer wird berechnet, sobald beide Teams genügend Stammspieler haben.'
                             : 'Voraussichtliche Dauer: ${_formatDuration(duration)} · ${_gameFormat.lengthLabel} · $_boards ${_boards == 1 ? 'Board' : 'Boards'}',
                       ),
                     ),
@@ -698,30 +1122,44 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                       ),
                     ),
                   const SizedBox(height: 12),
-                  if (_variant == LeagueMatchVariant.adjusted)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        TextButton.icon(
-                          onPressed: _busy
-                              ? null
-                              : () => setState(() {
-                                  _rosters[team].add(TextEditingController());
-                                  _error = null;
-                                }),
-                          icon: const Icon(Icons.person_add),
-                          label: const Text('Spieler hinzufügen'),
-                        ),
-                        TextButton.icon(
-                          onPressed: _busy || _rosters[team].length <= 1
-                              ? null
-                              : () => _removeLastPlayer(team),
-                          icon: const Icon(Icons.person_remove_outlined),
-                          label: const Text('Letzten Spieler entfernen'),
-                        ),
-                      ],
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      TextButton.icon(
+                        onPressed:
+                            _busy ||
+                                _rosters[team].length >=
+                                    (_variant == LeagueMatchVariant.traditional
+                                        ? 8
+                                        : _starterCount + _maxReservePlayers)
+                            ? null
+                            : () => setState(() {
+                                final next = _rosters[team].length + 1;
+                                _rosters[team].add(
+                                  TextEditingController(
+                                    text: '${_teams[team].text} $next',
+                                  ),
+                                );
+                                _error = null;
+                              }),
+                        icon: const Icon(Icons.person_add),
+                        label: const Text('Spieler / Ersatzspieler hinzufügen'),
+                      ),
+                      TextButton.icon(
+                        onPressed:
+                            _busy ||
+                                _rosters[team].length <=
+                                    (_variant == LeagueMatchVariant.traditional
+                                        ? 4
+                                        : _starterCount)
+                            ? null
+                            : () => _removeLastPlayer(team),
+                        icon: const Icon(Icons.person_remove_outlined),
+                        label: const Text('Letzten Spieler entfernen'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
           ],
@@ -825,6 +1263,61 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       const Text(
         'Jedes gewonnene Match zählt einen Mannschaftspunkt. Bei Gleichstand endet das Ligaspiel unentschieden.',
       ),
+      for (var teamSide = 0; teamSide < 2; teamSide++)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    onPressed: _busy ? null : () => _showTeamRoster(teamSide),
+                    icon: const Icon(Icons.groups_outlined),
+                    label: Text(
+                      teamSide == 0 ? league.homeTeam : league.awayTeam,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    Text(
+                      '${league.substitutionsRemaining(teamSide)} Auswechselungen verfügbar',
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => _substitutePlayers(teamSide),
+                      icon: const Icon(Icons.swap_horiz),
+                      label: Text(
+                        teamSide == 0
+                            ? 'Auswechselungen Heimteam'
+                            : 'Auswechselungen Gastteam',
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => _assignDoublePartners(teamSide),
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: Text(
+                        teamSide == 0
+                            ? 'Doppelpartner zuweisen Heimteam'
+                            : 'Doppelpartner zuweisen Gastteam',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       for (var i = 0; i < league.games.length; i++)
         LeagueFixtureCard(
           league: league,

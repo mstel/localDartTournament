@@ -44,8 +44,12 @@ class PlanningDuration {
     return (minimum + bestOfLegs) / 2;
   }
 
-  static double estimatedMatchLegs(TournamentGameFormat format) =>
-      estimatedLegs(format.bestOfLegs) * estimatedLegs(format.bestOfSets);
+  static double estimatedMatchLegs(TournamentGameFormat format) {
+    final minimumLegs =
+        (format.bestOfSets ~/ 2 + 1) * (format.bestOfLegs ~/ 2 + 1);
+    final maximumLegs = format.bestOfSets * format.bestOfLegs;
+    return (minimumLegs + maximumLegs) / 2;
+  }
 
   factory PlanningDuration.calculate({
     required List<int> groupSizes,

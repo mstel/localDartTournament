@@ -225,7 +225,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _canAdjustParticipants &&
       widget.tournament.stages.isNotEmpty &&
       widget.tournament.runStages.isNotEmpty &&
-      widget.tournament.stages.every((stage) => stage.type != 'groups') &&
+      widget.tournament.stages.every((stage) => !stage.isGroupStage) &&
       widget.tournament.runStages.every(
         (stage) => stage is KnockoutTournamentRunStage,
       ) &&
@@ -285,6 +285,18 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     trailing: Wrap(
       spacing: 4,
       children: [
+        if (widget.tournament.finishedAt == null &&
+            _restorableWithdrawal(player) != null)
+          IconButton(
+            tooltip: 'Spieler in dieser Phase wieder aufnehmen',
+            icon: const Icon(Icons.person_add_alt_1_outlined, size: 20),
+            onPressed: () {
+              final withdrawal = _restorableWithdrawal(player);
+              if (withdrawal != null) {
+                _restoreWithdrawnPlayer(player, withdrawal);
+              }
+            },
+          ),
         if (player.profileId == null)
           IconButton(
             tooltip: 'Spieler umbenennen',
@@ -409,6 +421,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       context: context,
       builder: (_) => PlayerWithdrawalDialog(
         tournament: widget.tournament,
+        stageIndex: _activeStageIndex,
         initialPlayer: selectedPlayer,
       ),
     );
@@ -474,6 +487,74 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  PlayerWithdrawal? _restorableWithdrawal(TournamentPlayer player) {
+    final withdrawal = PlayerWithdrawalService.policy(
+      widget.tournament,
+      player,
+    );
+    if (withdrawal == null ||
+        !const PlayerWithdrawalService().canRestore(
+          withdrawal,
+          _activeStageIndex,
+        )) {
+      return null;
+    }
+    return withdrawal;
+  }
+
+  Future<void> _restoreWithdrawnPlayer(
+    TournamentPlayer player,
+    PlayerWithdrawal withdrawal,
+  ) async {
+    final annulResults = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Spieler wieder aufnehmen?'),
+        content: Text(
+          '„${player.name}“ wird wieder in das Turnier aufgenommen. '
+          'Sollen alle durch den Ausstieg eingetragenen Partien annulliert '
+          'und ihre vorherigen Ergebnisse, Zeiten und Auszeichnungen '
+          'wiederhergestellt werden?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Ergebnisse beibehalten'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Annullieren und aufnehmen'),
+          ),
+        ],
+      ),
+    );
+    if (annulResults == null || !mounted) return;
+    final service = const PlayerWithdrawalService();
+    if (!service.canRestore(withdrawal, _activeStageIndex)) return;
+    setState(() {
+      if (!service.remove(
+        widget.tournament,
+        withdrawal,
+        annulResults: annulResults,
+      )) {
+        return;
+      }
+      _advanceKnockoutWinners(startStageIndex: withdrawal.stageIndex ?? 0);
+      _ensureGroupDeciders(startStageIndex: withdrawal.stageIndex ?? 0);
+      widget.tournament.addActivity(
+        'player_reinstated',
+        'Spieler ${player.name} wieder aufgenommen; '
+            'durch Ausstieg eingetragene Partien '
+            '${annulResults ? 'annulliert' : 'beibehalten'}',
+      );
+    });
+    await _saveTournamentProgress();
+  }
+
   bool get _hasStartedMatches => widget.tournament.runStages.any(
     (stage) => _matchesForStage(stage).any((match) => match.startedAt != null),
   );
@@ -486,7 +567,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   Set<String> _enabledPlannerModes() {
     final modes = <String>{};
     for (final stage in widget.tournament.stages) {
-      if (stage.type == 'groups') {
+      if (stage.isGroupStage) {
         final groupTypes = stage.groupPlayTypes.isEmpty
             ? [stage.groupPlayType]
             : stage.groupPlayTypes;
@@ -682,8 +763,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         initialEnabledModes: _enabledPlannerModes(),
         initialMaximumStages: tournament.stages.length,
         initialRequireGroupPhase: tournament.stages.any(
-          (stage) => stage.type == 'groups',
+          (stage) => stage.isGroupStage,
         ),
+        initialPreferredFinalStage:
+            tournament.stages.isNotEmpty &&
+                tournament.stages.last.type == 'single_knockout'
+            ? 'single_knockout'
+            : null,
         lockBoardCount: true,
         initialGameFormat: tournament.stages.isEmpty
             ? null
@@ -702,16 +788,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
 
     final previousStages = tournament.stages;
-    final groupSettings = previousStages.where(
-      (stage) => stage.type == 'groups',
-    );
+    final groupSettings = previousStages.where((stage) => stage.isGroupStage);
     final previousGroup = groupSettings.isEmpty ? null : groupSettings.first;
     final previousKnockoutStages = previousStages
         .where((stage) => _isKnockoutStageType(stage.type))
         .toList();
     final adjustedStages = [
       for (final proposed in suggestion.configurations)
-        if (proposed.type == 'groups' && previousGroup != null)
+        if (proposed.isGroupStage && previousGroup != null)
           TournamentStage.fromJson({
             ...proposed.toJson(),
             'groupTieBreakers': previousGroup.groupTieBreakers,
@@ -1295,6 +1379,137 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     if (mounted) setState(() {});
   }
+
+  Widget _achievementSettingsCard() => Card(
+    child: SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      title: const Text('Errungenschaften'),
+      subtitle: const Text(
+        'Hinweise zu freigeschalteten Errungenschaften während des Turniers anzeigen.',
+      ),
+      value: widget.tournament.showAchievementNotifications,
+      onChanged: _saveAchievementNotificationSetting,
+    ),
+  );
+
+  Widget _hintSettingsCard() => Card(
+    child: ExpansionTile(
+      key: const ValueKey('tournament-hint-settings'),
+      leading: const Icon(Icons.notifications_active),
+      title: const Text('Hinweiseinstellungen'),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      children: [
+        TournamentRunSettingsPanel(
+          tournament: widget.tournament,
+          onChanged: _saveTournamentSettings,
+          showAudioSettings: false,
+          showPrioritySettings: true,
+          showHintAudioSettings: widget.tournament.directorModeEnabled,
+        ),
+      ],
+    ),
+  );
+
+  Widget _tournamentTimingSettingsCard() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: TournamentTimingPanel(
+        tournament: widget.tournament,
+        onStart: _startTournamentClock,
+        onPauseToggle: _toggleClockPause,
+        onEditTimes: _editTournamentTimes,
+        onResetClock: _resetTournamentClock,
+        onChangeTournamentDate: _saveTournamentDate,
+        onShiftMatchDates: _shiftTournamentMatchDates,
+      ),
+    ),
+  );
+
+  Widget _secondScreenSettingsCard() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tv),
+              const SizedBox(width: 8),
+              Text(
+                '2. Bildschirm (TV-Anzeige)',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: () async {
+                  try {
+                    await Process.start(Platform.resolvedExecutable, [
+                      '--second-screen',
+                      widget.tournament.id,
+                      '--parent-pid=$pid',
+                    ]);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'TV-Anzeige im separaten Fenster geöffnet. Ziehe das Fenster auf den 2. Monitor und maximiere es.',
+                        ),
+                      ),
+                    );
+                  } catch (_) {
+                    if (!mounted) return;
+                    showDialog<void>(
+                      context: context,
+                      builder: (ctx) => Dialog.fullscreen(
+                        child: TournamentSecondScreenView(
+                          tournament: widget.tournament,
+                          isStandaloneWindow: true,
+                        ),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.open_in_new),
+                label: const Text(
+                  'In separatem Fenster öffnen (für 2. Monitor)',
+                ),
+              ),
+              IconButton(
+                tooltip: 'Information zum 2. Bildschirm',
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('2. Bildschirm (TV-Anzeige)'),
+                    content: const Text(
+                      'Öffnet die Tabellen, Spielansetzungen, Ergebnisse und Turnieruhr '
+                      'in einem eigenen Fenster. Ziehe dieses Fenster auf den zweiten '
+                      'Monitor und maximiere es. Ergebnisse kannst du weiterhin hier '
+                      'am Hauptbildschirm eintragen.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text('Schließen'),
+                      ),
+                    ],
+                  ),
+                ),
+                icon: const Icon(Icons.help_outline),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _groupBoardAssignmentsSettings() => ExpansionTile(
     key: const ValueKey('group-board-assignments'),
@@ -2116,7 +2331,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return;
     }
     final stage = widget.tournament.stages[_activeStageIndex];
-    if (stage.type != 'groups') return;
+    if (!stage.isGroupStage) return;
     final target = index + direction;
     final current = _tieBreakersForActiveStage();
     if (index < 0 ||
@@ -2650,7 +2865,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     var stage = widget.tournament.stages[stageIndex];
     final runStage = widget.tournament.runStages[stageIndex];
-    if (stage.type != 'groups' ||
+    if (!stage.isGroupStage ||
         !stage.groupDrawOnStart ||
         stage.groupSlotOrder.isEmpty ||
         runStage is! GroupTournamentRunStage) {
@@ -2796,11 +3011,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             stage.rounds,
             finalEndsTournament: stage.finalEndsTournament,
           );
+          PlacementEngine.advanceDoubleElimination(
+            stage.rounds,
+            stage.placementMatches,
+          );
         } else if (stage.eliminationLossLimit >= 3) {
           TripleKoEngine.advance(
             stage.rounds,
             lossLimit: stage.eliminationLossLimit,
             finalEndsTournament: stage.finalEndsTournament,
+          );
+          PlacementEngine.advanceTripleElimination(
+            stage.rounds,
+            stage.placementMatches,
+            lossLimit: stage.eliminationLossLimit,
           );
         } else {
           _advanceWinnersInRounds(stage.rounds);
@@ -3775,6 +3999,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               .length <=
           1;
     }
+    final advancingCount = _knockoutAdvancingCount(stage);
+    if (advancingCount != null &&
+        advancingCount > 1 &&
+        const KnockoutAdvancementPolicy().hasReachedAdvancingCount(
+          rounds: stage.rounds,
+          lossLimit: stage.eliminationLossLimit,
+          advancingCount: advancingCount,
+        )) {
+      return true;
+    }
     if (stage.finalEndsTournament &&
         stage.rounds.isNotEmpty &&
         stage.rounds.last.length == 1 &&
@@ -3876,7 +4110,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final stage = widget.tournament.runStages[stageIndex];
     final availablePlayers = _participantCountForRunStage(stage);
     final nextStage = widget.tournament.stages[stageIndex + 1];
-    final requiredPlayers = nextStage.type == 'groups'
+    final requiredPlayers = nextStage.isGroupStage
         ? nextStage.groupSizes.fold<int>(0, (sum, size) => sum + size)
         : nextStage.knockoutParticipantCount ?? availablePlayers;
     return requiredPlayers.clamp(1, availablePlayers).toInt();
@@ -3906,11 +4140,23 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   List<TournamentPlayer> _advancingPlayersFromStage(TournamentRunStage stage) {
-    return _advancingPlayersIncludingWithdrawn(stage)
+    final eligible = _advancingPlayersIncludingWithdrawn(stage)
         .where(
           (p) => PlayerWithdrawalService.policy(widget.tournament, p) == null,
         )
         .toList();
+    return stage is KnockoutTournamentRunStage
+        ? const KnockoutAdvancementPolicy().limitAdvancingPlayers(
+            eligible,
+            _knockoutAdvancingCount(stage),
+          )
+        : eligible;
+  }
+
+  int? _knockoutAdvancingCount(KnockoutTournamentRunStage stage) {
+    final index = widget.tournament.runStages.indexOf(stage);
+    if (index < 0 || index >= widget.tournament.stages.length) return null;
+    return widget.tournament.stages[index].knockoutAdvancingCount;
   }
 
   List<TournamentPlayer> _advancingPlayersIncludingWithdrawn(
@@ -3934,6 +4180,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           stage.eliminationLossLimit,
           fallbackPlayers: const [],
           finalEndsTournament: stage.finalEndsTournament,
+          placementMatches: stage.placementMatches,
         );
       }
       return _knockoutRanking(
@@ -4108,6 +4355,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     int lossLimit, {
     bool finalEndsTournament = false,
     required List<TournamentPlayer> fallbackPlayers,
+    List<GroupMatch> placementMatches = const [],
   }) {
     final players = _playersInEliminationRounds(rounds);
     final losses = _lossCountsForElimination(rounds);
@@ -4162,7 +4410,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     }
 
-    return ranked;
+    return PlacementEngine.applyRanking(ranked, placementMatches);
   }
 
   List<TournamentPlayer> _knockoutRanking(
@@ -4344,33 +4592,47 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         }
       }
       final lossLimit = stage.lossLimit;
+      final rounds = lossLimit == 1
+          ? _buildKnockoutRoundsForPlayers(participants, slotOrder: slots)
+          : lossLimit == 2
+          ? _buildDoubleEliminationRoundsForPlayers(
+              participants,
+              slotOrder: slots,
+            )
+          : _buildTripleEliminationRoundsForPlayers(
+              participants,
+              lossLimit: lossLimit,
+              slotOrder: slots,
+            );
+      final placementMatches = lossLimit == 1
+          ? stage.placementPlaces.isEmpty
+                ? _buildPlacementMatchesForPlayers(participants.length, 1)
+                : PlacementEngine.build(
+                    rounds,
+                    stage.placementPlaces.where(
+                      (place) => place < participants.length,
+                    ),
+                  )
+          : lossLimit == 2
+          ? PlacementEngine.buildDoubleElimination(
+              rounds,
+              stage.placementPlaces.where(
+                (place) => place < participants.length,
+              ),
+            )
+          : lossLimit >= 3
+          ? PlacementEngine.buildTripleElimination(
+              rounds,
+              stage.placementPlaces.where(
+                (place) => place < participants.length,
+              ),
+              lossLimit: lossLimit,
+            )
+          : const <GroupMatch>[];
       return KnockoutTournamentRunStage(
         name: stage.name,
-        rounds: lossLimit == 1
-            ? _buildKnockoutRoundsForPlayers(participants, slotOrder: slots)
-            : lossLimit == 2
-            ? _buildDoubleEliminationRoundsForPlayers(
-                participants,
-                slotOrder: slots,
-              )
-            : _buildTripleEliminationRoundsForPlayers(
-                participants,
-                lossLimit: lossLimit,
-                slotOrder: slots,
-              ),
-        placementMatches: lossLimit == 1
-            ? stage.placementPlaces.isEmpty
-                  ? _buildPlacementMatchesForPlayers(participants.length, 1)
-                  : PlacementEngine.build(
-                      _buildKnockoutRoundsForPlayers(
-                        participants,
-                        slotOrder: slots,
-                      ),
-                      stage.placementPlaces.where(
-                        (p) => p < participants.length,
-                      ),
-                    )
-            : const [],
+        rounds: rounds,
+        placementMatches: placementMatches,
         eliminationLossLimit: lossLimit,
         finalEndsTournament: stage.finalEndsTournament,
       );
@@ -4559,11 +4821,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       builder: (_) => _RandomDrawDialog(
         stageName: stageConfig.name,
         participantLabels: labels,
-        bracketSize: stageConfig.type == 'groups'
+        bracketSize: stageConfig.isGroupStage
             ? participantCount
             : _drawBracketSize(stageConfig, participantCount),
-        useBracketSlots: stageConfig.type != 'groups',
-        groupSizes: stageConfig.type == 'groups'
+        useBracketSlots: !stageConfig.isGroupStage,
+        groupSizes: stageConfig.isGroupStage
             ? stageConfig.groupSizes
             : const [],
       ),
@@ -4586,7 +4848,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   bool _stageNeedsStartDraw(TournamentStage stage) {
-    if (stage.type == 'groups') {
+    if (stage.isGroupStage) {
       return stage.groupDrawOnStart &&
           !stage.groupDrawCompleted &&
           stage.groupSlotOrder.isEmpty;
@@ -4612,7 +4874,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     TournamentStage stage,
     List<TournamentPlayer> incomingPlayers,
   ) {
-    if (stage.type == 'groups') {
+    if (stage.isGroupStage) {
       final groupParticipantCount = stage.groupSizes.fold<int>(
         0,
         (sum, size) => sum + size,
@@ -4637,7 +4899,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   TournamentStage _copyStageWithStartDraw(
     TournamentStage stage,
     List<int?> slotOrder,
-  ) => stage.type == 'groups'
+  ) => stage.isGroupStage
       ? stage.copyWith(
           groupSlotOrder: List.unmodifiable(slotOrder),
           groupDrawCompleted: true,
@@ -4899,1100 +5161,981 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             child: CustomScrollView(
               key: ValueKey('stage-$_viewStageIndex-$_stageViewMode'),
               slivers: [
-              SliverToBoxAdapter(
-                child: TournamentRunHeader(
-                  tournament: widget.tournament,
-                  stageIndex: _viewStageIndex,
-                  completedStages: _completedStageIndexes,
-                  mode: _stageViewMode,
-                  canLead: true,
-                  directorModeEnabled: widget.tournament.directorModeEnabled,
-                  onStageChanged: (index) => setState(() {
-                    _viewStageIndex = index;
-                    _isBracketEditMode = false;
-                  }),
-                  onModeChanged: (mode) =>
-                      setState(() => _stageViewMode = mode),
+                SliverToBoxAdapter(
+                  child: TournamentRunHeader(
+                    tournament: widget.tournament,
+                    stageIndex: _viewStageIndex,
+                    completedStages: _completedStageIndexes,
+                    mode: _stageViewMode,
+                    canLead: true,
+                    directorModeEnabled: widget.tournament.directorModeEnabled,
+                    onStageChanged: (index) => setState(() {
+                      _viewStageIndex = index;
+                      _isBracketEditMode = false;
+                    }),
+                    onModeChanged: (mode) =>
+                        setState(() => _stageViewMode = mode),
+                  ),
                 ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: SliverList.list(
-                  children: [
-                    if (!isViewingActiveStage &&
-                        _viewStageIndex > _activeStageIndex &&
-                        _stageViewMode != StageViewMode.orderOfPlay &&
-                        _stageViewMode != StageViewMode.director)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          'Vorschau: Teilnehmer und Setzung stehen erst nach Abschluss der vorherigen Etappe fest.',
-                        ),
-                      ),
-                    if (_stageViewMode == StageViewMode.dashboard ||
-                        _stageViewMode == StageViewMode.director)
-                      TournamentDirectorDashboard(
-                        tournament: widget.tournament,
-                        activeStage: _activeStageIndex,
-                        saveError: _directorSaveError,
-                        canOperate:
-                            !_isApplyingStartDraw &&
-                            !_completedStageIndexes.contains(
-                              _activeStageIndex,
-                            ) &&
-                            !_stageNeedsStartDraw(
-                              widget.tournament.stages[_activeStageIndex],
-                            ),
-                        onResult: (match) {
-                          final board = match.boardNumber;
-                          final announce =
-                              _stageViewMode == StageViewMode.director &&
-                              board != null;
-                          return _editResult(
-                            match,
-                            onSaved: announce
-                                ? () => unawaited(
-                                    _announceRecommendationForBoard(board),
-                                  )
-                                : null,
-                          );
-                        },
-                        onBlock: _toggleBoardBlock,
-                        directorModeEnabled:
-                            widget.tournament.directorModeEnabled &&
-                            _stageViewMode == StageViewMode.director,
-                        showBoardNumber: widget.tournament.directorModeEnabled,
-                        onStartOnBoard: _startRecommendedMatchOnBoard,
-                        onResetMatch: _resetRunningMatch,
-                        onOpenMatch: _openPlayedMatch,
-                        onStartClock: _startTournamentClock,
-                        onPauseClock: _toggleClockPause,
-                        onEditTimes: _editTournamentTimes,
-                        onResetClock: _resetTournamentClock,
-                        onChangeTournamentDate: _saveTournamentDate,
-                        onShiftMatchDates: _shiftTournamentMatchDates,
-                        onChange: () async {
-                          setState(() {});
-                          await _saveTournamentProgress(propagateError: true);
-                        },
-                        onCompleteStage: _completeCurrentStage,
-                        onFinishEarly: _finishCurrentStageEarly,
-                        onReopenPreviousStage: _reopenPreviousStage,
-                        canReopenPreviousStage: _canReopenPreviousStage,
-                        onResetCurrentStage: _resetCurrentStageWithConfirmation,
-                        canResetCurrentStage: _canResetCurrentStage,
-                        canCompleteStage: canCompleteStage,
-                        isLastStage: isLastStage,
-                      )
-                    else if (_stageViewMode == StageViewMode.settings)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Turniereinstellungen',
-                            style: Theme.of(context).textTheme.titleLarge,
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverList.list(
+                    children: [
+                      if (!isViewingActiveStage &&
+                          _viewStageIndex > _activeStageIndex &&
+                          _stageViewMode != StageViewMode.orderOfPlay &&
+                          _stageViewMode != StageViewMode.director)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            'Vorschau: Teilnehmer und Setzung stehen erst nach Abschluss der vorherigen Etappe fest.',
                           ),
-                          const SizedBox(height: 12),
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final field = TextField(
-                                        controller: _tournamentNameController,
-                                        maxLength: 100,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Turniername',
-                                          border: OutlineInputBorder(),
-                                          counterText: '',
+                        ),
+                      if (_stageViewMode == StageViewMode.dashboard ||
+                          _stageViewMode == StageViewMode.director)
+                        TournamentDirectorDashboard(
+                          tournament: widget.tournament,
+                          activeStage: _activeStageIndex,
+                          saveError: _directorSaveError,
+                          canOperate:
+                              !_isApplyingStartDraw &&
+                              !_completedStageIndexes.contains(
+                                _activeStageIndex,
+                              ) &&
+                              !_stageNeedsStartDraw(
+                                widget.tournament.stages[_activeStageIndex],
+                              ),
+                          onResult: (match) {
+                            final board = match.boardNumber;
+                            final announce =
+                                _stageViewMode == StageViewMode.director &&
+                                board != null;
+                            return _editResult(
+                              match,
+                              onSaved: announce
+                                  ? () => unawaited(
+                                      _announceRecommendationForBoard(board),
+                                    )
+                                  : null,
+                            );
+                          },
+                          onBlock: _toggleBoardBlock,
+                          directorModeEnabled:
+                              widget.tournament.directorModeEnabled &&
+                              _stageViewMode == StageViewMode.director,
+                          showBoardNumber:
+                              widget.tournament.directorModeEnabled,
+                          onStartOnBoard: _startRecommendedMatchOnBoard,
+                          onResetMatch: _resetRunningMatch,
+                          onOpenMatch: _openPlayedMatch,
+                          onStartClock: _startTournamentClock,
+                          onPauseClock: _toggleClockPause,
+                          onEditTimes: _editTournamentTimes,
+                          onResetClock: _resetTournamentClock,
+                          onChangeTournamentDate: _saveTournamentDate,
+                          onShiftMatchDates: _shiftTournamentMatchDates,
+                          onChange: () async {
+                            setState(() {});
+                            await _saveTournamentProgress(propagateError: true);
+                          },
+                          onCompleteStage: _completeCurrentStage,
+                          onFinishEarly: _finishCurrentStageEarly,
+                          onReopenPreviousStage: _reopenPreviousStage,
+                          canReopenPreviousStage: _canReopenPreviousStage,
+                          onResetCurrentStage:
+                              _resetCurrentStageWithConfirmation,
+                          canResetCurrentStage: _canResetCurrentStage,
+                          canCompleteStage: canCompleteStage,
+                          isLastStage: isLastStage,
+                        )
+                      else if (_stageViewMode == StageViewMode.settings)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Turniereinstellungen',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 12),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final field = TextField(
+                                          controller: _tournamentNameController,
+                                          maxLength: 100,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Turniername',
+                                            border: OutlineInputBorder(),
+                                            counterText: '',
+                                          ),
+                                          onSubmitted: (_) =>
+                                              _saveTournamentName(),
+                                        );
+                                        final pickNameButton = OutlinedButton.icon(
+                                          onPressed: _pickTournamentName,
+                                          icon: const Icon(
+                                            Icons.folder_open_outlined,
+                                          ),
+                                          label: const Text(
+                                            'Name eines anderen Turniers öffnen',
+                                          ),
+                                        );
+                                        final saveButton = FilledButton.icon(
+                                          onPressed: _saveTournamentName,
+                                          icon: const Icon(Icons.save_outlined),
+                                          label: const Text('Namen speichern'),
+                                        );
+                                        if (constraints.maxWidth < 900 ||
+                                            MediaQuery.textScalerOf(
+                                                  context,
+                                                ).scale(16) >
+                                                24) {
+                                          return Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              field,
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: [
+                                                  pickNameButton,
+                                                  saveButton,
+                                                ],
+                                              ),
+                                            ],
+                                          );
+                                        }
+                                        return Row(
+                                          children: [
+                                            Expanded(child: field),
+                                            const SizedBox(width: 12),
+                                            pickNameButton,
+                                            const SizedBox(width: 8),
+                                            saveButton,
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                    const Divider(height: 28),
+                                    if (widget.tournament.leagueMatch == null &&
+                                        widget.tournament.importedArchive ==
+                                            null)
+                                      Align(
+                                        alignment:
+                                            AlignmentDirectional.centerStart,
+                                        child: OutlinedButton.icon(
+                                          onPressed:
+                                              _editTournamentConfiguration,
+                                          icon: const Icon(Icons.edit_outlined),
+                                          label: const Text(
+                                            'Turnierkonfiguration bearbeiten',
+                                          ),
                                         ),
-                                        onSubmitted: (_) =>
-                                            _saveTournamentName(),
-                                      );
-                                      final pickNameButton = OutlinedButton.icon(
-                                        onPressed: _pickTournamentName,
-                                        icon: const Icon(
-                                          Icons.folder_open_outlined,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _secondScreenSettingsCard(),
+                            const SizedBox(height: 12),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text(
+                                        'Turnierleiter-Modus aktivieren',
+                                      ),
+                                      subtitle: const Text(
+                                        'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.',
+                                      ),
+                                      value:
+                                          widget.tournament.directorModeEnabled,
+                                      onChanged: (enabled) async {
+                                        final strategy = widget
+                                            .tournament
+                                            .directorSchedulingStrategy;
+                                        await _saveDirectorMode(
+                                          enabled: enabled,
+                                          strategy: strategy,
+                                        );
+                                      },
+                                    ),
+                                    if (widget.tournament.directorModeEnabled)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: DropdownButtonFormField<String>(
+                                          initialValue: widget
+                                              .tournament
+                                              .directorSchedulingStrategy,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Board-Strategie',
+                                            border: OutlineInputBorder(),
+                                            suffixIcon: Tooltip(
+                                              message:
+                                                  'Gruppenbasiert: Jede Gruppe '
+                                                  'spielt nur auf den ihr '
+                                                  'zugewiesenen Boards. Global '
+                                                  'optimiert: Alle offenen '
+                                                  'Partien werden gemeinsam '
+                                                  'auf die Boards verteilt.',
+                                              child: Icon(Icons.help_outline),
+                                            ),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'group',
+                                              child: Text('Gruppenbasiert'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'global',
+                                              child: Text('Global optimiert'),
+                                            ),
+                                          ],
+                                          onChanged: (value) async {
+                                            if (value == null) return;
+                                            final previous = widget
+                                                .tournament
+                                                .directorSchedulingStrategy;
+                                            setState(() {
+                                              widget
+                                                      .tournament
+                                                      .directorSchedulingStrategy =
+                                                  value;
+                                            });
+                                            try {
+                                              await _saveTournamentProgress(
+                                                propagateError: true,
+                                              );
+                                            } catch (_) {
+                                              if (!mounted) return;
+                                              setState(() {
+                                                widget
+                                                        .tournament
+                                                        .directorSchedulingStrategy =
+                                                    previous;
+                                              });
+                                            }
+                                          },
                                         ),
-                                        label: const Text(
-                                          'Name eines anderen Turniers öffnen',
+                                      ),
+                                    if (widget.tournament.directorModeEnabled &&
+                                        widget
+                                                .tournament
+                                                .directorSchedulingStrategy ==
+                                            'group')
+                                      _groupBoardAssignmentsSettings(),
+                                    if (widget.tournament.directorModeEnabled)
+                                      TournamentRunSettingsPanel(
+                                        tournament: widget.tournament,
+                                        onChanged: _saveTournamentSettings,
+                                        showAudioSettings: true,
+                                        showPrioritySettings: false,
+                                        showHintAudioSettings: false,
+                                      ),
+                                    if (widget.tournament.directorModeEnabled)
+                                      SwitchListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text(
+                                          'Player Insights anzeigen',
                                         ),
-                                      );
-                                      final saveButton = FilledButton.icon(
-                                        onPressed: _saveTournamentName,
-                                        icon: const Icon(Icons.save_outlined),
-                                        label: const Text('Namen speichern'),
-                                      );
-                                      if (constraints.maxWidth < 900 ||
-                                          MediaQuery.textScalerOf(
-                                                context,
-                                              ).scale(16) >
-                                              24) {
-                                        return Column(
+                                        subtitle: const Text(
+                                          'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
+                                        ),
+                                        value: widget
+                                            .tournament
+                                            .showPlayerInsights,
+                                        onChanged: _savePlayerInsightsSetting,
+                                      ),
+                                    if (widget.tournament.directorModeEnabled)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 12),
+                                        child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
                                           children: [
-                                            field,
+                                            Text(
+                                              'Boards: ${widget.tournament.boardCount}',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium,
+                                            ),
                                             const SizedBox(height: 8),
                                             Wrap(
                                               spacing: 8,
                                               runSpacing: 8,
                                               children: [
-                                                pickNameButton,
-                                                saveButton,
-                                              ],
-                                            ),
-                                          ],
-                                        );
-                                      }
-                                      return Row(
-                                        children: [
-                                          Expanded(child: field),
-                                          const SizedBox(width: 12),
-                                          pickNameButton,
-                                          const SizedBox(width: 8),
-                                          saveButton,
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                  const Divider(height: 28),
-                                  if (widget.tournament.leagueMatch == null &&
-                                      widget.tournament.importedArchive == null)
-                                    Align(
-                                      alignment:
-                                          AlignmentDirectional.centerStart,
-                                      child: OutlinedButton.icon(
-                                        onPressed: _editTournamentConfiguration,
-                                        icon: const Icon(Icons.edit_outlined),
-                                        label: const Text(
-                                          'Turnierkonfiguration bearbeiten',
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Card(
-                            child: SwitchListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              title: const Text(
-                                'Errungenschaften-Infos ein-/ausblenden',
-                              ),
-                              subtitle: const Text(
-                                'Steuert nur die Hinweise während des Turniers. '
-                                'Fortschritte werden unabhängig davon gespeichert.',
-                              ),
-                              value: widget
-                                  .tournament
-                                  .showAchievementNotifications,
-                              onChanged: _saveAchievementNotificationSetting,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  SwitchListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text(
-                                      'Turnierleiter-Modus aktivieren',
-                                    ),
-                                    subtitle: const Text(
-                                      'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.',
-                                    ),
-                                    value:
-                                        widget.tournament.directorModeEnabled,
-                                    onChanged: (enabled) async {
-                                      final strategy = widget
-                                          .tournament
-                                          .directorSchedulingStrategy;
-                                      await _saveDirectorMode(
-                                        enabled: enabled,
-                                        strategy: strategy,
-                                      );
-                                    },
-                                  ),
-                                  if (widget.tournament.directorModeEnabled)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 8),
-                                      child: DropdownButtonFormField<String>(
-                                        initialValue: widget
-                                            .tournament
-                                            .directorSchedulingStrategy,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Board-Strategie',
-                                          border: OutlineInputBorder(),
-                                          suffixIcon: Tooltip(
-                                            message:
-                                                'Gruppenbasiert: Jede Gruppe '
-                                                'spielt nur auf den ihr '
-                                                'zugewiesenen Boards. Global '
-                                                'optimiert: Alle offenen '
-                                                'Partien werden gemeinsam '
-                                                'auf die Boards verteilt.',
-                                            child: Icon(Icons.help_outline),
-                                          ),
-                                        ),
-                                        items: const [
-                                          DropdownMenuItem(
-                                            value: 'group',
-                                            child: Text('Gruppenbasiert'),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: 'global',
-                                            child: Text('Global optimiert'),
-                                          ),
-                                        ],
-                                        onChanged: (value) async {
-                                          if (value == null) return;
-                                          final previous = widget
-                                              .tournament
-                                              .directorSchedulingStrategy;
-                                          setState(() {
-                                            widget
-                                                    .tournament
-                                                    .directorSchedulingStrategy =
-                                                value;
-                                          });
-                                          try {
-                                            await _saveTournamentProgress(
-                                              propagateError: true,
-                                            );
-                                          } catch (_) {
-                                            if (!mounted) return;
-                                            setState(() {
-                                              widget
-                                                      .tournament
-                                                      .directorSchedulingStrategy =
-                                                  previous;
-                                            });
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                  if (widget.tournament.directorModeEnabled &&
-                                      widget
-                                              .tournament
-                                              .directorSchedulingStrategy ==
-                                          'group')
-                                    _groupBoardAssignmentsSettings(),
-                                  if (widget.tournament.directorModeEnabled)
-                                    TournamentRunSettingsPanel(
-                                      tournament: widget.tournament,
-                                      onChanged: _saveTournamentSettings,
-                                      showAudioSettings: true,
-                                      showPrioritySettings: false,
-                                      showHintAudioSettings: false,
-                                    ),
-                                  if (widget.tournament.directorModeEnabled)
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text(
-                                        'Player Insights anzeigen',
-                                      ),
-                                      subtitle: const Text(
-                                        'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
-                                      ),
-                                      value:
-                                          widget.tournament.showPlayerInsights,
-                                      onChanged: _savePlayerInsightsSetting,
-                                    ),
-                                  if (widget.tournament.directorModeEnabled)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 12),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          Text(
-                                            'Boards: ${widget.tournament.boardCount}',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.titleMedium,
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            children: [
-                                              OutlinedButton.icon(
-                                                onPressed:
-                                                    widget
-                                                            .tournament
-                                                            .boardCount <=
-                                                        1
-                                                    ? null
-                                                    : () => _handleDirectorSettings(
-                                                        () => _changeDirectorBoardCount(
-                                                          widget
-                                                                  .tournament
-                                                                  .boardCount -
-                                                              1,
+                                                OutlinedButton.icon(
+                                                  onPressed:
+                                                      widget
+                                                              .tournament
+                                                              .boardCount <=
+                                                          1
+                                                      ? null
+                                                      : () => _handleDirectorSettings(
+                                                          () => _changeDirectorBoardCount(
+                                                            widget
+                                                                    .tournament
+                                                                    .boardCount -
+                                                                1,
+                                                          ),
                                                         ),
-                                                      ),
-                                                icon: const Icon(Icons.remove),
-                                                label: const Text(
-                                                  'Board entfernen',
-                                                ),
-                                              ),
-                                              OutlinedButton.icon(
-                                                onPressed:
-                                                    widget
-                                                            .tournament
-                                                            .boardCount >=
-                                                        64
-                                                    ? null
-                                                    : () => _handleDirectorSettings(
-                                                        () => _changeDirectorBoardCount(
-                                                          widget
-                                                                  .tournament
-                                                                  .boardCount +
-                                                              1,
-                                                        ),
-                                                      ),
-                                                icon: const Icon(Icons.add),
-                                                label: const Text(
-                                                  'Board hinzufügen',
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Card(
-                            child: ExpansionTile(
-                              key: const ValueKey('tournament-hint-settings'),
-                              leading: const Icon(Icons.notifications_active),
-                              title: const Text('Hinweiseinstellungen'),
-                              childrenPadding: const EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                16,
-                                16,
-                              ),
-                              children: [
-                                TournamentRunSettingsPanel(
-                                  tournament: widget.tournament,
-                                  onChanged: _saveTournamentSettings,
-                                  showAudioSettings: false,
-                                  showPrioritySettings: true,
-                                  showHintAudioSettings:
-                                      widget.tournament.directorModeEnabled,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // 1. Turnieruhr Steuerung
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: TournamentTimingPanel(
-                                tournament: widget.tournament,
-                                onStart: _startTournamentClock,
-                                onPauseToggle: _toggleClockPause,
-                                onEditTimes: _editTournamentTimes,
-                                onResetClock: _resetTournamentClock,
-                                onChangeTournamentDate: _saveTournamentDate,
-                                onShiftMatchDates: _shiftTournamentMatchDates,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // 2. 2-Monitor-Modus
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.tv),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '2. Bildschirm (TV-Anzeige)',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      FilledButton.icon(
-                                        onPressed: () async {
-                                          try {
-                                            await Process.start(
-                                              Platform.resolvedExecutable,
-                                              [
-                                                '--second-screen',
-                                                widget.tournament.id,
-                                                '--parent-pid=$pid',
-                                              ],
-                                            );
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'TV-Anzeige im separaten Fenster geöffnet. Ziehe das Fenster auf den 2. Monitor und maximiere es.',
+                                                  icon: const Icon(
+                                                    Icons.remove,
+                                                  ),
+                                                  label: const Text(
+                                                    'Board entfernen',
                                                   ),
                                                 ),
-                                              );
-                                            }
-                                          } catch (_) {
-                                            if (context.mounted) {
-                                              showDialog<void>(
-                                                context: context,
-                                                builder: (ctx) => Dialog.fullscreen(
-                                                  child:
-                                                      TournamentSecondScreenView(
-                                                        tournament:
-                                                            widget.tournament,
-                                                        isStandaloneWindow:
-                                                            true,
-                                                      ),
+                                                OutlinedButton.icon(
+                                                  onPressed:
+                                                      widget
+                                                              .tournament
+                                                              .boardCount >=
+                                                          64
+                                                      ? null
+                                                      : () => _handleDirectorSettings(
+                                                          () => _changeDirectorBoardCount(
+                                                            widget
+                                                                    .tournament
+                                                                    .boardCount +
+                                                                1,
+                                                          ),
+                                                        ),
+                                                  icon: const Icon(Icons.add),
+                                                  label: const Text(
+                                                    'Board hinzufügen',
+                                                  ),
                                                 ),
-                                              );
-                                            }
-                                          }
-                                        },
-                                        icon: const Icon(Icons.open_in_new),
-                                        label: const Text(
-                                          'In separatem Fenster öffnen (für 2. Monitor)',
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                          ],
                                         ),
                                       ),
-                                      IconButton(
-                                        tooltip:
-                                            'Information zum 2. Bildschirm',
-                                        onPressed: () => showDialog<void>(
-                                          context: context,
-                                          builder: (context) => AlertDialog(
-                                            title: const Text(
-                                              '2. Bildschirm (TV-Anzeige)',
-                                            ),
-                                            content: const Text(
-                                              'Öffnet die Tabellen, Spielansetzungen, Ergebnisse und Turnieruhr '
-                                              'in einem eigenen Fenster. Ziehe dieses Fenster auf den zweiten '
-                                              'Monitor und maximiere es. Ergebnisse kannst du weiterhin hier '
-                                              'am Hauptbildschirm eintragen.',
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () =>
-                                                    Navigator.of(context).pop(),
-                                                child: const Text('Schließen'),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        icon: const Icon(Icons.help_outline),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          if (isViewingActiveStage &&
-                              activeStage is KnockoutTournamentRunStage &&
-                              activeStage.isKratzer)
-                            Card(
-                              child: ExpansionTile(
-                                key: const ValueKey(
-                                  'kratzer-handicap-settings',
-                                ),
-                                leading: const Icon(Icons.rule_folder_outlined),
-                                title: const Text('Sonderregel Einstellungen'),
-                                subtitle: const Text(
-                                  'Handicaps verwalten und Spielern zuweisen',
-                                ),
-                                childrenPadding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  16,
-                                ),
-                                children: [
-                                  SwitchListTile(
-                                    key: const ValueKey(
-                                      'kratzer-handicaps-enabled',
-                                    ),
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text('Handicaps aktivieren'),
-                                    value: activeStage.kratzerHandicapsEnabled,
-                                    onChanged: _savingKratzerHandicapSettings
-                                        ? null
-                                        : (enabled) =>
-                                              _saveKratzerHandicapSettings(
-                                                runStage: activeStage,
-                                                enabled: enabled,
-                                                handicaps: activeStage
-                                                    .kratzerHandicaps,
-                                                assignments: activeStage
-                                                    .kratzerHandicapAssignments,
-                                              ),
+
+                            if (isViewingActiveStage &&
+                                activeStage is KnockoutTournamentRunStage &&
+                                activeStage.isKratzer)
+                              Card(
+                                child: ExpansionTile(
+                                  key: const ValueKey(
+                                    'kratzer-handicap-settings',
                                   ),
-                                  if (activeStage.kratzerHandicapsEnabled) ...[
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        'Handicaps verwalten',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleSmall,
+                                  leading: const Icon(
+                                    Icons.rule_folder_outlined,
+                                  ),
+                                  title: const Text(
+                                    'Sonderregel Einstellungen',
+                                  ),
+                                  subtitle: const Text(
+                                    'Handicaps verwalten und Spielern zuweisen',
+                                  ),
+                                  childrenPadding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    0,
+                                    16,
+                                    16,
+                                  ),
+                                  children: [
+                                    SwitchListTile(
+                                      key: const ValueKey(
+                                        'kratzer-handicaps-enabled',
                                       ),
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Handicaps aktivieren'),
+                                      value:
+                                          activeStage.kratzerHandicapsEnabled,
+                                      onChanged: _savingKratzerHandicapSettings
+                                          ? null
+                                          : (
+                                              enabled,
+                                            ) => _saveKratzerHandicapSettings(
+                                              runStage: activeStage,
+                                              enabled: enabled,
+                                              handicaps:
+                                                  activeStage.kratzerHandicaps,
+                                              assignments: activeStage
+                                                  .kratzerHandicapAssignments,
+                                            ),
                                     ),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: OutlinedButton.icon(
-                                        onPressed:
-                                            _savingKratzerHandicapSettings
-                                            ? null
-                                            : () => _addKratzerHandicap(
-                                                activeStage,
-                                              ),
-                                        icon: const Icon(Icons.add),
-                                        label: const Text(
-                                          'Handicap hinzufügen',
-                                        ),
-                                      ),
-                                    ),
-                                    if (activeStage.kratzerHandicaps.isEmpty)
-                                      const Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          vertical: 8,
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            'Füge zuerst Handicaps hinzu, zum Beispiel „Wirf mit der linken Hand“. ',
-                                          ),
-                                        ),
-                                      ),
-                                    for (final handicap
-                                        in activeStage.kratzerHandicaps)
-                                      ListTile(
-                                        key: ValueKey(
-                                          'kratzer-handicap-$handicap',
-                                        ),
-                                        contentPadding: EdgeInsets.zero,
-                                        title: Text(handicap),
-                                        trailing: IconButton(
-                                          tooltip: 'Handicap entfernen',
-                                          onPressed:
-                                              _savingKratzerHandicapSettings
-                                              ? null
-                                              : () {
-                                                  final handicaps = activeStage
-                                                      .kratzerHandicaps
-                                                      .where(
-                                                        (item) =>
-                                                            item != handicap,
-                                                      )
-                                                      .toList();
-                                                  final assignments =
-                                                      Map<int, String>.from(
-                                                        activeStage
-                                                            .kratzerHandicapAssignments,
-                                                      )..removeWhere(
-                                                        (_, assigned) =>
-                                                            assigned ==
-                                                            handicap,
-                                                      );
-                                                  _saveKratzerHandicapSettings(
-                                                    runStage: activeStage,
-                                                    enabled: true,
-                                                    handicaps: handicaps,
-                                                    assignments: assignments,
-                                                  );
-                                                },
-                                          icon: const Icon(
-                                            Icons.delete_outline,
-                                          ),
-                                        ),
-                                      ),
                                     if (activeStage
-                                        .kratzerHandicaps
-                                        .isNotEmpty) ...[
+                                        .kratzerHandicapsEnabled) ...[
                                       Align(
                                         alignment: Alignment.centerLeft,
                                         child: Text(
-                                          'Handicaps zuweisen',
+                                          'Handicaps verwalten',
                                           style: Theme.of(
                                             context,
                                           ).textTheme.titleSmall,
                                         ),
                                       ),
-                                      for (
-                                        var playerIndex = 0;
-                                        playerIndex <
-                                            kratzerParticipants.length;
-                                        playerIndex++
-                                      )
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 12,
-                                          ),
-                                          child: DropdownButtonFormField<String>(
-                                            key: ValueKey(
-                                              'kratzer-handicap-assignment-$playerIndex',
-                                            ),
-                                            initialValue:
-                                                activeStage.kratzerHandicaps
-                                                    .contains(
-                                                      activeStage
-                                                          .kratzerHandicapAssignments[playerIndex],
-                                                    )
-                                                ? activeStage
-                                                      .kratzerHandicapAssignments[playerIndex]!
-                                                : '',
-                                            isExpanded: true,
-                                            decoration: InputDecoration(
-                                              labelText:
-                                                  'Handicap für ${kratzerParticipants[playerIndex].name}',
-                                            ),
-                                            items: [
-                                              const DropdownMenuItem(
-                                                value: '',
-                                                child: Text('Kein Handicap'),
-                                              ),
-                                              for (final handicap
-                                                  in activeStage
-                                                      .kratzerHandicaps)
-                                                DropdownMenuItem(
-                                                  value: handicap,
-                                                  child: Text(handicap),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: OutlinedButton.icon(
+                                          onPressed:
+                                              _savingKratzerHandicapSettings
+                                              ? null
+                                              : () => _addKratzerHandicap(
+                                                  activeStage,
                                                 ),
-                                            ],
-                                            onChanged:
+                                          icon: const Icon(Icons.add),
+                                          label: const Text(
+                                            'Handicap hinzufügen',
+                                          ),
+                                        ),
+                                      ),
+                                      if (activeStage.kratzerHandicaps.isEmpty)
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 8,
+                                          ),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              'Füge zuerst Handicaps hinzu, zum Beispiel „Wirf mit der linken Hand“. ',
+                                            ),
+                                          ),
+                                        ),
+                                      for (final handicap
+                                          in activeStage.kratzerHandicaps)
+                                        ListTile(
+                                          key: ValueKey(
+                                            'kratzer-handicap-$handicap',
+                                          ),
+                                          contentPadding: EdgeInsets.zero,
+                                          title: Text(handicap),
+                                          trailing: IconButton(
+                                            tooltip: 'Handicap entfernen',
+                                            onPressed:
                                                 _savingKratzerHandicapSettings
                                                 ? null
-                                                : (handicap) {
+                                                : () {
+                                                    final handicaps =
+                                                        activeStage
+                                                            .kratzerHandicaps
+                                                            .where(
+                                                              (item) =>
+                                                                  item !=
+                                                                  handicap,
+                                                            )
+                                                            .toList();
                                                     final assignments =
                                                         Map<int, String>.from(
                                                           activeStage
                                                               .kratzerHandicapAssignments,
+                                                        )..removeWhere(
+                                                          (_, assigned) =>
+                                                              assigned ==
+                                                              handicap,
                                                         );
-                                                    if (handicap == null ||
-                                                        handicap.isEmpty) {
-                                                      assignments.remove(
-                                                        playerIndex,
-                                                      );
-                                                    } else {
-                                                      assignments[playerIndex] =
-                                                          handicap;
-                                                    }
                                                     _saveKratzerHandicapSettings(
                                                       runStage: activeStage,
                                                       enabled: true,
-                                                      handicaps: activeStage
-                                                          .kratzerHandicaps,
+                                                      handicaps: handicaps,
                                                       assignments: assignments,
                                                     );
                                                   },
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                            ),
                                           ),
                                         ),
+                                      if (activeStage
+                                          .kratzerHandicaps
+                                          .isNotEmpty) ...[
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Handicaps zuweisen',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                          ),
+                                        ),
+                                        for (
+                                          var playerIndex = 0;
+                                          playerIndex <
+                                              kratzerParticipants.length;
+                                          playerIndex++
+                                        )
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 12,
+                                            ),
+                                            child: DropdownButtonFormField<String>(
+                                              key: ValueKey(
+                                                'kratzer-handicap-assignment-$playerIndex',
+                                              ),
+                                              initialValue:
+                                                  activeStage.kratzerHandicaps
+                                                      .contains(
+                                                        activeStage
+                                                            .kratzerHandicapAssignments[playerIndex],
+                                                      )
+                                                  ? activeStage
+                                                        .kratzerHandicapAssignments[playerIndex]!
+                                                  : '',
+                                              isExpanded: true,
+                                              decoration: InputDecoration(
+                                                labelText:
+                                                    'Handicap für ${kratzerParticipants[playerIndex].name}',
+                                              ),
+                                              items: [
+                                                const DropdownMenuItem(
+                                                  value: '',
+                                                  child: Text('Kein Handicap'),
+                                                ),
+                                                for (final handicap
+                                                    in activeStage
+                                                        .kratzerHandicaps)
+                                                  DropdownMenuItem(
+                                                    value: handicap,
+                                                    child: Text(handicap),
+                                                  ),
+                                              ],
+                                              onChanged:
+                                                  _savingKratzerHandicapSettings
+                                                  ? null
+                                                  : (handicap) {
+                                                      final assignments =
+                                                          Map<int, String>.from(
+                                                            activeStage
+                                                                .kratzerHandicapAssignments,
+                                                          );
+                                                      if (handicap == null ||
+                                                          handicap.isEmpty) {
+                                                        assignments.remove(
+                                                          playerIndex,
+                                                        );
+                                                      } else {
+                                                        assignments[playerIndex] =
+                                                            handicap;
+                                                      }
+                                                      _saveKratzerHandicapSettings(
+                                                        runStage: activeStage,
+                                                        enabled: true,
+                                                        handicaps: activeStage
+                                                            .kratzerHandicaps,
+                                                        assignments:
+                                                            assignments,
+                                                      );
+                                                    },
+                                            ),
+                                          ),
+                                      ],
                                     ],
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
-                          const SizedBox(height: 12),
-                          // 3. Gruppen verwalten
-                          if (widget.tournament.leagueMatch == null &&
-                              activeStage is GroupTournamentRunStage)
-                            Builder(
-                              builder: (context) {
-                                final canEdit =
-                                    isViewingActiveStage &&
-                                    _canEditGroupPositions(
-                                      activeStage,
-                                      _viewStageIndex,
-                                    );
-                                final disabledReason = _isApplyingStartDraw
-                                    ? 'Die Gruppenauslosung wird gerade angewendet.'
-                                    : !isViewingActiveStage
-                                    ? 'Gruppen können nur in der aktiven Etappe bearbeitet werden.'
-                                    : _hasRecordedTournamentResults()
-                                    ? 'Die Gruppen lassen sich nur bearbeiten, bevor Ergebnisse vorliegen oder nachdem alle Etappen zurückgesetzt wurden.'
-                                    : 'Mindestens eine Partie wurde bereits gestartet oder zurückgesetzt.';
-                                return Card(
-                                  child: ListTile(
-                                    leading: const Icon(Icons.grid_view),
-                                    title: const Text('Gruppen verwalten'),
-                                    subtitle: const Text(
-                                      'Positionen der Spieler in den Gruppen tauschen.',
-                                    ),
-                                    trailing: Tooltip(
-                                      message: canEdit
-                                          ? 'Spielerpositionen in den Gruppen tauschen'
-                                          : disabledReason,
-                                      child: OutlinedButton(
-                                        onPressed: canEdit
-                                            ? () => _editGroupPositions(
-                                                activeStage,
-                                              )
-                                            : null,
-                                        child: const Text('Bearbeiten'),
+                            const SizedBox(height: 12),
+                            // 3. Gruppen verwalten
+                            if (widget.tournament.leagueMatch == null &&
+                                activeStage is GroupTournamentRunStage)
+                              Builder(
+                                builder: (context) {
+                                  final canEdit =
+                                      isViewingActiveStage &&
+                                      _canEditGroupPositions(
+                                        activeStage,
+                                        _viewStageIndex,
+                                      );
+                                  final disabledReason = _isApplyingStartDraw
+                                      ? 'Die Gruppenauslosung wird gerade angewendet.'
+                                      : !isViewingActiveStage
+                                      ? 'Gruppen können nur in der aktiven Etappe bearbeitet werden.'
+                                      : _hasRecordedTournamentResults()
+                                      ? 'Die Gruppen lassen sich nur bearbeiten, bevor Ergebnisse vorliegen oder nachdem alle Etappen zurückgesetzt wurden.'
+                                      : 'Mindestens eine Partie wurde bereits gestartet oder zurückgesetzt.';
+                                  return Card(
+                                    child: ListTile(
+                                      leading: const Icon(Icons.grid_view),
+                                      title: const Text('Gruppen verwalten'),
+                                      subtitle: const Text(
+                                        'Positionen der Spieler in den Gruppen tauschen.',
+                                      ),
+                                      trailing: Tooltip(
+                                        message: canEdit
+                                            ? 'Spielerpositionen in den Gruppen tauschen'
+                                            : disabledReason,
+                                        child: OutlinedButton(
+                                          onPressed: canEdit
+                                              ? () => _editGroupPositions(
+                                                  activeStage,
+                                                )
+                                              : null,
+                                          child: const Text('Bearbeiten'),
+                                        ),
                                       ),
                                     ),
+                                  );
+                                },
+                              ),
+                            const SizedBox(height: 12),
+                            if (widget.tournament.leagueMatch == null &&
+                                !widget.tournament.isKratzerTournament)
+                              Card(
+                                child: ExpansionTile(
+                                  initiallyExpanded: false,
+                                  leading: const Icon(
+                                    Icons.leaderboard_outlined,
+                                  ),
+                                  title: const Text('Ranglistenoptionen'),
+                                  subtitle: const Text(
+                                    'Wertung und zugewiesene Ranglisten',
+                                  ),
+                                  childrenPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  children: [
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text(
+                                        'Für Rangliste berücksichtigen',
+                                      ),
+                                      subtitle: const Text(
+                                        'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
+                                      ),
+                                      value: widget.tournament.countsForRanking,
+                                      onChanged: _savingRankingSelection
+                                          ? null
+                                          : (value) => _saveRankingSelection(
+                                              countsForRanking: value,
+                                              rankingIds: value
+                                                  ? widget.tournament.rankingIds
+                                                  : const [],
+                                            ),
+                                    ),
+                                    if (_savingRankingSelection)
+                                      const LinearProgressIndicator(),
+                                    if (widget.tournament.countsForRanking)
+                                      FutureBuilder<List<LocalRanking>>(
+                                        future: _localRankings,
+                                        builder: (context, snapshot) {
+                                          if (snapshot.hasError) {
+                                            return Text(
+                                              'Ranglisten konnten nicht geladen werden: ${snapshot.error}',
+                                            );
+                                          }
+                                          if (!snapshot.hasData) {
+                                            return const LinearProgressIndicator();
+                                          }
+                                          final rankings = snapshot.data!;
+                                          if (rankings.isEmpty) {
+                                            return const Text(
+                                              'Lege zuerst eine Rangliste im Hauptmenü an.',
+                                            );
+                                          }
+                                          return Column(
+                                            children: [
+                                              for (final ranking in rankings)
+                                                CheckboxListTile(
+                                                  contentPadding:
+                                                      EdgeInsets.zero,
+                                                  title: Text(ranking.name),
+                                                  value: widget
+                                                      .tournament
+                                                      .rankingIds
+                                                      .contains(ranking.id),
+                                                  onChanged:
+                                                      _savingRankingSelection
+                                                      ? null
+                                                      : (selected) {
+                                                          final ids =
+                                                              List<String>.from(
+                                                                widget
+                                                                    .tournament
+                                                                    .rankingIds,
+                                                              );
+                                                          if (selected ==
+                                                              true) {
+                                                            ids.add(ranking.id);
+                                                          } else {
+                                                            ids.remove(
+                                                              ranking.id,
+                                                            );
+                                                          }
+                                                          _saveRankingSelection(
+                                                            countsForRanking:
+                                                                true,
+                                                            rankingIds: ids,
+                                                          );
+                                                        },
+                                                ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 12),
+                            if (widget.tournament.leagueMatch == null &&
+                                _activeStageIndex <
+                                    widget.tournament.stages.length &&
+                                widget
+                                        .tournament
+                                        .stages[_activeStageIndex]
+                                        .type ==
+                                    'groups')
+                              Card(
+                                child: ExpansionTile(
+                                  initiallyExpanded: false,
+                                  leading: const Icon(Icons.swap_vert),
+                                  title: const Text(
+                                    'Tie Breaker Einstellungen',
+                                  ),
+                                  subtitle: const Text(
+                                    'Reihenfolge für Gleichstände in dieser Etappe',
+                                  ),
+                                  childrenPadding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    0,
+                                    16,
+                                    16,
+                                  ),
+                                  children: [
+                                    Text(
+                                      'Tie-Breaker · ${widget.tournament.stages[_activeStageIndex].name}',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    GroupTieBreakerSetup(
+                                      tieBreakers: _tieBreakersForActiveStage(),
+                                      onMoveTieBreaker:
+                                          _moveGroupTieBreakerDraft,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: FilledButton.icon(
+                                        onPressed:
+                                            _hasPendingTieBreakerChanges &&
+                                                !_savingTieBreakerSettings &&
+                                                _viewStageIndex ==
+                                                    _activeStageIndex &&
+                                                !_completedStageIndexes
+                                                    .contains(_activeStageIndex)
+                                            ? _applyGroupTieBreakerDraft
+                                            : null,
+                                        icon: _savingTieBreakerSettings
+                                            ? const SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const Icon(Icons.check),
+                                        label: const Text('Übernehmen'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (widget.tournament.leagueMatch == null)
+                              const SizedBox(height: 12),
+                            // 4. Spieler verwalten
+                            ..._playerManagementSections(),
+                            if (widget.tournament.leagueMatch == null &&
+                                !widget.tournament.isKratzerTournament)
+                              const GoveeAmbiencePanel(),
+                            if (widget.tournament.leagueMatch == null &&
+                                widget.tournament.countsForRanking &&
+                                widget.tournament.rankingIds.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              _achievementSettingsCard(),
+                            ],
+                            if (widget.tournament.leagueMatch == null) ...[
+                              const SizedBox(height: 12),
+                              _hintSettingsCard(),
+                            ],
+                            const SizedBox(height: 12),
+                            _tournamentTimingSettingsCard(),
+                            const SizedBox(height: 12),
+                            Card(
+                              child: ExpansionTile(
+                                leading: const Icon(Icons.history),
+                                title: const Text('Turnierlog anzeigen'),
+                                subtitle: Text(
+                                  '${widget.tournament.activityLog.length} Einträge',
+                                ),
+                                children: widget.tournament.activityLog.isEmpty
+                                    ? const [
+                                        Padding(
+                                          padding: EdgeInsets.all(16),
+                                          child: Text(
+                                            'Für dieses Turnier gibt es noch keine Protokolleinträge.',
+                                          ),
+                                        ),
+                                      ]
+                                    : [
+                                        for (final entry
+                                            in widget
+                                                .tournament
+                                                .activityLog
+                                                .reversed)
+                                          ListTile(
+                                            dense: true,
+                                            title: Text(entry.message),
+                                            subtitle: Text(
+                                              '${MaterialLocalizations.of(context).formatMediumDate(entry.timestamp.toLocal())} · '
+                                              '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(entry.timestamp.toLocal()))}',
+                                            ),
+                                          ),
+                                      ],
+                              ),
+                            ),
+                          ],
+                        )
+                      else if (_stageViewMode == StageViewMode.players)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Spieler',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                if (_canAdjustParticipants)
+                                  FilledButton.icon(
+                                    onPressed: _addParticipantToTournament,
+                                    icon: const Icon(
+                                      Icons.person_add_alt_1_outlined,
+                                    ),
+                                    label: const Text('Spieler hinzufügen'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            for (final player in widget.tournament.players)
+                              Card(child: _playerManagementTile(player)),
+                          ],
+                        )
+                      else ...[
+                        // Modus "Ergebnisse"
+                        StageResultsSplitView(
+                          key: ValueKey(
+                            'stage-results-${_requestedResultMatch?.hashCode ?? 'default'}',
+                          ),
+                          stage: activeStage,
+                          tournament: widget.tournament,
+                          focusMatch: _requestedResultMatch,
+                          initialFilter: _requestedResultMatch == null
+                              ? null
+                              : MatchCategoryFilter.finished,
+                          runningMatches: widget.tournament.directorModeEnabled
+                              ? const OrderOfPlayController()
+                                    .plan(widget.tournament, _activeStageIndex)
+                                    .running
+                                    .map((entry) => entry.match)
+                                    .toSet()
+                              : const <GroupMatch>{},
+                          onOpenMatch: _openPlayedMatch,
+                          onPreviewBracket:
+                              activeStage is KnockoutTournamentRunStage
+                              ? null
+                              : () => showDialog<void>(
+                                  context: context,
+                                  builder: (context) => Dialog.fullscreen(
+                                    child: TournamentSecondScreenView(
+                                      tournament: widget.tournament,
+                                      isStandaloneWindow: true,
+                                      showNextStagePreviewInitially: true,
+                                      onClose: () =>
+                                          Navigator.of(context).pop(),
+                                    ),
+                                  ),
+                                ),
+                          standingsFor: _standingsFor,
+                          onEditResult: _editResult,
+                          onEditBracketResult: (match, onUpdated) =>
+                              _editResult(match, onLocalUpdate: onUpdated),
+                          canEditResults: canEditResults,
+                          qualifyingRank: _requiredRankForRunStage(
+                            _viewStageIndex,
+                          ),
+                          isBracketEditMode:
+                              _isBracketEditMode && canEditResults,
+                          canEditBracket:
+                              canEditResults &&
+                              (activeStage is KnockoutTournamentRunStage &&
+                                  _canEditKnockoutBracket(activeStage)),
+                          onSwapSlot: (fromSlotIndex, toSlotIndex) {
+                            if (activeStage is KnockoutTournamentRunStage) {
+                              _swapKnockoutRunSlots(
+                                activeStage,
+                                fromSlotIndex,
+                                toSlotIndex,
+                              );
+                            }
+                          },
+                          bracketBuilder:
+                              (
+                                stage,
+                                qualifyingRank,
+                                onEditResult,
+                                canEditResults,
+                                isEditMode,
+                                onSwapSlot,
+                              ) {
+                                return RepaintBoundary(
+                                  child: _KnockoutBracketView(
+                                    stage: stage,
+                                    placementMatches: stage.placementMatches,
+                                    qualifyingRank: qualifyingRank,
+                                    onEditResult: onEditResult,
+                                    canEditResults: canEditResults,
+                                    isEditMode: isEditMode,
+                                    onSwapSlot: onSwapSlot,
                                   ),
                                 );
                               },
-                            ),
-                          const SizedBox(height: 12),
-                          if (widget.tournament.leagueMatch == null &&
-                              !widget.tournament.isKratzerTournament)
-                            Card(
-                              child: ExpansionTile(
-                                initiallyExpanded: false,
-                                leading: const Icon(Icons.leaderboard_outlined),
-                                title: const Text('Ranglistenoptionen'),
-                                subtitle: const Text(
-                                  'Wertung und zugewiesene Ranglisten',
-                                ),
-                                childrenPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                children: [
-                                  SwitchListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text(
-                                      'Für Rangliste berücksichtigen',
-                                    ),
-                                    subtitle: const Text(
-                                      'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
-                                    ),
-                                    value: widget.tournament.countsForRanking,
-                                    onChanged: _savingRankingSelection
-                                        ? null
-                                        : (value) => _saveRankingSelection(
-                                            countsForRanking: value,
-                                            rankingIds: value
-                                                ? widget.tournament.rankingIds
-                                                : const [],
-                                          ),
-                                  ),
-                                  if (_savingRankingSelection)
-                                    const LinearProgressIndicator(),
-                                  if (widget.tournament.countsForRanking)
-                                    FutureBuilder<List<LocalRanking>>(
-                                      future: _localRankings,
-                                      builder: (context, snapshot) {
-                                        if (snapshot.hasError) {
-                                          return Text(
-                                            'Ranglisten konnten nicht geladen werden: ${snapshot.error}',
-                                          );
-                                        }
-                                        if (!snapshot.hasData) {
-                                          return const LinearProgressIndicator();
-                                        }
-                                        final rankings = snapshot.data!;
-                                        if (rankings.isEmpty) {
-                                          return const Text(
-                                            'Lege zuerst eine Rangliste im Hauptmenü an.',
-                                          );
-                                        }
-                                        return Column(
-                                          children: [
-                                            for (final ranking in rankings)
-                                              CheckboxListTile(
-                                                contentPadding: EdgeInsets.zero,
-                                                title: Text(ranking.name),
-                                                value: widget
-                                                    .tournament
-                                                    .rankingIds
-                                                    .contains(ranking.id),
-                                                onChanged:
-                                                    _savingRankingSelection
-                                                    ? null
-                                                    : (selected) {
-                                                        final ids =
-                                                            List<String>.from(
-                                                              widget
-                                                                  .tournament
-                                                                  .rankingIds,
-                                                            );
-                                                        if (selected == true) {
-                                                          ids.add(ranking.id);
-                                                        } else {
-                                                          ids.remove(
-                                                            ranking.id,
-                                                          );
-                                                        }
-                                                        _saveRankingSelection(
-                                                          countsForRanking:
-                                                              true,
-                                                          rankingIds: ids,
-                                                        );
-                                                      },
-                                              ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                ],
-                              ),
-                            ),
-                          const SizedBox(height: 12),
-                          if (widget.tournament.leagueMatch == null &&
-                              _activeStageIndex <
-                                  widget.tournament.stages.length &&
-                              widget
-                                      .tournament
-                                      .stages[_activeStageIndex]
-                                      .type ==
-                                  'groups')
-                            Card(
-                              child: ExpansionTile(
-                                initiallyExpanded: false,
-                                leading: const Icon(Icons.swap_vert),
-                                title: const Text('Tie Breaker Einstellungen'),
-                                subtitle: const Text(
-                                  'Reihenfolge für Gleichstände in dieser Etappe',
-                                ),
-                                childrenPadding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  16,
-                                ),
-                                children: [
-                                  Text(
-                                    'Tie-Breaker · ${widget.tournament.stages[_activeStageIndex].name}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleSmall,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  GroupTieBreakerSetup(
-                                    tieBreakers: _tieBreakersForActiveStage(),
-                                    onMoveTieBreaker: _moveGroupTieBreakerDraft,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: FilledButton.icon(
-                                      onPressed:
-                                          _hasPendingTieBreakerChanges &&
-                                              !_savingTieBreakerSettings &&
-                                              _viewStageIndex ==
-                                                  _activeStageIndex &&
-                                              !_completedStageIndexes.contains(
-                                                _activeStageIndex,
-                                              )
-                                          ? _applyGroupTieBreakerDraft
-                                          : null,
-                                      icon: _savingTieBreakerSettings
-                                          ? const SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(Icons.check),
-                                      label: const Text('Übernehmen'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (widget.tournament.leagueMatch == null)
-                            const SizedBox(height: 12),
-                          // 4. Spieler verwalten
-                          ..._playerManagementSections(),
-                          if (widget.tournament.leagueMatch == null &&
-                              !widget.tournament.isKratzerTournament)
-                            const GoveeAmbiencePanel(),
-                          const SizedBox(height: 12),
-                          Card(
-                            child: ExpansionTile(
-                              leading: const Icon(Icons.history),
-                              title: const Text('Turnierlog anzeigen'),
-                              subtitle: Text(
-                                '${widget.tournament.activityLog.length} Einträge',
-                              ),
-                              children: widget.tournament.activityLog.isEmpty
-                                  ? const [
-                                      Padding(
-                                        padding: EdgeInsets.all(16),
-                                        child: Text(
-                                          'Für dieses Turnier gibt es noch keine Protokolleinträge.',
-                                        ),
-                                      ),
-                                    ]
-                                  : [
-                                      for (final entry
-                                          in widget
-                                              .tournament
-                                              .activityLog
-                                              .reversed)
-                                        ListTile(
-                                          dense: true,
-                                          title: Text(entry.message),
-                                          subtitle: Text(
-                                            '${MaterialLocalizations.of(context).formatMediumDate(entry.timestamp.toLocal())} · '
-                                            '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(entry.timestamp.toLocal()))}',
-                                          ),
-                                        ),
-                                    ],
-                            ),
-                          ),
-                        ],
-                      )
-                    else if (_stageViewMode == StageViewMode.players)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Spieler',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              if (_canAdjustParticipants)
-                                FilledButton.icon(
-                                  onPressed: _addParticipantToTournament,
-                                  icon: const Icon(
-                                    Icons.person_add_alt_1_outlined,
-                                  ),
-                                  label: const Text('Spieler hinzufügen'),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          for (final player in widget.tournament.players)
-                            Card(child: _playerManagementTile(player)),
-                        ],
-                      )
-                    else ...[
-                      // Modus "Ergebnisse"
-                      StageResultsSplitView(
-                        key: ValueKey(
-                          'stage-results-${_requestedResultMatch?.hashCode ?? 'default'}',
                         ),
-                        stage: activeStage,
-                        tournament: widget.tournament,
-                        focusMatch: _requestedResultMatch,
-                        initialFilter: _requestedResultMatch == null
-                            ? null
-                            : MatchCategoryFilter.finished,
-                        runningMatches: widget.tournament.directorModeEnabled
-                            ? const OrderOfPlayController()
-                                  .plan(widget.tournament, _activeStageIndex)
-                                  .running
-                                  .map((entry) => entry.match)
-                                  .toSet()
-                            : const <GroupMatch>{},
-                        onOpenMatch: _openPlayedMatch,
-                        onPreviewBracket:
-                            activeStage is KnockoutTournamentRunStage
-                            ? null
-                            : () => showDialog<void>(
-                                context: context,
-                                builder: (context) => Dialog.fullscreen(
-                                  child: TournamentSecondScreenView(
-                                    tournament: widget.tournament,
-                                    isStandaloneWindow: true,
-                                    showNextStagePreviewInitially: true,
-                                    onClose: () => Navigator.of(context).pop(),
-                                  ),
-                                ),
-                              ),
-                        standingsFor: _standingsFor,
-                        onEditResult: _editResult,
-                        onEditBracketResult: (match, onUpdated) =>
-                            _editResult(match, onLocalUpdate: onUpdated),
-                        canEditResults: canEditResults,
-                        qualifyingRank: _requiredRankForRunStage(
-                          _viewStageIndex,
-                        ),
-                        isBracketEditMode: _isBracketEditMode && canEditResults,
-                        canEditBracket:
-                            canEditResults &&
-                            (activeStage is KnockoutTournamentRunStage &&
-                                _canEditKnockoutBracket(activeStage)),
-                        onSwapSlot: (fromSlotIndex, toSlotIndex) {
-                          if (activeStage is KnockoutTournamentRunStage) {
-                            _swapKnockoutRunSlots(
-                              activeStage,
-                              fromSlotIndex,
-                              toSlotIndex,
-                            );
-                          }
-                        },
-                        bracketBuilder:
-                            (
-                              stage,
-                              qualifyingRank,
-                              onEditResult,
-                              canEditResults,
-                              isEditMode,
-                              onSwapSlot,
-                            ) {
-                              return RepaintBoundary(
-            child: _KnockoutBracketView(
-                                stage: stage,
-                                placementMatches: stage.placementMatches,
-                                qualifyingRank: qualifyingRank,
-                                onEditResult: onEditResult,
-                                canEditResults: canEditResults,
-                                isEditMode: isEditMode,
-                                onSwapSlot: onSwapSlot,
-                              ),);
-                            },
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-              if (_stageViewMode == StageViewMode.dashboard) ...[
-                SliverToBoxAdapter(
-                  child: StageFooter(
-                    canCompleteStage: canCompleteStage,
-                    isLastStage: isLastStage,
-                    isViewingActiveStage: isViewingActiveStage,
-                    activeStageName:
-                        widget.tournament.runStages[_activeStageIndex].name,
-                    onCompleteStage: _completeCurrentStage,
-                    onFinishEarly: _finishCurrentStageEarly,
-                    onReopenPreviousStage: _reopenPreviousStage,
-                    canReopenPreviousStage: _canReopenPreviousStage,
-                    onResetCurrentStage: _resetCurrentStageWithConfirmation,
-                    canResetCurrentStage: _canResetCurrentStage,
                   ),
                 ),
+                if (_stageViewMode == StageViewMode.dashboard) ...[
+                  SliverToBoxAdapter(
+                    child: StageFooter(
+                      canCompleteStage: canCompleteStage,
+                      isLastStage: isLastStage,
+                      isViewingActiveStage: isViewingActiveStage,
+                      activeStageName:
+                          widget.tournament.runStages[_activeStageIndex].name,
+                      onCompleteStage: _completeCurrentStage,
+                      onFinishEarly: _finishCurrentStageEarly,
+                      onReopenPreviousStage: _reopenPreviousStage,
+                      canReopenPreviousStage: _canReopenPreviousStage,
+                      onResetCurrentStage: _resetCurrentStageWithConfirmation,
+                      canResetCurrentStage: _canResetCurrentStage,
+                    ),
+                  ),
+                ],
               ],
-            ],
             ),
           ),
         ),

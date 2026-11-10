@@ -51,6 +51,7 @@ class _KnockoutPreview extends StatelessWidget {
           );
 
     return Column(
+      key: const ValueKey('knockout-preview'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Wrap(
@@ -1284,6 +1285,7 @@ class _StageList extends StatelessWidget {
 
   String _typeLabel(String type) {
     return switch (type) {
+      'swiss' => 'Schweizer System',
       'single_knockout' => 'K.-o.-Runde',
       'double_knockout' => 'Doppel-K.-o.',
       'triple_knockout' => 'Triple-K.-o.',
@@ -1391,7 +1393,7 @@ class _StageList extends StatelessWidget {
           '${stage.kratzerPlayUntilElimination ? ', Gruppen bis zum Ausscheiden' : ''}'
           '${_matchCountDetails(stage)}';
     }
-    if (stage.type != 'groups' || stage.groupSizes.isEmpty) {
+    if (!stage.isGroupStage || stage.groupSizes.isEmpty) {
       if (_isKnockoutStageType(stage.type) &&
           stage.knockoutParticipantCount != null &&
           stage.knockoutBracketSize != null) {
@@ -1410,6 +1412,7 @@ class _StageList extends StatelessWidget {
                       ? ' - Ein großes Finale entscheidet'
                       : ' - Kratzer-Modus: ${stage.lossLimit} Leben'
                 : ''}'
+            '${stage.knockoutAdvancingCount == null ? '' : ' - Top ${stage.knockoutAdvancingCount} kommen weiter'}'
             '${stage.placementPlaces.isEmpty ? '' : ' - Platzierungsspiele: ${stage.placementPlaces.join(', ')}'}'
             '$seedingText'
             '${_matchCountDetails(stage)}'

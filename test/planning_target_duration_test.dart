@@ -18,6 +18,24 @@ void main() {
         checkoutType: 'double_out',
       );
 
+  testWidgets('planner accepts any final format as the initial preference', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TournamentFormatPlannerDialog(initialPreferredFinalStage: null),
+      ),
+    );
+
+    final preference = tester.widget<DropdownButtonFormField<String?>>(
+      find.byKey(
+        const ValueKey('planner-preferred-final-stage'),
+        skipOffstage: false,
+      ),
+    );
+    expect(preference.initialValue, isNull);
+  });
+
   test('target replaces window and sorts by absolute distance', () {
     for (final target in [90, 180, 300]) {
       final results = planner.suggestFormats(request(target));
@@ -61,21 +79,48 @@ void main() {
       ),
     );
 
+    expect(find.byKey(const ValueKey('planner-min-duration')), findsOneWidget);
+    expect(find.byKey(const ValueKey('planner-max-duration')), findsOneWidget);
     expect(
-      tester
-          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Wunschdauer'))
-          .selected,
-      isTrue,
-    );
-    expect(
-      find.text('2 Std. 30 Min. (Vorschläge sortiert nach Nähe)'),
+      find.byKey(const ValueKey('planner-target-duration')),
       findsOneWidget,
     );
+    expect(find.textContaining('2 Std. 30 Min.'), findsOneWidget);
+    expect(find.text('2 Std. 00 Min.'), findsOneWidget);
+    expect(find.text('4 Std. 00 Min.'), findsOneWidget);
     final fields = tester
         .widgetList<TextField>(find.byType(TextField))
         .toList();
     expect(fields[0].controller!.text, '7');
     expect(fields[1].controller!.text, '3');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('best/worst case resets an active target duration', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TournamentFormatPlannerDialog(
+          initialPlayerCount: 7,
+          initialTargetMinutes: 150,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('planner-best-worst-case')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const ValueKey('planner-best-worst-case')),
+          )
+          .value,
+      isTrue,
+    );
+    expect(find.textContaining('3 Std. 00 Min.'), findsOneWidget);
+    expect(find.textContaining('2 Std. 00 Min.'), findsOneWidget);
+    expect(find.textContaining('4 Std. 00 Min.'), findsOneWidget);
   });
 }

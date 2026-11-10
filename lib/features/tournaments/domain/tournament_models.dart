@@ -369,7 +369,7 @@ class TournamentStage {
     this.placementPlaces = const [],
     this.groupCount,
     this.groupSizes = const [],
-    this.groupPlayType = 'round_robin',
+    String? groupPlayType,
     this.groupPlayTypes = const [],
     this.groupRoundRobinRepeats = const [],
     this.groupMaxGamesPerPlayer = const [],
@@ -378,6 +378,7 @@ class TournamentStage {
     this.groupSlotOrder = const [],
     this.groupDrawCompleted = false,
     this.knockoutParticipantCount,
+    this.knockoutAdvancingCount,
     this.knockoutBracketSize,
     this.knockoutByeCount = 0,
     this.knockoutSlotOrder = const [],
@@ -391,13 +392,22 @@ class TournamentStage {
     this.qualifiedParticipantCount,
     this.qualificationSummary,
     this.gameFormat = const TournamentGameFormat(),
-  });
+  }) : groupPlayType =
+           groupPlayType ?? (type == 'swiss' ? 'swiss' : 'round_robin');
 
   factory TournamentStage.fromJson(Map<String, dynamic> json) {
     final groupSlotOrder = _nullableIntListFromJson(json['groupSlotOrder']);
+    final storedType = json['type'] as String? ?? 'groups';
+    final storedGroupPlayType = json['groupPlayType'] as String?;
+    final groupPlayType =
+        storedGroupPlayType ??
+        (storedType == 'swiss' ? 'swiss' : 'round_robin');
+    final type = storedType == 'groups' && groupPlayType == 'swiss'
+        ? 'swiss'
+        : storedType;
     return TournamentStage(
       name: json['name'] as String? ?? '',
-      type: json['type'] as String? ?? 'groups',
+      type: type,
       finalEndsTournament: json['finalEndsTournament'] as bool? ?? false,
       knockoutLives: json['knockoutLives'] as int?,
       kratzerPlayersPerBoard: _kratzerPlayersPerBoardFromJson(
@@ -421,7 +431,7 @@ class TournamentStage {
       placementPlaces: _intListFromJson(json['placementPlaces']),
       groupCount: json['groupCount'] as int?,
       groupSizes: _intListFromJson(json['groupSizes']),
-      groupPlayType: json['groupPlayType'] as String? ?? 'round_robin',
+      groupPlayType: groupPlayType,
       groupPlayTypes: _stringListFromJson(json['groupPlayTypes']),
       groupRoundRobinRepeats: _intListFromJson(json['groupRoundRobinRepeats']),
       groupMaxGamesPerPlayer: _nullableIntListFromJson(
@@ -433,6 +443,7 @@ class TournamentStage {
       groupDrawCompleted:
           json['groupDrawCompleted'] as bool? ?? groupSlotOrder.isNotEmpty,
       knockoutParticipantCount: json['knockoutParticipantCount'] as int?,
+      knockoutAdvancingCount: json['knockoutAdvancingCount'] as int?,
       knockoutBracketSize: json['knockoutBracketSize'] as int?,
       knockoutByeCount: json['knockoutByeCount'] as int? ?? 0,
       knockoutSlotOrder: _nullableIntListFromJson(json['knockoutSlotOrder']),
@@ -455,6 +466,7 @@ class TournamentStage {
 
   final String name;
   final String type;
+  bool get isGroupStage => type == 'groups' || type == 'swiss';
   final bool finalEndsTournament;
   final int? knockoutLives;
   final int? kratzerPlayersPerBoard;
@@ -490,6 +502,7 @@ class TournamentStage {
   final List<int?> groupSlotOrder;
   final bool groupDrawCompleted;
   final int? knockoutParticipantCount;
+  final int? knockoutAdvancingCount;
   final int? knockoutBracketSize;
   final int knockoutByeCount;
   final List<int?> knockoutSlotOrder;
@@ -536,6 +549,7 @@ class TournamentStage {
       'groupSlotOrder': groupSlotOrder,
       'groupDrawCompleted': groupDrawCompleted,
       'knockoutParticipantCount': knockoutParticipantCount,
+      'knockoutAdvancingCount': knockoutAdvancingCount,
       'knockoutBracketSize': knockoutBracketSize,
       'knockoutByeCount': knockoutByeCount,
       'knockoutSlotOrder': knockoutSlotOrder,
@@ -586,6 +600,7 @@ class TournamentStage {
     groupSlotOrder: groupSlotOrder ?? this.groupSlotOrder,
     groupDrawCompleted: groupDrawCompleted ?? this.groupDrawCompleted,
     knockoutParticipantCount: knockoutParticipantCount,
+    knockoutAdvancingCount: knockoutAdvancingCount,
     knockoutBracketSize: knockoutBracketSize,
     knockoutByeCount: knockoutByeCount,
     knockoutSlotOrder: knockoutSlotOrder,
@@ -1273,6 +1288,7 @@ class GroupMatch {
     this.withdrawalSignature,
     this.withdrawalIgnored = false,
     this.withdrawalHadResult = false,
+    this.withdrawalSnapshot,
     this.bestPerformances = const [],
     List<TournamentAchievementNotice>? achievementNotifications,
     this.kratzerBonusLives = const [],
@@ -1309,6 +1325,9 @@ class GroupMatch {
       withdrawalSignature: json['withdrawalSignature'] as String?,
       withdrawalIgnored: json['withdrawalIgnored'] == true,
       withdrawalHadResult: json['withdrawalHadResult'] == true,
+      withdrawalSnapshot: json['withdrawalSnapshot'] is Map
+          ? Map<String, dynamic>.from(json['withdrawalSnapshot'] as Map)
+          : null,
       bestPerformances: (json['bestPerformances'] as List? ?? const [])
           .whereType<Map>()
           .map(
@@ -1365,6 +1384,7 @@ class GroupMatch {
   String? withdrawalSignature;
   bool withdrawalIgnored;
   bool withdrawalHadResult;
+  Map<String, dynamic>? withdrawalSnapshot;
   List<BestPerformance> bestPerformances;
   List<TournamentAchievementNotice> achievementNotifications;
   List<KratzerBonusLife> kratzerBonusLives;
@@ -1440,6 +1460,7 @@ class GroupMatch {
         'withdrawalSignature': withdrawalSignature,
       if (withdrawalIgnored) 'withdrawalIgnored': true,
       if (withdrawalHadResult) 'withdrawalHadResult': true,
+      if (withdrawalSnapshot != null) 'withdrawalSnapshot': withdrawalSnapshot,
       'isDecider': isDecider,
       'boardNumber': boardNumber,
       'startedAt': startedAt?.toUtc().toIso8601String(),

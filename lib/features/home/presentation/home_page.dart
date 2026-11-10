@@ -109,7 +109,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _createTournament() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _shell(const TournamentCreationPage(), 0),
+        builder: (_) =>
+            _shell(const TournamentCreationPage(skipEntryChoices: true), 0),
       ),
     );
     _refreshActivity();
@@ -139,6 +140,13 @@ class _HomePageState extends State<HomePage> {
                 label: 'Turniere',
                 icon: Icons.emoji_events_outlined,
                 onTap: _openTournamentArea,
+              ),
+              SportMenuAction(
+                label: 'Freundschafts- & Ligaspiele',
+                icon: Icons.sports,
+                description: 'Eigenständige Übersicht für Mannschaftsspiele.',
+                onTap: () =>
+                    _open(const TournamentHomePage(leagueMatchesOnly: true), 1),
               ),
               SportMenuAction(
                 label: 'Spieler',
@@ -182,10 +190,19 @@ enum TournamentSortOption {
   final String label;
 }
 
+enum _TournamentListingKind { all, ranking, normal }
+
 class TournamentHomePage extends StatefulWidget {
-  const TournamentHomePage({super.key, this.storage});
+  const TournamentHomePage({
+    super.key,
+    this.storage,
+    this.leagueMatchesOnly = false,
+    this.loadRankings,
+  });
 
   final TournamentStorage? storage;
+  final bool leagueMatchesOnly;
+  final Future<List<LocalRanking>> Function()? loadRankings;
 
   @override
   State<TournamentHomePage> createState() => _TournamentHomePageState();
@@ -196,6 +213,10 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
   late Future<List<CreatedTournament>> _tournamentsFuture;
   String _tournamentQuery = '';
   TournamentSortOption _sortOption = TournamentSortOption.date;
+  _TournamentListingKind _listingKind = _TournamentListingKind.all;
+  String? _rankingFilter;
+  int? _yearFilter;
+  late Future<List<LocalRanking>> _rankingsFuture;
   bool _isDeletingTournament = false;
   bool _isConvertingTournament = false;
 
@@ -204,6 +225,8 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     super.initState();
     _storage = widget.storage ?? TournamentStorage();
     _tournamentsFuture = _storage.loadTournaments();
+    _rankingsFuture =
+        widget.loadRankings?.call() ?? LocalAppDatabase().loadLocalRankings();
   }
 
   void _reloadTournaments() {
@@ -228,9 +251,17 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
   }
 
   Future<void> _openCreationPage() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const TournamentCreationPage()),
-    );
+    if (widget.leagueMatchesOnly) {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const LeagueMatchPage()));
+    } else {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const TournamentCreationPage(skipEntryChoices: true),
+        ),
+      );
+    }
     _reloadTournaments();
   }
 
@@ -268,6 +299,9 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
   }
 
   Widget _tournamentPageFor(CreatedTournament tournament) {
+    if (tournament.leagueMatch != null) {
+      return LeagueMatchPage(tournament: tournament, storage: _storage);
+    }
     final lastStageIndex = tournament.runStages.length - 1;
     if (lastStageIndex >= 0 &&
         tournament.completedStageIndexes.contains(lastStageIndex)) {
@@ -280,6 +314,28 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
   }
 
   bool _matchesTournamentQuery(CreatedTournament tournament) {
+    if (widget.leagueMatchesOnly != (tournament.leagueMatch != null)) {
+      return false;
+    }
+    if (!widget.leagueMatchesOnly) {
+      if (_listingKind == _TournamentListingKind.ranking &&
+          !tournament.countsForRanking) {
+        return false;
+      }
+      if (_listingKind == _TournamentListingKind.normal &&
+          tournament.countsForRanking) {
+        return false;
+      }
+      if (_rankingFilter != null &&
+          !tournament.rankingIds.contains(_rankingFilter)) {
+        return false;
+      }
+      if (_yearFilter != null &&
+          (tournament.tournamentDate ?? tournament.createdAt).toLocal().year !=
+              _yearFilter) {
+        return false;
+      }
+    }
     final query = _tournamentQuery.trim().toLowerCase();
     if (query.isEmpty) return true;
     final lastStageIndex = tournament.runStages.length - 1;
@@ -567,10 +623,33 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     _reloadTournaments();
   }
 
+  Widget _sortDropdown() => DropdownButtonFormField<TournamentSortOption>(
+    key: const ValueKey('tournament-sort'),
+    initialValue: _sortOption,
+    isExpanded: true,
+    decoration: const InputDecoration(labelText: 'Sortierung'),
+    onChanged: (option) {
+      if (option != null) setState(() => _sortOption = option);
+    },
+    items: [
+      for (final option in TournamentSortOption.values)
+        DropdownMenuItem(value: option, child: Text(option.label)),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Turniere')),
+      appBar: AppBar(
+        title: Text(
+          widget.leagueMatchesOnly ? 'Freundschafts- & Ligaspiele' : 'Turniere',
+        ),
+      ),
+      bottomNavigationBar: _isDeletingTournament
+          ? const LinearProgressIndicator(
+              semanticsLabel: 'Turnier wird gelöscht',
+            )
+          : null,
       body: SafeArea(
         child: FutureBuilder<List<CreatedTournament>>(
           future: _tournamentsFuture,
@@ -614,13 +693,17 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
               padding: const EdgeInsets.all(24),
               children: [
                 Text(
-                  'Meine Turniere',
+                  widget.leagueMatchesOnly
+                      ? 'Meine Freundschafts- & Ligaspiele'
+                      : 'Meine Turniere',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 6),
                 if (tournaments != null)
                   Text(
-                    '${tournaments.length} gespeicherte Turniere',
+                    widget.leagueMatchesOnly
+                        ? '${tournaments.where((item) => item.leagueMatch != null).length} gespeicherte Spiele'
+                        : '${tournaments.where((item) => item.leagueMatch == null).length} gespeicherte Turniere',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ValueListenableBuilder<String>(
@@ -635,65 +718,118 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                     ),
                   ),
                 ),
-                if (_isDeletingTournament)
-                  Semantics(
-                    label: 'Turnier wird gelöscht',
-                    child: const LinearProgressIndicator(),
-                  ),
                 const SizedBox(height: 12),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact =
-                        constraints.maxWidth < 520 ||
-                        MediaQuery.textScalerOf(context).scale(16) > 20;
-                    final label = Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      children: [
-                        const Icon(Icons.sort, size: 20),
-                        Text(
-                          'Sortierung:',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    );
-                    final dropdown = SizedBox(
-                      width: compact ? constraints.maxWidth : 260,
-                      child: DropdownButtonFormField<TournamentSortOption>(
-                        initialValue: _sortOption,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Sortierung',
-                        ),
-                        onChanged: (option) {
-                          if (option != null) {
-                            setState(() => _sortOption = option);
-                          }
-                        },
-                        items: [
-                          for (final opt in TournamentSortOption.values)
-                            DropdownMenuItem(
-                              value: opt,
-                              child: Text(opt.label),
+                if (tournaments != null) ...[
+                  Text(
+                    widget.leagueMatchesOnly
+                        ? 'Sortierung'
+                        : 'Sortierung & Filter',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  if (widget.leagueMatchesOnly)
+                    AdaptiveTileLayout(children: [_sortDropdown()])
+                  else
+                    FutureBuilder<List<LocalRanking>>(
+                      future: _rankingsFuture,
+                      builder: (context, rankingSnapshot) {
+                        final years =
+                            tournaments
+                                .where((item) => item.leagueMatch == null)
+                                .map(
+                                  (item) =>
+                                      (item.tournamentDate ?? item.createdAt)
+                                          .toLocal()
+                                          .year,
+                                )
+                                .toSet()
+                                .toList()
+                              ..sort((a, b) => b.compareTo(a));
+                        return AdaptiveTileLayout(
+                          minTileWidth: 170,
+                          children: [
+                            _sortDropdown(),
+                            DropdownButtonFormField<_TournamentListingKind>(
+                              key: const ValueKey('tournament-kind-filter'),
+                              initialValue: _listingKind,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Turnierart',
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: _TournamentListingKind.all,
+                                  child: Text('Alle Turniere'),
+                                ),
+                                DropdownMenuItem(
+                                  value: _TournamentListingKind.ranking,
+                                  child: Text('Nur Ranglistenturniere'),
+                                ),
+                                DropdownMenuItem(
+                                  value: _TournamentListingKind.normal,
+                                  child: Text('Nur normale Turniere'),
+                                ),
+                              ],
+                              onChanged: (value) => setState(
+                                () => _listingKind =
+                                    value ?? _TournamentListingKind.all,
+                              ),
                             ),
-                        ],
-                      ),
-                    );
-                    return compact
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [label, dropdown],
-                          )
-                        : Row(
-                            children: [
-                              label,
-                              const SizedBox(width: 12),
-                              dropdown,
-                            ],
-                          );
-                  },
-                ),
+                            DropdownButtonFormField<int?>(
+                              key: const ValueKey('tournament-year-filter'),
+                              initialValue: _yearFilter,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Jahr',
+                              ),
+                              items: [
+                                const DropdownMenuItem<int?>(
+                                  value: null,
+                                  child: Text('Alle Jahre'),
+                                ),
+                                for (final year in years)
+                                  DropdownMenuItem<int?>(
+                                    value: year,
+                                    child: Text('$year'),
+                                  ),
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => _yearFilter = value),
+                            ),
+                            if (rankingSnapshot.hasError)
+                              Text(
+                                'Ranglistenfilter konnten nicht geladen werden: ${rankingSnapshot.error}',
+                              )
+                            else
+                              DropdownButtonFormField<String?>(
+                                key: const ValueKey(
+                                  'tournament-ranking-filter',
+                                ),
+                                initialValue: _rankingFilter,
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Rangliste',
+                                ),
+                                items: [
+                                  const DropdownMenuItem<String?>(
+                                    value: null,
+                                    child: Text('Alle Ranglisten'),
+                                  ),
+                                  for (final ranking
+                                      in rankingSnapshot.data ?? const [])
+                                    DropdownMenuItem<String?>(
+                                      value: ranking.id,
+                                      child: Text(ranking.name),
+                                    ),
+                                ],
+                                onChanged: (value) =>
+                                    setState(() => _rankingFilter = value),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                ],
                 const SizedBox(height: 8),
                 TextField(
                   onChanged: (value) =>
@@ -718,7 +854,11 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                 FilledButton.icon(
                   onPressed: _openCreationPage,
                   icon: const Icon(Icons.add),
-                  label: const Text('Turnier erstellen'),
+                  label: Text(
+                    widget.leagueMatchesOnly
+                        ? 'Freundschafts- oder Ligaspiel anlegen'
+                        : 'Turnier erstellen',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(

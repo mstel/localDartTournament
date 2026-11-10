@@ -11,6 +11,7 @@ void main() {
     final start = DateTime(2026, 10, 3, 12);
     final tournament =
         CreatedTournament(name: 'Test', players: [], stages: [], runStages: [])
+          ..tournamentDate = DateTime(2026, 5, 1)
           ..startedAt = start
           ..pausedAt = start.add(const Duration(minutes: 5))
           ..totalPausedSeconds = 300;
@@ -61,6 +62,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tournament.startedAt, resetAt);
+    expect(tournament.tournamentDate, DateTime(2026, 5, 1));
     expect(tournament.pausedAt, isNull);
     expect(tournament.totalPausedSeconds, 0);
     expect(find.text('Laufzeit 0 h 0 min'), findsOneWidget);

@@ -84,6 +84,18 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     }
     final summary = _TournamentResultSummary.fromTournament(tournament);
     final podium = summary.ranking.take(3).toList();
+    if (tournament.runStages.isNotEmpty &&
+        tournament.runStages.last is KnockoutTournamentRunStage &&
+        !(tournament.runStages.last as KnockoutTournamentRunStage).isKratzer) {
+      final finalStage =
+          tournament.runStages.last as KnockoutTournamentRunStage;
+      final playedThirdPlaceMatch = finalStage.placementMatches.any(
+        (match) => match.label == 'Spiel um Platz 3' && match.hasResult,
+      );
+      if (!playedThirdPlaceMatch && podium.length > 2) {
+        podium.removeRange(2, podium.length);
+      }
+    }
     final performances = [
       for (final entry in _resultMatches(tournament))
         ...entry.match.bestPerformances,
@@ -1298,7 +1310,11 @@ class _TournamentResultSummary {
     final native = tournament.importedArchive?.usesNativeLogic == true;
     final runtime = native ? ProductionTournamentRuntime(tournament) : null;
     final finalStageRanking = finalStage is KnockoutTournamentRunStage
-        ? runtime?.ranking(finalStage, const []) ?? _knockoutRanking(finalStage)
+        ? PlacementEngine.applyRanking(
+            runtime?.ranking(finalStage, const []) ??
+                _knockoutRanking(finalStage),
+            finalStage.placementMatches,
+          )
         : native &&
               finalStage is GroupTournamentRunStage &&
               finalStage.groups.length == 1
@@ -1422,7 +1438,7 @@ class _TournamentResultSummary {
           if (last.loser != null) last.loser!,
         ]);
       }
-      return players;
+      return PlacementEngine.applyRanking(players, stage.placementMatches);
     }
 
     if (stage.rounds.isNotEmpty) {

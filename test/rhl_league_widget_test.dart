@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/league/presentation/league_match_page.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
+import 'package:dart_tournament_manager/features/league/presentation/league_team_dialogs.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 
@@ -13,6 +15,77 @@ class _MemoryStorage extends TournamentStorage {
 }
 
 void main() {
+  testWidgets('captains can assign any roster players to open doubles', (
+    tester,
+  ) async {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: const ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'],
+      awayPlayers: const ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'],
+      starterCount: 4,
+      maxReservePlayers: 2,
+      singlesPerPlayer: 1,
+      doublesCount: 1,
+    );
+    Map<int, List<int>>? assignments;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                assignments = await showDialog<Map<int, List<int>>>(
+                  context: context,
+                  builder: (context) =>
+                      LeagueTeamPairingsDialog(league: league, teamSide: 0),
+                );
+              },
+              child: const Text('Doppelpartner zuweisen Heimteam'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Doppelpartner zuweisen Heimteam'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('league-pairing-0-4-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('H5 · Ersatzspieler').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('league-pairing-0-4-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('H6 · Ersatzspieler').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Übernehmen'));
+    await tester.pumpAndSettle();
+
+    expect(assignments, {
+      4: [4, 5],
+    });
+    league.games[4].home = assignments![4]!;
+    expect(LeagueMatch.fromJson(league.toJson()).games[4].home, [4, 5]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('team roster shows active and reserve status', (tester) async {
+    final league = LeagueMatch.rhl(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: const ['H1', 'H2', 'H3', 'H4', 'H5'],
+      awayPlayers: const ['G1', 'G2', 'G3', 'G4'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: LeagueRosterDialog(league: league, teamSide: 0)),
+      ),
+    );
+    expect(find.text('Aktiv'), findsNWidgets(4));
+    expect(find.text('Ersatzspieler'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   int estimatedMinutes(WidgetTester tester) {
     final text = tester
         .widget<Text>(find.textContaining('Voraussichtliche Dauer:'))
@@ -50,7 +123,7 @@ void main() {
       find.text('Angepasstes Liga-/Freundschaftsspiel anlegen'),
       findsOneWidget,
     );
-    expect(find.text('14 Begegnungen'), findsOneWidget);
+    expect(find.textContaining('10 Begegnungen'), findsOneWidget);
     expect(find.textContaining('Voraussichtliche Dauer:'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -128,6 +201,62 @@ void main() {
     await tester.tap(find.text('Ergebnis entfernen'));
     await tester.pumpAndSettle();
     expect(storage.saved!.leagueMatch!.homePoints, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('live team substitution confirms and updates future fixtures', (
+    tester,
+  ) async {
+    final storage = _MemoryStorage();
+    final league = LeagueMatch.rhl(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'],
+      awayPlayers: ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'],
+    );
+    final tournament = CreatedTournament(
+      name: 'Liga',
+      players: [
+        for (final name in [...league.homePlayers, ...league.awayPlayers])
+          TournamentPlayer(name: name, isGenerated: false),
+      ],
+      stages: const [],
+      runStages: const [],
+      leagueMatch: league,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LeagueMatchPage(tournament: tournament, storage: storage),
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Auswechselungen Heimteam'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Auswechselungen Heimteam'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AlertDialog).last;
+    await tester.tap(find.descendant(of: dialog, matching: find.text('H1')));
+    await tester.tap(find.descendant(of: dialog, matching: find.text('H5')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.text('Auswechseln')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Auswechseln bestätigen?'), findsOneWidget);
+    expect(
+      find.textContaining('Ihre Mannschaft hat danach noch 1 Auswechselungen'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Ja, auswechseln'));
+    await tester.pumpAndSettle();
+
+    expect(storage.saved!.leagueMatch!.games[0].home, [4]);
+    expect(storage.saved!.leagueMatch!.activePlayers(0), contains(4));
+    expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 1);
+    expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

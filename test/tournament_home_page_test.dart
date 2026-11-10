@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/challonge/domain/challonge_tournament.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
@@ -58,6 +59,24 @@ void main() {
     await tester.pump();
   }
 
+  Future<void> openTournamentActions(WidgetTester tester) async {
+    final actions = find.byTooltip('Turnieraktionen');
+    final scrollable = find
+        .descendant(
+          of: find.byType(ListView).last,
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      actions,
+      200,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(actions);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('load error does not show an empty state or zero count', (
     tester,
   ) async {
@@ -96,8 +115,7 @@ void main() {
     await showPage(tester);
     expect(find.text('15.08.2026'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Turnieraktionen'));
-    await tester.pumpAndSettle();
+    await openTournamentActions(tester);
     await tester.tap(find.text('Enddatum festlegen'));
     await tester.pumpAndSettle();
     expect(find.text('Turnier-Enddatum auswählen'), findsOneWidget);
@@ -151,8 +169,7 @@ void main() {
       storage.tournaments.add(tournament);
       await showPage(tester);
 
-      await tester.tap(find.byTooltip('Turnieraktionen'));
-      await tester.pumpAndSettle();
+      await openTournamentActions(tester);
       await tester.tap(find.text('Enddatum festlegen'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('6').last);
@@ -183,8 +200,7 @@ void main() {
     storage.tournaments.add(tournament);
     await showPage(tester);
 
-    await tester.tap(find.byTooltip('Turnieraktionen'));
-    await tester.pumpAndSettle();
+    await openTournamentActions(tester);
     await tester.tap(find.text('Turnier löschen'));
     await tester.pumpAndSettle();
 
@@ -194,8 +210,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(storage.tournaments.single.name, 'Sommerpokal');
 
-    await tester.tap(find.byTooltip('Turnieraktionen'));
-    await tester.pumpAndSettle();
+    await openTournamentActions(tester);
     await tester.tap(find.text('Turnier löschen'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Löschen'));
@@ -220,13 +235,15 @@ void main() {
       ),
     );
     await showPage(tester);
-    await tester.tap(find.byTooltip('Turnieraktionen'));
-    await tester.pumpAndSettle();
+    await openTournamentActions(tester);
     await tester.tap(find.text('Turnier löschen'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Löschen'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
+    expect(find.text('Turnier löschen?'), findsNothing);
+    expect(storage.tournaments, hasLength(1));
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     completion.complete();
     await tester.pumpAndSettle();
@@ -256,6 +273,68 @@ void main() {
     expect(find.text('Sommerpokal'), findsOneWidget);
     expect(find.text('Winterpokal'), findsNothing);
     expect(find.text('2 gespeicherte Turniere'), findsOneWidget);
+  });
+
+  testWidgets('overview filters by tournament kind, year and ranking', (
+    tester,
+  ) async {
+    storage.tournaments
+      ..add(
+        CreatedTournament(
+          id: 'ranked-2025',
+          name: 'Ranglistencup 2025',
+          players: const [],
+          stages: const [],
+          runStages: const [],
+          tournamentDate: DateTime(2025, 6, 1),
+          countsForRanking: true,
+          rankingIds: const ['club-ranking'],
+        ),
+      )
+      ..add(
+        CreatedTournament(
+          id: 'normal-2026',
+          name: 'Normales Turnier 2026',
+          players: const [],
+          stages: const [],
+          runStages: const [],
+          tournamentDate: DateTime(2026, 3, 1),
+          countsForRanking: false,
+        ),
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentHomePage(
+          storage: storage,
+          loadRankings: () async => const [
+            LocalRanking(id: 'club-ranking', name: 'Vereinsrangliste'),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Ranglistencup 2025'), findsOneWidget);
+    expect(find.text('Normales Turnier 2026'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('tournament-kind-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nur Ranglistenturniere').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Ranglistencup 2025'), findsOneWidget);
+    expect(find.text('Normales Turnier 2026'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('tournament-year-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2025').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tournament-ranking-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vereinsrangliste').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ranglistencup 2025'), findsOneWidget);
+    expect(find.text('Normales Turnier 2026'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('does not show open ranking button on tournament card', (
@@ -288,8 +367,7 @@ void main() {
     storage.tournaments.add(original);
     await showPage(tester);
 
-    await tester.tap(find.byTooltip('Turnieraktionen'));
-    await tester.pumpAndSettle();
+    await openTournamentActions(tester);
     await tester.tap(find.text('Turnier kopieren'));
     await tester.pumpAndSettle();
 
@@ -338,8 +416,7 @@ void main() {
       );
       await showPage(tester);
 
-      await tester.tap(find.byTooltip('Turnieraktionen'));
-      await tester.pumpAndSettle();
+      await openTournamentActions(tester);
       await tester.tap(find.text('Zu Dart-Turnier konvertieren'));
       await tester.pumpAndSettle();
 
@@ -455,8 +532,11 @@ void main() {
       );
       await tester.pump();
       await tester.pump();
-      await tester.drag(find.byType(ListView), const Offset(0, -1000));
-      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.textContaining('besonders langen'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
 
       expect(find.textContaining('besonders langen'), findsOneWidget);
       expect(tester.takeException(), isNull);

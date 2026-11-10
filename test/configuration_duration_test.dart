@@ -76,7 +76,7 @@ void main() {
     expect(estimator.preview([repeat], 1, parameters)!.totalMatches, 12);
   });
   test(
-    'Swiss rounds estimate full match distance and partial-board waiting',
+    'Swiss rounds estimate average match distance and partial-board waiting',
     () {
       final swissParameters = TournamentPlanningParameters.fromValues({
         PlanningParameter.minutes501DoubleOut: 10,
@@ -90,7 +90,7 @@ void main() {
       )!;
       expect(fiveMatchesOnFourBoards.totalMatches, 5);
       expect(fiveMatchesOnFourBoards.minimumMatches, 1);
-      expect(fiveMatchesOnFourBoards.minutes, 68);
+      expect(fiveMatchesOnFourBoards.minutes, 58);
       expect(fiveMatchesOnFourBoards.waitMinutes, 8);
 
       final eightMatchesOnFourBoards = estimator.preview(
@@ -99,7 +99,7 @@ void main() {
         swissParameters,
       )!;
       expect(eightMatchesOnFourBoards.totalMatches, 8);
-      expect(eightMatchesOnFourBoards.minutes, 64);
+      expect(eightMatchesOnFourBoards.minutes, 54);
       expect(eightMatchesOnFourBoards.waitMinutes, 4);
 
       final bestOfFive = estimator.preview(
@@ -107,7 +107,7 @@ void main() {
         4,
         swissParameters,
       )!;
-      expect(bestOfFive.minutes, 108);
+      expect(bestOfFive.minutes, 88);
     },
   );
   test('KO byes and sequential stages use production runtime', () {
@@ -119,12 +119,12 @@ void main() {
       knockoutByeCount: 1,
       gameFormat: TournamentGameFormat(bestOfLegs: 3),
     );
-    expect(estimator.estimate([ko], 4, parameters), 60);
+    expect(estimator.estimate([ko], 4, parameters), 50);
     expect(estimator.preview([ko], 4, parameters)!.totalMatches, 2);
     expect(estimator.preview([ko], 4, parameters)!.minimumMatches, 1);
     expect(estimator.preview([group, ko], 2, parameters)!.minimumMatches, 3);
     expect(estimator.preview([group, ko], 2, parameters)!.totalMatches, 8);
-    expect(estimator.estimate([group, ko], 2, parameters), 135);
+    expect(estimator.estimate([group, ko], 2, parameters), 125);
     expect(estimator.preview([group, ko], 2, parameters)!.matchEndSeconds, [
       1500,
       1500,
@@ -132,39 +132,50 @@ void main() {
       3000,
       4500,
       4500,
-      6300,
-      8100,
+      6000,
+      7500,
     ]);
     expect(estimator.estimate([], 2, parameters), isNull);
   });
-  test(
-    'KO rounds use full-distance match durations and wait for each round',
-    () {
-      const knockout = TournamentStage(
-        name: 'KO',
-        type: 'single_knockout',
-        knockoutParticipantCount: 8,
-        gameFormat: TournamentGameFormat(bestOfLegs: 5),
-      );
-      final withBoardChange = TournamentPlanningParameters.fromValues({
-        PlanningParameter.minutes501DoubleOut: 10,
-        PlanningParameter.boardIdleMinutes: 4,
-      });
+  test('KO rounds use average match durations and wait for each round', () {
+    const knockout = TournamentStage(
+      name: 'KO',
+      type: 'single_knockout',
+      knockoutParticipantCount: 8,
+      gameFormat: TournamentGameFormat(bestOfLegs: 5),
+    );
+    final withBoardChange = TournamentPlanningParameters.fromValues({
+      PlanningParameter.minutes501DoubleOut: 10,
+      PlanningParameter.boardIdleMinutes: 4,
+    });
+    final estimate = estimator.preview([knockout], 4, withBoardChange)!;
 
-      final estimate = estimator.preview([knockout], 4, withBoardChange)!;
+    expect(estimate.minutes, 128);
+    expect(estimate.matchEndSeconds, [
+      2400,
+      2400,
+      2400,
+      2400,
+      5040,
+      5040,
+      7680,
+    ]);
+  });
+  test('partial KO stages stop at the configured number of qualifiers', () {
+    const partialKnockout = TournamentStage(
+      name: 'KO bis Halbfinale',
+      type: 'single_knockout',
+      knockoutParticipantCount: 8,
+      knockoutAdvancingCount: 4,
+      knockoutBracketSize: 8,
+      gameFormat: TournamentGameFormat(bestOfLegs: 3),
+    );
 
-      expect(estimate.minutes, 158);
-      expect(estimate.matchEndSeconds, [
-        3000,
-        3000,
-        3000,
-        3000,
-        6240,
-        6240,
-        9480,
-      ]);
-    },
-  );
+    final estimate = estimator.preview([partialKnockout], 4, parameters)!;
+
+    expect(estimate.totalMatches, 4);
+    expect(estimate.minutes, 25);
+  });
   test('variable elimination uses a match-count lower bound for duration', () {
     const doubleKo = TournamentStage(
       name: 'Double KO',

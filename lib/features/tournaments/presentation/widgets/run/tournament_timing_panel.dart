@@ -134,7 +134,8 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
       builder: (context) => AlertDialog(
         title: const Text('Turnieruhr zurücksetzen?'),
         content: const Text(
-          'Die Laufzeit wird auf null gesetzt und die Uhr startet ab jetzt neu. '
+          'Die Laufzeit wird ab 00:00 Uhr des eingestellten Turnierdatums '
+          'berechnet. Wenn kein Turnierdatum festgelegt wurde, gilt heute. '
           'Ergebnisse und gemessene Matchzeiten bleiben erhalten.',
         ),
         actions: [
