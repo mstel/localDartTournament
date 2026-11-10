@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/app/app_bootstrap.dart';
 import 'package:dart_tournament_manager/features/backups/data/backup_service.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:dart_tournament_manager/features/settings/data/planning_settings_storage.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/monthly_player_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
@@ -105,6 +106,30 @@ void main() {
       endsWith('planning_settings.json'),
     );
     expect(created.backupDirectory.path, endsWith('backups'));
+  });
+
+  test('update backup accepts saved matches with uneven singles', () async {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: ['H1', 'H2', 'H3', 'H4'],
+      awayPlayers: ['G1', 'G2', 'G3', 'G4'],
+      singlesPerPlayer: 2,
+      doublesCount: 0,
+    )..games[0].home[0] = 1;
+    await tournaments.saveTournament(
+      CreatedTournament(
+        name: 'Freundschaftsspiel',
+        players: [],
+        stages: [],
+        runStages: [],
+        leagueMatch: league,
+      ),
+    );
+
+    final preview = await service.inspect(await service.exportBytes());
+
+    expect(preview.tournaments, 1);
   });
 
   test(

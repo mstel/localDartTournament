@@ -434,7 +434,7 @@ class LeagueMatch {
     return match;
   }
 
-  void validate() {
+  void validate({bool validateSinglesDistribution = true}) {
     if (homeTeam.isEmpty || awayTeam.isEmpty) {
       throw const FormatException('Mannschaftsnamen fehlen.');
     }
@@ -478,7 +478,8 @@ class LeagueMatch {
         throw const FormatException('Ungültiger angepasster Spielplan.');
       }
       // Substitutions intentionally change the scheduled player distribution.
-      if (substitutions.isEmpty) {
+      // Persisted schedules may predate the fairness rule or have been edited.
+      if (validateSinglesDistribution && substitutions.isEmpty) {
         for (var player = 0; player < starterCount; player++) {
           if (games
                       .where(
@@ -594,7 +595,7 @@ class LeagueMatch {
           )
           .toList(),
     );
-    match.validate();
+    match.validate(validateSinglesDistribution: false);
     return match;
   }
 }

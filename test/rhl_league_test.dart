@@ -186,6 +186,22 @@ void main() {
       expect(restored.leagueMatch!.substitutions, hasLength(1));
     },
   );
+  test('saved adjusted schedules load when singles are uneven', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: ['H1', 'H2', 'H3', 'H4'],
+      awayPlayers: ['G1', 'G2', 'G3', 'G4'],
+      singlesPerPlayer: 2,
+      doublesCount: 0,
+    )..games[0].home[0] = 1;
+
+    expect(() => league.validate(), throwsFormatException);
+
+    final restored = LeagueMatch.fromJson(league.toJson());
+    expect(restored.games[0].home, [1]);
+    expect(restored.games, hasLength(8));
+  });
   test('adjusted games use equal starter count with unequal roster sizes', () {
     final league = LeagueMatch.adjusted(
       homeTeam: 'Heim',

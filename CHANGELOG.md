@@ -1,3 +1,10 @@
+# 2.6.7+87
+
+- Behebt fehlgeschlagene Updates, wenn ein gespeichertes Liga- oder
+  Freundschaftsspiel eine ungleichmäßige Einzelverteilung enthält. Bestehende
+  Spielpläne werden weiterhin strukturell geprüft und bleiben beim Backup
+  erhalten; neu erzeugte Pläne müssen weiterhin fair verteilt sein.
+
 # 2.6.6+86
 
 - Behebt das Laden von Liga- und Freundschaftsspielen mit gespeicherten
