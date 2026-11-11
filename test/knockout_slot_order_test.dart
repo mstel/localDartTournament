@@ -23,7 +23,7 @@ void main() {
           matching: find.byType(Scrollable),
         )
         .first;
-    final generatePlayers = find.text('Spieler erzeugen');
+    final generatePlayers = find.text('Teilnehmer erzeugen');
     await tester.scrollUntilVisible(
       generatePlayers,
       400,
@@ -33,7 +33,7 @@ void main() {
     await tester.tap(generatePlayers);
     await tester.pumpAndSettle();
 
-    final workflow = find.text('2 · Turnierablauf');
+    final workflow = find.text('2 · Turnierstruktur');
     await tester.scrollUntilVisible(workflow, 400, scrollable: scrollable);
     await tester.pumpAndSettle();
     if (find.byKey(const ValueKey('stage-type-field')).evaluate().isEmpty) {

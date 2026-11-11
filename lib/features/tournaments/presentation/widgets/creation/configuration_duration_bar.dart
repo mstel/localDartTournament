@@ -163,7 +163,7 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
                 ? 'Wird berechnet …'
                 : _error ??
                       (_minutes == null
-                          ? 'Bitte eine vollständige Etappe konfigurieren.'
+                          ? 'Bitte eine vollständige Phase konfigurieren.'
                           : _minutes! < 60
                           ? 'ca. ${_minutes!} min'
                           : 'ca. ${_minutes! ~/ 60} h ${_minutes! % 60} min'),
@@ -190,10 +190,10 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
           const SizedBox(height: 12),
           if (!_loading && _error == null && _estimate != null) ...[
             Text(
-              '${_estimate!.variableMatches ? 'ca. ' : ''}${_estimate!.totalMatches} Spiele insgesamt',
+              '${_estimate!.variableMatches ? 'ca. ' : ''}${_estimate!.totalMatches} Begegnungen insgesamt',
             ),
             Text(
-              'Garantiert mindestens ${_estimate!.minimumMatches} Spiele je Teilnehmer',
+              'Garantiert mindestens ${_estimate!.minimumMatches} Begegnungen je Teilnehmer',
             ),
             Text(
               'Zusätzliche Pausen- und Leerstandszeit: '
@@ -201,7 +201,7 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
               '(Leerstand ${_parameters!.boardIdleMinutes} min je Boardwechsel).',
             ),
             const Text(
-              'Matches, nicht einzelne Legs. Freilose zählen nicht als Spiel. Spätere Etappen zählen zur Mindestzahl nur, wenn alle Teilnehmer sie erreichen. Zusätzliche Entscheidungsspiele sind nicht enthalten.',
+              'Begegnungen, nicht einzelne Legs. Freilose zählen nicht als Begegnung. Spätere Phasen zählen zur Mindestzahl nur, wenn alle Teilnehmer sie erreichen. Zusätzliche Entscheidungsspiele sind nicht enthalten.',
             ),
             if (_estimate!.variableMatches)
               const Text(
@@ -234,8 +234,8 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
           ),
           Text(
             widget.editing
-                ? 'Vorschau inklusive der aktuell bearbeiteten Etappe.'
-                : 'Berechnet für die hinzugefügten Etappen.',
+                ? 'Vorschau inklusive der aktuell bearbeiteten Phase.'
+                : 'Berechnet für die hinzugefügten Phasen.',
           ),
           const Text(
             'Die Schätzung addiert die durchschnittliche Matchdauer je Zeitblock. '

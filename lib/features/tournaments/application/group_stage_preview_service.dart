@@ -13,12 +13,18 @@ class GroupStagePreviewService {
     final matches = _matches(stage).toList();
     final hasResults = matches.any((match) => match.countsForStatistics);
     if (!hasResults) {
-      final targetCount = _placeholderCount(stage, tournament, projectedPlayers);
-      final requiredCount = targetCount > 0 ? targetCount : projectedPlayers.length;
+      final targetCount = _placeholderCount(
+        stage,
+        tournament,
+        projectedPlayers,
+      );
+      final requiredCount = targetCount > 0
+          ? targetCount
+          : projectedPlayers.length;
       return List.generate(
         requiredCount,
         (index) => TournamentPlayer(
-          name: 'Qualifikant ${index + 1} (noch offen)',
+          name: 'Teilnehmer ${index + 1} (noch offen)',
           isGenerated: true,
         ),
       );

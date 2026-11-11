@@ -83,7 +83,7 @@ class SupabaseAccountSessionStore implements AccountSessionStore {
   AccountUser _accountFromSupabaseUser(User user) {
     final metadata = user.userMetadata ?? const <String, dynamic>{};
     final displayName =
-        (metadata['display_name'] as String?) ?? user.email ?? 'Spieler';
+        (metadata['display_name'] as String?) ?? user.email ?? 'Teilnehmer';
     final createdAt =
         DateTime.tryParse(user.createdAt) ??
         DateTime.fromMillisecondsSinceEpoch(0);

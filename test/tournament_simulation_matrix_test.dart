@@ -33,7 +33,9 @@ void main() {
 
       for (var index = 0; index < reports.length; index++) {
         final report = reports[index];
-        final scenario = tournamentDevelopmentScenarios.firstWhere((s) => s.name == report.scenarioName);
+        final scenario = tournamentDevelopmentScenarios.firstWhere(
+          (s) => s.name == report.scenarioName,
+        );
         final expectedFinalCount = scenario.stages.last.qualifiers;
 
         expect(
@@ -41,12 +43,12 @@ void main() {
           hasLength(expectedFinalCount),
           reason:
               '${report.scenarioName} muss $expectedFinalCount '
-              'finale Weiterkommende ermitteln.',
+              'finale Teilnehmer ermitteln.',
         );
         expect(
           report.totalMatches,
           greaterThan(0),
-          reason: '${report.scenarioName} muss Spiele erzeugen.',
+          reason: '${report.scenarioName} muss Begegnungen erzeugen.',
         );
         for (final stage in report.stageReports) {
           expect(
@@ -56,12 +58,17 @@ void main() {
           );
         }
       }
-      expect(failures, isEmpty, reason: 'Produktive Laufzeit blockiert; Details im Turnier-Simulationslog.');
+      expect(
+        failures,
+        isEmpty,
+        reason:
+            'Produktive Laufzeit blockiert; Details im Turnier-Simulationslog.',
+      );
     });
 
     test('detects impossible qualifier requests', () {
       const scenario = TournamentSimulationScenario(
-        name: 'ungueltige KO-Qualifikation',
+        name: 'ungueltige KO-Weiterkommen',
         playerCount: 4,
         stages: [
           SimulationEliminationStageSpec(

@@ -70,13 +70,13 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('ca. 1 h 35 min'), findsOneWidget);
-        expect(find.text('6 Spiele insgesamt'), findsOneWidget);
+        expect(find.text('6 Begegnungen insgesamt'), findsOneWidget);
         expect(
           find.textContaining('ca. 20 min (Leerstand 4 min je Boardwechsel)'),
           findsOneWidget,
         );
         expect(
-          find.text('Garantiert mindestens 3 Spiele je Teilnehmer'),
+          find.text('Garantiert mindestens 3 Begegnungen je Teilnehmer'),
           findsOneWidget,
         );
         final plus = find.byTooltip('Ein Board mehr');

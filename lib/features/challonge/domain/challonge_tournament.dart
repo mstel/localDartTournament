@@ -23,7 +23,7 @@ class ChallongeTournament {
     }
     if (data['participants'] is! List || data['matches'] is! List) {
       throw const FormatException(
-        'Teilnehmer und Spiele fehlen. Vollständigen JSON-Export verwenden.',
+        'Teilnehmer und Begegnungen fehlen. Vollständigen JSON-Export verwenden.',
       );
     }
     final ids = participants.map((p) => '${p['id']}').toSet();
@@ -122,7 +122,7 @@ class ChallongeTournament {
             players.values.any((p) => p.profileId == null)) ||
         linkedProfileIds.toSet().length != linkedProfileIds.length) {
       throw ArgumentError(
-        'Jeder zugewiesene Teilnehmer muss einem eindeutigen Spieler entsprechen.',
+        'Jeder zugewiesene Teilnehmer muss einem eindeutigen Teilnehmer entsprechen.',
       );
     }
     final results = <GroupMatch>[];

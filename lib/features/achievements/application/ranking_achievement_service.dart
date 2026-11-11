@@ -46,7 +46,7 @@ class RankingAchievementService {
         'Du hast ${value == '1' ? 'eine 180 geworfen' : '$value 180er geworfen'}.',
       AchievementMetric.legsWon => 'Du hast insgesamt $value Legs gewonnen.',
       AchievementMetric.distinctOpponentsBeaten =>
-        'Du hast gegen mindestens $value verschiedene Spieler gewonnen.',
+        'Du hast gegen mindestens $value verschiedene Teilnehmer gewonnen.',
       AchievementMetric.tournamentParticipations =>
         'Du hast an $value Turnieren dieser Rangliste teilgenommen.',
       AchievementMetric.tournamentWins =>
@@ -168,7 +168,7 @@ class RankingAchievementService {
     }
     if (!(await _eligibleRankingPlayerIds(ranking)).contains(playerProfileId)) {
       throw StateError(
-        'Spieler muss im Katalog und der Rangliste zugewiesen sein.',
+        'Teilnehmer muss im Katalog und der Rangliste zugewiesen sein.',
       );
     }
 

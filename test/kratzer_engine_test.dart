@@ -617,7 +617,7 @@ void main() {
       expect(restoredStage.participants, players);
       expect(
         restoredMatch.participantLabel,
-        'Spieler 1 · Spieler 2 · Spieler 3',
+        'Teilnehmer 1 · Teilnehmer 2 · Teilnehmer 3',
       );
       expect(restoredMatch.scratchedPlayer, players.first);
       expect(restoredMatch.winner, isNull);

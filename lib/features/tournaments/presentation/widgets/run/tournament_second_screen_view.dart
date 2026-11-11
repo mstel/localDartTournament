@@ -5,12 +5,13 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
-    show ProductionTournamentRuntime;
+    show KnockoutBracketView, ProductionTournamentRuntime;
 
 import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../utils/match_display_label.dart';
 import '../../../domain/player_insight.dart';
 import '../../../domain/second_screen_widget_placement.dart';
 import '../../../application/tournament_director_snapshot.dart';
@@ -40,8 +41,8 @@ import '../../../../league/presentation/league_overview.dart';
 const Map<String, String> _monitorWidgetTitles = {
   'combined': 'Tabellen/Siegprognose mit Umschalter',
   'recent': 'Zuletzt beendete Matches',
-  'boards': 'Boards & nächste Begegnungen',
-  'stageProgress': 'Fortschritt nach Etappen',
+  'boards': 'Nächste Begegnungen',
+  'stageProgress': 'Fortschritt nach Phasen',
   'highlights': 'Bestleistungen & Highlights',
   'ranking': 'Rangliste',
   'teamComparison': 'Mannschaftsvergleich',
@@ -50,8 +51,6 @@ const Map<String, String> _monitorWidgetTitles = {
 };
 
 enum _StandingsDisplayMode { standings, forecast }
-
-enum _MonitorLayoutAction { add, save, load, reset, standard }
 
 const String _standardMonitorLayoutName = 'Standard';
 
@@ -83,7 +82,7 @@ const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
   SecondScreenWidgetPlacement(widgetId: 'stageProgress', columnIndex: 1),
 ];
 
-/// Feste, responsive Info-Tafel für den Vereinsheim-TV (2. Bildschirm).
+/// Feste, responsive Info-Tafel für den Vereinsheim-TV (Zweitbildschirm-Modus).
 class TournamentSecondScreenView extends StatefulWidget {
   const TournamentSecondScreenView({
     super.key,
@@ -286,7 +285,7 @@ class _TournamentSecondScreenViewState
             {
               'round': match.round,
               'placementKey': match.placementKey,
-              'label': match.label,
+              'label': matchDisplayLabel(match.label, fallback: ''),
               'isKratzer': match.isKratzer,
               'participants': [
                 for (final player in [
@@ -729,12 +728,20 @@ class _TournamentSecondScreenViewState
         Widget content;
         if (activeStage is KnockoutTournamentRunStage &&
             !activeStage.isKratzer) {
-          content = _buildBracketPreview(
-            t,
-            activeStage,
-            activeIndex,
-            isActiveStage: true,
-          );
+          content = activeStage.eliminationLossLimit >= 3
+              ? KnockoutBracketView(
+                  stage: activeStage,
+                  placementMatches: activeStage.placementMatches,
+                  qualifyingRank: 1,
+                  onEditResult: (_) {},
+                  canEditResults: false,
+                )
+              : _buildBracketPreview(
+                  t,
+                  activeStage,
+                  activeIndex,
+                  isActiveStage: true,
+                );
         } else if (!wide) {
           content = SingleChildScrollView(
             child: Column(
@@ -834,7 +841,7 @@ class _TournamentSecondScreenViewState
                         onPressed: () =>
                             setState(() => _showNextStagePreview = true),
                         icon: const Icon(Icons.account_tree_outlined),
-                        label: const Text('Vorschau nächste Etappe'),
+                        label: const Text('Vorschau nächste Phase'),
                       ),
                     OutlinedButton.icon(
                       onPressed: _startMonitorLayoutEditing,
@@ -882,7 +889,7 @@ class _TournamentSecondScreenViewState
           constraints.maxHeight / 2.4,
           minimumUnitHeight,
         )).clamp(220.0, 360.0);
-        return Column(
+        final header = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildCustomLayoutStatusBar(t, activeStage),
@@ -905,6 +912,23 @@ class _TournamentSecondScreenViewState
                 ),
               ),
             const SizedBox(height: 8),
+          ],
+        );
+        final compactHeader =
+            constraints.maxWidth < 480 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.5;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (compactHeader)
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: min(320, constraints.maxHeight * 0.42),
+                ),
+                child: SingleChildScrollView(child: header),
+              )
+            else
+              header,
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -1156,77 +1180,11 @@ class _TournamentSecondScreenViewState
     TournamentRunStage? activeStage,
     double width,
   ) {
-    final compact =
-        width < 640 || MediaQuery.textScalerOf(context).scale(1) > 1.3;
-    if (compact) {
-      return Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        alignment: WrapAlignment.end,
-        children: [
-          if (_nextKnockoutStage(tournament, activeIndex, activeStage) != null)
-            OutlinedButton.icon(
-              onPressed: () => setState(() => _showNextStagePreview = true),
-              icon: const Icon(Icons.account_tree_outlined),
-              label: const Text('Vorschau nächste Etappe'),
-            ),
-          if (_isEditingLayout)
-            FilledButton.icon(
-              onPressed: _applyMonitorLayout,
-              icon: const Icon(Icons.check),
-              label: const Text('Layout anwenden'),
-            )
-          else
-            OutlinedButton.icon(
-              onPressed: _startMonitorLayoutEditing,
-              icon: const Icon(Icons.dashboard_customize),
-              label: const Text('Layout anpassen'),
-            ),
-          PopupMenuButton<_MonitorLayoutAction>(
-            tooltip: 'Weitere Layout-Aktionen',
-            icon: const Icon(Icons.more_vert),
-            itemBuilder: (context) => [
-              if (_isEditingLayout) ...[
-                const PopupMenuItem(
-                  value: _MonitorLayoutAction.add,
-                  child: Text('Widget hinzufügen'),
-                ),
-                const PopupMenuItem(
-                  value: _MonitorLayoutAction.save,
-                  child: Text('Layout speichern'),
-                ),
-                const PopupMenuItem(
-                  value: _MonitorLayoutAction.reset,
-                  child: Text('Layout zurücksetzen'),
-                ),
-              ],
-              if (tournament.secondScreenLayouts.isNotEmpty)
-                const PopupMenuItem(
-                  value: _MonitorLayoutAction.load,
-                  child: Text('Layout laden'),
-                ),
-              const PopupMenuItem(
-                value: _MonitorLayoutAction.standard,
-                child: Text('Standardansicht'),
-              ),
-            ],
-            onSelected: _handleMonitorLayoutAction,
-          ),
-        ],
-      );
-    }
-
     return Wrap(
       spacing: 8,
       runSpacing: 4,
-      alignment: WrapAlignment.end,
+      alignment: width < 640 ? WrapAlignment.start : WrapAlignment.end,
       children: [
-        if (_nextKnockoutStage(tournament, activeIndex, activeStage) != null)
-          OutlinedButton.icon(
-            onPressed: () => setState(() => _showNextStagePreview = true),
-            icon: const Icon(Icons.account_tree_outlined),
-            label: const Text('Vorschau nächste Etappe'),
-          ),
         if (_isEditingLayout) ...[
           OutlinedButton.icon(
             onPressed: _addMonitorWidget,
@@ -1238,56 +1196,47 @@ class _TournamentSecondScreenViewState
             icon: const Icon(Icons.save_outlined),
             label: const Text('Layout speichern'),
           ),
-          OutlinedButton.icon(
-            onPressed: _resetMonitorLayout,
-            icon: const Icon(Icons.restart_alt),
-            label: const Text('Layout zurücksetzen'),
-          ),
-          FilledButton.icon(
-            onPressed: _applyMonitorLayout,
-            icon: const Icon(Icons.check),
-            label: const Text('Layout anwenden'),
-          ),
-        ] else
-          OutlinedButton.icon(
-            onPressed: _startMonitorLayoutEditing,
-            icon: const Icon(Icons.dashboard_customize),
-            label: const Text('Layout anpassen'),
-          ),
+        ],
         if (tournament.secondScreenLayouts.isNotEmpty)
           OutlinedButton.icon(
             onPressed: _loadMonitorLayout,
             icon: const Icon(Icons.folder_open_outlined),
             label: const Text('Layout laden'),
           ),
+        if (_isEditingLayout) ...[
+          FilledButton.icon(
+            onPressed: _applyMonitorLayout,
+            icon: const Icon(Icons.check),
+            label: const Text('Layout anwenden'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _resetMonitorLayout,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Layout zurücksetzen'),
+          ),
+        ],
         OutlinedButton.icon(
           onPressed: () => setState(() {
             _useCustomLayout = false;
             _isEditingLayout = false;
           }),
           icon: const Icon(Icons.tv),
-          label: const Text('Standardansicht'),
+          label: const Text('Standardlayout'),
         ),
+        if (!_isEditingLayout)
+          OutlinedButton.icon(
+            onPressed: _startMonitorLayoutEditing,
+            icon: const Icon(Icons.dashboard_customize),
+            label: const Text('Layout anpassen'),
+          ),
+        if (_nextKnockoutStage(tournament, activeIndex, activeStage) != null)
+          OutlinedButton.icon(
+            onPressed: () => setState(() => _showNextStagePreview = true),
+            icon: const Icon(Icons.account_tree_outlined),
+            label: const Text('Vorschau nächste Phase'),
+          ),
       ],
     );
-  }
-
-  void _handleMonitorLayoutAction(_MonitorLayoutAction action) {
-    switch (action) {
-      case _MonitorLayoutAction.add:
-        _addMonitorWidget();
-      case _MonitorLayoutAction.save:
-        _saveMonitorLayout();
-      case _MonitorLayoutAction.load:
-        _loadMonitorLayout();
-      case _MonitorLayoutAction.reset:
-        _resetMonitorLayout();
-      case _MonitorLayoutAction.standard:
-        setState(() {
-          _useCustomLayout = false;
-          _isEditingLayout = false;
-        });
-    }
   }
 
   Widget _buildMonitorWidgetDropTarget(
@@ -2651,7 +2600,7 @@ class _TournamentSecondScreenViewState
           const Expanded(
             child: Center(
               child: Text(
-                'Keine K.-o.-Etappe als Nächstes geplant.',
+                'Keine K.-o.-Phase als Nächstes geplant.',
                 style: TextStyle(color: Colors.white70),
               ),
             ),
@@ -2737,35 +2686,45 @@ class _TournamentSecondScreenViewState
       required bool home,
     }) {
       if (isActiveStage) {
-        if (player != null && !player.name.startsWith('Qualifikant ')) {
+        if (player != null && !player.name.startsWith('Teilnehmer ')) {
           return player.shortDisplayName;
         }
         if (roundIndex == 0) return 'Offen';
         final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
-        return 'Gewinner Spiel $sourceMatchNumber';
+        return matchDisplayLabel(
+          'Gewinner Spiel $sourceMatchNumber',
+          fallback: '',
+        );
       }
       if (!hasGroupStageResults) {
         if (roundIndex == 0) {
-          return 'Qualifikant offen';
+          return 'Teilnehmer offen';
         }
         if (roundIndex > 0) {
           final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
-          if (player == null || player.name.startsWith('Qualifikant ')) {
-            return 'Gewinner Spiel $sourceMatchNumber';
+          if (player == null || player.name.startsWith('Teilnehmer ')) {
+            return matchDisplayLabel(
+              'Gewinner Spiel $sourceMatchNumber',
+              fallback: '',
+            );
           }
           return player.name;
         }
-        if (player == null || player.name.startsWith('Qualifikant ')) {
-          return 'Qualifikant offen';
+        if (player == null || player.name.startsWith('Teilnehmer ')) {
+          return 'Teilnehmer offen';
         }
         return player.name;
       }
       if (roundIndex > 0) {
         final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
-        return player?.name ?? 'Gewinner Spiel $sourceMatchNumber';
+        return player?.name ??
+            matchDisplayLabel(
+              'Gewinner Spiel $sourceMatchNumber',
+              fallback: '',
+            );
       }
-      if (player == null || player.name.startsWith('Qualifikant ')) {
-        return 'Qualifikant offen';
+      if (player == null || player.name.startsWith('Teilnehmer ')) {
+        return 'Teilnehmer offen';
       }
       return player.name;
     }
@@ -2814,7 +2773,7 @@ class _TournamentSecondScreenViewState
             padding: const EdgeInsets.only(top: 4),
             child: Text(
               groupStageIsSet
-                  ? 'Die Setzplätze der Etappe stehen fest.'
+                  ? 'Die Setzplätze der Phase stehen fest.'
                   : 'Die angezeigten Plätze entsprechen dem aktuellen Tabellenstand und sind vorläufig.',
               style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
@@ -2824,7 +2783,7 @@ class _TournamentSecondScreenViewState
           child: previewStage.rounds.isEmpty
               ? const Center(
                   child: Text(
-                    'Für diese Etappe ist noch kein Turnierbaum vorhanden.',
+                    'Für diese Phase ist noch kein Turnierbaum vorhanden.',
                     style: TextStyle(color: Colors.white70),
                   ),
                 )
@@ -3012,7 +2971,7 @@ class _TournamentSecondScreenViewState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            match.label ?? 'Spiel $matchNumber',
+            matchDisplayLabel(match.label, fallback: 'Begegnung $matchNumber'),
             style: const TextStyle(color: Colors.white54, fontSize: 11),
           ),
           const SizedBox(height: 3),
@@ -3053,7 +3012,7 @@ class _TournamentSecondScreenViewState
     if (stage == null) {
       return const Center(
         child: Text(
-          'Keine aktive Etappe vorhanden',
+          'Keine aktive Phase vorhanden',
           style: TextStyle(color: Colors.white70),
         ),
       );
@@ -3133,7 +3092,7 @@ class _TournamentSecondScreenViewState
             ),
             const SizedBox(height: 8),
             Text(
-              'Aktuelle Spiele und Paarungen siehe Spielansetzungen.',
+              'Aktuelle Begegnungen und Paarungen siehe Spielansetzungen.',
               style: TextStyle(color: Colors.white70),
             ),
           ],
@@ -3578,7 +3537,7 @@ class _TournamentSecondScreenViewState
                       children: [
                         const Tooltip(
                           message:
-                              'Prioritätshinweis: Diese Gruppe oder Spieler '
+                              'Prioritätshinweis: Diese Gruppe oder Teilnehmer '
                               'liegen im Spielplan zurück.',
                           child: Icon(
                             Icons.priority_high,
@@ -3628,7 +3587,7 @@ class _TournamentSecondScreenViewState
                           deprioritizedMatches:
                               flowPriority.deprioritizedMatches,
                           emptyMessage:
-                              'Keine offenen Partien in dieser Etappe.',
+                              'Keine offenen Partien in dieser Phase.',
                           dense: true,
                           playerInsights: snapshot.data ?? const {},
                         ),
@@ -3750,7 +3709,7 @@ class _TournamentSecondScreenViewState
         ],
         Text(
           widget.tournament.directorModeEnabled
-              ? 'Boards & nächste Begegnungen'
+              ? 'Nächste Begegnungen'
               : 'Nächste Partien · Vorschläge',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
@@ -3767,7 +3726,7 @@ class _TournamentSecondScreenViewState
           const Padding(
             padding: EdgeInsets.only(top: 8),
             child: Text(
-              'Keine offenen Partien in dieser Etappe.',
+              'Keine offenen Partien in dieser Phase.',
               style: TextStyle(color: Colors.white70),
             ),
           ),
@@ -4230,8 +4189,11 @@ class _TournamentSecondScreenViewState
                             ),
                           );
                     final activityRows = [
-                      for (final entry in recentSubstitutions.take(3))
+                      for (final entry in recentSubstitutions.take(5))
                         ListTile(
+                          key: ValueKey(
+                            'recent-activity-${entry.timestamp.toIso8601String()}',
+                          ),
                           dense: true,
                           visualDensity: VisualDensity.compact,
                           leading: const Icon(

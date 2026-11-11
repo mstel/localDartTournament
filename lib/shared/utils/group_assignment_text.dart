@@ -14,7 +14,7 @@ class GroupAssignmentText {
     }
     if (groups.any((group) => group.isEmpty)) {
       throw ArgumentError(
-        'Jede Gruppe muss mindestens einen Spieler enthalten.',
+        'Jede Gruppe muss mindestens einen Teilnehmer enthalten.',
       );
     }
     return [
@@ -70,7 +70,7 @@ class GroupAssignmentText {
       } else {
         if (groups.isEmpty) {
           throw const FormatException(
-            'Vor dem ersten Spielernamen muss eine Gruppenüberschrift stehen.',
+            'Vor dem ersten Teilnehmernamen muss eine Gruppenüberschrift stehen.',
           );
         }
         groups.last.add(line);
@@ -84,14 +84,14 @@ class GroupAssignmentText {
     }
     if (groups.any((group) => group.isEmpty)) {
       throw const FormatException(
-        'Jede Gruppe muss mindestens einen Spieler enthalten.',
+        'Jede Gruppe muss mindestens einen Teilnehmer enthalten.',
       );
     }
     final names = groups.expand((group) => group).toList();
     if (names.any((name) => name.isEmpty) ||
         names.map(_key).toSet().length != names.length) {
       throw const FormatException(
-        'Spielernamen müssen vorhanden und eindeutig sein.',
+        'Teilnehmernamen müssen vorhanden und eindeutig sein.',
       );
     }
 

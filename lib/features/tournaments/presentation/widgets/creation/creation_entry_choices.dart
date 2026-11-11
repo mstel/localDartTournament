@@ -29,7 +29,8 @@ class CreationEntryChoices extends StatelessWidget {
         actions: [
           SportMenuAction(
             label: 'Normales- oder Ranglistenturnier erstellen',
-            description: 'Spieler, Etappen, Regeln und Ranglisten selbst festlegen.',
+            description:
+                'Teilnehmer, Phasen, Regeln und Ranglisten selbst festlegen.',
             icon: Icons.tune,
             onTap: onExpert,
           ),

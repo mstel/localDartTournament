@@ -227,7 +227,7 @@ class _GroupTable extends StatelessWidget {
                   ),
                 if (group.isDelayed)
                   const Tooltip(
-                    message: 'Diese Gruppe liegt im Spielplan zurück',
+                    message: 'Diese Gruppe liegt im Begegnungsplan zurück',
                     child: Icon(
                       Icons.priority_high,
                       color: TournamentDisplayPalette.accent,

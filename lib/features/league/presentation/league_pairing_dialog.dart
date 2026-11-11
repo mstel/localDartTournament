@@ -77,7 +77,8 @@ class _LeaguePairingDialogState extends State<LeaguePairingDialog> {
           if (_home.toSet().length != _home.length ||
               _away.toSet().length != _away.length) {
             setState(
-              () => _error = 'Im Doppel zwei unterschiedliche Spieler wählen.',
+              () =>
+                  _error = 'Im Doppel zwei unterschiedliche Teilnehmer wählen.',
             );
             return;
           }

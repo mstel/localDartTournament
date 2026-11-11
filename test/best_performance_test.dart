@@ -10,7 +10,7 @@ void main() {
   test('legacy 170+ data migrates to the 171+ category', () {
     final migrated = BestPerformance.fromJson({
       'type': 'score170',
-      'playerName': 'Spieler 1',
+      'playerName': 'Teilnehmer 1',
       'value': 170,
     });
 
@@ -24,7 +24,7 @@ void main() {
   test('new best performance categories preserve bullseye text', () {
     const performance = BestPerformance(
       type: BestPerformanceType.bullseyeFinish,
-      playerName: 'Spieler 1',
+      playerName: 'Teilnehmer 1',
       details: 'Bullseye',
     );
 
@@ -38,12 +38,12 @@ void main() {
     final match = GroupMatch(
       homePlayer: TournamentPlayer(
         profileId: 'player-1',
-        name: 'Spieler 1',
+        name: 'Teilnehmer 1',
         isGenerated: false,
       ),
       awayPlayer: TournamentPlayer(
         profileId: 'player-2',
-        name: 'Spieler 2',
+        name: 'Teilnehmer 2',
         isGenerated: false,
       ),
       round: 1,
@@ -52,12 +52,12 @@ void main() {
       bestPerformances: const [
         BestPerformance(
           type: BestPerformanceType.score180,
-          playerName: 'Spieler 1',
+          playerName: 'Teilnehmer 1',
           playerProfileId: 'player-1',
         ),
         BestPerformance(
           type: BestPerformanceType.highFinish,
-          playerName: 'Spieler 2',
+          playerName: 'Teilnehmer 2',
           playerProfileId: 'player-2',
           value: 120,
         ),
@@ -85,19 +85,19 @@ void main() {
       final match = GroupMatch(
         homePlayer: TournamentPlayer(
           profileId: 'player-1',
-          name: 'Spieler 1',
+          name: 'Teilnehmer 1',
           isGenerated: false,
         ),
         awayPlayer: TournamentPlayer(
           profileId: 'player-2',
-          name: 'Spieler 2',
+          name: 'Teilnehmer 2',
           isGenerated: false,
         ),
         round: 1,
         bestPerformances: const [
           BestPerformance(
             type: BestPerformanceType.score170,
-            playerName: 'Spieler 1',
+            playerName: 'Teilnehmer 1',
             value: 170,
           ),
         ],

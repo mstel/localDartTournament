@@ -21,7 +21,7 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
-    await tester.tap(find.byTooltip('Spielerprofil von Anna öffnen'));
+    await tester.tap(find.byTooltip('Teilnehmerprofil von Anna öffnen'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
 
@@ -32,7 +32,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: PlayerEloHistoryPage(
-          player: LocalEloPlayer(id: 'player-1', name: 'Spieler', rating: 1030),
+          player: LocalEloPlayer(
+            id: 'player-1',
+            name: 'Teilnehmer',
+            rating: 1030,
+          ),
           rankingName: 'Vereinsrangliste',
           history: [
             LocalEloHistoryItem(
@@ -83,7 +87,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: PlayerEloHistoryPage(
-          player: LocalEloPlayer(id: 'player-1', name: 'Spieler', rating: 1030),
+          player: LocalEloPlayer(
+            id: 'player-1',
+            name: 'Teilnehmer',
+            rating: 1030,
+          ),
           rankingName: 'Vereinsrangliste',
           history: [
             LocalEloHistoryItem(
@@ -259,9 +267,7 @@ void main() {
     );
     final chart = find.byType(EloTrajectoryChart);
     final rect = tester.getRect(chart);
-    await tester.tapAt(
-      Offset(rect.left + rect.width / 12, rect.center.dy),
-    );
+    await tester.tapAt(Offset(rect.left + rect.width / 12, rect.center.dy));
     await tester.pump();
 
     final tooltipText = tester.widget<Text>(
@@ -327,7 +333,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: PlayerEloHistoryPage(
-          player: LocalEloPlayer(id: 'player-1', name: 'Spieler', rating: 1045),
+          player: LocalEloPlayer(
+            id: 'player-1',
+            name: 'Teilnehmer',
+            rating: 1045,
+          ),
           rankingName: 'Vereinsrangliste',
           history: [
             LocalEloHistoryItem(

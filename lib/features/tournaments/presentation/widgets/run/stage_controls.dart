@@ -39,7 +39,7 @@ class StageProgressBar extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: SportSectionNavigation<int>(
-              label: 'Etappe',
+              label: 'Phase',
               selected: activeStageIndex,
               onChanged: onStageSelected,
               sections: [
@@ -170,7 +170,7 @@ class StageViewModeSwitch extends StatelessWidget {
         if (canLead)
           const SportSection(
             StageViewMode.dashboard,
-            'Dashboard',
+            'Übersicht',
             Icons.dashboard_outlined,
           ),
         if (canLead && directorModeEnabled)
@@ -181,7 +181,7 @@ class StageViewModeSwitch extends StatelessWidget {
           ),
         const SportSection(
           StageViewMode.results,
-          'Ergebnisse',
+          'Partien & Ergebnisse',
           Icons.sports_score_outlined,
         ),
         if (canLead)
@@ -241,10 +241,10 @@ class StageFooter extends StatelessWidget {
           children: [
             Text(
               !isViewingActiveStage
-                  ? 'Vorschau: Ergebnisse und Abschluss sind nur in der aktuellen Etappe "$activeStageName" möglich.'
+                  ? 'Vorschau: Ergebnisse und Abschluss sind nur in der aktuellen Phase "$activeStageName" möglich.'
                   : canCompleteStage
-                  ? 'Alle Ergebnisse dieser Etappe sind eingetragen.'
-                  : 'Trage alle Ergebnisse ein, um die Etappe abzuschliessen.',
+                  ? 'Alle Ergebnisse dieser Phase sind eingetragen.'
+                  : 'Trage alle Ergebnisse ein, um die Phase abzuschliessen.',
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -257,7 +257,7 @@ class StageFooter extends StatelessWidget {
                       ? onFinishEarly
                       : null,
                   icon: const Icon(Icons.block_outlined),
-                  label: const Text('Etappe vorzeitig beenden'),
+                  label: const Text('Phase vorzeitig beenden'),
                 ),
                 FilledButton.icon(
                   onPressed: canCompleteStage && isViewingActiveStage
@@ -269,9 +269,7 @@ class StageFooter extends StatelessWidget {
                         : Icons.arrow_forward,
                   ),
                   label: Text(
-                    isLastStage
-                        ? 'Turnier abschliessen'
-                        : 'Etappe abschliessen',
+                    isLastStage ? 'Turnier abschliessen' : 'Phase abschliessen',
                   ),
                 ),
               ],

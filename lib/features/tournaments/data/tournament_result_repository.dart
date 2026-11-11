@@ -52,7 +52,7 @@ class TournamentResultRepository {
         result.homeLegs == null ||
         result.awayLegs == null) {
       throw StateError(
-        'Nur offene Spiele können gemeldet werden. Korrekturen übernimmt die Turnierleitung.',
+        'Nur offene Begegnungen können gemeldet werden. Korrekturen übernimmt die Turnierleitung.',
       );
     }
     final data = await Supabase.instance.client.rpc(

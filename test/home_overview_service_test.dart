@@ -183,7 +183,7 @@ void main() {
       for (var index = 0; index < 16; index++)
         TournamentPlayer(
           profileId: 'player-$index',
-          name: 'Spieler $index',
+          name: 'Teilnehmer $index',
           isGenerated: false,
         ),
     ];

@@ -63,11 +63,13 @@ class PlayQueueBlock extends StatelessWidget {
                     ),
                     Text(
                       parallelCount > 1
-                          ? '$parallelCount Spiele parallel auf verschiedenen Boards'
-                          : 'Ein Spiel in diesem Block',
+                          ? '$parallelCount Begegnungen parallel auf verschiedenen Boards'
+                          : 'Eine Begegnung in diesem Block',
                     ),
                     if (next && waitingForBoards)
-                      const Text('Start, sobald Boards und Spieler frei sind.'),
+                      const Text(
+                        'Start, sobald Boards und Teilnehmer frei sind.',
+                      ),
                   ],
                 ),
               ),

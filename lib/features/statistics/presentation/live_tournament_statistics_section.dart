@@ -57,16 +57,20 @@ class _LiveTournamentStatisticsSectionState
               'Turnierstatistik',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
-            const Text('Aktueller Stand über alle Etappen'),
+            const Text('Aktueller Stand über alle Phasen'),
             const SizedBox(height: 16),
             SportMetricGrid(
               metrics: [
                 SportMetric(
-                  'Spiele',
+                  'Begegnungen',
                   '$completedMatches',
                   Icons.check_circle_outline,
                 ),
-                SportMetric('Spieler', '${rows.length}', Icons.groups_outlined),
+                SportMetric(
+                  'Teilnehmer',
+                  '${rows.length}',
+                  Icons.groups_outlined,
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -74,7 +78,7 @@ class _LiveTournamentStatisticsSectionState
             ...[
               if (rows.isEmpty)
                 const Text(
-                  'Noch keine abgeschlossenen Spiele mit menschlichen Teilnehmern.',
+                  'Noch keine abgeschlossenen Begegnungen mit menschlichen Teilnehmern.',
                 )
               else ...[
                 AdaptiveTileLayout(
@@ -83,7 +87,7 @@ class _LiveTournamentStatisticsSectionState
                     TextField(
                       controller: _search,
                       decoration: const InputDecoration(
-                        labelText: 'Spieler suchen',
+                        labelText: 'Teilnehmer suchen',
                         prefixIcon: Icon(Icons.search),
                       ),
                       onChanged: (value) =>
@@ -108,7 +112,7 @@ class _LiveTournamentStatisticsSectionState
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (visible.isEmpty) const Text('Keine passenden Spieler.'),
+                if (visible.isEmpty) const Text('Keine passenden Teilnehmer.'),
                 AdaptiveTileLayout(
                   minTileWidth: 360,
                   children: [

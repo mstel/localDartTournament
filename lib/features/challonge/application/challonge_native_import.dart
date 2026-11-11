@@ -652,7 +652,7 @@ class ChallongeNativeImport {
             )
             .join('; ');
         throw FormatException(
-          'Die eigene K.-o.-Weiterleitung konnte ${pending.length} historische Spiele von ${archived.name} nicht nachspielen: ${pending.map((m) => '${m['id']} (${bySourceId['${m['player1_id']}']?.name ?? 'Freilos'} gegen ${bySourceId['${m['player2_id']}']?.name ?? 'Freilos'})').join('; ')}. Offene Zielspiele: $unresolvedTargets. Import vor dem Speichern abgebrochen.',
+          'Die eigene K.-o.-Weiterleitung konnte ${pending.length} historische Begegnungen von ${archived.name} nicht nachspielen: ${pending.map((m) => '${m['id']} (${bySourceId['${m['player1_id']}']?.name ?? 'Freilos'} gegen ${bySourceId['${m['player2_id']}']?.name ?? 'Freilos'})').join('; ')}. Offene Zielspiele: $unresolvedTargets. Import vor dem Speichern abgebrochen.',
         );
       }
       runs[runs.length - 1] = replayStage;
@@ -665,7 +665,7 @@ class ChallongeNativeImport {
         });
         if (i < 0) {
           issues.add(
-            'Gesamtplatz ${p['name']} (${p['finalRank']}) liegt außerhalb der finalen K.-o.-Etappe und wurde nicht gegen deren Rangfolge geprüft. Die Gruppenwertung bleibt separat erhalten.',
+            'Gesamtplatz ${p['name']} (${p['finalRank']}) liegt außerhalb der finalen K.-o.-Phase und wurde nicht gegen deren Rangfolge geprüft. Die Gruppenwertung bleibt separat erhalten.',
           );
         }
         if (i >= 0 && i + 1 != p['finalRank']) {

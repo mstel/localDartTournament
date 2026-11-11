@@ -128,14 +128,14 @@ class MonthlyStatisticsXlsxParser {
         final playerName = _value(cells, columns.player).trim();
         if (playerName.isEmpty || playerName.length > 200) {
           throw FormatException(
-            'Zeile $rowNumber: Spielername fehlt oder ist zu lang.',
+            'Zeile $rowNumber: Teilnehmername fehlt oder ist zu lang.',
           );
         }
         final month = _parseMonth(_value(cells, columns.month), rowNumber);
         final key = '${_normalizeName(playerName)}|$month';
         if (!seen.add(key)) {
           throw FormatException(
-            'Zeile $rowNumber: Spieler und Monat kommen mehrfach vor ($playerName, $month).',
+            'Zeile $rowNumber: Teilnehmer und Monat kommen mehrfach vor ($playerName, $month).',
           );
         }
 
@@ -261,7 +261,7 @@ class MonthlyStatisticsXlsxParser {
     }
 
     return _MonthlyColumns(
-      player: required('Spieler'),
+      player: required('Teilnehmer'),
       month: required('Monat'),
       threeDartAverage: required('3-Dart Average'),
       firstNineAverage: required('First 9'),

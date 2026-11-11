@@ -103,7 +103,7 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
           DropdownButtonFormField<String?>(
             isExpanded: true,
             initialValue: _playerId,
-            decoration: const InputDecoration(labelText: 'Spieler'),
+            decoration: const InputDecoration(labelText: 'Teilnehmer'),
             items: [
               for (final player in players)
                 DropdownMenuItem<String?>(

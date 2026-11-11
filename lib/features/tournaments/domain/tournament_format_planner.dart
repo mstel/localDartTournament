@@ -17,7 +17,7 @@ class TournamentPlanningRequest {
     'groups:round_robin': 'Gruppen: Jeder gegen jeden (einmal)',
     'groups:double_round_robin': 'Gruppen: Jeder gegen jeden (zweimal)',
     'groups:limited_round_robin':
-        'Gruppen: Rundenformat mit max. 5 Begegnungen pro Spieler',
+        'Gruppen: Rundenformat mit max. 5 Begegnungen pro Teilnehmer',
     'groups:swiss': 'Schweizer System',
   };
   const TournamentPlanningRequest({
@@ -278,8 +278,8 @@ class TournamentFormatPlanner {
                     ? '${sizes.first}'
                     : '${sizes.last}–${sizes.first}';
                 final groupDesc = groups == 1
-                    ? '1 Gruppe à $sizeDesc Spieler'
-                    : '$groups Gruppen à $sizeDesc Spieler';
+                    ? '1 Gruppe à $sizeDesc Teilnehmer'
+                    : '$groups Gruppen à $sizeDesc Teilnehmer';
                 // Determine mode key for lookup (double round robin or regular)
                 final modeKey = 'groups:round_robin';
                 final modeLabel =

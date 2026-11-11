@@ -34,13 +34,13 @@ class _RenamePlayerDialogState extends State<RenamePlayerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Spieler bearbeiten'),
+      title: const Text('Teilnehmer bearbeiten'),
       content: TextField(
         controller: _nameController,
         autofocus: true,
         decoration: const InputDecoration(
           border: OutlineInputBorder(),
-          labelText: 'Spielername',
+          labelText: 'Teilnehmername',
         ),
         onSubmitted: (_) => _submit(),
       ),
@@ -65,7 +65,7 @@ class GroupSizePreview extends StatelessWidget {
     if (groupSizes.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 14),
-        child: Text('Erst Spieler anlegen.'),
+        child: Text('Erst Teilnehmer anlegen.'),
       );
     }
 
@@ -76,7 +76,7 @@ class GroupSizePreview extends StatelessWidget {
         for (var index = 0; index < groupSizes.length; index++)
           Chip(
             avatar: CircleAvatar(child: Text('${index + 1}')),
-            label: Text('${groupSizes[index]} Spieler'),
+            label: Text('${groupSizes[index]} Teilnehmer'),
           ),
       ],
     );
@@ -107,10 +107,7 @@ class RoundRobinRepeatsSetup extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Begegnungen pro Paar / Swiss-Runden',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('Anzahl Runden', style: Theme.of(context).textTheme.titleMedium),
         if (playTypes.contains('swiss'))
           const Text(
             'Swiss: feste Rundenzahl, maximal die aufgerundete halbe Teilnehmerzahl je Gruppe. Die nächste Runde wartet auf alle Ergebnisse.',
@@ -148,7 +145,7 @@ class RoundRobinRepeatsSetup extends StatelessWidget {
                             ? null
                             : () => onChangeRepeats(index, -1),
                         icon: const Icon(Icons.remove),
-                        tooltip: 'Weniger Spiele',
+                        tooltip: 'Weniger Begegnungen',
                       ),
                       Text(
                         playTypes[index] == 'swiss'
@@ -169,7 +166,7 @@ class RoundRobinRepeatsSetup extends StatelessWidget {
                             ? null
                             : () => onChangeRepeats(index, 1),
                         icon: const Icon(Icons.add),
-                        tooltip: 'Mehr Spiele',
+                        tooltip: 'Mehr Begegnungen',
                       ),
                     ],
                   ),
@@ -212,7 +209,7 @@ class StageMatchCountPreview extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$matchCount Spiele in dieser Etappe',
+                  '$matchCount Begegnungen in dieser Phase',
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
@@ -345,14 +342,14 @@ class QualificationRuleSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final plan = qualificationPlan;
     if (plan == null) {
-      return const Text('Keine gültige Anzahl Weiterkommende.');
+      return const Text('Keine gültige Anzahl Teilnehmer.');
     }
 
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        Chip(label: Text('${plan.totalQualifiers} Weiterkommende')),
+        Chip(label: Text('${plan.totalQualifiers} Teilnehmer')),
         if (plan.fixedByGroup.isNotEmpty &&
             plan.fixedByGroup.toSet().length > 1)
           Chip(label: Text(_fixedByGroupSummary(plan.fixedByGroup)))
@@ -533,12 +530,12 @@ class _QualificationPlaceBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final backgroundColor = isQualified
-        ? const Color(0xFFC8F7DC)
+        ? colorScheme.primary
         : isExtraCandidate
         ? colorScheme.primaryContainer
         : colorScheme.surfaceContainerHighest;
     final borderColor = isQualified
-        ? const Color(0xFF14965F)
+        ? colorScheme.primary
         : isExtraCandidate
         ? colorScheme.primary
         : colorScheme.outlineVariant;
@@ -561,7 +558,17 @@ class _QualificationPlaceBadge extends StatelessWidget {
             border: Border.all(color: borderColor),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Text('$place.'),
+          child: Text(
+            '$place.',
+            style: TextStyle(
+              color: isQualified
+                  ? colorScheme.onPrimary
+                  : isExtraCandidate
+                  ? colorScheme.onPrimaryContainer
+                  : colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ),
     );

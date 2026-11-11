@@ -93,7 +93,7 @@ class KratzerDurationPreview extends StatelessWidget {
                 Text(
                   '${entry.stage.name}: ${entry.estimate.rounds} Runden · '
                   '${entry.stage.gameFormat.bestOfLegs} Legs · '
-                  'Spielzeit je zusätzlichem Spieler +50 %',
+                  'Spielzeit je zusätzlichem Teilnehmer +50 %',
                 ),
               Text(
                 'Je Runde wird die längste tatsächlich belegte Board-Partie '
@@ -131,7 +131,7 @@ class KratzerDurationPreview extends StatelessWidget {
               ),
               if (stages.any((stage) => stage.type != 'kratzer'))
                 const Text(
-                  'Die Vorschau berücksichtigt hier die Kratzer-Etappen; andere Etappen sind nicht eingerechnet.',
+                  'Die Vorschau berücksichtigt hier die Kratzer-Phasen; andere Phasen sind nicht eingerechnet.',
                 ),
             ],
           ),

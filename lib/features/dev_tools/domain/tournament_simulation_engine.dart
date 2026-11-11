@@ -182,12 +182,12 @@ class TournamentSimulationEngine {
     final configs = <TournamentStage>[];
     for (final spec in scenario.stages) {
       if (spec.qualifiers < 1 || spec.qualifiers > count) {
-        throw const TournamentSimulationFailure('Ungültige Qualifikation');
+        throw const TournamentSimulationFailure('Ungültige Weiterkommen');
       }
       if (spec is SimulationGroupStageSpec) {
         if (spec.groupSizes.fold<int>(0, (a, b) => a + b) != count) {
           throw const TournamentSimulationFailure(
-            'Gruppengrößen passen nicht zur Spielerzahl',
+            'Gruppengrößen passen nicht zur Teilnehmerzahl',
           );
         }
         configs.add(
@@ -323,7 +323,7 @@ class TournamentSimulationEngine {
               : match.scratchEligiblePlayers;
           if (eligible.isEmpty) {
             throw TournamentSimulationFailure(
-              '${scenario.name} / ${stage.name}: kein Kratzer-Spieler verfügbar',
+              '${scenario.name} / ${stage.name}: kein Kratzer-Teilnehmer verfügbar',
             );
           }
           match
@@ -386,7 +386,7 @@ class TournamentSimulationEngine {
           .take(scenario.stages[index].qualifiers)
           .toList();
       if (advancing.length != scenario.stages[index].qualifiers) {
-        throw const TournamentSimulationFailure('Zu wenige Weiterkommende');
+        throw const TournamentSimulationFailure('Zu wenige Teilnehmer');
       }
       final tables = <String, List<PlayerStanding>>{};
       if (stage is GroupTournamentRunStage) {

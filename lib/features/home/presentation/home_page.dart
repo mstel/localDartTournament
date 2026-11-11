@@ -35,7 +35,7 @@ class _HomePageState extends State<HomePage> {
       () => _open(const TournamentHomePage(leagueMatchesOnly: true), 2),
     ),
     SportDestination(
-      'Spieler',
+      'Teilnehmer',
       Icons.groups_outlined,
       () => _open(const PlayersPage(), 3),
     ),
@@ -501,12 +501,12 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Nicht alle Spieler sind zugeordnet'),
+          title: const Text('Nicht alle Teilnehmer sind zugeordnet'),
           content: Text(
-            '$unassignedCount Challonge-Spieler werden als lokale Spieler '
+            '$unassignedCount Challonge-Teilnehmer werden als lokale Teilnehmer '
             'übernommen. Ihre Begegnungen bleiben standardmäßig ohne '
             'Ranglistenwertung. In den Ranglisteneinstellungen kannst du '
-            '„Begegnungen mit lokalen Spielern Werten“ aktivieren, damit sie '
+            '„Begegnungen mit lokalen Teilnehmern werten“ aktivieren, damit sie '
             'mit 1000 Elo einfließen.',
           ),
           actions: [
@@ -686,7 +686,7 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
                 if (tournaments != null)
                   Text(
                     widget.leagueMatchesOnly
-                        ? '${tournaments.where((item) => item.leagueMatch != null).length} gespeicherte Spiele'
+                        ? '${tournaments.where((item) => item.leagueMatch != null).length} gespeicherte Begegnungen'
                         : '${tournaments.where((item) => item.leagueMatch == null).length} gespeicherte Turniere',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),

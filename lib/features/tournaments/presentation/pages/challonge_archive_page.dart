@@ -42,7 +42,7 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
     for (final participant in archive.participants) {
       final player = TournamentPlayer(
         profileId: participant['profileId'] as String?,
-        name: '${participant['name'] ?? 'Spieler'}',
+        name: '${participant['name'] ?? 'Teilnehmer'}',
         isGenerated: false,
       );
       playerById['${participant['id']}'] = player;
@@ -86,7 +86,7 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
     await _save(CreatedTournament.fromJson(updatedJson));
   }
 
-  // ── Spieler-Zuweisung bearbeiten ─────────────────────────────────────────────
+  // ── Teilnehmer-Zuweisung bearbeiten ─────────────────────────────────────────────
   Future<void> _editPlayerAssignments() async {
     final archive = tournament.importedArchive!;
     final db = LocalAppDatabase();
@@ -168,7 +168,7 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
         title: Text('${tournament.name} (Challonge-Turnier)'),
         actions: [
           IconButton(
-            tooltip: 'Spieler-Zuweisung bearbeiten',
+            tooltip: 'Teilnehmer-Zuweisung bearbeiten',
             icon: const Icon(Icons.people_alt_outlined),
             onPressed: saving ? null : _editPlayerAssignments,
           ),
@@ -206,8 +206,8 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
                     children: [
                       Text(
                         assigned == total
-                            ? 'Alle Spieler zugewiesen ($assigned/$total)'
-                            : 'Spieler-Zuweisung unvollständig ($assigned/$total zugewiesen)',
+                            ? 'Alle Teilnehmer zugewiesen ($assigned/$total)'
+                            : 'Teilnehmer-Zuweisung unvollständig ($assigned/$total zugewiesen)',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -215,7 +215,7 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
                       if (assigned < total) ...[
                         const SizedBox(height: 4),
                         const Text(
-                          'Für die Ranglisten-Wertung müssen alle Spieler zugewiesen sein.',
+                          'Für die Ranglistenwertung müssen alle Teilnehmer zugewiesen sein.',
                         ),
                       ],
                     ],
@@ -306,7 +306,7 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
             ),
 
           Text(
-            'Spiele (${archive.matches.length})',
+            'Begegnungen (${archive.matches.length})',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           for (final m in archive.matches)
@@ -346,7 +346,7 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
   }
 }
 
-// ── Spieler-Zuweisung-Dialog ──────────────────────────────────────────────────
+// ── Teilnehmer-Zuweisung-Dialog ──────────────────────────────────────────────────
 
 class _PlayerAssignmentDialog extends StatefulWidget {
   const _PlayerAssignmentDialog({
@@ -369,7 +369,7 @@ class _PlayerAssignmentDialogState extends State<_PlayerAssignmentDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Spieler-Zuweisung bearbeiten'),
+      title: const Text('Teilnehmer-Zuweisung bearbeiten'),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -378,7 +378,7 @@ class _PlayerAssignmentDialogState extends State<_PlayerAssignmentDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Weise jedem Challonge-Teilnehmer ein lokales Spielerprofil zu. Nur zugewiesene Spieler gehen in die Ranglisten-Wertung ein.',
+                'Weise jedem Challonge-Teilnehmer ein lokales Teilnehmerprofil zu. Nur zugewiesene Teilnehmer gehen in die Ranglistenwertung ein.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 16),

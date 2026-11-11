@@ -14,7 +14,7 @@ LeagueMatch rhlDevelopmentScenario() => LeagueMatch.rhl(
 
 const tournamentDevelopmentScenarios = [
   TournamentSimulationScenario(
-    name: 'Begrenzte Gruppe: 13 Spieler mit maximal 5 Spielen und Finale',
+    name: 'Begrenzte Gruppe: 13 Teilnehmer mit maximal 5 Spielen und Finale',
     playerCount: 13,
     stages: [
       SimulationGroupStageSpec(
@@ -32,7 +32,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Begrenzte Gruppe: 12 Spieler mit maximal 5 Spielen',
+    name: 'Begrenzte Gruppe: 12 Teilnehmer mit maximal 5 Spielen',
     playerCount: 12,
     stages: [
       SimulationGroupStageSpec(
@@ -63,7 +63,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Ausstieg: zwei Spieler im KO',
+    name: 'Ausstieg: zwei Teilnehmer im KO',
     playerCount: 8,
     withdrawnPlayers: [0, 7],
     stages: [
@@ -85,7 +85,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Ausstieg: ignorierte Doppel-KO-Spiele',
+    name: 'Ausstieg: ignorierte Doppel-KO-Begegnungen',
     playerCount: 8,
     withdrawnPlayers: [0],
     withdrawalMode: WithdrawalResultMode.ignoreOpen,
@@ -331,7 +331,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Doppel-KO mit zwei Spielern',
+    name: 'Doppel-KO mit zwei Teilnehmern',
     playerCount: 2,
     stages: [
       SimulationEliminationStageSpec(
@@ -365,7 +365,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Triple-KO Grenzfall mit 2 Spielern',
+    name: 'Triple-KO Grenzfall mit 2 Teilnehmern',
     playerCount: 2,
     stages: [
       SimulationEliminationStageSpec(
@@ -376,7 +376,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Triple-KO Grenzfall mit 3 Spielern',
+    name: 'Triple-KO Grenzfall mit 3 Teilnehmern',
     playerCount: 3,
     stages: [
       SimulationEliminationStageSpec(
@@ -387,7 +387,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Triple-KO Grenzfall mit 5 Spielern',
+    name: 'Triple-KO Grenzfall mit 5 Teilnehmern',
     playerCount: 5,
     stages: [
       SimulationEliminationStageSpec(
@@ -398,7 +398,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Triple-KO Grenzfall mit 16 Spielern',
+    name: 'Triple-KO Grenzfall mit 16 Teilnehmern',
     playerCount: 16,
     stages: [
       SimulationEliminationStageSpec(
@@ -409,7 +409,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: '13 Spieler in drei Gruppen mit sechs KO-Qualifikanten',
+    name: '13 Teilnehmer in drei Gruppen mit sechs KO-Teilnehmer',
     playerCount: 13,
     stages: [
       SimulationGroupStageSpec(
@@ -426,7 +426,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Planer mit einem Qualifikanten je Gruppe',
+    name: 'Planer mit einem Teilnehmer je Gruppe',
     playerCount: 8,
     stages: [
       SimulationGroupStageSpec(
@@ -443,7 +443,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'nur KO mit 7 Spielern',
+    name: 'nur KO mit 7 Teilnehmern',
     playerCount: 7,
     stages: [
       SimulationEliminationStageSpec(
@@ -454,18 +454,18 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'nur KO mit 3 von 5 Weiterkommenden',
+    name: 'nur KO mit 3 von 5 Teilnehmern',
     playerCount: 5,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Mini-K.-o.-Qualifikation',
+        name: 'Mini-K.-o.-Weiterkommen',
         qualifiers: 3,
         lossLimit: 1,
       ),
     ],
   ),
   TournamentSimulationScenario(
-    name: 'KO in KO mit 13 Spielern',
+    name: 'KO in KO mit 13 Teilnehmern',
     playerCount: 13,
     stages: [
       SimulationEliminationStageSpec(
@@ -481,7 +481,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'nur Doppel-KO mit 10 Spielern',
+    name: 'nur Doppel-KO mit 10 Teilnehmern',
     playerCount: 10,
     stages: [
       SimulationEliminationStageSpec(
@@ -492,18 +492,18 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Doppel-KO mit 5 von 9 Weiterkommenden',
+    name: 'Doppel-KO mit 5 von 9 Teilnehmern',
     playerCount: 9,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Doppel-K.-o.-Qualifikation',
+        name: 'Doppel-K.-o.-Weiterkommen',
         qualifiers: 5,
         lossLimit: 2,
       ),
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Doppel-KO in KO mit 18 Spielern',
+    name: 'Doppel-KO in KO mit 18 Teilnehmern',
     playerCount: 18,
     stages: [
       SimulationEliminationStageSpec(
@@ -519,7 +519,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'nur Triple-KO mit 12 Spielern',
+    name: 'nur Triple-KO mit 12 Teilnehmern',
     playerCount: 12,
     stages: [
       SimulationEliminationStageSpec(
@@ -530,11 +530,11 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'Triple-KO mit 4 von 11 Weiterkommenden',
+    name: 'Triple-KO mit 4 von 11 Teilnehmern',
     playerCount: 11,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Triple-K.-o.-Qualifikation',
+        name: 'Triple-K.-o.-Weiterkommen',
         qualifiers: 4,
         lossLimit: 3,
       ),
@@ -618,7 +618,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'kleine gemischte Gruppen mit knapper Qualifikation',
+    name: 'kleine gemischte Gruppen mit knapper Weiterkommen',
     playerCount: 14,
     stages: [
       SimulationGroupStageSpec(
@@ -676,7 +676,7 @@ const tournamentDevelopmentScenarios = [
     ],
   ),
   TournamentSimulationScenario(
-    name: 'drei Etappen mit wechselnden Modi und ungeraden Feldern',
+    name: 'drei Phasen mit wechselnden Modi und ungeraden Feldern',
     playerCount: 21,
     stages: [
       SimulationGroupStageSpec(

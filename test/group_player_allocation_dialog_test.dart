@@ -90,8 +90,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(result, isNotNull);
-    expect(result![0].map((player) => player.name), ['Spieler 3', 'Spieler 2']);
-    expect(result![1].map((player) => player.name), ['Spieler 1', 'Spieler 4']);
+    expect(result![0].map((player) => player.name), [
+      'Teilnehmer 3',
+      'Teilnehmer 2',
+    ]);
+    expect(result![1].map((player) => player.name), [
+      'Teilnehmer 1',
+      'Teilnehmer 4',
+    ]);
     expect(tester.takeException(), isNull);
   });
 
@@ -141,8 +147,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(result, isNotNull);
-    expect(result![0].first.name, 'Spieler 3');
-    expect(result![1].first.name, 'Spieler 1');
+    expect(result![0].first.name, 'Teilnehmer 3');
+    expect(result![1].first.name, 'Teilnehmer 1');
     expect(tester.takeException(), isNull);
   });
 }

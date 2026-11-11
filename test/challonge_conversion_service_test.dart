@@ -140,7 +140,7 @@ void main() {
         'full_challonge_url': 'https://challonge.com/unsortierterbaum',
         'participants': [
           for (var seed = 1; seed <= 8; seed++)
-            {'id': seed, 'name': 'Spieler $seed', 'final_rank': seed},
+            {'id': seed, 'name': 'Teilnehmer $seed', 'final_rank': seed},
         ],
         // The second-round paths require [1 vs 8, 4 vs 5] and [2 vs 7,
         // 3 vs 6]. Challonge may return first-round rows in another order.
@@ -168,11 +168,11 @@ void main() {
       expect(
         stage.rounds[1].map((m) => {m.homePlayer!.name, m.awayPlayer!.name}),
         [
-          {'Spieler 1', 'Spieler 4'},
-          {'Spieler 2', 'Spieler 3'},
+          {'Teilnehmer 1', 'Teilnehmer 4'},
+          {'Teilnehmer 2', 'Teilnehmer 3'},
         ],
       );
-      expect(stage.rounds.last.single.winner?.name, 'Spieler 1');
+      expect(stage.rounds.last.single.winner?.name, 'Teilnehmer 1');
     },
   );
 
@@ -209,7 +209,7 @@ void main() {
         'completed_at': '2026-04-04T14:00:00Z',
         'participants': [
           for (var id = 1; id <= 4; id++)
-            {'id': id, 'name': 'Spieler $id', 'final_rank': id},
+            {'id': id, 'name': 'Teilnehmer $id', 'final_rank': id},
         ],
         'matches': [
           match(1, 1, 1, 2, 2, 0),
@@ -233,7 +233,7 @@ void main() {
       expect(stage.eliminationLossLimit, 2);
       expect(stage.matches.where((match) => match.hasResult), hasLength(6));
       expect(stage.matches.last.label, 'Grand Final');
-      expect(stage.matches.last.winner?.name, 'Spieler 1');
+      expect(stage.matches.last.winner?.name, 'Teilnehmer 1');
       expect(converted.importedArchive!.nativeValidation!['issues'], isEmpty);
     },
   );

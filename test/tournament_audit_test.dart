@@ -16,11 +16,11 @@ void main() {
         try {
           final report = TournamentSimulationEngine().run(scenario, seed: seed);
           if (report.finalPlayers.length != scenario.stages.last.qualifiers) {
-            throw StateError('Falsche Anzahl Weiterkommender');
+            throw StateError('Falsche Anzahl Teilnehmerr');
           }
           if (report.finalPlayers.map((p) => p.name).toSet().length !=
               report.finalPlayers.length) {
-            throw StateError('Doppelte Weiterkommende');
+            throw StateError('Doppelte Teilnehmer');
           }
           for (final stage in report.stageReports) {
             if (stage.outputCount < 1 || stage.outputCount > stage.inputCount) {
@@ -33,11 +33,11 @@ void main() {
               if (match.isKratzer) {
                 if (match.players.map((player) => player.name).toSet().length !=
                     match.players.length) {
-                  throw StateError('Spieler spielt gegen sich selbst');
+                  throw StateError('Teilnehmer spielt gegen sich selbst');
                 }
               } else if (match.hasPlayers &&
                   match.homePlayer!.name == match.awayPlayer!.name) {
-                throw StateError('Spieler spielt gegen sich selbst');
+                throw StateError('Teilnehmer spielt gegen sich selbst');
               }
             }
           }
@@ -80,7 +80,7 @@ void main() {
             '<p>${runs.length} Durchläufe · ${failures.length} Fehler · ${escape(DateTime.now().toString())}</p>',
           )
           ..writeln(
-            '<p>Jeder Modus wird mit Standard-Reihenfolge und zwei festen Zufalls-Seeds durchgespielt. Ergebnisse folgen einer reproduzierbaren Spielstärke-Reihenfolge (2:1). Aufbau, Freilose, Ergebnisweitergabe und Qualifikation laufen über dieselben Methoden wie im normalen Turnier. Nur die Ergebnisse werden simuliert. Kein vollständiger automatisierter UI-Durchlauf.</p>',
+            '<p>Jeder Modus wird mit Standard-Reihenfolge und zwei festen Zufalls-Seeds durchgespielt. Ergebnisse folgen einer reproduzierbaren Spielstärke-Reihenfolge (2:1). Aufbau, Freilose, Ergebnisweitergabe und Weiterkommen laufen über dieselben Methoden wie im normalen Turnier. Nur die Ergebnisse werden simuliert. Kein vollständiger automatisierter UI-Durchlauf.</p>',
           )
           ..writeln(
             '<input id="filter" placeholder="Szenario suchen …" aria-label="Szenarien filtern">',
@@ -91,7 +91,7 @@ void main() {
       );
       if (run['passed'] == true) {
         html.writeln(
-          '<p>${run['matches']} Matches · Finale Weiterkommende: ${escape((run['winners'] as List).join(', '))}</p>',
+          '<p>${run['matches']} Matches · Finale Teilnehmer: ${escape((run['winners'] as List).join(', '))}</p>',
         );
       }
       html.writeln('<pre>${escape(run['detail'] as String)}</pre></details>');

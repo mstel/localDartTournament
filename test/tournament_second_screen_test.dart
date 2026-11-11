@@ -32,7 +32,7 @@ void main() {
 
     final players = [
       for (var index = 1; index <= 8; index++)
-        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+        TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
     ];
     final groups = [
       for (var groupIndex = 0; groupIndex < 2; groupIndex++)
@@ -102,7 +102,7 @@ void main() {
 
     final players = [
       for (var index = 1; index <= 3; index++)
-        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+        TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
     ];
     final tournament = CreatedTournament(
       name: 'Kratzer',
@@ -173,7 +173,7 @@ void main() {
     await tester.pump();
 
     expect(forecastService.calls, lessThanOrEqualTo(1));
-    expect(find.text('Boards & nächste Begegnungen'), findsOneWidget);
+    expect(find.text('Nächste Begegnungen'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('second-screen-director-board-1')),
       findsOneWidget,
@@ -239,7 +239,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Boards & nächste Begegnungen'), findsOneWidget);
+    expect(find.text('Nächste Begegnungen'), findsOneWidget);
     expect(
       find.textContaining('Empfohlene Partien für Board 1'),
       findsOneWidget,
@@ -256,7 +256,7 @@ void main() {
     addTearDown(tester.view.reset);
     final players = [
       for (var index = 1; index <= 8; index++)
-        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+        TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
     ];
     final matches = [
       for (var index = 0; index < 4; index++)
@@ -579,7 +579,7 @@ void main() {
     final players = [
       for (var index = 1; index <= 8; index++)
         TournamentPlayer.generated(index).copyWith(
-          name: 'Spielername mit außergewöhnlicher Länge Nummer $index',
+          name: 'Teilnehmername mit außergewöhnlicher Länge Nummer $index',
         ),
     ];
     final matches = [
@@ -671,7 +671,7 @@ void main() {
           .where(
             (text) =>
                 text.data?.startsWith(
-                  'Spielername mit außergewöhnlicher Länge',
+                  'Teilnehmername mit außergewöhnlicher Länge',
                 ) ??
                 false,
           )
@@ -788,8 +788,8 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Vorschau nächste Etappe'), findsOneWidget);
-      await tester.tap(find.text('Vorschau nächste Etappe'));
+      expect(find.text('Vorschau nächste Phase'), findsOneWidget);
+      await tester.tap(find.text('Vorschau nächste Phase'));
       await tester.pump();
 
       expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
@@ -859,10 +859,10 @@ void main() {
       expect(find.text('6/33 gespielt'), findsNothing);
       expect(find.text('KO: 0/3'), findsOneWidget);
       expect(
-        find.text('Keine K.-o.-Etappe als Nächstes geplant.'),
+        find.text('Keine K.-o.-Phase als Nächstes geplant.'),
         findsNothing,
       );
-      expect(find.text('Qualifikant offen'), findsNothing);
+      expect(find.text('Teilnehmer offen'), findsNothing);
       expect(find.text('Bernd'), findsOneWidget);
       expect(find.text('Noah'), findsOneWidget);
       expect(find.text('Spielplan'), findsNothing);
@@ -898,12 +898,12 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tap(find.text('Vorschau nächste Etappe'));
+    await tester.tap(find.text('Vorschau nächste Phase'));
     await tester.pump();
 
     expect(find.textContaining('A · gesetzt'), findsOneWidget);
     expect(find.textContaining('B · gesetzt'), findsOneWidget);
-    expect(find.text('Die Setzplätze der Etappe stehen fest.'), findsOneWidget);
+    expect(find.text('Die Setzplätze der Phase stehen fest.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -997,7 +997,7 @@ void main() {
       findsNothing,
     );
     expect(
-      find.descendant(of: picker, matching: find.text('Nächste Etappe')),
+      find.descendant(of: picker, matching: find.text('Nächste Phase')),
       findsNothing,
     );
     expect(tester.takeException(), isNull);
@@ -1085,7 +1085,7 @@ void main() {
 
     expect(find.text('3/9 gespielt'), findsNothing);
     expect(find.text('Gesamt'), findsNothing);
-    expect(find.text('Fortschritt nach Etappen'), findsNothing);
+    expect(find.text('Fortschritt nach Phasen'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -1245,7 +1245,7 @@ void main() {
       ),
     );
     await tester.pump();
-    final previewButton = find.text('Vorschau nächste Etappe');
+    final previewButton = find.text('Vorschau nächste Phase');
     await tester.ensureVisible(previewButton);
     await tester.tap(previewButton);
     await tester.pump();
@@ -2082,7 +2082,7 @@ void main() {
 
     expect(find.text('Tabellen & Zwischenstände'), findsAtLeastNWidgets(2));
     expect(find.text('Nächste Partien · Vorschläge'), findsOneWidget);
-    expect(find.text('Boards & nächste Begegnungen'), findsNothing);
+    expect(find.text('Nächste Begegnungen'), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('monitor-widget-combined')),
@@ -2356,7 +2356,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.text('Qualifikant offen').hitTestable(), findsNWidgets(16));
+    expect(find.text('Teilnehmer offen').hitTestable(), findsNWidgets(16));
     expect(find.text('Halbfinale'), findsOneWidget);
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
     final verticalPreview = find.byKey(
@@ -2391,9 +2391,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Qualifikant offen').hitTestable(), findsNWidgets(8));
-    expect(find.text('Gewinner Spiel 1'), findsNWidgets(2));
-    expect(find.text('Gewinner Spiel 2'), findsNWidgets(2));
+    expect(find.text('Teilnehmer offen').hitTestable(), findsNWidgets(8));
+    expect(find.text('Gewinner Begegnung 1'), findsNWidgets(2));
+    expect(find.text('Gewinner Begegnung 2'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
@@ -2561,7 +2561,7 @@ CreatedTournament _twoGroupPreviewTournament() {
 CreatedTournament _largePreviewTournament() {
   final players = [
     for (var index = 1; index <= 16; index++)
-      TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+      TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
   ];
   return CreatedTournament(
     name: 'Großes Testturnier',
@@ -2612,7 +2612,7 @@ CreatedTournament _largePreviewTournament() {
 CreatedTournament _threeGroupEightQualifierPreviewTournament() {
   final players = [
     for (var index = 1; index <= 18; index++)
-      TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+      TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
   ];
   final groups = [
     for (var groupIndex = 0; groupIndex < 3; groupIndex++)
@@ -2624,7 +2624,7 @@ CreatedTournament _threeGroupEightQualifierPreviewTournament() {
       ),
   ];
   return CreatedTournament(
-    name: 'Drei Gruppen, acht Qualifikanten',
+    name: 'Drei Gruppen, acht Teilnehmer',
     players: players,
     stages: const [
       TournamentStage(

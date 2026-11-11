@@ -5,12 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const player = TournamentPlayer(
     profileId: 'player-1',
-    name: 'Spieler Eins',
+    name: 'Teilnehmer Eins',
     isGenerated: false,
   );
   const opponent = TournamentPlayer(
     profileId: 'player-2',
-    name: 'Spieler Zwei',
+    name: 'Teilnehmer Zwei',
     isGenerated: false,
   );
   const resolver = AchievementMatchResolver();

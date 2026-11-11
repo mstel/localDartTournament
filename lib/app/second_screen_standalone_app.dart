@@ -59,7 +59,7 @@ class _SecondScreenStandaloneAppState extends State<SecondScreenStandaloneApp> {
       builder: (context, style, _) {
         final christmas = style == AppThemeStyle.christmas;
         return MaterialApp(
-          title: 'Dart Turnieranzeige (2. Bildschirm)',
+          title: 'Dart Turnieranzeige (Zweitbildschirm-Modus)',
           debugShowCheckedModeBanner: false,
           themeMode: themeMode,
           theme: buildDartTournamentTheme(christmas: christmas),
@@ -158,7 +158,7 @@ class _SecondScreenStandalonePageState
               CircularProgressIndicator(color: scheme.tertiary),
               SizedBox(height: 16),
               Text(
-                'Lade 2. Bildschirmanzeige...',
+                'Lade Zweitbildschirm-Modusanzeige...',
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16),
               ),
             ],

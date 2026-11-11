@@ -64,13 +64,13 @@ void main() {
                       ),
                     );
                   },
-                  child: const Text('Spieler auswählen'),
+                  child: const Text('Teilnehmer auswählen'),
                 ),
               ),
             ),
           ),
         );
-        await tester.tap(find.text('Spieler auswählen'));
+        await tester.tap(find.text('Teilnehmer auswählen'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Anna Musterfrau'));
         await tester.pumpAndSettle();

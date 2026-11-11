@@ -12,12 +12,12 @@ void main() {
     final match = GroupMatch(
       homePlayer: TournamentPlayer(
         profileId: 'player-1',
-        name: 'Spieler Eins',
+        name: 'Teilnehmer Eins',
         isGenerated: false,
       ),
       awayPlayer: TournamentPlayer(
         profileId: 'player-2',
-        name: 'Spieler Zwei',
+        name: 'Teilnehmer Zwei',
         isGenerated: false,
       ),
       round: 1,
@@ -61,7 +61,7 @@ void main() {
       expect(changed.single.type, BestPerformanceType.bullseyeFinish);
       expect(changed.single.details, 'Bullseye innen');
       expect(
-        find.text('Spieler Eins: Bullseye Finish · Bullseye innen'),
+        find.text('Teilnehmer Eins: Bullseye Finish · Bullseye innen'),
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);

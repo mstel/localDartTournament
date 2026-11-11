@@ -9,7 +9,7 @@ class TournamentPlayerSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) => SportSettingsSection(
     key: ValueKey(row.id),
     title: row.name,
-    summary: '${row.wins} Siege · ${row.matches} Spiele',
+    summary: '${row.wins} Siege · ${row.matches} Begegnungen',
     icon: Icons.person_outline,
     children: [
       Text(

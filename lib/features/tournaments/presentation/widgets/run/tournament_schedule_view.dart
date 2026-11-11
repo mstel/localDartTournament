@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../utils/match_display_label.dart';
 
 class TournamentScheduleView extends StatelessWidget {
   const TournamentScheduleView({
@@ -139,7 +140,7 @@ class TournamentScheduleView extends StatelessWidget {
           if (rows.isEmpty)
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Für diese Etappe sind keine Paarungen vorhanden.'),
+              child: Text('Für diese Phase sind keine Paarungen vorhanden.'),
             )
           else
             SingleChildScrollView(
@@ -151,7 +152,7 @@ class TournamentScheduleView extends StatelessWidget {
                     label: Text(
                       stage is KnockoutTournamentRunStage && stage.isKratzer
                           ? 'Teilnehmende'
-                          : 'Spieler 1',
+                          : 'Teilnehmer 1',
                     ),
                   ),
                   const DataColumn(label: Text('Ergebnis')),
@@ -159,7 +160,7 @@ class TournamentScheduleView extends StatelessWidget {
                     label: Text(
                       stage is KnockoutTournamentRunStage && stage.isKratzer
                           ? 'Kratzer'
-                          : 'Spieler 2',
+                          : 'Teilnehmer 2',
                     ),
                   ),
                   const DataColumn(label: Text('Status')),
@@ -298,7 +299,7 @@ class _KnockoutTreePage extends StatelessWidget {
             Expanded(
               child: rounds.isEmpty
                   ? const Center(
-                      child: Text('Für diese Etappe gibt es keinen Baum.'),
+                      child: Text('Für diese Phase gibt es keinen Baum.'),
                     )
                   : _buildTree(context, rounds),
             ),
@@ -405,7 +406,10 @@ class _KnockoutTreePage extends StatelessWidget {
     String playerLabel(TournamentPlayer? player, bool home) {
       if (player != null) return player.name;
       if (roundIndex == 0) return match.allowsBye ? 'Freilos' : 'Offen';
-      return 'Gewinner Spiel ${matchIndex * 2 + (home ? 1 : 2)}';
+      return matchDisplayLabel(
+        'Gewinner Spiel ${matchIndex * 2 + (home ? 1 : 2)}',
+        fallback: '',
+      );
     }
 
     if (match.isKratzer) {
@@ -419,7 +423,7 @@ class _KnockoutTreePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Board ${match.boardNumber ?? '–'} · ${match.players.length} Spieler',
+                'Board ${match.boardNumber ?? '–'} · ${match.players.length} Teilnehmer',
                 style: theme.textTheme.labelSmall,
               ),
               const SizedBox(height: 4),
@@ -502,7 +506,10 @@ class _KnockoutTreePage extends StatelessWidget {
             if (roundIndex == roundCount - 1 &&
                 match.isDecider &&
                 match.label != null)
-              Text(match.label!, style: theme.textTheme.bodySmall),
+              Text(
+                matchDisplayLabel(match.label, fallback: ''),
+                style: theme.textTheme.bodySmall,
+              ),
             if (match.hasResult || (match.allowsBye && match.winner != null))
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -552,7 +559,7 @@ String _matchSummary(
   GroupMatch match, {
   KnockoutTournamentRunStage? knockoutStage,
 }) {
-  if (match.isAnnulled) return 'Spiel annulliert.';
+  if (match.isAnnulled) return 'Begegnung annulliert.';
   if (match.isKratzer) {
     final scratched = match.scratchedPlayer;
     if (scratched == null) return 'Noch kein Kratzer eingetragen.';

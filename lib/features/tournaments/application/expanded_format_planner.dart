@@ -460,18 +460,18 @@ class ExpandedFormatPlanner {
           final label = play == 'double_round_robin'
               ? 'Jeder gegen jeden (zweimal)'
               : play == 'limited_round_robin'
-              ? 'maximal 5 Spiele pro Spieler'
+              ? 'maximal 5 Begegnungen pro Teilnehmer'
               : play == 'swiss'
               ? 'Schweizer System'
               : play == 'round_robin'
               ? 'Jeder gegen jeden'
-              : 'maximal 5 Spiele pro Spieler';
+              : 'maximal 5 Begegnungen pro Teilnehmer';
           final sizeDesc = sizes.first == sizes.last
               ? '${sizes.first}'
               : '${sizes.last}–${sizes.first}';
           final groupDesc = groups == 1
-              ? '1 Gruppe à $sizeDesc Spieler'
-              : '$groups Gruppen à $sizeDesc Spieler';
+              ? '1 Gruppe à $sizeDesc Teilnehmer'
+              : '$groups Gruppen à $sizeDesc Teilnehmer';
           final isRoundRobinVariant =
               play == 'limited_round_robin' || play == 'double_round_robin';
           yield TournamentStage(

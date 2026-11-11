@@ -25,7 +25,8 @@ class BackupPanel extends StatefulWidget {
 class _BackupPanelState extends State<BackupPanel> {
   static const _areaNames = {
     'tournaments.json': 'Turniere und Ergebnisse',
-    'app_database.sqlite': 'Spielerprofile, Ranglisten und Monatsstatistiken',
+    'app_database.sqlite':
+        'Teilnehmerprofile, Ranglisten und Monatsstatistiken',
     'planning_settings.json': 'Turnierplanung',
   };
   bool _busy = false;
@@ -146,13 +147,13 @@ class _BackupPanelState extends State<BackupPanel> {
         const MonthlyStatisticsImportPanel(),
         const SizedBox(height: 12),
         const Text(
-          'Sichere Turniere mit Ergebnissen, lokale Spielerprofile, '
+          'Sichere Turniere mit Ergebnissen, lokale Teilnehmerprofile, '
           'Ranglisten, Monatsstatistiken und Einstellungen in einer Datei. Das Supabase-Backup '
           'wird separat mit dem Betreiberkonto gespeichert und wiederhergestellt.',
         ),
         const SizedBox(height: 12),
         const Text(
-          'Die Datei ist nicht verschlüsselt und enthält Spieler-, Turnier- und '
+          'Die Datei ist nicht verschlüsselt und enthält Teilnehmer-, Turnier- und '
           'Geräteeinstellungen. Bewahre lokale Exportdateien geschützt auf.',
         ),
         const SizedBox(height: 24),
@@ -220,7 +221,7 @@ class _SelectiveCategoryDialog extends StatefulWidget {
 class _SelectiveCategoryDialogState extends State<_SelectiveCategoryDialog> {
   static const _labels = {
     'tournaments.json': 'Turniere und Ergebnisse',
-    'app_database.sqlite': 'Spielerprofile, Ranglisten und Bestleistungen',
+    'app_database.sqlite': 'Teilnehmerprofile, Ranglisten und Bestleistungen',
     'planning_settings.json': 'Turnierplanung und Voreinstellungen',
   };
 

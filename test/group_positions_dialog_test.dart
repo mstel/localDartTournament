@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const clipboardText =
-      'Gruppen: 2\n\nGruppe A:\nSpieler 3\nSpieler 4\n\nGruppe B:\nSpieler 1\nSpieler 2';
+      'Gruppen: 2\n\nGruppe A:\nTeilnehmer 3\nTeilnehmer 4\n\nGruppe B:\nTeilnehmer 1\nTeilnehmer 2';
 
   GroupTournamentRunStage fixture() => GroupTournamentRunStage(
     name: 'Gruppen',
@@ -22,7 +22,7 @@ void main() {
           players: [
             for (var index = 0; index < 2; index++)
               TournamentPlayer(
-                name: 'Spieler ${groupIndex * 2 + index + 1}',
+                name: 'Teilnehmer ${groupIndex * 2 + index + 1}',
                 isGenerated: false,
               ),
           ],
@@ -117,7 +117,7 @@ void main() {
             players: [
               for (var index = 0; index < 16; index++)
                 TournamentPlayer(
-                  name: 'Spieler ${groupIndex * 16 + index + 1}',
+                  name: 'Teilnehmer ${groupIndex * 16 + index + 1}',
                   isGenerated: false,
                 ),
             ],
@@ -156,21 +156,21 @@ void main() {
     expect(find.text('Gruppe B'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Spieler 1'));
-    await tester.tap(find.text('Spieler 17'));
+    await tester.tap(find.text('Teilnehmer 1'));
+    await tester.tap(find.text('Teilnehmer 17'));
     await tester.pumpAndSettle();
 
     expect(find.text('Gruppen neu einteilen'), findsOneWidget);
     expect(result, isNull);
-    expect(find.text('Spieler 17'), findsOneWidget);
-    expect(find.text('Spieler 1'), findsOneWidget);
+    expect(find.text('Teilnehmer 17'), findsOneWidget);
+    expect(find.text('Teilnehmer 1'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tapApply(tester);
 
     expect(result!.assignments, hasLength(2));
-    expect(result!.assignments[0].first.name, 'Spieler 17');
-    expect(result!.assignments[1].first.name, 'Spieler 1');
+    expect(result!.assignments[0].first.name, 'Teilnehmer 17');
+    expect(result!.assignments[1].first.name, 'Teilnehmer 1');
     expect(tester.takeException(), isNull);
   });
 
@@ -191,7 +191,7 @@ void main() {
             players: [
               for (var index = 0; index < 4; index++)
                 TournamentPlayer(
-                  name: 'Spieler ${groupIndex * 4 + index + 1}',
+                  name: 'Teilnehmer ${groupIndex * 4 + index + 1}',
                   isGenerated: false,
                 ),
             ],
@@ -221,8 +221,8 @@ void main() {
     await tester.tap(find.text('Öffnen'));
     await tester.pumpAndSettle();
 
-    final source = tester.getCenter(find.text('Spieler 1'));
-    final target = tester.getCenter(find.text('Spieler 5'));
+    final source = tester.getCenter(find.text('Teilnehmer 1'));
+    final target = tester.getCenter(find.text('Teilnehmer 5'));
     final gesture = await tester.startGesture(source);
     await tester.pump(const Duration(milliseconds: 600));
     await gesture.moveTo(target);
@@ -233,8 +233,8 @@ void main() {
     expect(result, isNull);
     expect(find.text('Gruppen neu einteilen'), findsOneWidget);
     await tapApply(tester);
-    expect(result!.assignments[0].first.name, 'Spieler 5');
-    expect(result!.assignments[1].first.name, 'Spieler 1');
+    expect(result!.assignments[0].first.name, 'Teilnehmer 5');
+    expect(result!.assignments[1].first.name, 'Teilnehmer 1');
     expect(tester.takeException(), isNull);
   });
 
@@ -270,13 +270,13 @@ void main() {
     await tester.tap(find.text('Zuweisung aus Zwischenablage übernehmen'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Spieler 3'), findsOneWidget);
-    expect(stage.groups.first.players.first.name, 'Spieler 1');
+    expect(find.text('Teilnehmer 3'), findsOneWidget);
+    expect(stage.groups.first.players.first.name, 'Teilnehmer 1');
     expect(result, isNull);
 
     await tapApply(tester);
-    expect(result!.assignments.first.first.name, 'Spieler 3');
-    expect(result!.assignments.last.first.name, 'Spieler 1');
+    expect(result!.assignments.first.first.name, 'Teilnehmer 3');
+    expect(result!.assignments.last.first.name, 'Teilnehmer 1');
     expect(tester.takeException(), isNull);
   });
 
@@ -286,7 +286,7 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await setClipboard(tester, 'Gruppen: 1\n\nGruppe A:\nFremder Spieler');
+    await setClipboard(tester, 'Gruppen: 1\n\nGruppe A:\nFremder Teilnehmer');
     final stage = fixture();
     GroupPositionsResult? result;
 
@@ -313,13 +313,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('enthält 1 Gruppen'), findsOneWidget);
-    expect(stage.groups.first.players.first.name, 'Spieler 1');
+    expect(stage.groups.first.players.first.name, 'Teilnehmer 1');
     expect(result, isNull);
     expect(tester.takeException(), isNull);
 
     await tapApply(tester);
-    expect(result!.assignments.first.first.name, 'Spieler 1');
-    expect(result!.assignments.last.last.name, 'Spieler 4');
+    expect(result!.assignments.first.first.name, 'Teilnehmer 1');
+    expect(result!.assignments.last.last.name, 'Teilnehmer 4');
   });
 
   testWidgets('asks whether matching catalog names are profiles or locals', (
@@ -390,12 +390,12 @@ void main() {
     await tester.tap(find.text('Zuweisung aus Zwischenablage übernehmen'));
     await tester.pumpAndSettle();
     expect(
-      find.text('Spieler aus dem Spielerkatalog verwenden'),
+      find.text('Teilnehmer aus dem Spielerkatalog verwenden'),
       findsOneWidget,
     );
-    await tester.tap(find.text('Spieler aus dem Spielerkatalog verwenden'));
+    await tester.tap(find.text('Teilnehmer aus dem Spielerkatalog verwenden'));
     await tester.pumpAndSettle();
-    expect(find.text('Spieler 3'), findsNothing);
+    expect(find.text('Teilnehmer 3'), findsNothing);
     expect(tester.takeException(), isNull);
 
     await tapApply(tester);

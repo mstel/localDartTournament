@@ -50,12 +50,12 @@ class _StagePlayOrderSectionState extends State<StagePlayOrderSection> {
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
-          const Text('Spielreihenfolge'),
+          const Text('Begegnungsreihenfolge'),
           const SizedBox(height: 16),
           SportMetricGrid(
             metrics: [
               SportMetric(
-                'Offene Spiele',
+                'Offene Begegnungen',
                 '${matches.length - completed}',
                 Icons.sports_score,
               ),
@@ -72,7 +72,7 @@ class _StagePlayOrderSectionState extends State<StagePlayOrderSection> {
             runSpacing: 8,
             children: [
               ChoiceChip(
-                label: const Text('Offene Spiele'),
+                label: const Text('Offene Begegnungen'),
                 selected: !_results,
                 padding: const EdgeInsets.all(12),
                 onSelected: (_) => setState(() => _results = false),
@@ -89,10 +89,10 @@ class _StagePlayOrderSectionState extends State<StagePlayOrderSection> {
           if (ordered.isEmpty)
             Text(
               matches.isEmpty
-                  ? 'Keine Spiele in dieser Etappe.'
+                  ? 'Keine Begegnungen in dieser Phase.'
                   : _results
                   ? 'Noch keine Ergebnisse.'
-                  : 'Alle Spiele abgeschlossen.',
+                  : 'Alle Begegnungen abgeschlossen.',
             )
           else
             RoundMatchList(

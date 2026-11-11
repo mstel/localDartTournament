@@ -119,9 +119,9 @@ void main() {
       find.text('Name des angepassten Liga-/Freundschaftsspiels'),
       findsOneWidget,
     );
-    expect(find.text('Einzel je Spieler'), findsOneWidget);
+    expect(find.text('Einzel je Teilnehmer'), findsOneWidget);
     final singlesField = tester.widget<TextFormField>(
-      find.widgetWithText(TextFormField, 'Einzel je Spieler'),
+      find.widgetWithText(TextFormField, 'Einzel je Teilnehmer'),
     );
     expect(singlesField.controller!.text, '4');
     expect(find.text('Doppel je Mannschaft'), findsOneWidget);
@@ -196,7 +196,7 @@ void main() {
 
     for (var player = 0; player < 4; player++) {
       for (var team = 0; team < 2; team++) {
-        final addButtons = find.text('Spieler / Ersatzspieler hinzufügen');
+        final addButtons = find.text('Teilnehmer / Ersatzspieler hinzufügen');
         await tester.scrollUntilVisible(
           addButtons.at(team),
           300,
@@ -218,7 +218,7 @@ void main() {
     await tester.enterText(starterCount, '10');
     await tester.pumpAndSettle();
 
-    final addButtons = find.text('Spieler / Ersatzspieler hinzufügen');
+    final addButtons = find.text('Teilnehmer / Ersatzspieler hinzufügen');
     await tester.scrollUntilVisible(
       addButtons.last,
       300,
@@ -408,9 +408,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('Übersicht'), findsOneWidget);
     expect(find.text('Leitung'), findsOneWidget);
-    expect(find.text('Ergebnisse'), findsOneWidget);
+    expect(find.text('Partien & Ergebnisse'), findsOneWidget);
     await tester.tap(find.text('Einstellungen'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(

@@ -183,6 +183,76 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     });
   }
 
+  Future<void> _configureRankingSelection(bool enabled) async {
+    if (!enabled) {
+      setState(() {
+        _rankingSetupTouched = true;
+        _countsForRanking = false;
+        _localRankingIds.clear();
+      });
+      return;
+    }
+
+    final rankings = await _localRankings;
+    if (!mounted) return;
+    final selected = Set<String>.from(_localRankingIds);
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Ranglistenwertung'),
+          content: SizedBox(
+            width: 440,
+            child: rankings.isEmpty
+                ? const Text('Lege zuerst eine Rangliste im Hauptmenü an.')
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final ranking in rankings)
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(ranking.name),
+                          value: selected.contains(ranking.id),
+                          onChanged: (value) => setDialogState(() {
+                            if (value == true) {
+                              selected.add(ranking.id);
+                            } else {
+                              selected.remove(ranking.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, selected.toList()),
+              child: const Text('Übernehmen'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (result == null) {
+      if (_localRankingIds.isEmpty) {
+        setState(() => _countsForRanking = false);
+      }
+      return;
+    }
+    setState(() {
+      _rankingSetupTouched = true;
+      _countsForRanking = true;
+      _localRankingIds
+        ..clear()
+        ..addAll(result);
+    });
+  }
+
   Future<void> _saveTournamentNameDraft() async {
     final name = _tournamentNameController.text.trim();
     if (name.isEmpty) {
@@ -300,8 +370,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       return ListTile(
                         title: Text(tournament.name),
                         subtitle: Text(
-                          '${tournament.players.length} Spieler · '
-                          '${tournament.stages.length} Etappen · '
+                          '${tournament.players.length} Teilnehmer · '
+                          '${tournament.stages.length} Phasen · '
                           '${tournament.boardCount} Boards',
                         ),
                         onTap: () => Navigator.pop(context, tournament),
@@ -409,7 +479,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         const SnackBar(
           content: Text(
             'Benutzerdefinierte Gruppen können für die erste Gruppenetappe festgelegt werden. '
-            'Spätere Etappen lassen sich nach der Qualifikation anpassen.',
+            'Spätere Phasen lassen sich nach dem Weiterkommen anpassen.',
           ),
         ),
       );
@@ -615,8 +685,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         if (participants < 3) 'Für den Start sind mindestens 3 nötig',
         '$usedBoards von $boards Boards pro Runde',
         playersPerBoard == null
-            ? '3–6 Spieler je Board, gleichmäßig verteilt'
-            : '$playersPerBoard Spieler je Board',
+            ? '3–6 Teilnehmer je Board, gleichmäßig verteilt'
+            : '$playersPerBoard Teilnehmer je Board',
         '${const KratzerEngine().estimatedGameCount(playerCount: participants, lives: _selectedLossLimit, boards: boards, playersPerBoard: playersPerBoard)} Partien bis zur letzten Person (Verlaufsschätzung)',
       ];
     }
@@ -639,9 +709,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     return [
       for (var index = 0; index < groupSizes.length; index++)
         playTypes[index] == 'swiss'
-            ? '${groupLabel(index + 1)} ${repeats[index]} Runden · ${(groupSizes[index] ~/ 2) * repeats[index]} Spiele'
+            ? '${groupLabel(index + 1)} ${repeats[index]} Runden · ${(groupSizes[index] ~/ 2) * repeats[index]} Begegnungen'
             : playTypes[index] == 'round_robin'
-            ? '${groupLabel(index + 1)} ${_roundRobinMatchCount(groupSizes[index], repeats[index], maxGamesPerPlayer: _gameLimitsForGroupSizes(groupSizes)[index])} Spiele${_gameLimitsForGroupSizes(groupSizes)[index] == null ? '' : ' · maximal ${_gameLimitsForGroupSizes(groupSizes)[index]} pro Spieler'}'
+            ? '${groupLabel(index + 1)} ${_roundRobinMatchCount(groupSizes[index], repeats[index], maxGamesPerPlayer: _gameLimitsForGroupSizes(groupSizes)[index])} Begegnungen${_gameLimitsForGroupSizes(groupSizes)[index] == null ? '' : ' · maximal ${_gameLimitsForGroupSizes(groupSizes)[index]} pro Teilnehmer'}'
             : '${groupLabel(index + 1)} ${_groupEliminationMatchEstimate(groupSizes[index], _lossLimitForGroupPlayType(playTypes[index]), _requiredRankForCurrentGroup(index, qualificationPlan))}',
     ];
   }
@@ -1453,7 +1523,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Spieler konnten nicht aus der Datenbank geladen werden.',
+            'Teilnehmer konnten nicht aus der Datenbank geladen werden.',
           ),
         ),
       );
@@ -1585,7 +1655,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Der Kratzer-Modus muss die einzige Etappe des Turniers sein.',
+            'Der Kratzer-Modus muss die einzige Phase des Turniers sein.',
           ),
         ),
       );
@@ -1607,7 +1677,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Jede Gruppe benötigt mindestens 3 Spieler. Bitte weniger Gruppen wählen oder Spieler ergänzen.',
+            'Jede Gruppe benötigt mindestens 3 Teilnehmer. Bitte weniger Gruppen wählen oder Teilnehmer ergänzen.',
           ),
         ),
       );
@@ -1618,7 +1688,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Für ein Schweizer System werden zwei Spieler benötigt.',
+            'Für ein Schweizer System werden zwei Teilnehmer benötigt.',
           ),
         ),
       );
@@ -1642,7 +1712,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         const SnackBar(
           content: Text(
             'Bitte die benutzerdefinierten Gruppen erneut einteilen, '
-            'damit alle aktuellen Spieler genau einmal zugeordnet sind.',
+            'damit alle aktuellen Teilnehmer genau einmal zugeordnet sind.',
           ),
         ),
       );
@@ -1929,7 +1999,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Die Spielerzahl im Finder muss zu den ausgewählten Spielern passen.',
+              'Die Teilnehmerzahl im Finder muss zu den ausgewählten Teilnehmern passen.',
             ),
           ),
         );
@@ -1955,7 +2025,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Vorschlag übernommen. Spieler, Etappen und Spielformate bleiben bearbeitbar.',
+            'Vorschlag übernommen. Teilnehmer, Phasen und Spielformate bleiben bearbeitbar.',
           ),
         ),
       );
@@ -1976,7 +2046,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Der Vorschlag passt nicht zur aktuellen Spielerzahl: mindestens 3 Spieler je Gruppe erforderlich.',
+            'Der Vorschlag passt nicht zur aktuellen Teilnehmerzahl: mindestens 3 Teilnehmer je Gruppe erforderlich.',
           ),
         ),
       );
@@ -2057,8 +2127,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       SnackBar(
         content: Text(
           _players.isEmpty
-              ? 'Vorschlag übernommen. Bitte zuerst die Spieler auswählen.'
-              : 'Vorschlag übernommen. Du kannst Spieler, Etappen und Spielformate weiter anpassen.',
+              ? 'Vorschlag übernommen. Bitte zuerst die Teilnehmer auswählen.'
+              : 'Vorschlag übernommen. Du kannst Teilnehmer, Phasen und Spielformate weiter anpassen.',
         ),
       ),
     );
@@ -2081,7 +2151,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Jede Gruppe benötigt mindestens 3 Spieler. Bitte die Etappen anpassen.',
+            'Jede Gruppe benötigt mindestens 3 Teilnehmer. Bitte die Phasen anpassen.',
           ),
         ),
       );
@@ -2096,7 +2166,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Der Kratzer-Modus muss die einzige Etappe des Turniers sein.',
+              'Der Kratzer-Modus muss die einzige Phase des Turniers sein.',
             ),
           ),
         );
@@ -2135,7 +2205,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Ohne lokale Spielerprofile wird das Turnier als normales Turnier angelegt.',
+            'Ohne lokale Teilnehmerprofile wird das Turnier als normales Turnier angelegt.',
           ),
         ),
       );
@@ -2840,7 +2910,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               children: [
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final field = TextField(
+                    final nameField = TextField(
                       key: const ValueKey('tournament-name-field'),
                       controller: _tournamentNameController,
                       maxLength: 100,
@@ -2862,87 +2932,83 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       icon: const Icon(Icons.save_outlined),
                       label: const Text('Namen speichern'),
                     );
+                    final datePicker = TournamentDatePickerField(
+                      value: _tournamentDate,
+                      onChanged: (date) =>
+                          setState(() => _tournamentDate = date),
+                    );
+                    final settingsButton = OutlinedButton.icon(
+                      onPressed: _isCreatingTournament
+                          ? null
+                          : _pickTournamentSettings,
+                      icon: const Icon(Icons.settings_backup_restore),
+                      label: const Text(
+                        'Einstellungen eines anderen Turniers öffnen',
+                      ),
+                    );
                     if (constraints.maxWidth < 900 ||
                         MediaQuery.textScalerOf(context).scale(16) > 24) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          field,
+                          nameField,
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
                             children: [pickNameButton, saveButton],
                           ),
+                          const SizedBox(height: 12),
+                          datePicker,
+                          const SizedBox(height: 8),
+                          if (widget.existingTournament == null) settingsButton,
                         ],
                       );
                     }
-                    return Row(
+                    return Column(
                       children: [
-                        Expanded(child: field),
-                        const SizedBox(width: 12),
-                        pickNameButton,
-                        const SizedBox(width: 8),
-                        saveButton,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: nameField),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Expanded(child: pickNameButton),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: saveButton),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (widget.existingTournament == null)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: datePicker),
+                              const SizedBox(width: 16),
+                              Expanded(child: settingsButton),
+                            ],
+                          )
+                        else
+                          datePicker,
                       ],
                     );
                   },
                 ),
-                const SizedBox(height: 12),
-                if (widget.existingTournament == null)
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final datePicker = TournamentDatePickerField(
-                        value: _tournamentDate,
-                        onChanged: (date) =>
-                            setState(() => _tournamentDate = date),
-                      );
-                      final settingsButton = OutlinedButton.icon(
-                        onPressed: _isCreatingTournament
-                            ? null
-                            : _pickTournamentSettings,
-                        icon: const Icon(Icons.settings_backup_restore),
-                        label: const Text(
-                          'Einstellungen eines anderen Turniers öffnen',
-                        ),
-                      );
-                      if (constraints.maxWidth < 720) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            datePicker,
-                            const SizedBox(height: 8),
-                            settingsButton,
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(flex: 2, child: datePicker),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 3, child: settingsButton),
-                        ],
-                      );
-                    },
-                  )
-                else
-                  TournamentDatePickerField(
-                    value: _tournamentDate,
-                    onChanged: (date) => setState(() => _tournamentDate = date),
-                  ),
                 const SizedBox(height: 32),
                 if (!_hasKratzerStage) ...[
                   SwitchListTile(
-                    title: const Text('Für Rangliste/n berücksichtigen'),
+                    title: const Text('Ranglistenwertung'),
                     subtitle: const Text(
-                      'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
+                      'Turnierergebnisse in ausgewählten Ranglisten werten.',
                     ),
                     value: _countsForRanking,
-                    onChanged: (value) => setState(() {
-                      _rankingSetupTouched = true;
-                      _countsForRanking = value;
-                      if (!value) _localRankingIds.clear();
-                    }),
+                    onChanged: (value) =>
+                        unawaited(_configureRankingSelection(value)),
                   ),
                   if (_countsForRanking)
                     FutureBuilder<List<LocalRanking>>(
@@ -2950,45 +3016,26 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       builder: (context, snapshot) {
                         final rankings =
                             snapshot.data ?? const <LocalRanking>[];
-                        return Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Ranglisten auswählen',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                                if (snapshot.connectionState ==
-                                    ConnectionState.waiting)
-                                  const LinearProgressIndicator(),
-                                if (rankings.isEmpty)
-                                  const Padding(
-                                    padding: EdgeInsets.all(8),
-                                    child: Text(
-                                      'Lege zuerst eine Rangliste im Hauptmenü an.',
-                                    ),
-                                  ),
-                                for (final ranking in rankings)
-                                  CheckboxListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(ranking.name),
-                                    value: _localRankingIds.contains(
-                                      ranking.id,
-                                    ),
-                                    onChanged: (selected) => setState(() {
-                                      _rankingSetupTouched = true;
-                                      if (selected == true) {
-                                        _localRankingIds.add(ranking.id);
-                                      } else {
-                                        _localRankingIds.remove(ranking.id);
-                                      }
-                                    }),
-                                  ),
-                              ],
+                        final selectedNames = rankings
+                            .where(
+                              (ranking) =>
+                                  _localRankingIds.contains(ranking.id),
+                            )
+                            .map((ranking) => ranking.name)
+                            .join(', ');
+                        return Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                unawaited(_configureRankingSelection(true)),
+                            icon: const Icon(Icons.leaderboard_outlined),
+                            label: Text(
+                              snapshot.connectionState ==
+                                      ConnectionState.waiting
+                                  ? 'Ranglisten werden geladen …'
+                                  : selectedNames.isEmpty
+                                  ? 'Ranglisten auswählen'
+                                  : selectedNames,
                             ),
                           ),
                         );
@@ -2996,7 +3043,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     ),
                 ],
                 Text(
-                  'Spieler',
+                  'Teilnehmer',
                   style: textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -3008,7 +3055,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     controller: _playerNameController,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      labelText: 'Spielername',
+                      labelText: 'Teilnehmername',
                       prefixIcon: Icon(Icons.person_add_alt_1_outlined),
                     ),
                     onSubmitted: (_) => _addPlayer(),
@@ -3021,7 +3068,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       IconButton.filled(
                         onPressed: _addPlayer,
                         icon: const Icon(Icons.add),
-                        tooltip: 'Spieler hinzufügen',
+                        tooltip: 'Teilnehmer hinzufügen',
                       ),
                       OutlinedButton.icon(
                         onPressed: _isOpeningPlayerPicker
@@ -3035,7 +3082,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                                 ),
                               )
                             : const Icon(Icons.playlist_add_check_outlined),
-                        label: const Text('Auswählen'),
+                        label: const Text('Aus Spielerkatalog auswählen'),
                       ),
                     ],
                   ),
@@ -3053,7 +3100,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   trailing: OutlinedButton.icon(
                     onPressed: _generatePlayers,
                     icon: const Icon(Icons.group_add_outlined),
-                    label: const Text('Spieler erzeugen'),
+                    label: const Text('Teilnehmer erzeugen'),
                   ),
                   breakpoint: 420,
                 ),
@@ -3070,12 +3117,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               ],
             ),
             ExpertSetupSection(
-              title: '2 · Turnierablauf',
+              title: '2 · Turnierstruktur',
               summary:
-                  '${_stages.length} Etappen gespeichert · Gruppen, KO und Spielregeln',
+                  '${_stages.length} Phasen gespeichert · Gruppen, KO und Spielregeln',
+              enabled: _players.isNotEmpty,
               children: [
                 Text(
-                  'Etappen',
+                  'Phasen',
                   style: textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -3086,7 +3134,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   const Padding(
                     padding: EdgeInsets.only(bottom: 12),
                     child: Text(
-                      'Ein Kratzer-Turnier besteht nur aus dieser einen Etappe. Entferne oder bearbeite sie, um die Konfiguration zu ändern.',
+                      'Ein Kratzer-Turnier besteht nur aus dieser einen Phase. Entferne oder bearbeite sie, um die Konfiguration zu ändern.',
                     ),
                   ),
                 Text('Name: ${_defaultStageName()}'),
@@ -3104,8 +3152,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       _editingStageIndex == null ? Icons.add : Icons.check,
                     ),
                     tooltip: _editingStageIndex == null
-                        ? 'Etappe hinzufügen'
-                        : 'Etappe speichern',
+                        ? 'Phase hinzufügen'
+                        : 'Phase speichern',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -3117,7 +3165,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   initialValue: _selectedStageType,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    labelText: 'Etappentyp',
+                    labelText: 'Format',
                     prefixIcon: Icon(Icons.schema_outlined),
                   ),
                   items: [
@@ -3201,9 +3249,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     initialValue: _kratzerBoardDistribution,
                     isExpanded: true,
                     decoration: const InputDecoration(
-                      labelText: 'Spieler pro Board',
+                      labelText: 'Teilnehmer pro Board',
                       helperText:
-                          'Gleichmäßig verteilt sich z. B. 15 Spieler auf 4 Boards als 4, 4, 4 und 3.',
+                          'Gleichmäßig verteilt sich z. B. 15 Teilnehmer auf 4 Boards als 4, 4, 4 und 3.',
                       border: OutlineInputBorder(),
                     ),
                     items: [
@@ -3214,7 +3262,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       for (final count in [3, 4, 5, 6])
                         DropdownMenuItem(
                           value: '$count',
-                          child: Text('$count Spieler'),
+                          child: Text('$count Teilnehmer'),
                         ),
                     ],
                     onChanged: (value) => setState(
@@ -3225,7 +3273,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     key: const ValueKey('kratzer-prefer-same-scratches'),
                     contentPadding: EdgeInsets.zero,
                     title: const Text(
-                      'Spieler mit gleichem Lebensstand bevorzugen',
+                      'Teilnehmer mit gleichem Lebensstand bevorzugen',
                     ),
                     subtitle: const Text(
                       'Gleicht zuerst absolvierte Partien aus, vermeidet frühere Begegnungen wenn möglich und bevorzugt danach gleiche Kratzerstände.',
@@ -3241,7 +3289,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       'Gruppen bis zum Ausscheiden beibehalten',
                     ),
                     subtitle: const Text(
-                      'Die Boards behalten ihre Gruppen, bis in einer Runde mindestens ein Spieler ausscheidet.',
+                      'Die Boards behalten ihre Gruppen, bis in einer Runde mindestens ein Teilnehmer ausscheidet.',
                     ),
                     value: _kratzerPlayUntilElimination,
                     onChanged: (value) =>
@@ -3280,7 +3328,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Handicaps aktivieren'),
                         subtitle: const Text(
-                          'Im Turnier lassen sich Handicaps verwalten und einzelnen Spielern zuweisen.',
+                          'Im Turnier lassen sich Handicaps verwalten und einzelnen Teilnehmern zuweisen.',
                         ),
                         value: _kratzerHandicapsEnabled,
                         onChanged: (value) =>
@@ -3470,7 +3518,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                             padding: EdgeInsets.only(top: 8),
                             child: Text(
                               'Manuelle Gruppen sind für die erste Gruppenetappe verfügbar. '
-                              'Spätere Etappen können nach der Qualifikation angepasst werden.',
+                              'Spätere Phasen können nach dem Weiterkommen angepasst werden.',
                             ),
                           ),
                         const SizedBox(height: 8),
@@ -3481,9 +3529,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           GroupPlayerAllocationMode.balanced =>
                             'Nach Wertung sortieren und abwechselnd auf die Gruppen verteilen.',
                           GroupPlayerAllocationMode.random =>
-                            'Spieler zufällig auf die Gruppen verteilen.',
+                            'Teilnehmer zufällig auf die Gruppen verteilen.',
                           GroupPlayerAllocationMode.manual =>
-                            'Spieler per Drag-and-drop den gewünschten Gruppen zuordnen.',
+                            'Teilnehmer per Drag-and-drop den gewünschten Gruppen zuordnen.',
                         }),
                         const SizedBox(height: 12),
                       ],
@@ -3521,7 +3569,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       onChanged: (_) => setState(() {}),
                     ),
                     trailing: ExpertSetupSection(
-                      title: 'Qualifikation im Detail',
+                      title: 'Weiterkommen im Detail',
                       summary:
                           'Plätze, Best-of-Vergleich und automatische Anpassung',
                       children: [
@@ -3544,7 +3592,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   ),
                   const SizedBox(height: 12),
                   ExpertSetupSection(
-                    title: 'Gleichstand entscheiden',
+                    title: 'Bei Punktgleichheit',
                     summary: 'Reihenfolge der Tabellenkriterien anpassen',
                     children: [
                       GroupTieBreakerSetup(
@@ -3562,28 +3610,30 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Turnierform vollständig ausspielen'),
                     value: _playKnockoutFully,
-                    onChanged: (value) {
-                      if (!value && (knockoutParticipantCount ?? 0) < 5) {
-                        return;
-                      }
-                      setState(() {
-                        _playKnockoutFully = value;
-                        if (!value) {
-                          _finalEndsTournament = false;
-                          _placementPlaces.clear();
-                          _knockoutAdvancingCount =
-                              max(
-                                4,
-                                (knockoutParticipantCount ?? 4) ~/ 2,
-                              ).clamp(
-                                4,
-                                max(4, (knockoutParticipantCount ?? 4) - 1),
-                              );
-                        } else {
-                          _knockoutAdvancingCount = null;
-                        }
-                      });
-                    },
+                    onChanged: (knockoutParticipantCount ?? 0) < 5
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _playKnockoutFully = value;
+                              if (!value) {
+                                _finalEndsTournament = false;
+                                _placementPlaces.clear();
+                                _knockoutAdvancingCount =
+                                    max(
+                                      4,
+                                      (knockoutParticipantCount ?? 4) ~/ 2,
+                                    ).clamp(
+                                      4,
+                                      max(
+                                        4,
+                                        (knockoutParticipantCount ?? 4) - 1,
+                                      ),
+                                    );
+                              } else {
+                                _knockoutAdvancingCount = null;
+                              }
+                            });
+                          },
                   ),
                   if (!_playKnockoutFully)
                     Padding(
@@ -3596,9 +3646,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                             '${_knockoutAdvancingCount ?? max(4, (knockoutParticipantCount ?? 4) ~/ 2)}',
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Weiterkommende',
+                          labelText: 'Teilnehmer',
                           helperText:
-                              'Mindestens 4 Spieler, weniger als die aktuelle Teilnehmerzahl.',
+                              'Mindestens 4 Teilnehmer, weniger als die aktuelle Teilnehmerzahl.',
                         ),
                         validator: (value) {
                           final count = int.tryParse(value ?? '');
@@ -3666,7 +3716,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   ),
                   label: Text(
                     _editingStageIndex == null
-                        ? 'Etappe hinzufügen'
+                        ? 'Phase hinzufügen'
                         : 'Änderungen speichern',
                   ),
                 ),
@@ -3683,7 +3733,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             ExpertSetupSection(
               title: '3 · Prüfen & anlegen',
               summary:
-                  '${_players.length} Teilnehmer · ${_stages.length} Etappen · $_plannedBoardCount Boards',
+                  '${_players.length} Teilnehmer · ${_stages.length} Phasen · $_plannedBoardCount Boards',
+              enabled: _stages.isNotEmpty,
               children: [
                 if (_hasKratzerStage)
                   KratzerDurationPreview(
@@ -3726,8 +3777,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
                       _players.isEmpty
-                          ? 'Zum Speichern fehlen die Teilnehmer. Bitte oben Spieler hinzufügen oder auswählen.'
-                          : 'Zum Speichern fehlt eine Etappe. Bitte eine Etappe hinzufügen oder einen Vorschlag übernehmen.',
+                          ? 'Zum Speichern fehlen die Teilnehmer. Bitte oben Teilnehmer hinzufügen oder auswählen.'
+                          : 'Zum Speichern fehlt eine Phase. Bitte eine Phase hinzufügen oder einen Vorschlag übernehmen.',
                     ),
                   ),
                 FilledButton.icon(

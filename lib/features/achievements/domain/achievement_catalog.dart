@@ -499,7 +499,7 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'shortleg_1',
       name: 'Shortleg I',
-      description: 'Spiele ein Shortleg.',
+      description: 'Erziele ein Shortleg.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       experiencePoints: 13,
@@ -507,7 +507,7 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'shortleg_3',
       name: 'Shortleg II',
-      description: 'Spiele drei Shortlegs.',
+      description: 'Erziele drei Shortlegs.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 3,
@@ -516,7 +516,7 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'shortleg_5',
       name: 'Shortleg III',
-      description: 'Spiele fünf Shortlegs.',
+      description: 'Erziele fünf Shortlegs.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 5,
@@ -525,7 +525,7 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'shortleg_10',
       name: 'Schnellstarter I',
-      description: 'Spiele zehn Shortlegs.',
+      description: 'Erziele zehn Shortlegs.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 10,
@@ -534,7 +534,7 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'shortleg_25',
       name: 'Schnellstarter II',
-      description: 'Spiele 25 Shortlegs.',
+      description: 'Erziele 25 Shortlegs.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 25,
@@ -543,7 +543,7 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'shortleg_50',
       name: 'Schnellstarter III',
-      description: 'Spiele 50 Shortlegs.',
+      description: 'Erziele 50 Shortlegs.',
       category: AchievementCategory.checkoutAndPrecision,
       metric: AchievementMetric.shortLegCount,
       target: 50,
@@ -619,7 +619,7 @@ class AchievementCatalog {
       id: 'consecutive_active_months_6',
       name: 'Treue Seele',
       description:
-          'Spiele mindestens ein Match in sechs aufeinanderfolgenden '
+          'Spiele mindestens eine Begegnung in sechs aufeinanderfolgenden '
           'Monaten.',
       category: AchievementCategory.activityAndLoyalty,
       metric: AchievementMetric.consecutiveActiveMonths,
@@ -630,7 +630,7 @@ class AchievementCatalog {
       id: 'active_months_12',
       name: 'Ganzjährig am Start',
       description:
-          'Spiele mindestens ein Match in allen zwölf Monaten eines '
+          'Spiele mindestens eine Begegnung in allen zwölf Monaten eines '
           'Kalenderjahres.',
       category: AchievementCategory.activityAndLoyalty,
       metric: AchievementMetric.activeMonthsInYear,
@@ -695,7 +695,7 @@ class AchievementCatalog {
     AchievementDefinition(
       id: 'opponents_beaten_10',
       name: 'Wanderpokal',
-      description: 'Gewinne gegen mindestens zehn verschiedene Spieler.',
+      description: 'Gewinne gegen mindestens zehn verschiedene Teilnehmer.',
       category: AchievementCategory.rivalriesAndComebacks,
       metric: AchievementMetric.distinctOpponentsBeaten,
       target: 10,

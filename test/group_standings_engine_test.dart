@@ -43,14 +43,14 @@ void main() {
     () {
       final first =
           PlayerStanding(
-              TournamentPlayer.generated(1).copyWith(name: 'Spieler A'),
+              TournamentPlayer.generated(1).copyWith(name: 'Teilnehmer A'),
             )
             ..points = 6
             ..legsFor = 19
             ..legsAgainst = 12;
       final second =
           PlayerStanding(
-              TournamentPlayer.generated(2).copyWith(name: 'Spieler B'),
+              TournamentPlayer.generated(2).copyWith(name: 'Teilnehmer B'),
             )
             ..points = 6
             ..legsFor = 20

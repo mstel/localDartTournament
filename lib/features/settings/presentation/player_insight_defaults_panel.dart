@@ -74,8 +74,7 @@ class _PlayerInsightDefaultsPanelState
       if (mounted) {
         setState(() {
           _settings = previous;
-          _thresholdControllers[type]?.text =
-              '${previous.thresholdFor(type)}';
+          _thresholdControllers[type]?.text = '${previous.thresholdFor(type)}';
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Speichern fehlgeschlagen: $error')),
@@ -99,8 +98,7 @@ class _PlayerInsightDefaultsPanelState
       if (mounted) {
         setState(() {
           _settings = previous;
-          _thresholdControllers[type]?.text =
-              '${previous.thresholdFor(type)}';
+          _thresholdControllers[type]?.text = '${previous.thresholdFor(type)}';
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Speichern fehlgeschlagen: $error')),
@@ -141,7 +139,7 @@ class _PlayerInsightDefaultsPanelState
     leading: const Icon(Icons.auto_awesome_outlined),
     title: const Text('Insights Standardwerte'),
     subtitle: const Text(
-      'Legt fest, welche Spieler-Insights standardmäßig angezeigt werden.',
+      'Legt fest, welche Teilnehmer-Insights standardmäßig angezeigt werden.',
     ),
     childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
     children: [
@@ -181,10 +179,11 @@ class _PlayerInsightDefaultsPanelState
                               key: ValueKey('insight-threshold-${type.name}'),
                               controller: _thresholdControllers[type],
                               enabled: !_loading && !_saving.contains(type),
-                              keyboardType: const TextInputType.numberWithOptions(
-                                decimal: false,
-                                signed: false,
-                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: false,
+                                    signed: false,
+                                  ),
                               decoration: InputDecoration(
                                 labelText: type.thresholdLabel,
                                 suffixText: type.thresholdUnit,
@@ -192,8 +191,8 @@ class _PlayerInsightDefaultsPanelState
                               ),
                               validator: (value) =>
                                   _validateThreshold(type, value),
-                              onFieldSubmitted: _loading ||
-                                      _saving.contains(type)
+                              onFieldSubmitted:
+                                  _loading || _saving.contains(type)
                                   ? null
                                   : (_) => _saveThreshold(type),
                             ),

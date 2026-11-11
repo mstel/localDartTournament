@@ -59,7 +59,7 @@ class LeagueTournamentPlayerSections extends StatelessWidget {
       child: ExpansionTile(
         leading: const Icon(Icons.people_alt_outlined),
         title: Text(title),
-        subtitle: Text('${players.length} Spieler'),
+        subtitle: Text('${players.length} Teilnehmer'),
         childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           for (var index = 0; index < players.length; index++) ...[

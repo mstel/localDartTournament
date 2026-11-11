@@ -88,7 +88,7 @@ class _StatisticsPeriodFilterState extends State<StatisticsPeriodFilter> {
             ),
           const SizedBox(height: 8),
           const Text(
-            'Gilt für alle Werte und Spiele unten. Turnierspiele: Spielende, ersatzweise Start. Ältere Ergebnisse ohne Zeitangabe erscheinen nur unter Gesamt.',
+            'Gilt für alle Werte und Begegnungen unten. Turnierspiele: Spielende, ersatzweise Start. Ältere Ergebnisse ohne Zeitangabe erscheinen nur unter Gesamt.',
           ),
         ],
       ),

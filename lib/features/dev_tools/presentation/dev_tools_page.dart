@@ -87,12 +87,12 @@ class _DevToolsPageState extends State<DevToolsPage> {
           const SizedBox(height: 8),
           Text(
             _randomMode
-                ? 'Zufallsturniere mit 2–32 Spielern und bis zu drei Etappen. Seed leer lassen für neue Turniere oder einen Seed zur Wiederholung eingeben. Gespeicherte Turniere werden nicht verändert.'
-                : 'Alle hinterlegten Szenarien werden mit drei reproduzierbaren Ergebnisverläufen geprüft. Die Berichte enthalten Matches, Ergebnisse und Weiterkommende. Gespeicherte Turniere werden nicht verändert.',
+                ? 'Zufallsturniere mit 2–32 Teilnehmern und bis zu drei Phasen. Seed leer lassen für neue Turniere oder einen Seed zur Wiederholung eingeben. Gespeicherte Turniere werden nicht verändert.'
+                : 'Alle hinterlegten Szenarien werden mit drei reproduzierbaren Ergebnisverläufen geprüft. Die Berichte enthalten Matches, Ergebnisse und Teilnehmer. Gespeicherte Turniere werden nicht verändert.',
           ),
           const SizedBox(height: 8),
           const Text(
-            'Der Tester verwendet die produktive Turnierlogik für Aufbau, Freilose, Weitergabe, Tabellen und Qualifikation. Nur die Ergebnisse werden simuliert. Flutter-Analyse und weitere Regressionstests laufen über den externen Turniertester.',
+            'Der Tester verwendet die produktive Turnierlogik für Aufbau, Freilose, Weitergabe, Tabellen und Weiterkommen. Nur die Ergebnisse werden simuliert. Flutter-Analyse und weitere Regressionstests laufen über den externen Turniertester.',
           ),
           const SizedBox(height: 16),
           SwitchListTile(

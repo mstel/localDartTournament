@@ -41,7 +41,10 @@ void main() {
   });
 
   test('placement rank metadata survives tournament storage', () {
-    final players = List.generate(8, (index) => player('Spieler ${index + 1}'));
+    final players = List.generate(
+      8,
+      (index) => player('Teilnehmer ${index + 1}'),
+    );
     final rounds = [
       round('Losers Runde 1', 2),
       round('Losers Runde 2', 2),

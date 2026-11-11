@@ -24,7 +24,7 @@ void main() {
 
       final priority = TournamentFlowPriority.forStage(stage);
 
-      expect(priority.notices.single, contains('Spieler 4'));
+      expect(priority.notices.single, contains('Teilnehmer 4'));
       expect(
         priority.prioritizedMatches,
         containsAll(

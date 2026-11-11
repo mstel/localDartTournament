@@ -20,7 +20,8 @@ class ChallongeLocalImportPage extends StatefulWidget {
   const ChallongeLocalImportPage({super.key});
 
   @override
-  State<ChallongeLocalImportPage> createState() => _ChallongeLocalImportPageState();
+  State<ChallongeLocalImportPage> createState() =>
+      _ChallongeLocalImportPageState();
 }
 
 class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
@@ -28,11 +29,19 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
   final _apiKey = TextEditingController();
   final _database = LocalAppDatabase();
   final _storage = TournamentStorage();
-  late final _client = ChallongeClient(publicReader: ChallongePublicReader(readDocument: (uri) async {
-    final source = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => ChallongeBrowserPage(uri: uri)));
-    if (source == null) throw const FormatException('Öffentlicher Abruf abgebrochen.');
-    return source;
-  }));
+  late final _client = ChallongeClient(
+    publicReader: ChallongePublicReader(
+      readDocument: (uri) async {
+        final source = await Navigator.of(context).push<String>(
+          MaterialPageRoute(builder: (_) => ChallongeBrowserPage(uri: uri)),
+        );
+        if (source == null) {
+          throw const FormatException('Öffentlicher Abruf abgebrochen.');
+        }
+        return source;
+      },
+    ),
+  );
   List<ChallongeTournament> _sources = [];
   List<PlayerProfile> _players = [];
   List<LocalRanking> _rankings = [];
@@ -44,48 +53,91 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
   String? _message;
 
   Future<void> _loadFile() async {
-    final file = await openFile(acceptedTypeGroups: [
-      const XTypeGroup(label: 'Challonge-Export', extensions: ['json', 'html', 'htm']),
-    ]);
+    final file = await openFile(
+      acceptedTypeGroups: [
+        const XTypeGroup(
+          label: 'Challonge-Export',
+          extensions: ['json', 'html', 'htm'],
+        ),
+      ],
+    );
     if (file == null || !mounted) return;
-    setState(() { _busy = true; _message = null; });
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
     try {
-      await _prepare(ChallongePublicReader.decodeDocument(await file.readAsString()));
+      await _prepare(
+        ChallongePublicReader.decodeDocument(await file.readAsString()),
+      );
     } catch (error) {
-      if (mounted) setState(() => _message = 'Importdatei konnte nicht gelesen werden: $error');
-    } finally { if (mounted) setState(() => _busy = false); }
+      if (mounted) {
+        setState(
+          () => _message = 'Importdatei konnte nicht gelesen werden: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _loadUrl() async {
-    setState(() { _busy = true; _message = null; });
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
     try {
       var identifier = _url.text.trim();
       if (_apiKey.text.trim().isNotEmpty) {
         final uri = Uri.tryParse(identifier);
         if (uri != null && uri.hasScheme) {
-          final parts = uri.pathSegments.where((part) => !['de', 'en', 'fr', 'es', 'pt', 'ja'].contains(part)).toList();
-          if (parts.isEmpty) throw const FormatException('Turnierkennung fehlt.');
-          identifier = uri.host == 'challonge.com' ? parts.first : '${uri.host.split('.').first}-${parts.first}';
+          final parts = uri.pathSegments
+              .where(
+                (part) => !['de', 'en', 'fr', 'es', 'pt', 'ja'].contains(part),
+              )
+              .toList();
+          if (parts.isEmpty) {
+            throw const FormatException('Turnierkennung fehlt.');
+          }
+          identifier = uri.host == 'challonge.com'
+              ? parts.first
+              : '${uri.host.split('.').first}-${parts.first}';
         }
       }
       await _prepare([await _client.tournament(_apiKey.text, identifier)]);
     } catch (error) {
-      if (mounted) setState(() => _message = 'Challonge-Turnier konnte nicht geladen werden: $error');
-    } finally { if (mounted) setState(() => _busy = false); }
+      if (mounted) {
+        setState(
+          () => _message =
+              'Challonge-Turnier konnte nicht geladen werden: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _prepare(List<ChallongeTournament> decoded) async {
-    final existing = (await _storage.loadTournaments()).map((t) => t.id).toSet();
-    final sources = decoded.where((t) => !existing.contains(t.tournamentId)).toList();
+    final existing = (await _storage.loadTournaments())
+        .map((t) => t.id)
+        .toSet();
+    final sources = decoded
+        .where((t) => !existing.contains(t.tournamentId))
+        .toList();
     final players = await _database.loadPlayerProfiles();
     final rankings = await _database.loadLocalRankings();
     final aliases = await _database.loadChallongePlayerLinks();
-    final byName = {for (final row in aliases) '${row['challongeName']}'.trim().toLowerCase(): '${row['playerProfileId']}'};
+    final byName = {
+      for (final row in aliases)
+        '${row['challongeName']}'.trim().toLowerCase():
+            '${row['playerProfileId']}',
+    };
     _assignments.clear();
     for (final tournament in sources) {
       for (final participant in tournament.participants) {
         final name = ChallongeTournament.name(participant);
-        _assignments[_key(tournament, participant)] = byName[name.trim().toLowerCase()];
+        _assignments[_key(tournament, participant)] =
+            byName[name.trim().toLowerCase()];
       }
     }
     _remember.clear();
@@ -94,28 +146,48 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
     _rankings = rankings;
     if (mounted) {
       if (decoded.isNotEmpty && sources.isEmpty) {
-        setState(() => _message = 'Alle enthaltenen Turniere wurden bereits importiert.');
+        setState(
+          () =>
+              _message = 'Alle enthaltenen Turniere wurden bereits importiert.',
+        );
       } else if (sources.length < decoded.length) {
-        setState(() => _message = '${sources.length} neue Turniere geladen (${decoded.length - sources.length} bereits importiert).');
+        setState(
+          () => _message =
+              '${sources.length} neue Turniere geladen (${decoded.length - sources.length} bereits importiert).',
+        );
       } else {
-        setState(() => _message = '${sources.length} abgeschlossene Turniere geladen.');
+        setState(
+          () => _message = '${sources.length} abgeschlossene Turniere geladen.',
+        );
       }
     }
   }
 
   @override
-  void dispose() { _url.dispose(); _apiKey.dispose(); super.dispose(); }
+  void dispose() {
+    _url.dispose();
+    _apiKey.dispose();
+    super.dispose();
+  }
 
-  String _key(ChallongeTournament t, Map<String, dynamic> p) => '${t.id}:${p['id']}';
+  String _key(ChallongeTournament t, Map<String, dynamic> p) =>
+      '${t.id}:${p['id']}';
 
   Future<void> _import() async {
-    setState(() { _busy = true; _message = null; });
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
     try {
       if (_countsForRanking && _selectedRankings.isEmpty) {
-        throw const FormatException('Bitte mindestens eine Rangliste auswählen.');
+        throw const FormatException(
+          'Bitte mindestens eine Rangliste auswählen.',
+        );
       }
       if (_sources.isEmpty) {
-        throw const FormatException('Keine neuen Turniere zum Übernehmen vorhanden.');
+        throw const FormatException(
+          'Keine neuen Turniere zum Übernehmen vorhanden.',
+        );
       }
       var imported = 0;
       for (final source in _sources) {
@@ -123,8 +195,12 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
         for (final participant in source.participants) {
           final selected = _assignments[_key(source, participant)];
           if (selected != null) profiles['${participant['id']}'] = selected;
-          if (selected != null && _remember.contains(_key(source, participant))) {
-            await _database.saveChallongePlayerLink(ChallongeTournament.name(participant), selected);
+          if (selected != null &&
+              _remember.contains(_key(source, participant))) {
+            await _database.saveChallongePlayerLink(
+              ChallongeTournament.name(participant),
+              selected,
+            );
           }
         }
         final tournament = source.convert(
@@ -137,9 +213,14 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
         imported++;
       }
       if (mounted) {
-        setState(() { _sources = []; _message = '$imported Turniere erfolgreich lokal importiert.'; });
+        setState(() {
+          _sources = [];
+          _message = '$imported Turniere erfolgreich lokal importiert.';
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$imported Turniere erfolgreich lokal importiert.')),
+          SnackBar(
+            content: Text('$imported Turniere erfolgreich lokal importiert.'),
+          ),
         );
       }
     } catch (error) {
@@ -150,13 +231,23 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
           _ => 'Import fehlgeschlagen: $error',
         };
         setState(() => _message = message);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Theme.of(context).colorScheme.error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
-    } finally { if (mounted) setState(() => _busy = false); }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _export() async {
-    setState(() { _busy = true; _message = null; });
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
     try {
       final tournaments = await _storage.loadTournaments();
       final jsonString = const JsonEncoder.withIndent('  ').convert({
@@ -174,11 +265,12 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
         }
       } else if (Platform.isAndroid) {
         try {
-          final saved = await const MethodChannel('dartturnier/backups').invokeMethod<bool>('export', {
-            'bytes': bytes,
-            'fileName': fileName,
-            'mimeType': 'application/json',
-          });
+          final saved = await const MethodChannel('dartturnier/backups')
+              .invokeMethod<bool>('export', {
+                'bytes': bytes,
+                'fileName': fileName,
+                'mimeType': 'application/json',
+              });
           if (saved == false) return;
         } catch (_) {
           final tempDir = await getTemporaryDirectory();
@@ -202,7 +294,11 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
       if (mounted) {
         setState(() => _message = '${tournaments.length} Turniere exportiert.');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${tournaments.length} Turniere erfolgreich exportiert.')),
+          SnackBar(
+            content: Text(
+              '${tournaments.length} Turniere erfolgreich exportiert.',
+            ),
+          ),
         );
       }
     } catch (error) {
@@ -215,55 +311,171 @@ class _ChallongeLocalImportPageState extends State<ChallongeLocalImportPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Challonge-Import und Export')),
-    body: ListView(padding: const EdgeInsets.all(16), children: [
-      Text('Abgeschlossene Challonge-Turniere aus einem JSON- oder HTML-Export übernehmen.', style: Theme.of(context).textTheme.bodyLarge),
-      const SizedBox(height: 12),
-      Wrap(spacing: 12, runSpacing: 8, children: [
-        FilledButton.icon(onPressed: _busy ? null : _loadFile, icon: const Icon(Icons.file_open), label: const Text('Challonge-Datei importieren')),
-        OutlinedButton.icon(onPressed: _busy ? null : _export, icon: const Icon(Icons.download), label: const Text('Turniere exportieren')),
-      ]),
-      const SizedBox(height: 10),
-      TextField(controller: _url, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Öffentlicher Challonge-Turnierlink', hintText: 'https://challonge.com/turniername')),
-      TextField(controller: _apiKey, obscureText: true, decoration: const InputDecoration(labelText: 'API-Schlüssel für private Turniere (optional)')),
-      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _busy ? null : _loadUrl, icon: const Icon(Icons.download), label: const Text('Link laden'))),
-      if (_busy) const LinearProgressIndicator(),
-      if (_message != null) Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(_message!)),
-      if (_sources.isNotEmpty) ...[
-        const Divider(height: 28),
-        SwitchListTile(title: const Text('Für Rangliste/n berücksichtigen'), value: _countsForRanking, onChanged: (value) => setState(() => _countsForRanking = value)),
-        if (_countsForRanking) ...[
-          for (final ranking in _rankings) CheckboxListTile(title: Text(ranking.name), value: _selectedRankings.contains(ranking.id), onChanged: (value) => setState(() { value == true ? _selectedRankings.add(ranking.id) : _selectedRankings.remove(ranking.id); })),
-        ],
-        for (final tournament in _sources) ...[
-          Padding(padding: const EdgeInsets.only(top: 12, bottom: 6), child: Text(tournament.title, style: Theme.of(context).textTheme.titleMedium)),
-          for (final participant in tournament.participants)
-            Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(ChallongeTournament.name(participant), style: Theme.of(context).textTheme.titleSmall),
-              DropdownButtonFormField<String?>(
-                initialValue: _assignments[_key(tournament, participant)],
-                decoration: const InputDecoration(labelText: 'Lokalen Spieler zuweisen', isDense: true),
-                items: [const DropdownMenuItem<String?>(value: null, child: Text('Nicht verknüpfen')), ..._players.map((p) => DropdownMenuItem<String?>(value: p.id, child: Text(p.displayName)))],
-                onChanged: (value) => setState(() => _assignments[_key(tournament, participant)] = value),
-              ),
-              CheckboxListTile(contentPadding: EdgeInsets.zero, title: const Text('Zuordnung für künftige Importe merken'), value: _remember.contains(_key(tournament, participant)), onChanged: _assignments[_key(tournament, participant)] == null ? null : (value) => setState(() { value == true ? _remember.add(_key(tournament, participant)) : _remember.remove(_key(tournament, participant)); })),
-            ]))),
-        ],
+    body: ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          'Abgeschlossene Challonge-Turniere aus einem JSON- oder HTML-Export übernehmen.',
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
         const SizedBox(height: 12),
-        FilledButton.icon(onPressed: _busy ? null : _import, icon: const Icon(Icons.move_to_inbox), label: const Text('Ausgewählte Turniere lokal übernehmen')),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: _busy ? null : _loadFile,
+              icon: const Icon(Icons.file_open),
+              label: const Text('Challonge-Datei importieren'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _export,
+              icon: const Icon(Icons.download),
+              label: const Text('Turniere exportieren'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _url,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            labelText: 'Öffentlicher Challonge-Turnierlink',
+            hintText: 'https://challonge.com/turniername',
+          ),
+        ),
+        TextField(
+          controller: _apiKey,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'API-Schlüssel für private Turniere (optional)',
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _busy ? null : _loadUrl,
+            icon: const Icon(Icons.download),
+            label: const Text('Link laden'),
+          ),
+        ),
+        if (_busy) const LinearProgressIndicator(),
         if (_message != null)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              _message!,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: _message!.startsWith('Import fehlgeschlagen') || _message!.startsWith('Bitte')
-                    ? Theme.of(context).colorScheme.error
-                    : Theme.of(context).colorScheme.primary,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(_message!),
+          ),
+        if (_sources.isNotEmpty) ...[
+          const Divider(height: 28),
+          SwitchListTile(
+            title: const Text('Ranglistenwertung'),
+            value: _countsForRanking,
+            onChanged: (value) => setState(() => _countsForRanking = value),
+          ),
+          if (_countsForRanking) ...[
+            for (final ranking in _rankings)
+              CheckboxListTile(
+                title: Text(ranking.name),
+                value: _selectedRankings.contains(ranking.id),
+                onChanged: (value) => setState(() {
+                  value == true
+                      ? _selectedRankings.add(ranking.id)
+                      : _selectedRankings.remove(ranking.id);
+                }),
+              ),
+          ],
+          for (final tournament in _sources) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 6),
+              child: Text(
+                tournament.title,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
+            for (final participant in tournament.participants)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ChallongeTournament.name(participant),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      DropdownButtonFormField<String?>(
+                        initialValue:
+                            _assignments[_key(tournament, participant)],
+                        decoration: const InputDecoration(
+                          labelText: 'Lokalen Teilnehmer zuweisen',
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Nicht verknüpfen'),
+                          ),
+                          ..._players.map(
+                            (p) => DropdownMenuItem<String?>(
+                              value: p.id,
+                              child: Text(p.displayName),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) => setState(
+                          () => _assignments[_key(tournament, participant)] =
+                              value,
+                        ),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Zuordnung für künftige Importe merken',
+                        ),
+                        value: _remember.contains(
+                          _key(tournament, participant),
+                        ),
+                        onChanged:
+                            _assignments[_key(tournament, participant)] == null
+                            ? null
+                            : (value) => setState(() {
+                                value == true
+                                    ? _remember.add(
+                                        _key(tournament, participant),
+                                      )
+                                    : _remember.remove(
+                                        _key(tournament, participant),
+                                      );
+                              }),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _busy ? null : _import,
+            icon: const Icon(Icons.move_to_inbox),
+            label: const Text('Ausgewählte Turniere lokal übernehmen'),
           ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                _message!,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color:
+                      _message!.startsWith('Import fehlgeschlagen') ||
+                          _message!.startsWith('Bitte')
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+        ],
       ],
-    ]),
+    ),
   );
 }

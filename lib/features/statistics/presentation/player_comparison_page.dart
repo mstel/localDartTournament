@@ -220,13 +220,15 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Spieler vergleichen')),
+    appBar: AppBar(title: const Text('Teilnehmer vergleichen')),
     body: FutureBuilder<(List<PlayerProfile>, List<LocalRanking>, List<int>)>(
       future: _options,
       builder: (context, optionsSnapshot) {
         if (optionsSnapshot.hasError) {
           return const Center(
-            child: Text('Spieler und Ranglisten konnten nicht geladen werden.'),
+            child: Text(
+              'Teilnehmer und Ranglisten konnten nicht geladen werden.',
+            ),
           );
         }
         final options = optionsSnapshot.data;
@@ -237,7 +239,9 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
         if (players.length < 2) {
           return const AdaptiveContentList(
             children: [
-              Text('Zum Vergleichen werden mindestens zwei Spieler benötigt.'),
+              Text(
+                'Zum Vergleichen werden mindestens zwei Teilnehmer benötigt.',
+              ),
             ],
           );
         }
@@ -433,7 +437,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return const Text(
-                      'Der Spieler-Vergleich konnte nicht geladen werden.',
+                      'Der Teilnehmer-Vergleich konnte nicht geladen werden.',
                     );
                   }
                   final data = snapshot.data;
@@ -458,7 +462,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Spielervergleich · ${ranking?.name ?? 'Alle Ranglisten'}${_selectedYear == null ? '' : ' ($_selectedYear)'}',
+                        'Teilnehmervergleich · ${ranking?.name ?? 'Alle Ranglisten'}${_selectedYear == null ? '' : ' ($_selectedYear)'}',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
@@ -598,7 +602,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     initialValue: value,
     isExpanded: true,
     decoration: InputDecoration(
-      labelText: 'Spieler $label',
+      labelText: 'Teilnehmer $label',
       border: const OutlineInputBorder(),
     ),
     items: [
@@ -771,7 +775,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
     final rows = <({String category, String left, String right})>[
       (category: 'Elo aktuell', left: '', right: ''),
       (
-        category: 'Spiele',
+        category: 'Begegnungen',
         left: '${leftStats.matches}',
         right: '${rightStats.matches}',
       ),

@@ -109,8 +109,8 @@ class PlanningSuggestionCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
 
-                    // Fix 1.4: Qualifikationspfeile nur anzeigen wo sie relevant sind
-                    // (nicht für die letzte/einzige Etappe eines mehrstufigen Turniers)
+                    // Fix 1.4: Weiterkommenspfeile nur anzeigen wo sie relevant sind
+                    // (nicht für die letzte/einzige Phase eines mehrstufigen Turniers)
                     if (suggestion.configurations.isNotEmpty) ...[
                       for (
                         var i = 0;
@@ -125,14 +125,14 @@ class PlanningSuggestionCard extends StatelessWidget {
                             final participants = stage.isGroupStage
                                 ? stage.groupSizes.fold<int>(0, (a, b) => a + b)
                                 : stage.knockoutParticipantCount;
-                            // Fix 1.4: Kein "→ X weiter" bei der letzten Etappe
+                            // Fix 1.4: Kein "→ X weiter" bei der letzten Phase
                             final qualifier =
                                 (!isLast &&
                                     suggestion.configurations.length > 1)
                                 ? ' → ${stage.qualifiedParticipantCount ?? 1} weiter'
                                 : '';
                             return Text(
-                              '${stage.name}: ${stage.gameFormat.label} · $participants Spieler$qualifier',
+                              '${stage.name}: ${stage.gameFormat.label} · $participants Teilnehmer$qualifier',
                             );
                           },
                         ),
@@ -151,7 +151,7 @@ class PlanningSuggestionCard extends StatelessWidget {
                             final minLegs = (bo ~/ 2 + 1);
                             final maxLegs = bo;
                             return Text(
-                              '${i + 1}. ${stage.name}: $matchCount Spiele · $minLegs–$maxLegs Legs/Spiel',
+                              '${i + 1}. ${stage.name}: $matchCount Begegnungen · $minLegs–$maxLegs Legs/Begegnung',
                               style: theme.textTheme.bodySmall,
                             );
                           },
@@ -165,8 +165,8 @@ class PlanningSuggestionCard extends StatelessWidget {
 
                     const SizedBox(height: 4),
                     Text(
-                      '${suggestion.variableMatches ? 'ca. ' : ''}${suggestion.totalMatches} Spiele gesamt'
-                      ' · mind. ${suggestion.minimumMatchesPerPlayer} je Spieler'
+                      '${suggestion.variableMatches ? 'ca. ' : ''}${suggestion.totalMatches} Begegnungen gesamt'
+                      ' · mind. ${suggestion.minimumMatchesPerPlayer} je Teilnehmer'
                       ' · ${suggestion.effectiveBoards} Boards',
                     ),
 

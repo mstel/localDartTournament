@@ -69,8 +69,8 @@ void main() {
         ),
       ),
     );
-    final start = tester.getCenter(find.text('Spieler 1'));
-    final end = tester.getCenter(find.text('Spieler 2'));
+    final start = tester.getCenter(find.text('Teilnehmer 1'));
+    final end = tester.getCenter(find.text('Teilnehmer 2'));
     final gesture = await tester.startGesture(start);
     await gesture.moveTo(start + const Offset(30, 0));
     await tester.pump();
@@ -166,9 +166,9 @@ void main() {
       await tester.ensureVisible(find.byTooltip('Team bearbeiten').first);
       await tester.tap(find.byTooltip('Team bearbeiten').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Mit Spieler / Team verbinden'));
+      await tester.tap(find.text('Mit Teilnehmer / Team verbinden'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(SimpleDialogOption, 'Spieler 2'));
+      await tester.tap(find.widgetWithText(SimpleDialogOption, 'Teilnehmer 2'));
       await tester.pumpAndSettle();
       expect(players.length, 2);
       expect(players.first.isTeam, isTrue);

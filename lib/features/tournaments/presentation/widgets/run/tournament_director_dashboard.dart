@@ -483,7 +483,7 @@ class _TournamentDirectorDashboardState
 
     return _box([
       Text(
-        'Partien eines Spielers finden',
+        'Partien eines Teilnehmers finden',
         style: Theme.of(context).textTheme.titleLarge,
       ),
       const SizedBox(height: 8),
@@ -491,7 +491,7 @@ class _TournamentDirectorDashboardState
         key: const ValueKey('director-player-search'),
         controller: _matchSearchController,
         decoration: const InputDecoration(
-          labelText: 'Spielername suchen',
+          labelText: 'Teilnehmername suchen',
           hintText: 'Name eingeben',
           prefixIcon: Icon(Icons.search),
           border: OutlineInputBorder(),
@@ -502,7 +502,7 @@ class _TournamentDirectorDashboardState
       if (query.isNotEmpty) ...[
         const SizedBox(height: 8),
         if (matches.isEmpty)
-          const Text('Keine offene Partie mit diesem Spieler gefunden.')
+          const Text('Keine offene Partie mit diesem Teilnehmer gefunden.')
         else
           for (final entry in matches)
             Builder(
@@ -533,7 +533,7 @@ class _TournamentDirectorDashboardState
                     : canStart
                     ? 'Startbar · ${widget.tournament.boardDisplayName(assignment.board)}'
                     : assignment != null
-                    ? 'Wartet auf ein freies Board oder die Etappenfreigabe'
+                    ? 'Wartet auf ein freies Board oder die Phasenfreigabe'
                     : 'Wartet auf vorherige Ergebnisse';
 
                 return ListTile(
@@ -1171,7 +1171,7 @@ class _TournamentDirectorDashboardState
                 OutlinedButton.icon(
                   onPressed: widget.onReopenPreviousStage,
                   icon: const Icon(Icons.undo),
-                  label: const Text('Vorherige Etappe wieder öffnen'),
+                  label: const Text('Vorherige Phase wieder öffnen'),
                 ),
               if (widget.onResetCurrentStage != null &&
                   widget.canResetCurrentStage)
@@ -1181,7 +1181,7 @@ class _TournamentDirectorDashboardState
                   ),
                   onPressed: widget.onResetCurrentStage,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Etappe zurücksetzen'),
+                  label: const Text('Phase zurücksetzen'),
                 ),
               if (widget.onFinishEarly != null)
                 OutlinedButton.icon(
@@ -1204,7 +1204,7 @@ class _TournamentDirectorDashboardState
                   label: Text(
                     widget.isLastStage
                         ? 'Turnier abschließen'
-                        : 'Etappe abschließen',
+                        : 'Phase abschließen',
                   ),
                 ),
               if (_hasNextKnockoutStage(t))
@@ -1221,7 +1221,7 @@ class _TournamentDirectorDashboardState
                     ),
                   ),
                   icon: const Icon(Icons.account_tree_outlined),
-                  label: const Text('Vorschau nächste Etappe'),
+                  label: const Text('Vorschau nächste Phase'),
                 ),
             ],
           )
@@ -1237,7 +1237,7 @@ class _TournamentDirectorDashboardState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Dashboard',
+                'Übersicht',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
             ],
@@ -1285,7 +1285,7 @@ class _TournamentDirectorDashboardState
         runSpacing: 12,
         children: [
           Text(
-            '$completed/$totalGames Spiele in dieser Etappe · '
+            '$completed/$totalGames Begegnungen in dieser Phase · '
             '$totalCompleted/$totalTournamentGames gesamt',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
@@ -1296,7 +1296,7 @@ class _TournamentDirectorDashboardState
         const Padding(
           padding: EdgeInsets.only(top: 8),
           child: Text(
-            'Spielstart derzeit gesperrt: Etappenfreigabe oder Auslosung abwarten.',
+            'Start derzeit gesperrt: Phasenfreigabe oder Auslosung abwarten.',
           ),
         ),
     ]);
@@ -1418,7 +1418,7 @@ class _TournamentDirectorDashboardState
           completed == active.length &&
           waiting == 0)
         const Text(
-          'Etappe fertig: Buttons oben zum Abschließen oder vorzeitigen Beenden nutzen.',
+          'Phase fertig: Buttons oben zum Abschließen oder vorzeitigen Beenden nutzen.',
         ),
       if (widget.saveError == null &&
           _actionError == null &&
@@ -1453,7 +1453,7 @@ class _TournamentDirectorDashboardState
           _matchQueue(
             'Spielplan',
             directorPlan,
-            emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+            emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
             prioritizedMatches: flowPriority.prioritizedMatches,
             plannedBoards: {
               for (final assignment in upcoming)
@@ -1464,7 +1464,7 @@ class _TournamentDirectorDashboardState
           _matchQueue(
             'Empfohlene Partien',
             nextSix,
-            emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+            emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
             prioritizedMatches: flowPriority.prioritizedMatches,
             plannedBoards: {
               for (final assignment in upcoming)
@@ -1479,7 +1479,7 @@ class _TournamentDirectorDashboardState
               groups: recommendedGroups,
               prioritizedMatches: flowPriority.prioritizedMatches,
               deprioritizedMatches: flowPriority.deprioritizedMatches,
-              emptyMessage: 'Keine weiteren Paarungen in der aktiven Etappe.',
+              emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
               dense: true,
             ),
           ]),
@@ -1488,7 +1488,7 @@ class _TournamentDirectorDashboardState
         _matchQueue(
           'Letzte Ergebnisse',
           latestResults,
-          emptyMessage: 'Noch keine Ergebnisse in dieser Etappe.',
+          emptyMessage: 'Noch keine Ergebnisse in dieser Phase.',
           showResult: true,
           maxColumns: 4,
         ),

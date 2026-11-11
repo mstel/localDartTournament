@@ -14,7 +14,7 @@ void main() {
       nationality: 'Deutschland',
       song: 'Song',
       spotify: 'https://open.spotify.com/track/123',
-      favoritePlayer: 'Spieler',
+      favoritePlayer: 'Teilnehmer',
       favoriteDouble: 'D20',
     );
     await repository.save('a', profile);

@@ -65,7 +65,7 @@ void main() {
       ),
     );
     final profile = await database.createPlayerProfile(
-      displayName: 'Eigener Spieler',
+      displayName: 'Eigener Teilnehmer',
     );
     profileId = profile.id;
     await database.saveMonthlyPlayerPerformances([
@@ -160,7 +160,7 @@ void main() {
       );
       expect(
         (await database.loadPlayerProfiles()).any(
-          (p) => p.displayName == 'Eigener Spieler',
+          (p) => p.displayName == 'Eigener Teilnehmer',
         ),
         isTrue,
       );

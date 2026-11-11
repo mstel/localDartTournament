@@ -116,7 +116,7 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
     if (players.length < 2) return 'Mindestens zwei Namen eingeben.';
     if (_groupCount == null) return 'Bitte 1 bis 32 Gruppen angeben.';
     if (_groupCount! > players.length) {
-      return 'Es darf nicht mehr Gruppen als Spieler geben.';
+      return 'Es darf nicht mehr Gruppen als Teilnehmer geben.';
     }
     final normalized = players.map((name) => name.toLowerCase()).toSet();
     if (normalized.length != players.length) {
@@ -194,7 +194,9 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
         _resetDraw();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gruppen und Spielernamen übernommen.')),
+        const SnackBar(
+          content: Text('Gruppen und Teilnehmernamen übernommen.'),
+        ),
       );
     } on FormatException catch (error) {
       if (mounted) {
@@ -362,7 +364,7 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
             minLines: 3,
             maxLines: 8,
             decoration: const InputDecoration(
-              labelText: 'Spielernamen',
+              labelText: 'Teilnehmernamen',
               hintText: 'Namen mit Kommas trennen',
               helperText:
                   'Kommas, Semikolons oder Zeilen trennen Namen. '
@@ -510,7 +512,7 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
           if (players.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 8),
-              child: Text('Keine Spielerplätze'),
+              child: Text('Keine Teilnehmerplätze'),
             ),
           for (var index = 0; index < players.length; index++)
             Padding(
@@ -527,7 +529,7 @@ class _RandomDrawToolPageState extends State<RandomDrawToolPage>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  players[index] ?? 'Spieler ${index + 1}',
+                  players[index] ?? 'Teilnehmer ${index + 1}',
                   key: ValueKey('draw-slot-$name-$index'),
                 ),
               ),

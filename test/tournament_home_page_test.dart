@@ -131,18 +131,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
-    expect(find.text('Dashboard'), findsWidgets);
-    expect(find.text('Ergebnisse'), findsOneWidget);
+    expect(find.text('Übersicht'), findsWidgets);
+    expect(find.text('Partien & Ergebnisse'), findsOneWidget);
     expect(find.text('Einstellungen'), findsOneWidget);
     expect(find.text('Leitung'), findsOneWidget);
     await tester.tap(find.text('Einstellungen'));
     await tester.pumpAndSettle();
-    expect(find.text('Turnierleiter-Modus aktivieren'), findsOneWidget);
-    expect(find.text('2. Bildschirm (TV-Anzeige)'), findsOneWidget);
-    await tester.tap(find.text('Turnierleiter-Modus aktivieren'));
+    expect(find.text('Spielleiter-Modus aktivieren'), findsOneWidget);
+    expect(find.text('Zweitbildschirm-Modus (TV-Anzeige)'), findsOneWidget);
+    await tester.tap(find.text('Spielleiter-Modus aktivieren'));
     await tester.pumpAndSettle();
     expect(find.text('Boards: 1'), findsOneWidget);
-    expect(find.text('Board-Strategie'), findsNothing);
+    expect(find.text('Board Zuweisung'), findsNothing);
     expect(find.text('Player Insights anzeigen'), findsNothing);
     expect(tester.takeException(), isNull);
   });

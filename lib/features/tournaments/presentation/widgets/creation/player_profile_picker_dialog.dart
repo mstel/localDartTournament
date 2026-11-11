@@ -58,7 +58,8 @@ class PlayerProfilePickerDialogState extends State<PlayerProfilePickerDialog> {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _error = 'Spieler konnte nicht angelegt werden. Verbindung und Berechtigung prüfen.',
+          () => _error =
+              'Teilnehmer konnte nicht angelegt werden. Verbindung und Berechtigung prüfen.',
         );
       }
     } finally {
@@ -92,7 +93,7 @@ class PlayerProfilePickerDialogState extends State<PlayerProfilePickerDialog> {
       child: AlertDialog(
         insetPadding: const EdgeInsets.all(16),
         contentPadding: const EdgeInsets.all(16),
-        title: const Text('Spieler auswählen'),
+        title: const Text('Teilnehmer auswählen'),
         content: SizedBox(
           width: 460,
           child: SingleChildScrollView(
@@ -100,13 +101,13 @@ class PlayerProfilePickerDialogState extends State<PlayerProfilePickerDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.createPlayer != null) ...[
-                  const Text('Neuen lokalen Spieler anlegen.'),
+                  const Text('Neuen lokalen Teilnehmer anlegen.'),
                   TextField(
                     controller: _firstName,
                     enabled: !_busy,
                     maxLength: 80,
                     decoration: const InputDecoration(
-                      labelText: 'Vorname des neuen Spielers',
+                      labelText: 'Vorname des neuen Teilnehmers',
                     ),
                   ),
                   TextField(
@@ -119,7 +120,7 @@ class PlayerProfilePickerDialogState extends State<PlayerProfilePickerDialog> {
                   FilledButton.icon(
                     onPressed: _busy ? null : _create,
                     icon: const Icon(Icons.person_add),
-                    label: const Text('Neuen Spieler anlegen'),
+                    label: const Text('Neuen Teilnehmer anlegen'),
                   ),
                   if (_busy) const LinearProgressIndicator(),
                   if (_error != null) Text(_error!),
@@ -128,7 +129,7 @@ class PlayerProfilePickerDialogState extends State<PlayerProfilePickerDialog> {
                 _profiles.isEmpty
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Text('Noch keine Spielerprofile angelegt.'),
+                        child: Text('Noch keine Teilnehmerprofile angelegt.'),
                       )
                     : ListView.separated(
                         physics: const NeverScrollableScrollPhysics(),

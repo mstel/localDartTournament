@@ -124,7 +124,7 @@ extension PlayerInsightTypeLabel on PlayerInsightType {
     PlayerInsightType.lastLegStanding =>
       'Mindestens $threshold der letzten 5 Matches wurden im entscheidenden letzten Leg gewonnen.',
     PlayerInsightType.underdog =>
-      'Spieler im unteren Drittel der ELO-Rangliste des Teilnehmerfelds haben eine positive Matchbilanz.',
+      'Teilnehmer im unteren Drittel der ELO-Rangliste des Teilnehmerfelds haben eine positive Matchbilanz.',
     PlayerInsightType.titleDefender =>
       'Der Sieger der vorherigen Ausgabe desselben Turniers nimmt wieder teil.',
     PlayerInsightType.eloClimber =>

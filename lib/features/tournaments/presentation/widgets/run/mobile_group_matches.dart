@@ -24,7 +24,9 @@ class MobileGroupMatches extends StatelessWidget {
     final swiss = group.playType == 'swiss';
     final playedCount = finished.where((m) => m.hasPlayers).length;
     final openCount = swiss
-        ? (group.players.length ~/ 2) * group.matches.map((m) => m.round).toSet().length - playedCount
+        ? (group.players.length ~/ 2) *
+                  group.matches.map((m) => m.round).toSet().length -
+              playedCount
         : pending.length;
     Widget tile(GroupMatch match) => MatchResultTile(
       match: match,
@@ -37,10 +39,15 @@ class MobileGroupMatches extends StatelessWidget {
       children: [
         Text(group.name, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 4),
-        Text('$openCount offen · ${swiss ? playedCount : finished.length} abgeschlossen${swiss ? ' · ${finished.where((m) => !m.hasPlayers).length} Freilose' : ''}'),
+        Text(
+          '$openCount offen · ${swiss ? playedCount : finished.length} abgeschlossen${swiss ? ' · ${finished.where((m) => !m.hasPlayers).length} Freilose' : ''}',
+        ),
         const SizedBox(height: 12),
         if (pending.isNotEmpty) ...[
-          Text('Offene Spiele', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Offene Begegnungen',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           RoundMatchList(
             key: ValueKey(group),
@@ -63,13 +70,13 @@ class MobileGroupMatches extends StatelessWidget {
         ] else
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text('Alle Spiele dieser Gruppe sind abgeschlossen.'),
+            child: Text('Alle Begegnungen dieser Gruppe sind abgeschlossen.'),
           ),
         Card(
           child: ExpansionTile(
             key: PageStorageKey('table-${group.name}'),
             maintainState: true,
-            title: const Text('Tabelle & Qualifikation'),
+            title: const Text('Tabelle & Weiterkommen'),
             leading: const Icon(Icons.leaderboard_outlined),
             childrenPadding: const EdgeInsets.all(12),
             children: [
@@ -86,7 +93,7 @@ class MobileGroupMatches extends StatelessWidget {
             child: ExpansionTile(
               key: PageStorageKey('finished-${group.name}'),
               maintainState: true,
-              title: Text('Abgeschlossene Spiele (${finished.length})'),
+              title: Text('Abgeschlossene Begegnungen (${finished.length})'),
               leading: const Icon(Icons.check_circle_outline),
               childrenPadding: const EdgeInsets.all(12),
               children: [for (final match in finished) tile(match)],

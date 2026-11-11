@@ -23,9 +23,11 @@ class GroupGameLimitSetup extends StatelessWidget {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             key: ValueKey('group-game-limit-${i + 1}'),
-            title: Text('${groupLabel(i + 1)}: Spiele pro Spieler begrenzen'),
+            title: Text(
+              '${groupLabel(i + 1)}: Begegnungen pro Teilnehmer begrenzen',
+            ),
             subtitle: const Text(
-              'Feste, ausgewogene Gegnerauswahl. Freilose zählen nicht als Spiel. Bei ungerader Teilnehmerzahl kann ein Spieler ein Spiel weniger erhalten.',
+              'Feste, ausgewogene Gegnerauswahl. Freilose zählen nicht als Begegnung. Bei ungerader Teilnehmerzahl kann ein Teilnehmer eine Begegnung weniger erhalten.',
             ),
             value: limits[i] != null,
             onChanged: (enabled) => onChanged(i, enabled ? 5 : null),
@@ -35,9 +37,7 @@ class GroupGameLimitSetup extends StatelessWidget {
               key: ValueKey('group-game-limit-value-${i + 1}-${limits[i]}'),
               initialValue: limits[i],
               isExpanded: true,
-              decoration: const InputDecoration(
-                  labelText: 'Spielobergrenze',
-              ),
+              decoration: const InputDecoration(labelText: 'Spielobergrenze'),
               items: [
                 for (
                   var limit = 1;
@@ -47,7 +47,10 @@ class GroupGameLimitSetup extends StatelessWidget {
                           : limits[i]!);
                   limit++
                 )
-                  DropdownMenuItem(value: limit, child: Text('$limit Spiele')),
+                  DropdownMenuItem(
+                    value: limit,
+                    child: Text('$limit Begegnungen'),
+                  ),
               ],
               onChanged: (value) => onChanged(i, value),
             ),

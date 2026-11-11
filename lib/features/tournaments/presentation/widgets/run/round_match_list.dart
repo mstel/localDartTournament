@@ -52,7 +52,7 @@ class _RoundMatchListState extends State<RoundMatchList>
       for (var i = 0; i < widget.rounds.length; i++)
         if (!widget.openOnly || widget.rounds[i].any((m) => !m.isResolved)) i,
     ];
-    if (available.isEmpty) return const Text('Keine offenen Spiele.');
+    if (available.isEmpty) return const Text('Keine offenen Begegnungen.');
     final firstReady = available
         .where(
           (i) => widget.rounds[i].any((m) => m.hasPlayers && !m.isResolved),
@@ -73,7 +73,7 @@ class _RoundMatchListState extends State<RoundMatchList>
             initialValue: selected,
             isExpanded: true,
             itemHeight: null,
-            decoration: const InputDecoration(labelText: 'Spielrunde'),
+            decoration: const InputDecoration(labelText: 'Runde'),
             items: [
               for (final i in available)
                 DropdownMenuItem(

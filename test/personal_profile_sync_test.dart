@@ -28,7 +28,7 @@ void main() {
       nationality: 'Deutschland',
       song: 'Song',
       spotify: 'https://open.spotify.com/track/123',
-      favoritePlayer: 'Spieler',
+      favoritePlayer: 'Teilnehmer',
       favoriteDouble: 'D20',
       dartSetup: DartSetup(
         barrel: 'Target',

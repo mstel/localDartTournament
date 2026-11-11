@@ -18,9 +18,9 @@ String formatTournamentSimulationLog(List<TournamentSimulationReport> reports) {
 void _writeScenario(StringBuffer buffer, TournamentSimulationReport report) {
   buffer
     ..writeln('Szenario: ${report.scenarioName}')
-    ..writeln('Spiele gesamt: ${report.totalMatches}')
+    ..writeln('Begegnungen gesamt: ${report.totalMatches}')
     ..writeln(
-      'Finale Weiterkommende: '
+      'Finale Teilnehmer: '
       '${report.finalPlayers.map((player) => player.name).join(', ')}',
     )
     ..writeln('');
@@ -40,13 +40,13 @@ void _writeStage(
   SimulationStageReport stage,
 ) {
   buffer.writeln(
-    'Etappe $stageNumber: ${stage.name} '
+    'Phase $stageNumber: ${stage.name} '
     '(${stage.inputCount} rein -> ${stage.outputCount} weiter, '
-    '${stage.matchCount} Spiele)',
+    '${stage.matchCount} Begegnungen)',
   );
 
   if (stage.matches.isEmpty) {
-    buffer.writeln('  Keine Spiele in dieser Etappe.');
+    buffer.writeln('  Keine Begegnungen in dieser Phase.');
     buffer.writeln('');
     return;
   }
@@ -65,7 +65,9 @@ void _writeStage(
 
     final orderedRounds = rounds.keys.toList()..sort();
     for (final round in orderedRounds) {
-      buffer.writeln('    ${rounds[round]!.first.isRoundBased ? _roundLabel(round) : knockoutMatchName(rounds[round]!.first.match, brackets[bracket]!.map((r) => r.match))}');
+      buffer.writeln(
+        '    ${rounds[round]!.first.isRoundBased ? _roundLabel(round) : knockoutMatchName(rounds[round]!.first.match, brackets[bracket]!.map((r) => r.match))}',
+      );
       for (final record in rounds[round]!) {
         buffer.writeln('      ${_recordLine(record)}');
       }
@@ -91,8 +93,8 @@ String _recordLine(SimulationMatchRecord record) {
   final score = match.hasResult
       ? match.scoreLabel
       : match.winner != null
-          ? 'Freilos'
-          : 'offen';
+      ? 'Freilos'
+      : 'offen';
   final winner = match.winner?.name;
   final winnerText = winner == null ? '' : ' -> Sieger: $winner';
   final label = match.label == null ? '' : ' [${match.label}]';

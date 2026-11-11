@@ -10,8 +10,8 @@ import 'package:dart_tournament_manager/tournament_workspace.dart'
 class _HomeOverviewSource implements HomeOverviewDataSource {
   @override
   Future<List<CreatedTournament>> loadTournaments() async {
-    final home = TournamentPlayer(name: 'Spieler A', isGenerated: false);
-    final away = TournamentPlayer(name: 'Spieler B', isGenerated: false);
+    final home = TournamentPlayer(name: 'Teilnehmer A', isGenerated: false);
+    final away = TournamentPlayer(name: 'Teilnehmer B', isGenerated: false);
     return [
       CreatedTournament(
         id: 'active',
@@ -88,7 +88,7 @@ void main() {
         for (final label in [
           'Turniere',
           'Freundschafts- & Ligaspiele',
-          'Spieler',
+          'Teilnehmer',
           'Statistiken',
           'Ranglisten',
         ]) {

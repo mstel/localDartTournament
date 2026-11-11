@@ -136,7 +136,7 @@ class _TournamentRunSettingsPanelState
           Text('Tonmodus', style: Theme.of(context).textTheme.titleMedium),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Sprachassistenz aktivieren'),
+            title: const Text('Sprachausgabe aktivieren'),
             subtitle: const Text(
               'Spricht nach einem eingetragenen Ergebnis die nächste Partie für dieses Board an.',
             ),
@@ -152,7 +152,7 @@ class _TournamentRunSettingsPanelState
               initialValue: settings.announcementNameFormat,
               isExpanded: true,
               decoration: const InputDecoration(
-                labelText: 'Namensformat',
+                labelText: 'Namenswiedergabe',
                 border: OutlineInputBorder(),
               ),
               items: const [
@@ -162,9 +162,7 @@ class _TournamentRunSettingsPanelState
                 ),
                 DropdownMenuItem(
                   value: AnnouncementNameFormat.firstNameLastInitial,
-                  child: Text(
-                    'Vorname + ersten Buchstaben des Nachnamens aussprechen',
-                  ),
+                  child: Text('Vorname + Nachnameninitial'),
                 ),
               ],
               onChanged: _saving
@@ -177,7 +175,7 @@ class _TournamentRunSettingsPanelState
             ),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Spitzname aussprechen, wenn vorhanden'),
+              title: const Text('Spitzname bevorzugen'),
               value: settings.speakNicknameWhenAvailable,
               onChanged: _saving
                   ? null
@@ -187,9 +185,9 @@ class _TournamentRunSettingsPanelState
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Alternative Empfehlungen vorlesen'),
+              title: const Text('Weitere Vorschläge vorlesen'),
               subtitle: const Text(
-                'Liest die nächsten sichtbaren Empfehlungen in ihrer angezeigten Reihenfolge als „Alternativ“ vor.',
+                'Liest die nächsten sichtbaren Vorschläge in ihrer angezeigten Reihenfolge vor.',
               ),
               value: settings.readAlternativeRecommendations,
               onChanged: _saving
@@ -211,7 +209,7 @@ class _TournamentRunSettingsPanelState
                     enabled: !_saving,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: 'Anzahl alternativer Begegnungen',
+                      labelText: 'Anzahl weiterer Vorschläge',
                       helperText: 'Zwischen 1 und 3',
                       border: OutlineInputBorder(),
                     ),
@@ -225,12 +223,12 @@ class _TournamentRunSettingsPanelState
         ],
         if (widget.showPrioritySettings) ...[
           Text(
-            'Prioritätshinweise',
+            'Spielplan Priorisierung',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 6),
           const Text(
-            'Zeigt offene Partien bevorzugt an, wenn Spieler oder Gruppen im Spielplan zurückliegen.',
+            'Zeigt offene Partien bevorzugt an, wenn Teilnehmer oder Gruppen im Spielplan zurückliegen.',
           ),
           const SizedBox(height: 12),
           Form(
@@ -244,7 +242,7 @@ class _TournamentRunSettingsPanelState
                   enabled: !_saving,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Spielerrückstand ab',
+                    labelText: 'Rückstand ab',
                     suffixText: 'Partien',
                     border: OutlineInputBorder(),
                   ),
@@ -275,7 +273,7 @@ class _TournamentRunSettingsPanelState
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Gruppenfortschritt prozentual vergleichen'),
+            title: const Text('Gruppenfortschritt relativ vergleichen'),
             subtitle: const Text(
               'Vergleicht den Anteil gespielter Partien und rechnet den Abstand auf die mögliche Partienzahl der größten Gruppe um.',
             ),
@@ -289,13 +287,10 @@ class _TournamentRunSettingsPanelState
         ],
         if (widget.showHintAudioSettings) ...[
           const Divider(height: 32),
-          Text(
-            'Akustische Hinweise',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('Signalton', style: Theme.of(context).textTheme.titleMedium),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Hinweise akustisch ankündigen'),
+            title: const Text('Signalton bei neuen Hinweisen'),
             subtitle: const Text(
               'Spielt bei einem neu angezeigten Hinweis einen kurzen, dezenten Signalton.',
             ),
@@ -307,9 +302,7 @@ class _TournamentRunSettingsPanelState
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'Bei Board-Leerstand regelmäßig ein Signal abspielen',
-            ),
+            title: const Text('Freie Boards akustisch signalisieren'),
             subtitle: const Text(
               'Nur im Reiter „Leitung“, wenn ein Board frei ist und sofort spielbare Partien offen sind.',
             ),

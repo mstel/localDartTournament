@@ -37,7 +37,7 @@ void main() {
       );
 
       expect(
-        tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
         isNull,
       );
       expect(
@@ -61,7 +61,7 @@ void main() {
     );
 
     expect(
-      tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNotNull,
     );
   });

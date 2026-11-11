@@ -22,8 +22,8 @@ void main() {
     );
 
     expect(find.text('Statistik'), findsNothing);
-    expect(find.text('Dashboard'), findsOneWidget);
-    expect(find.text('Ergebnisse'), findsOneWidget);
+    expect(find.text('Übersicht'), findsOneWidget);
+    expect(find.text('Partien & Ergebnisse'), findsOneWidget);
     expect(find.text('Einstellungen'), findsOneWidget);
     expect(find.text('Leitung'), findsNothing);
   });

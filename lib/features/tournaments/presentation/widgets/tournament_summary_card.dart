@@ -170,7 +170,7 @@ class TournamentSummaryCard extends StatelessWidget {
               Text(
                 league != null
                     ? '${league.homePoints}:${league.awayPoints} Mannschaftspunkte'
-                    : '${tournament.players.length} Spieler · ${tournament.stages.length} Etappen',
+                    : '${tournament.players.length} Teilnehmer · ${tournament.stages.length} Phasen',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),

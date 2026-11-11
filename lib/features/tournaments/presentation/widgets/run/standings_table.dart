@@ -136,7 +136,7 @@ class _StandingsTableState extends State<StandingsTable> {
                   : null,
               columns: [
                 const DataColumn(numeric: true, label: Text('#')),
-                const DataColumn(label: Text('Spieler')),
+                const DataColumn(label: Text('Teilnehmer')),
                 const DataColumn(numeric: true, label: Text('Sp')),
                 const DataColumn(numeric: true, label: Text('S')),
                 const DataColumn(numeric: true, label: Text('U')),

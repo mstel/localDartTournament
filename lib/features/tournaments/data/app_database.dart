@@ -104,7 +104,7 @@ class LocalAppDatabase {
       }
       if (!keys.add('${record.playerProfileId}|${record.month}')) {
         throw ArgumentError(
-          'Spieler und Monat dürfen im Import nur einmal vorkommen.',
+          'Teilnehmer und Monat dürfen im Import nur einmal vorkommen.',
         );
       }
     }
@@ -121,7 +121,7 @@ class LocalAppDatabase {
             );
             if (profile.isEmpty || profile.single['is_active'] != 1) {
               throw StateError(
-                'Ein zugeordneter Spieler ist nicht mehr aktiv.',
+                'Ein zugeordneter Teilnehmer ist nicht mehr aktiv.',
               );
             }
             database.execute(

@@ -78,7 +78,7 @@ void main() {
   test('cancelled start with legacy player signature allows swapping', () {
     final stage = fixture();
     final match = stage.groups.first.matches.first;
-    match.startedPlayers = 'Spieler 1\u0000Spieler 2';
+    match.startedPlayers = 'Teilnehmer 1\u0000Teilnehmer 2';
     expect(GroupPositionEditor.canEdit(stage), isTrue);
     expect(
       GroupPositionEditor.swap(
@@ -108,7 +108,7 @@ void main() {
     final runningMatch = runningStage.groups.first.matches.first
       ..startedAt = DateTime(2026)
       ..boardNumber = 1
-      ..startedPlayers = 'Spieler 1\u0000Spieler 2';
+      ..startedPlayers = 'Teilnehmer 1\u0000Teilnehmer 2';
     expect(runningMatch.hasResult, isFalse);
     expect(GroupPositionEditor.canEdit(runningStage), isFalse);
 

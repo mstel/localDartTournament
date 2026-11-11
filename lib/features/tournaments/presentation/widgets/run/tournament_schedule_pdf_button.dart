@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 
 import '../../../../league/domain/league_match.dart';
 import '../../../domain/tournament_models.dart';
+import '../../utils/match_display_label.dart';
 
 class TournamentSchedulePdfButton extends StatelessWidget {
   const TournamentSchedulePdfButton({super.key, required this.tournament});
@@ -25,16 +26,43 @@ class TournamentSchedulePdfButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = OutlinedButton.icon(
-      onPressed: _isUnsupported ? null : () => _print(context),
-      icon: const Icon(Icons.picture_as_pdf_outlined),
-      label: const Text('Spielplan als .PDF generieren/drucken'),
-    );
     return Tooltip(
       message: _isUnsupported
           ? 'Druck / Exportfunktionen des Spielplans für diesen Modus deaktiviert'
           : 'Spielplan mit offenen Ergebnisfeldern als PDF öffnen',
-      child: button,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.picture_as_pdf_outlined),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Spielplan Exportieren',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _isUnsupported ? null : () => _print(context),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('Spielplan als .PDF generieren/drucken'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -180,8 +208,10 @@ class TournamentSchedulePdfButton extends StatelessWidget {
                   )
                     _matchRow(
                       stage.placementMatches[index],
-                      stage.placementMatches[index].label ??
-                          'Spiel ${index + 1}',
+                      matchDisplayLabel(
+                        stage.placementMatches[index].label,
+                        fallback: 'Begegnung ${index + 1}',
+                      ),
                     ),
                 ],
                 [2, 4, 4, 2],
@@ -272,14 +302,14 @@ class TournamentSchedulePdfButton extends StatelessWidget {
     final matchIndex = slot ~/ span;
     if (matchIndex >= rounds[round].length) return '';
     final match = rounds[round][matchIndex];
-    return '${match.label ?? 'Spiel ${match.round}'}\n'
+    return '${matchDisplayLabel(match.label, fallback: 'Begegnung ${match.round}')}\n'
         '${match.homePlayer?.name ?? '________________'}\n'
         'vs. ${match.awayPlayer?.name ?? '________________'}\n'
         'Ergebnis: ${match.hasResult ? '${match.homeScore ?? 0} : ${match.awayScore ?? 0}' : '__________'}';
   }
 
   List<String> _matchRow(GroupMatch match, String label) => [
-    label,
+    matchDisplayLabel(label, fallback: ''),
     match.homePlayer?.name ?? '________________',
     match.awayPlayer?.name ?? '________________',
     match.hasResult

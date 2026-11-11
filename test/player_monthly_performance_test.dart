@@ -21,7 +21,7 @@ void main() {
         imported: const [
           MonthlyPlayerPerformance(
             playerProfileId: 'player-1',
-            sourcePlayerName: 'Spieler 1',
+            sourcePlayerName: 'Teilnehmer 1',
             month: '2025-10',
             threeDartAverage: 90,
             firstNineAverage: 55,
@@ -30,7 +30,7 @@ void main() {
           ),
           MonthlyPlayerPerformance(
             playerProfileId: 'player-1',
-            sourcePlayerName: 'Spieler 1',
+            sourcePlayerName: 'Teilnehmer 1',
             month: '2025-09',
             threeDartAverage: 70,
             firstNineAverage: 40,

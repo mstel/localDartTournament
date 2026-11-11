@@ -261,7 +261,7 @@ class LeagueMatch {
         !active.contains(outPlayerIndex) ||
         !reserves.contains(inPlayerIndex) ||
         active.contains(inPlayerIndex)) {
-      throw const FormatException('Ungültiger Spielerwechsel.');
+      throw const FormatException('Ungültiger Teilnehmerwechsel.');
     }
     if (substitutionsRemaining(teamSide) < 1) {
       throw const FormatException('Keine Auswechselungen mehr verfügbar.');
@@ -272,7 +272,7 @@ class LeagueMatch {
     );
     if (alreadySubstitutedOut && !allowReentry) {
       throw const FormatException(
-        'Bereits ausgewechselte Spieler dürfen nicht erneut eingewechselt werden.',
+        'Bereits ausgewechselte Teilnehmer dürfen nicht erneut eingewechselt werden.',
       );
     }
 
@@ -330,7 +330,7 @@ class LeagueMatch {
         homePlayers.length > 8 ||
         awayPlayers.length > 8) {
       throw const FormatException(
-        'Traditionelle Mannschaften benötigen 4 bis 8 Spieler.',
+        'Traditionelle Mannschaften benötigen 4 bis 8 Teilnehmer.',
       );
     }
     final match = LeagueMatch(
@@ -379,12 +379,12 @@ class LeagueMatch {
         awayPlayers.length < starters ||
         starters < 1) {
       throw const FormatException(
-        'Beide Teams benötigen mindestens so viele Spieler wie Stammplätze.',
+        'Beide Teams benötigen mindestens so viele Teilnehmer wie Stammplätze.',
       );
     }
     if (singlesPerPlayer < 1) {
       throw const FormatException(
-        'Jeder Spieler muss mindestens ein Einzel spielen.',
+        'Jeder Teilnehmer muss mindestens ein Einzel spielen.',
       );
     }
     if (maxReservePlayers < 0 ||
@@ -396,7 +396,7 @@ class LeagueMatch {
     }
     if (doublesCount < 0 || doublesCount > starters ~/ 2) {
       throw const FormatException(
-        'Die Anzahl der Doppel darf höchstens der Hälfte der Spieler je Team entsprechen.',
+        'Die Anzahl der Doppel darf höchstens der Hälfte der Teilnehmer je Team entsprechen.',
       );
     }
     final games = <LeagueGame>[];
@@ -443,7 +443,7 @@ class LeagueMatch {
         throw FormatException(
           variant == LeagueMatchVariant.traditional
               ? 'Je Mannschaft werden mindestens 4 Stammspieler benötigt.'
-              : 'Spielernamen dürfen nicht leer sein.',
+              : 'Teilnehmernamen dürfen nicht leer sein.',
         );
       }
     }
@@ -494,7 +494,7 @@ class LeagueMatch {
                       .length !=
                   singlesPerPlayer) {
             throw const FormatException(
-              'Die Einzel müssen gleichmäßig auf alle Spieler verteilt sein.',
+              'Die Einzel müssen gleichmäßig auf alle Teilnehmer verteilt sein.',
             );
           }
         }
@@ -528,7 +528,9 @@ class LeagueMatch {
           event.outPlayerIndex >= roster.length ||
           (event.inPlayerIndex < starterCount && !isReentry) ||
           event.inPlayerIndex >= roster.length) {
-        throw const FormatException('Ungültiger gespeicherter Spielerwechsel.');
+        throw const FormatException(
+          'Ungültiger gespeicherter Teilnehmerwechsel.',
+        );
       }
     }
   }

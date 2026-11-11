@@ -304,7 +304,7 @@ class _RandomDrawDialogState extends State<_RandomDrawDialog>
                       ),
                     if (_drawnSeeds.isEmpty)
                       Text(
-                        'Noch kein Spieler gezogen.',
+                        'Noch kein Teilnehmer gezogen.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                   ],
@@ -649,7 +649,7 @@ class _DrawWheelPainter extends CustomPainter {
       );
       final name = seed - 1 < labels.length
           ? labels[seed - 1]
-          : 'Spieler $seed';
+          : 'Teilnehmer $seed';
       final numberPainter = TextPainter(
         text: TextSpan(
           text: name,

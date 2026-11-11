@@ -9,7 +9,7 @@ void main() {
     for (var index = 0; index < count; index++)
       TournamentPlayer(
         profileId: 'player-$index',
-        name: 'Spieler $index',
+        name: 'Teilnehmer $index',
         isGenerated: false,
       ),
   ];

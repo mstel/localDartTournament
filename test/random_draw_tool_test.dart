@@ -125,7 +125,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Anzahl der Gruppen'), findsOneWidget);
-      expect(find.text('Spielernamen'), findsOneWidget);
+      expect(find.text('Teilnehmernamen'), findsOneWidget);
       expect(
         find.byKey(
           ValueKey(
@@ -152,14 +152,14 @@ void main() {
       '8',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'Spielernamen'),
-      List.generate(32, (index) => 'Spieler ${index + 1}').join(', '),
+      find.widgetWithText(TextField, 'Teilnehmernamen'),
+      List.generate(32, (index) => 'Teilnehmer ${index + 1}').join(', '),
     );
     await tester.pump();
 
     expect(find.text('Gruppe H'), findsOneWidget);
     expect(find.byKey(const ValueKey('draw-slot-Gruppe A-3')), findsOneWidget);
-    expect(find.text('Spieler 4'), findsWidgets);
+    expect(find.text('Teilnehmer 4'), findsWidgets);
     expect(find.byType(DropdownButtonFormField<int>), findsNothing);
 
     final drawnOrder = <String>[];
@@ -181,7 +181,7 @@ void main() {
         if (index == 0) {
           expect(
             find.bySemanticsLabel(
-              'Im Rad: ${List.generate(32, (playerIndex) => 'Spieler ${playerIndex + 1}').where((name) => name != selected).join(', ')}',
+              'Im Rad: ${List.generate(32, (playerIndex) => 'Teilnehmer ${playerIndex + 1}').where((name) => name != selected).join(', ')}',
             ),
             findsOneWidget,
           );
@@ -191,7 +191,7 @@ void main() {
 
     expect(
       tester
-          .widget<TextField>(find.widgetWithText(TextField, 'Spielernamen'))
+          .widget<TextField>(find.widgetWithText(TextField, 'Teilnehmernamen'))
           .enabled,
       isFalse,
     );
@@ -271,7 +271,7 @@ void main() {
       find.widgetWithText(TextField, 'Anzahl der Gruppen'),
     );
     final players = tester.widget<TextField>(
-      find.widgetWithText(TextField, 'Spielernamen'),
+      find.widgetWithText(TextField, 'Teilnehmernamen'),
     );
     expect(groupCount.controller!.text, '2');
     expect(players.controller!.text, 'Ada\nBert\nCem\nDora');

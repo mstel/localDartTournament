@@ -35,7 +35,7 @@ class _YearReviewDatabase extends LocalAppDatabase {
   Future<List<PlayerProfile>> loadPlayerProfiles() async => [
     PlayerProfile(
       id: 'player',
-      displayName: 'Robin Spieler',
+      displayName: 'Robin Teilnehmer',
       country: '',
       city: '',
       dartsSetupJson: '',
@@ -44,7 +44,7 @@ class _YearReviewDatabase extends LocalAppDatabase {
     ),
     PlayerProfile(
       id: 'empty-player',
-      displayName: 'Spieler ohne Messwerte',
+      displayName: 'Teilnehmer ohne Messwerte',
       country: '',
       city: '',
       dartsSetupJson: '',
@@ -53,7 +53,7 @@ class _YearReviewDatabase extends LocalAppDatabase {
     ),
     PlayerProfile(
       id: 'monthly-player',
-      displayName: 'Spieler mit Vereinswerten',
+      displayName: 'Teilnehmer mit Vereinswerten',
       country: '',
       city: '',
       dartsSetupJson: '',
@@ -113,17 +113,17 @@ class _YearReviewStorage extends TournamentStorage {
 CreatedTournament _convertedChallongeWithBestPerformance() {
   final player = TournamentPlayer(
     profileId: 'player',
-    name: 'Robin Spieler',
+    name: 'Robin Teilnehmer',
     isGenerated: false,
   );
   final opponent = TournamentPlayer(
     profileId: 'empty-player',
-    name: 'Spieler ohne Messwerte',
+    name: 'Teilnehmer ohne Messwerte',
     isGenerated: false,
   );
   const performance = {
     'type': 'score180',
-    'playerName': 'Robin Spieler',
+    'playerName': 'Robin Teilnehmer',
     'playerProfileId': 'player',
     'value': 180,
   };
@@ -137,7 +137,7 @@ CreatedTournament _convertedChallongeWithBestPerformance() {
     bestPerformances: const [
       BestPerformance(
         type: BestPerformanceType.score180,
-        playerName: 'Robin Spieler',
+        playerName: 'Robin Teilnehmer',
         playerProfileId: 'player',
         value: 180,
       ),
@@ -172,10 +172,10 @@ CreatedTournament _convertedChallongeWithBestPerformance() {
       url: 'https://challonge.com/example',
       mode: 'round robin',
       participants: const [
-        {'id': '1', 'name': 'Robin Spieler', 'profileId': 'player'},
+        {'id': '1', 'name': 'Robin Teilnehmer', 'profileId': 'player'},
         {
           'id': '2',
-          'name': 'Spieler ohne Messwerte',
+          'name': 'Teilnehmer ohne Messwerte',
           'profileId': 'empty-player',
         },
       ],
@@ -261,7 +261,7 @@ void main() {
       importedPerformance: const [
         MonthlyPlayerPerformance(
           playerProfileId: 'monthly-player',
-          sourcePlayerName: 'Spieler mit Vereinswerten',
+          sourcePlayerName: 'Teilnehmer mit Vereinswerten',
           month: '2026-01',
           threeDartAverage: 100,
           firstNineAverage: 60,
@@ -314,14 +314,14 @@ void main() {
     expect(find.text('Höchstes Scoring'), findsOneWidget);
     expect(find.text('Höchste Checkout-Quote'), findsOneWidget);
     expect(
-      find.textContaining('Spieler mit Vereinswerten (100.0)'),
+      find.textContaining('Teilnehmer mit Vereinswerten (100.0)'),
       findsOneWidget,
     );
     expect(
-      find.textContaining('Spieler mit Vereinswerten (60.0)'),
+      find.textContaining('Teilnehmer mit Vereinswerten (60.0)'),
       findsOneWidget,
     );
-    expect(find.textContaining('Robin Spieler (66.7 %)'), findsOneWidget);
+    expect(find.textContaining('Robin Teilnehmer (66.7 %)'), findsOneWidget);
     expect(find.text('Gesamt-Performance pro Monat'), findsOneWidget);
     expect(find.byType(PlayerPerformanceTrendChart), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -334,7 +334,7 @@ void main() {
       importedPerformance: const [
         MonthlyPlayerPerformance(
           playerProfileId: 'player',
-          sourcePlayerName: 'Robin Spieler',
+          sourcePlayerName: 'Robin Teilnehmer',
           month: '2025-03',
           threeDartAverage: 100,
           firstNineAverage: 63.5,
@@ -343,7 +343,7 @@ void main() {
         ),
         MonthlyPlayerPerformance(
           playerProfileId: 'player',
-          sourcePlayerName: 'Robin Spieler',
+          sourcePlayerName: 'Robin Teilnehmer',
           month: '2024-11',
           threeDartAverage: 130,
           firstNineAverage: 105,
@@ -390,11 +390,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Nach Spieler'));
+    await tester.tap(find.text('Nach Teilnehmer'));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(DropdownButtonFormField<PlayerProfile>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Robin Spieler').last);
+    await tester.tap(find.text('Robin Teilnehmer').last);
     await tester.pumpAndSettle();
 
     final yearField = find.byType(DropdownButtonFormField<int?>);
@@ -421,7 +421,7 @@ void main() {
     final playerField = find.byType(DropdownButtonFormField<PlayerProfile>);
     await tester.tap(playerField);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Spieler ohne Messwerte').last);
+    await tester.tap(find.text('Teilnehmer ohne Messwerte').last);
     await tester.pumpAndSettle();
     expect(find.text('–'), findsNWidgets(3));
     expect(tester.takeException(), isNull);
@@ -441,7 +441,7 @@ void main() {
             2026,
           );
 
-      final player = review.players['Robin Spieler']!;
+      final player = review.players['Robin Teilnehmer']!;
       expect(player.bestPerformances, 1);
       expect(player.scores180, 1);
       expect(review.totalBestPerformances, 1);

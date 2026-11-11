@@ -12,20 +12,20 @@ class PlanningMatchBreakdownView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'So entstehen die ${breakdown.total} Spiele',
+          'So entstehen die ${breakdown.total} Begegnungen',
           style: Theme.of(context).textTheme.titleSmall,
         ),
         if (breakdown.groupSizes.isNotEmpty)
           const Text('Jeder gegen jeden: n × (n − 1) ÷ 2'),
         for (var index = 0; index < breakdown.groupSizes.length; index++)
           Text(
-            'Gruppe ${index + 1}: ${breakdown.groupSizes[index]} Spieler → '
-            '${breakdown.groupSizes[index]} × ${breakdown.groupSizes[index] - 1} ÷ 2 = ${breakdown.groupMatches[index]} Spiele',
+            'Gruppe ${index + 1}: ${breakdown.groupSizes[index]} Teilnehmer → '
+            '${breakdown.groupSizes[index]} × ${breakdown.groupSizes[index] - 1} ÷ 2 = ${breakdown.groupMatches[index]} Begegnungen',
           ),
         if (breakdown.knockoutParticipants > 1) ...[
           Text(
-            'K.-o.: ${breakdown.knockoutParticipants} ${breakdown.groupSizes.isEmpty ? 'Teilnehmer' : 'Qualifikanten (bis zu ${breakdown.qualifiersPerGroup} je Gruppe)'} → '
-            '${breakdown.knockoutParticipants} − 1 = ${breakdown.knockoutMatches} Spiele',
+            'K.-o.: ${breakdown.knockoutParticipants} ${breakdown.groupSizes.isEmpty ? 'Teilnehmer' : 'Teilnehmer (bis zu ${breakdown.qualifiersPerGroup} je Gruppe)'} → '
+            '${breakdown.knockoutParticipants} − 1 = ${breakdown.knockoutMatches} Begegnungen',
           ),
           if (breakdown.byes > 0)
             Text(
@@ -33,10 +33,10 @@ class PlanningMatchBreakdownView extends StatelessWidget {
             ),
         ],
         Text(
-          'Gesamt: ${breakdown.groupTotal} Gruppenspiele + ${breakdown.knockoutMatches} K.-o.-Spiele = ${breakdown.total} Spiele',
+          'Gesamt: ${breakdown.groupTotal} Gruppenspiele + ${breakdown.knockoutMatches} K.-o.-Begegnungen = ${breakdown.total} Begegnungen',
         ),
         const Text(
-          'Spiele sind Matches; die Legs innerhalb eines Matches werden hier nicht einzeln gezählt.',
+          'Begegnungen sind Matches; die Legs innerhalb eines Matches werden hier nicht einzeln gezählt.',
         ),
       ],
     ),

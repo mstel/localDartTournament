@@ -61,7 +61,7 @@ class StageResultsSplitView extends StatefulWidget {
 }
 
 class _StageResultsSplitViewState extends State<StageResultsSplitView> {
-  // Default is "Offene Spiele" (always visible on initial load, finished and all matches hidden by default)
+  // Default is "Offene Begegnungen" (always visible on initial load, finished and all matches hidden by default)
   late MatchCategoryFilter _filter =
       widget.initialFilter ?? MatchCategoryFilter.open;
   TournamentPlayer? _filteredPlayer;
@@ -115,15 +115,17 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   bool _matchesPlayerFilter(GroupMatch match) {
     final player = _filteredPlayer;
     if (player == null) return true;
+    final selectedKeys = player.individuals.map(_playerKey).toSet();
+    bool includesSelectedPlayer(TournamentPlayer participant) => participant
+        .individuals
+        .any((individual) => selectedKeys.contains(_playerKey(individual)));
+
     if (match.isKratzer) {
-      return match.players.any(
-        (participant) => _playerKey(participant) == _playerKey(player),
-      );
+      return match.players.any(includesSelectedPlayer);
     }
-    return match.homePlayer != null &&
-            _playerKey(match.homePlayer!) == _playerKey(player) ||
-        match.awayPlayer != null &&
-            _playerKey(match.awayPlayer!) == _playerKey(player);
+    return (match.homePlayer != null &&
+            includesSelectedPlayer(match.homePlayer!)) ||
+        (match.awayPlayer != null && includesSelectedPlayer(match.awayPlayer!));
   }
 
   @override
@@ -223,14 +225,14 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Category Filter Segmented Button: "Offene Spiele" (default), "Bereits gespielt", "Alle Spiele"
+        // Category Filter Segmented Button: "Offene Begegnungen" (default), "Bereits gespielt", "Alle Begegnungen"
         SizedBox(
           width: double.infinity,
           child: SegmentedButton<MatchCategoryFilter>(
             segments: [
               ButtonSegment<MatchCategoryFilter>(
                 value: MatchCategoryFilter.open,
-                label: Text('Offene Spiele ($openCount)'),
+                label: Text('Offene Begegnungen ($openCount)'),
                 icon: const Icon(Icons.play_circle_outline, size: 18),
               ),
               ButtonSegment<MatchCategoryFilter>(
@@ -240,7 +242,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               ),
               ButtonSegment<MatchCategoryFilter>(
                 value: MatchCategoryFilter.all,
-                label: Text('Alle Spiele ($totalCount)'),
+                label: Text('Alle Begegnungen ($totalCount)'),
                 icon: const Icon(Icons.list_alt, size: 18),
               ),
             ],
@@ -274,7 +276,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               children: [
                 Chip(
                   avatar: const Icon(Icons.filter_alt_outlined, size: 18),
-                  label: Text('Spiele von ${player.name}'),
+                  label: Text('Begegnungen von ${player.name}'),
                 ),
                 TextButton.icon(
                   onPressed: () => setState(() => _filteredPlayer = null),
@@ -437,12 +439,12 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               child: Center(
                 child: Text(
                   _filteredPlayer != null
-                      ? 'Keine Spiele von ${_filteredPlayer!.name} in dieser Ansicht.'
+                      ? 'Keine Begegnungen von ${_filteredPlayer!.name} in dieser Ansicht.'
                       : _filter == MatchCategoryFilter.open
-                      ? 'Alle Spiele in ${group.name} sind abgeschlossen.'
+                      ? 'Alle Begegnungen in ${group.name} sind abgeschlossen.'
                       : _filter == MatchCategoryFilter.finished
                       ? 'Noch keine gespielten Partien in ${group.name}.'
-                      : 'Keine Spiele vorhanden.',
+                      : 'Keine Begegnungen vorhanden.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -595,7 +597,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                 segments: [
                   ButtonSegment<MatchCategoryFilter>(
                     value: MatchCategoryFilter.open,
-                    label: Text('Offene Spiele ($openCount)'),
+                    label: Text('Offene Begegnungen ($openCount)'),
                     icon: const Icon(Icons.play_circle_outline, size: 18),
                   ),
                   ButtonSegment<MatchCategoryFilter>(
@@ -605,7 +607,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                   ),
                   ButtonSegment<MatchCategoryFilter>(
                     value: MatchCategoryFilter.all,
-                    label: Text('Alle Spiele ($totalCount)'),
+                    label: Text('Alle Begegnungen ($totalCount)'),
                     icon: const Icon(Icons.list_alt, size: 18),
                   ),
                 ],
@@ -731,7 +733,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             appBar: AppBar(
               title: Text('${stage.name} · Turnierbaum'),
               leading: IconButton(
-                tooltip: 'Zurück zu Ergebnisse',
+                tooltip: 'Zurück zu Partien & Ergebnisse',
                 onPressed: () => Navigator.of(context).pop(),
                 icon: const Icon(Icons.arrow_back),
               ),
@@ -821,10 +823,10 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           child: Center(
             child: Text(
               _filter == MatchCategoryFilter.open
-                  ? 'Keine offenen K.-o.-Spiele.'
+                  ? 'Keine offenen K.-o.-Begegnungen.'
                   : _filter == MatchCategoryFilter.finished
-                  ? 'Noch keine K.-o.-Spiele beendet.'
-                  : 'Keine K.-o.-Spiele vorhanden.',
+                  ? 'Noch keine K.-o.-Begegnungen beendet.'
+                  : 'Keine K.-o.-Begegnungen vorhanden.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

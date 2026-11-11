@@ -13,7 +13,7 @@ void main() {
       tournament: tournament,
     );
 
-    expect(projected.single.name, 'Qualifikant 1 (noch offen)');
+    expect(projected.single.name, 'Teilnehmer 1 (noch offen)');
   });
 
   test('labels a projected but catchable leader as provisional', () {
@@ -30,7 +30,7 @@ void main() {
       tournament: tournament,
     );
 
-    expect(projected.single.name, 'Spieler 1 · vorläufig');
+    expect(projected.single.name, 'Teilnehmer 1 · vorläufig');
   });
 
   test('labels an uncatchable group leader as set before the group ends', () {
@@ -49,7 +49,7 @@ void main() {
       tournament: tournament,
     );
 
-    expect(projected.single.name, 'Spieler 1 · gesetzt');
+    expect(projected.single.name, 'Teilnehmer 1 · gesetzt');
   });
 }
 
@@ -58,7 +58,7 @@ CreatedTournament _tournament() {
     for (var index = 1; index <= 4; index++)
       TournamentPlayer(
         profileId: 'player-$index',
-        name: 'Spieler $index',
+        name: 'Teilnehmer $index',
         isGenerated: false,
       ),
   ];

@@ -35,7 +35,7 @@ class SwissEngine {
         rounds < 1 ||
         rounds > maximumRounds(players.length)) {
       throw ArgumentError(
-        'Swiss benötigt mindestens 3 Spieler und höchstens ${maximumRounds(players.length)} Runden.',
+        'Swiss benötigt mindestens 3 Teilnehmer und höchstens ${maximumRounds(players.length)} Runden.',
       );
     }
     final group = TournamentGroup(

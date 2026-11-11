@@ -8,7 +8,7 @@ void main() {
   final players = [
     for (var index = 0; index < 10; index++)
       TournamentPlayer(
-        name: 'Spieler $index',
+        name: 'Teilnehmer $index',
         profileId: 'player-$index',
         isGenerated: false,
       ),

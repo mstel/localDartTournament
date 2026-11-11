@@ -29,7 +29,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final tile = tester.widget<MatchResultTile>(find.byType(MatchResultTile).first);
+    final tile = tester.widget<MatchResultTile>(
+      find.byType(MatchResultTile).first,
+    );
     expect(tile.isRunning, isTrue);
     expect(find.text('Läuft'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -116,7 +118,9 @@ void main() {
       expect(tile.showRoundLabel, isFalse);
     }
     final card = tester.widget<Container>(
-      find.byKey(const ValueKey('match-result-tile-1-Spieler A-Spieler B')),
+      find.byKey(
+        const ValueKey('match-result-tile-1-Teilnehmer A-Teilnehmer B'),
+      ),
     );
     final cardDecoration = card.decoration! as BoxDecoration;
     expect(cardDecoration.color, isNotNull);
@@ -298,21 +302,21 @@ void main() {
       greaterThanOrEqualTo(48),
     );
 
-    await tester.tap(find.text('Spieler 1').first);
+    await tester.tap(find.text('Teilnehmer 1').first);
     await tester.pumpAndSettle();
-    expect(find.text('Spiele von Spieler 1'), findsOneWidget);
+    expect(find.text('Begegnungen von Teilnehmer 1'), findsOneWidget);
     expect(find.byType(MatchResultTile), findsNWidgets(5));
 
     await tester.tap(find.byTooltip('Ergebnis eingeben').first);
     await tester.pumpAndSettle();
-    expect(find.text('Spiele von Spieler 1'), findsNothing);
+    expect(find.text('Begegnungen von Teilnehmer 1'), findsNothing);
     expect(find.byType(MatchResultTile), findsNWidgets(14));
 
-    final standingsPlayer = find.text('Spieler 2').last;
+    final standingsPlayer = find.text('Teilnehmer 2').last;
     expect(tester.getRect(standingsPlayer).left, greaterThan(1200));
     await tester.tap(standingsPlayer);
     await tester.pumpAndSettle();
-    expect(find.text('Spiele von Spieler 2'), findsOneWidget);
+    expect(find.text('Begegnungen von Teilnehmer 2'), findsOneWidget);
     expect(find.byType(MatchResultTile), findsNWidgets(4));
     expect(tester.takeException(), isNull);
   });
@@ -323,8 +327,12 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final playerA = TournamentPlayer.generated(1).copyWith(name: 'Spieler A');
-    final playerB = TournamentPlayer.generated(2).copyWith(name: 'Spieler B');
+    final playerA = TournamentPlayer.generated(
+      1,
+    ).copyWith(name: 'Teilnehmer A');
+    final playerB = TournamentPlayer.generated(
+      2,
+    ).copyWith(name: 'Teilnehmer B');
     final stage = KnockoutTournamentRunStage(
       name: 'KO',
       rounds: [
@@ -370,9 +378,12 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Vollständiger Turnierbaum'), findsOneWidget);
-        expect(find.byTooltip('Zurück zu Ergebnisse'), findsOneWidget);
+        expect(
+          find.byTooltip('Zurück zu Partien & Ergebnisse'),
+          findsOneWidget,
+        );
         expect(tester.takeException(), isNull, reason: '$size at $textScale×');
-        await tester.tap(find.byTooltip('Zurück zu Ergebnisse'));
+        await tester.tap(find.byTooltip('Zurück zu Partien & Ergebnisse'));
         await tester.pumpAndSettle();
         expect(previewButton, findsOneWidget);
         expect(tester.takeException(), isNull, reason: '$size at $textScale×');
@@ -391,10 +402,10 @@ CreatedTournament _tournamentFor(GroupTournamentRunStage stage) =>
 
 GroupTournamentRunStage _groupStage() {
   final players = [
-    TournamentPlayer.generated(1).copyWith(name: 'Spieler A'),
-    TournamentPlayer.generated(2).copyWith(name: 'Spieler B'),
-    TournamentPlayer.generated(3).copyWith(name: 'Spieler C'),
-    TournamentPlayer.generated(4).copyWith(name: 'Spieler D'),
+    TournamentPlayer.generated(1).copyWith(name: 'Teilnehmer A'),
+    TournamentPlayer.generated(2).copyWith(name: 'Teilnehmer B'),
+    TournamentPlayer.generated(3).copyWith(name: 'Teilnehmer C'),
+    TournamentPlayer.generated(4).copyWith(name: 'Teilnehmer D'),
   ];
   return GroupTournamentRunStage(
     name: 'Gruppenphase',
@@ -422,7 +433,7 @@ GroupTournamentRunStage _groupStage() {
 GroupTournamentRunStage _oneLargeGroup() {
   final players = [
     for (var index = 1; index <= 6; index++)
-      TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+      TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
   ];
   return GroupTournamentRunStage(
     name: 'Gruppenphase',

@@ -9,7 +9,7 @@ void main() {
     await tester.pumpWidget(const DartTournamentApp());
     await tester.tap(find.text('Turnier erstellen'));
     await tester.pumpAndSettle();
-    final workflow = find.text('2 · Turnierablauf');
+    final workflow = find.text('2 · Turnierstruktur');
     for (
       var attempt = 0;
       attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
@@ -18,13 +18,8 @@ void main() {
       await tester.drag(find.byType(ListView).last, const Offset(0, -400));
       await tester.pumpAndSettle();
     }
-    if (find.byKey(const ValueKey('stage-type-field')).evaluate().isEmpty &&
-        workflow.hitTestable().evaluate().isNotEmpty) {
-      await tester.tap(workflow);
-      await tester.pumpAndSettle();
-    }
     await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '16');
-    final generatePlayers = find.text('Spieler erzeugen');
+    final generatePlayers = find.text('Teilnehmer erzeugen');
     for (
       var attempt = 0;
       attempt < 8 && generatePlayers.hitTestable().evaluate().isEmpty;
@@ -43,7 +38,17 @@ void main() {
           )
           .first,
     );
-    await tester.tap(find.text('Spieler erzeugen'));
+    await tester.tap(find.text('Teilnehmer erzeugen'));
+    await tester.pumpAndSettle();
+    for (
+      var attempt = 0;
+      attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(workflow);
     await tester.pumpAndSettle();
     final type = find.byKey(const ValueKey('stage-type-field'));
     for (
@@ -86,7 +91,7 @@ void main() {
     await tester.pumpWidget(const DartTournamentApp());
     await tester.tap(find.text('Turnier erstellen'));
     await tester.pumpAndSettle();
-    final workflow = find.text('2 · Turnierablauf');
+    final workflow = find.text('2 · Turnierstruktur');
     for (
       var attempt = 0;
       attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
@@ -95,13 +100,8 @@ void main() {
       await tester.drag(find.byType(ListView).last, const Offset(0, -400));
       await tester.pumpAndSettle();
     }
-    if (find.byKey(const ValueKey('stage-type-field')).evaluate().isEmpty &&
-        workflow.hitTestable().evaluate().isNotEmpty) {
-      await tester.tap(workflow);
-      await tester.pumpAndSettle();
-    }
     await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '16');
-    final generatePlayers = find.text('Spieler erzeugen');
+    final generatePlayers = find.text('Teilnehmer erzeugen');
     for (
       var attempt = 0;
       attempt < 8 && generatePlayers.hitTestable().evaluate().isEmpty;
@@ -122,6 +122,16 @@ void main() {
     );
     await tester.tap(generatePlayers);
     await tester.pumpAndSettle();
+    for (
+      var attempt = 0;
+      attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(workflow);
+    await tester.pumpAndSettle();
 
     final type = find.byKey(const ValueKey('stage-type-field'));
     for (
@@ -139,8 +149,15 @@ void main() {
 
     expect(find.text('Optionale Platzierungsspiele'), findsOneWidget);
     final fifthPlace = find.widgetWithText(FilterChip, 'Platz 5');
-    await tester.ensureVisible(fifthPlace);
-    await tester.tap(fifthPlace);
+    for (
+      var attempt = 0;
+      attempt < 12 && fifthPlace.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(fifthPlace.hitTestable());
     await tester.pumpAndSettle();
     expect(tester.widget<FilterChip>(fifthPlace).selected, isTrue);
   });
@@ -177,14 +194,14 @@ void main() {
     );
     await tester.tap(viewSelector);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ergebnisse').last);
+    await tester.tap(find.text('Partien & Ergebnisse').last);
     await tester.pumpAndSettle();
     final bracketButton = find.text('KO Baum öffnen');
     await tester.ensureVisible(bracketButton);
     await tester.tap(bracketButton);
     await tester.pumpAndSettle();
     expect(find.textContaining('· Turnierbaum'), findsOneWidget);
-    expect(find.byTooltip('Zurück zu Ergebnisse'), findsOneWidget);
+    expect(find.byTooltip('Zurück zu Partien & Ergebnisse'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -32,7 +32,7 @@ class LeagueOverview extends StatelessWidget {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             Text(
-              '$played von ${league.games.length} Spielen abgeschlossen · ${league.outcome}',
+              '$played von ${league.games.length} Begegnungen abgeschlossen · ${league.outcome}',
             ),
             const SizedBox(height: 12),
             LinearProgressIndicator(
@@ -134,7 +134,7 @@ class LeagueFixtureCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 Text(
-                  'Spiel ${index + 1} · ${game.isDouble ? 'Doppel' : 'Einzel'}',
+                  'Begegnung ${index + 1} · ${game.isDouble ? 'Doppel' : 'Einzel'}',
                 ),
                 Text(boardLabel ?? (game.complete ? 'Abgeschlossen' : 'Offen')),
               ],

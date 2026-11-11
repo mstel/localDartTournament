@@ -40,7 +40,7 @@ class LeagueRosterDialog extends StatelessWidget {
     final roster = teamSide == 0 ? league.homePlayers : league.awayPlayers;
     final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
     return AlertDialog(
-      title: Text('Spielerstatus · $teamName'),
+      title: Text('Teilnehmerstatus · $teamName'),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -137,7 +137,7 @@ class _LeagueTeamPairingsDialogState extends State<LeagueTeamPairingsDialog> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
-                                'Doppel · Spiel ${entry.key + 1}',
+                                'Doppel · Begegnung ${entry.key + 1}',
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
                               for (var slot = 0; slot < 2; slot++)
@@ -148,7 +148,7 @@ class _LeagueTeamPairingsDialogState extends State<LeagueTeamPairingsDialog> {
                                   initialValue: entry.value[slot],
                                   isExpanded: true,
                                   decoration: InputDecoration(
-                                    labelText: 'Spieler ${slot + 1}',
+                                    labelText: 'Teilnehmer ${slot + 1}',
                                   ),
                                   items: [
                                     for (
@@ -200,7 +200,7 @@ class _LeagueTeamPairingsDialogState extends State<LeagueTeamPairingsDialog> {
                   )) {
                     setState(
                       () => _error =
-                          'Für jedes Doppel zwei unterschiedliche Spieler wählen.',
+                          'Für jedes Doppel zwei unterschiedliche Teilnehmer wählen.',
                     );
                     return;
                   }

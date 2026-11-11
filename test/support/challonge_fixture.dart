@@ -12,7 +12,7 @@ Map<String, dynamic> challongeFixture({int id = 7}) => {
       {
         'participant': {
           'id': i,
-          'name': 'Spieler $i',
+          'name': 'Teilnehmer $i',
           'final_rank': i == 1 ? 1 : 2,
         },
       },

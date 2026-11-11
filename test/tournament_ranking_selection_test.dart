@@ -583,7 +583,7 @@ void main() {
         .map((widget) => widget.data)
         .where((text) => players.any((player) => player.name == text))
         .toList();
-    expect(podiumNames.take(2), ['Spieler 1', 'Spieler 2']);
+    expect(podiumNames.take(2), ['Teilnehmer 1', 'Teilnehmer 2']);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

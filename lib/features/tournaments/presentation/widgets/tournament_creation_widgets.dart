@@ -108,7 +108,7 @@ class _KnockoutPreview extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Bracket-Vorschau',
+                'Turnierbaum-Vorschau',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
@@ -157,7 +157,7 @@ class _KnockoutPreview extends StatelessWidget {
                 rounds,
                 placementPlaces.where((p) => p < players.length),
               );
-              return _KnockoutBracketView(
+              return KnockoutBracketView(
                 stage: KnockoutTournamentRunStage(
                   name: 'Vorschau',
                   rounds: rounds,
@@ -349,7 +349,7 @@ class _TripleEliminationPreview extends StatelessWidget {
 
 String _previewAdvancementLabel(String? sourceLabel) =>
     sourceLabel == null || sourceLabel == 'Freilos'
-    ? 'Qualifikant offen'
+    ? 'Teilnehmer offen'
     : sourceLabel;
 
 class _DoubleEliminationPreview extends StatelessWidget {
@@ -885,12 +885,12 @@ class _GroupQualificationSetup extends StatelessWidget {
 
     if (selectedCount < plan.totalQualifiers) {
       return [
-        'Es kommen noch ${plan.totalQualifiers - selectedCount} Spieler zu wenig weiter. Erhöhe "Beste-N Weiter" oder markiere feste Plätze.',
+        'Es kommen noch ${plan.totalQualifiers - selectedCount} Teilnehmer zu wenig weiter. Erhöhe "Beste-N Weiter" oder markiere feste Plätze.',
       ];
     }
 
     return [
-      'Es kommen ${selectedCount - plan.totalQualifiers} Spieler zu viel weiter. Reduziere "Beste-N Weiter" oder feste Plätze.',
+      'Es kommen ${selectedCount - plan.totalQualifiers} Teilnehmer zu viel weiter. Reduziere "Beste-N Weiter" oder feste Plätze.',
     ];
   }
 
@@ -899,7 +899,7 @@ class _GroupQualificationSetup extends StatelessWidget {
     if (groupSizes.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 8),
-        child: Text('Erst Spieler und Gruppen anlegen.'),
+        child: Text('Erst Teilnehmer und Gruppen anlegen.'),
       );
     }
 
@@ -1130,7 +1130,7 @@ class _GroupEliminationPreviewCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               Chip(label: Text(_groupPlayTypeLabel(playType))),
-              Chip(label: Text('$playerCount Spieler')),
+              Chip(label: Text('$playerCount Teilnehmer')),
               Chip(label: Text('${bracketSize}er Feld')),
               if (bracketSize > playerCount)
                 Chip(label: Text('${bracketSize - playerCount} Freilose')),
@@ -1235,13 +1235,13 @@ class _InheritedKnockoutSetup extends StatelessWidget {
       children: [
         Text(
           previousStage == null
-              ? 'Start mit allen Spielern'
-              : 'Übernahme aus vorheriger Etappe',
+              ? 'Start mit allen Teilnehmern'
+              : 'Übernahme aus vorheriger Phase',
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
         if (previousStage == null)
-          const Text('Alle angelegten Spieler nehmen teil.')
+          const Text('Alle angelegten Teilnehmer nehmen teil.')
         else if (qualificationPlan != null)
           QualificationRuleSummary(qualificationPlan: qualificationPlan)
         else
@@ -1304,7 +1304,7 @@ class _StageList extends StatelessWidget {
         if (_groupPlayTypeForStage(stage, index) == 'swiss')
           '${groupLabel(index + 1)} ${_roundRobinRepeatForStage(stage, index)} Swiss-Runden'
         else if (_groupPlayTypeForStage(stage, index) == 'round_robin')
-          '${groupLabel(index + 1)} ${index < stage.groupRoundRobinRepeats.length ? stage.groupRoundRobinRepeats[index] : 1}x${stage.maxGamesForGroup(index) == null ? '' : ' · maximal ${stage.maxGamesForGroup(index)} Spiele pro Spieler'}',
+          '${groupLabel(index + 1)} ${index < stage.groupRoundRobinRepeats.length ? stage.groupRoundRobinRepeats[index] : 1}x${stage.maxGamesForGroup(index) == null ? '' : ' · maximal ${stage.maxGamesForGroup(index)} Begegnungen pro Teilnehmer'}',
     ].join(', ');
 
     return details.isEmpty ? '' : ' - Begegnungen: $details';
@@ -1379,7 +1379,7 @@ class _StageList extends StatelessWidget {
   }
 
   String _matchCountDetails(TournamentStage stage) {
-    return ' - ${stage.placementPlaces.isEmpty ? '' : 'bis zu '}${_stageMatchCount(stage)} Spiele';
+    return ' - ${stage.placementPlaces.isEmpty ? '' : 'bis zu '}${_stageMatchCount(stage)} Begegnungen';
   }
 
   String _stageDetails(TournamentStage stage) {
@@ -1388,7 +1388,7 @@ class _StageList extends StatelessWidget {
       return '${_typeLabel(stage.type)} - '
           '${stage.knockoutParticipantCount ?? 0} Teilnehmende, '
           '${stage.lossLimit} Leben, '
-          '${playersPerBoard == null ? 'gleichmäßig auf Boards verteilt' : '$playersPerBoard Spieler pro Board'}'
+          '${playersPerBoard == null ? 'gleichmäßig auf Boards verteilt' : '$playersPerBoard Teilnehmer pro Board'}'
           '${stage.kratzerPreferSameScratchCount ? ', Paarung nach Lebensstand' : ''}'
           '${stage.kratzerPlayUntilElimination ? ', Gruppen bis zum Ausscheiden' : ''}'
           '${_matchCountDetails(stage)}';
@@ -1451,7 +1451,7 @@ class _StageList extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
-          child: Text('Noch keine Etappen hinzugefügt.'),
+          child: Text('Noch keine Phasen hinzugefügt.'),
         ),
       );
     }
@@ -1460,7 +1460,7 @@ class _StageList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '${stages.length} Etappen im Turnier',
+          '${stages.length} Phasen im Turnier',
           style: textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
@@ -1487,12 +1487,12 @@ class _StageList extends StatelessWidget {
                   IconButton(
                     onPressed: () => onEditStage(index),
                     icon: const Icon(Icons.edit_outlined),
-                    tooltip: 'Etappe bearbeiten',
+                    tooltip: 'Phase bearbeiten',
                   ),
                   IconButton(
                     onPressed: () => onRemoveStage(index),
                     icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Etappe entfernen',
+                    tooltip: 'Phase entfernen',
                   ),
                 ],
               ),

@@ -164,7 +164,7 @@ class TournamentCreationController {
       if (oldPlayer.name != newPlayer.name) {
         updated.addActivity(
           'player_renamed',
-          'Spieler umbenannt: ${oldPlayer.name} → ${newPlayer.name}',
+          'Teilnehmer umbenannt: ${oldPlayer.name} → ${newPlayer.name}',
         );
       }
     }
@@ -177,14 +177,14 @@ class TournamentCreationController {
           jsonEncode(oldStage.toJson()) != jsonEncode(newStage.toJson())) {
         updated.addActivity(
           'groups_changed',
-          'Gruppen in Etappe „${oldStage.name}“ verändert',
+          'Gruppen in Phase „${oldStage.name}“ verändert',
         );
       }
       if (oldStage.groupTieBreakers.join('|') !=
           newStage.groupTieBreakers.join('|')) {
         updated.addActivity(
           'tiebreakers_changed',
-          'Tie-Breaker-Einstellungen in Etappe „${oldStage.name}“ geändert',
+          'Tie-Breaker-Einstellungen in Phase „${oldStage.name}“ geändert',
         );
       }
     }

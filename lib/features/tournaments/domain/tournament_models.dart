@@ -256,7 +256,7 @@ class TournamentPlayer {
   }
 
   factory TournamentPlayer.generated(int number) {
-    return TournamentPlayer(name: 'Spieler $number', isGenerated: true);
+    return TournamentPlayer(name: 'Teilnehmer $number', isGenerated: true);
   }
 
   final String? profileId;
@@ -287,7 +287,7 @@ class TournamentPlayer {
         members.map((p) => p.profileId ?? p.name).toSet().length !=
             members.length) {
       throw ArgumentError(
-        'Ein Team benötigt mindestens zwei unterschiedliche Spieler.',
+        'Ein Team benötigt mindestens zwei unterschiedliche Teilnehmer.',
       );
     }
     return TournamentPlayer(
@@ -617,7 +617,7 @@ class TournamentStage {
   );
 }
 
-/// Das tatsächlich gespielte Format einer Etappe. Es ist bewusst unabhängig
+/// Das tatsächlich gespielte Format einer Phase. Es ist bewusst unabhängig
 /// von der Planungs-Schätzung gespeichert, damit es später in der Übersicht
 /// und bei Ergebnissen zuverlässig angezeigt werden kann.
 class TournamentGameFormat {
@@ -1248,7 +1248,7 @@ class KratzerBonusLife {
     };
     final player = _playerFromJson(json['player']);
     if (player == null) {
-      throw const FormatException('Spieler für Kratzer-Bonusleben fehlt');
+      throw const FormatException('Teilnehmer für Kratzer-Bonusleben fehlt');
     }
     return KratzerBonusLife(player: player, type: type);
   }
@@ -1592,14 +1592,14 @@ class QualificationPlan {
         : 'Top $fixedPerGroup je Gruppe';
 
     if (extraCount == 0) {
-      return '$totalQualifiers Weiterkommende - $fixedText';
+      return '$totalQualifiers Teilnehmer - $fixedText';
     }
 
     final groupText = extraGroups.isEmpty
         ? ''
         : ' aus ${_formatGroupSelection(extraGroups)}';
 
-    return '$totalQualifiers Weiterkommende - $fixedText + '
+    return '$totalQualifiers Teilnehmer - $fixedText + '
         'beste $extraCount $extraRank. Plätze$groupText';
   }
 

@@ -6,7 +6,7 @@ void main() {
   test('preserves every drawn slot when splitting the draw into groups', () {
     final players = [
       for (var index = 1; index <= 8; index++)
-        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+        TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
     ];
     const drawnSeeds = [2, 4, 1, 8, 3, 5, 7, 6];
 
@@ -17,8 +17,8 @@ void main() {
     );
 
     expect(groups.map((group) => group.map((player) => player.name).toList()), [
-      ['Spieler 2', 'Spieler 4', 'Spieler 1', 'Spieler 8'],
-      ['Spieler 3', 'Spieler 5', 'Spieler 7', 'Spieler 6'],
+      ['Teilnehmer 2', 'Teilnehmer 4', 'Teilnehmer 1', 'Teilnehmer 8'],
+      ['Teilnehmer 3', 'Teilnehmer 5', 'Teilnehmer 7', 'Teilnehmer 6'],
     ]);
   });
 

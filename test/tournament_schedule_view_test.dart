@@ -132,7 +132,7 @@ void main() {
     await tester.tap(find.text('K.-o.-Baum im Vollbild öffnen'));
     await tester.pumpAndSettle();
     expect(find.text('Finale'), findsWidgets);
-    expect(find.text('Spieler 1'), findsWidgets);
+    expect(find.text('Teilnehmer 1'), findsWidgets);
     final bracketDialog = find.byType(Dialog).last;
     await tester.tap(
       find.descendant(

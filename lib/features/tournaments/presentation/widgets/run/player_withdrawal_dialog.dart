@@ -29,12 +29,13 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
 
   String _modeLabel(WithdrawalResultMode value) => switch (value) {
     WithdrawalResultMode.loseOpen =>
-      'Offene Spiele als Niederlage zu null werten',
-    WithdrawalResultMode.loseAll => 'Alle Spiele als Niederlage zu null werten',
+      'Offene Begegnungen als Niederlage zu null werten',
+    WithdrawalResultMode.loseAll =>
+      'Alle Begegnungen als Niederlage zu null werten',
     WithdrawalResultMode.ignoreOpen =>
-      'Nur offene Spiele von der Ranglistenwertung ausschließen',
+      'Nur offene Begegnungen von der Ranglistenwertung ausschließen',
     WithdrawalResultMode.ignoreAll =>
-      'Alle Spiele von der Ranglistenwertung ausschließen',
+      'Alle Begegnungen von der Ranglistenwertung ausschließen',
   };
 
   String _modeExplanation(WithdrawalResultMode value) => switch (value) {
@@ -44,12 +45,12 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
     WithdrawalResultMode.ignoreOpen =>
       'Bereits gespielte Partien bleiben gewertet; offene Partien beeinflussen die Rangliste nicht.',
     WithdrawalResultMode.ignoreAll =>
-      'Keine Partie dieses Turniers fließt für diesen Spieler in die Ranglistenwertung ein.',
+      'Keine Partie dieses Turniers fließt für diesen Teilnehmer in die Ranglistenwertung ein.',
   };
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Spieler aus Turnier entfernen'),
+    title: const Text('Teilnehmer aus Turnier entfernen'),
     scrollable: true,
     content: SizedBox(
       width: 560,
@@ -61,7 +62,7 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
             itemHeight: null,
             isExpanded: true,
             initialValue: player,
-            decoration: const InputDecoration(labelText: 'Spieler / Team'),
+            decoration: const InputDecoration(labelText: 'Teilnehmer / Team'),
             items: [
               for (final p in widget.tournament.players)
                 if (PlayerWithdrawalService.policy(widget.tournament, p) ==
@@ -75,7 +76,7 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
             itemHeight: null,
             initialValue: mode,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Spielwertung'),
+            decoration: const InputDecoration(labelText: 'Begegnungswertung'),
             items: [
               for (final v in WithdrawalResultMode.values)
                 DropdownMenuItem(
@@ -100,7 +101,7 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
           ),
           const SizedBox(height: 12),
           const Text(
-            '„Alle Spiele“ betrifft auch bisherige Ergebnisse. Wenn frühere Etappen betroffen sind, werden die davon abhängigen späteren Etappen neu aufgebaut und ihre Ergebnisse zurückgesetzt. Im K.-o.-Baum kommt der Gegner eines offenen Spiels kampflos weiter.',
+            '„Alle Begegnungen“ betrifft auch bisherige Ergebnisse. Wenn frühere Phasen betroffen sind, werden die davon abhängigen späteren Phasen neu aufgebaut und ihre Ergebnisse zurückgesetzt. Im K.-o.-Baum kommt der Gegner eines offenen Spiels kampflos weiter.',
           ),
         ],
       ),

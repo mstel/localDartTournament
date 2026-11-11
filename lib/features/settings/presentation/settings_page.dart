@@ -193,7 +193,7 @@ Future<void> _resetLocalData(BuildContext context) async {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Die aktiven lokalen Turniere, Spieler, Ergebnisse, Ranglisten, Statistiken und Planungseinstellungen dieses Geräts werden nach einer bytegetreuen Sicherung entfernt. Deine Anmeldung und übrigen App-Einstellungen bleiben erhalten. Cloud-Daten und andere Geräte bleiben unberührt. Der Cloud-Abgleich läuft nicht automatisch; ein neuer Stand bleibt lokal, bis du ihn ausdrücklich manuell abgleichst oder hochlädst.',
+            'Die aktiven lokalen Turniere, Teilnehmer, Ergebnisse, Ranglisten, Statistiken und Planungseinstellungen dieses Geräts werden nach einer bytegetreuen Sicherung entfernt. Deine Anmeldung und übrigen App-Einstellungen bleiben erhalten. Cloud-Daten und andere Geräte bleiben unberührt. Der Cloud-Abgleich läuft nicht automatisch; ein neuer Stand bleibt lokal, bis du ihn ausdrücklich manuell abgleichst oder hochlädst.',
           ),
           const SizedBox(height: 16),
           TextField(
@@ -445,11 +445,11 @@ class _PlanningParametersPanelState extends State<_PlanningParametersPanel> {
             icon: Icons.info_outline,
             children: [
               Text(
-                'Leg-Dauern sind Schätzwerte. Pro Match gilt der Mittelwert aus minimaler und maximaler Leg-Zahl: Bo3 = 2,5; Bo5 = 4; Bo101 = 76; Bo1 = 1 Leg. Bei Sets wird zusätzlich mit der mittleren Set-Zahl gerechnet. Double In verwendet die Double-Out-Dauer. Weniger Strafpunkte bedeuten eine bessere Platzierung. Spielerzahl, Boards, Zeitfenster, Punktzahl und Checkout werden weiterhin je Turniersuche festgelegt.',
+                'Leg-Dauern sind Schätzwerte. Pro Match gilt der Mittelwert aus minimaler und maximaler Leg-Zahl: Bo3 = 2,5; Bo5 = 4; Bo101 = 76; Bo1 = 1 Leg. Bei Sets wird zusätzlich mit der mittleren Set-Zahl gerechnet. Double In verwendet die Double-Out-Dauer. Weniger Strafpunkte bedeuten eine bessere Platzierung. Teilnehmerzahl, Boards, Zeitfenster, Punktzahl und Checkout werden weiterhin je Turniersuche festgelegt.',
               ),
               SizedBox(height: 8),
               Text(
-                'Strafpunkte sind nur Bewertungsgewichte für die Sortierung der Turniervorschläge, keine Minuspunkte für Spieler. Ein fehlendes Mindestspiel pro Spieler wiegt standardmäßig 10.000 Punkte, eine Minute außerhalb des Zeitfensters 10 Punkte und eine Minute Abweichung von der Maximaldauer 1 Punkt. Bei der Suche nach einer Zielzeit wird außerdem berücksichtigt, wie nah ein Vorschlag an dieser Zeit liegt. Je niedriger der Gesamtwert, desto weiter oben steht der Vorschlag.',
+                'Strafpunkte sind nur Bewertungsgewichte für die Sortierung der Turniervorschläge, keine Minuspunkte für Teilnehmer. Ein fehlendes Mindestspiel pro Teilnehmer wiegt standardmäßig 10.000 Punkte, eine Minute außerhalb des Zeitfensters 10 Punkte und eine Minute Abweichung von der Maximaldauer 1 Punkt. Bei der Suche nach einer Zielzeit wird außerdem berücksichtigt, wie nah ein Vorschlag an dieser Zeit liegt. Je niedriger der Gesamtwert, desto weiter oben steht der Vorschlag.',
               ),
             ],
           ),

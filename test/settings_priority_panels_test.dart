@@ -58,7 +58,7 @@ void main() {
       await tester.tap(find.text('Hinweiseinstellungen'));
       await tester.pumpAndSettle();
       expect(
-        find.text('Prioritätshinweis pro Spieler ab Verzug von'),
+        find.text('Prioritätshinweis pro Teilnehmer ab Verzug von'),
         findsOneWidget,
       );
       expect(

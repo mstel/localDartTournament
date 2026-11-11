@@ -27,7 +27,7 @@ class RankingStandingsImageGenerator {
     required ColorScheme colorScheme,
   }) => generateRows(
     title: ranking.name,
-    subtitle: 'Ranglistenstand · ${snapshot.entries.length} Spieler',
+    subtitle: 'Ranglistenstand · ${snapshot.entries.length} Teilnehmer',
     rows: [
       for (var index = 0; index < snapshot.entries.length; index++)
         RankingStandingImageRow(

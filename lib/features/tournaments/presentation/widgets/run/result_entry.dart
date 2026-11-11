@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../../shared/theme/tournament_display_palette.dart';
 import '../../../domain/tournament_models.dart';
+import '../../utils/match_display_label.dart';
 import '../../../domain/set_result_validation.dart';
 import '../../models/match_result.dart';
 import 'set_result_dialog.dart';
@@ -77,7 +78,7 @@ class MatchResultTile extends StatelessWidget {
         return SizedBox(height: 48, child: text);
       }
       return Tooltip(
-        message: 'Spiele von ${player.name} anzeigen',
+        message: 'Begegnungen von ${player.name} anzeigen',
         child: InkWell(
           onTap: () => onPlayerTap!(player),
           borderRadius: BorderRadius.circular(4),
@@ -142,7 +143,7 @@ class MatchResultTile extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(left: 2, top: 2),
                   child: Text(
-                    leadingLabel!,
+                    matchDisplayLabel(leadingLabel, fallback: ''),
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: colorScheme.secondary,
                     ),
@@ -359,7 +360,7 @@ class _KratzerResultDialogState extends State<KratzerResultDialog> {
                               initialValue: _bonuses[index].player,
                               isExpanded: true,
                               decoration: const InputDecoration(
-                                labelText: 'Spieler',
+                                labelText: 'Teilnehmer',
                                 border: OutlineInputBorder(),
                               ),
                               items: [
@@ -620,7 +621,7 @@ class _ResultDialogState extends State<ResultDialog> {
               Text(
                 widget.match.isDecider
                     ? 'Entscheidungsspiel: bei Gleichstand ein zusätzliches Leg spielen.'
-                    : 'Unentschieden: 1 Punkt je Spieler',
+                    : 'Unentschieden: 1 Punkt je Teilnehmer',
               ),
             Text(
               '${widget.match.homePlayer?.name ?? 'offen'} vs '
@@ -714,7 +715,7 @@ class _ResultDialogState extends State<ResultDialog> {
           TextButton.icon(
             onPressed: _annul,
             icon: const Icon(Icons.block_outlined),
-            label: const Text('Spiel annullieren'),
+            label: const Text('Begegnung annullieren'),
           ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),

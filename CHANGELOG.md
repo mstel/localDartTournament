@@ -1,3 +1,15 @@
+# 2.6.9+89
+
+- Vereinheitlicht die Turnierbegriffe von der Erstellung über den laufenden
+  Betrieb bis zu Übersicht, Zweitbildschirm sowie PDF- und Grafikexporten.
+- Verbessert die Bedienbarkeit der Turniererstellung mit lesbareren
+  Weiterkommen-Auswahlen und einer verbindlichen Reihenfolge: Erst Teilnehmer,
+  dann Turnierstruktur, anschließend Zusammenfassung und Start.
+- Überarbeitet die Beschriftungen und Reihenfolge der Zweitbildschirm-Layouts,
+  Sprachausgabe-, Board-Zuweisungs- und Hinweiseinstellungen.
+- Passt responsive Tests und Erstellungsabläufe an die neue Teilnehmer-zuerst-
+  Führung an.
+
 # 2.6.7+87
 
 - Behebt fehlgeschlagene Updates, wenn ein gespeichertes Liga- oder

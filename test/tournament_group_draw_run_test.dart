@@ -19,7 +19,7 @@ void main() {
       addTearDown(tester.view.reset);
       final players = [
         for (var index = 1; index <= 8; index++)
-          TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+          TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
       ];
       const historyStageCount = 40;
       final tournament = CreatedTournament(
@@ -28,7 +28,7 @@ void main() {
         stages: [
           for (var stageIndex = 0; stageIndex < historyStageCount; stageIndex++)
             TournamentStage(
-              name: 'Etappe ${stageIndex + 1}',
+              name: 'Phase ${stageIndex + 1}',
               type: 'groups',
               groupSizes: const [8],
             ),
@@ -36,7 +36,7 @@ void main() {
         runStages: [
           for (var stageIndex = 0; stageIndex < historyStageCount; stageIndex++)
             GroupTournamentRunStage(
-              name: 'Etappe ${stageIndex + 1}',
+              name: 'Phase ${stageIndex + 1}',
               groupPlayType: 'round_robin',
               qualificationPlan: null,
               tieBreakers: defaultGroupTieBreakers,
@@ -98,10 +98,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Vorherige Etappe wieder öffnen'), findsOneWidget);
+      expect(find.text('Vorherige Phase wieder öffnen'), findsOneWidget);
 
       final reopenTimer = Stopwatch()..start();
-      await tester.tap(find.text('Vorherige Etappe wieder öffnen'));
+      await tester.tap(find.text('Vorherige Phase wieder öffnen'));
       await tester.pumpAndSettle();
       reopenTimer.stop();
       expect(tournament.activeStageIndex, historyStageCount - 2);
@@ -111,8 +111,8 @@ void main() {
         reason: 'Opening a previous stage should complete promptly.',
       );
 
-      await tester.ensureVisible(find.text('Etappe zurücksetzen'));
-      await tester.tap(find.text('Etappe zurücksetzen'));
+      await tester.ensureVisible(find.text('Phase zurücksetzen'));
+      await tester.tap(find.text('Phase zurücksetzen'));
       await tester.pumpAndSettle();
       final resetTimer = Stopwatch()..start();
       await tester.tap(find.text('Zurücksetzen'));
@@ -206,8 +206,8 @@ void main() {
               )
               .toList(),
           [
-            ['Spieler 2', 'Spieler 4', 'Spieler 1', 'Spieler 8'],
-            ['Spieler 3', 'Spieler 5', 'Spieler 7', 'Spieler 6'],
+            ['Teilnehmer 2', 'Teilnehmer 4', 'Teilnehmer 1', 'Teilnehmer 8'],
+            ['Teilnehmer 3', 'Teilnehmer 5', 'Teilnehmer 7', 'Teilnehmer 6'],
           ],
         );
       } finally {
@@ -246,12 +246,12 @@ void main() {
 
       await tester.tap(find.text('Einstellungen'));
       await tester.pumpAndSettle();
-      await _scrollToText(tester, 'Spieler (8)');
+      await _scrollToText(tester, 'Teilnehmer (8)');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Spieler (8)'));
+      await tester.tap(find.text('Teilnehmer (8)'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Spieler hinzufügen'));
-      await tester.tap(find.text('Spieler hinzufügen'));
+      await tester.ensureVisible(find.text('Teilnehmer hinzufügen'));
+      await tester.tap(find.text('Teilnehmer hinzufügen'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Neuen Namen'));
       await tester.pumpAndSettle();
@@ -431,8 +431,8 @@ void main() {
       expect(find.text('Auslosung: Gruppenphase'), findsNothing);
       expect(tournament.stages.single.groupDrawCompleted, isTrue);
       final expectedGroups = [
-        ['Spieler 2', 'Spieler 4', 'Spieler 1', 'Spieler 8'],
-        ['Spieler 3', 'Spieler 5', 'Spieler 7', 'Spieler 6'],
+        ['Teilnehmer 2', 'Teilnehmer 4', 'Teilnehmer 1', 'Teilnehmer 8'],
+        ['Teilnehmer 3', 'Teilnehmer 5', 'Teilnehmer 7', 'Teilnehmer 6'],
       ];
       List<List<String>> groupNames(CreatedTournament value) =>
           (value.runStages.single as GroupTournamentRunStage).groups
@@ -477,8 +477,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Einstellungen'));
     await tester.pumpAndSettle();
-    await _scrollToText(tester, 'Spieler (4)');
-    await tester.tap(find.text('Spieler (4)'));
+    await _scrollToText(tester, 'Teilnehmer (4)');
+    await tester.tap(find.text('Teilnehmer (4)'));
     await tester.pumpAndSettle();
 
     final reorderableList = tester.widget<ReorderableListView>(
@@ -488,15 +488,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tournament.players.map((player) => player.name), [
-      'Spieler 2',
-      'Spieler 1',
-      'Spieler 3',
-      'Spieler 4',
+      'Teilnehmer 2',
+      'Teilnehmer 1',
+      'Teilnehmer 3',
+      'Teilnehmer 4',
     ]);
     final runStage = tournament.runStages.single as KnockoutTournamentRunStage;
     expect(runStage.rounds.first.map((match) => match.homePlayer?.name), [
-      'Spieler 2',
-      'Spieler 1',
+      'Teilnehmer 2',
+      'Teilnehmer 1',
     ]);
     expect(storage.savedTournament, isNotNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -522,8 +522,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Einstellungen'));
     await tester.pumpAndSettle();
-    await _scrollToText(tester, 'Spieler (4)');
-    await tester.tap(find.text('Spieler (4)'));
+    await _scrollToText(tester, 'Teilnehmer (4)');
+    await tester.tap(find.text('Teilnehmer (4)'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ReorderableListView), findsNothing);
@@ -558,8 +558,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('Einstellungen'));
       await tester.pumpAndSettle();
-      await _scrollToText(tester, 'Spieler (4)');
-      await tester.tap(find.text('Spieler (4)'));
+      await _scrollToText(tester, 'Teilnehmer (4)');
+      await tester.tap(find.text('Teilnehmer (4)'));
       await tester.pumpAndSettle();
 
       expect(find.byType(ReorderableListView), findsOneWidget, reason: type);
@@ -568,7 +568,7 @@ void main() {
           .onReorderItem!(0, 1);
       await tester.pumpAndSettle();
 
-      expect(tournament.players.first.name, 'Spieler 2', reason: type);
+      expect(tournament.players.first.name, 'Teilnehmer 2', reason: type);
       expect(
         (tournament.runStages.first as KnockoutTournamentRunStage).isKratzer,
         type == 'kratzer',

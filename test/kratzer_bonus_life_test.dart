@@ -50,7 +50,7 @@ void main() {
     );
     await tester.tap(find.text('Ergebnis öffnen'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Spieler 3'));
+    await tester.tap(find.text('Teilnehmer 3'));
     await tester.tap(find.text('Bonusleben hinzufügen'));
     await tester.pumpAndSettle();
 
@@ -61,10 +61,10 @@ void main() {
     await tester.tap(find.text('High Finish').last);
     await tester.pumpAndSettle();
     await tester.tap(
-      find.byKey(const ValueKey('kratzer-bonus-player-0-Spieler 1')),
+      find.byKey(const ValueKey('kratzer-bonus-player-0-Teilnehmer 1')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Spieler 2').last);
+    await tester.tap(find.text('Teilnehmer 2').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Kratzer speichern'));
     await tester.pumpAndSettle();

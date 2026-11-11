@@ -1,7 +1,8 @@
 part of '../../../../../../tournament_workspace.dart';
 
-class _KnockoutBracketView extends StatelessWidget {
-  const _KnockoutBracketView({
+class KnockoutBracketView extends StatelessWidget {
+  const KnockoutBracketView({
+    super.key,
     required this.stage,
     required this.qualifyingRank,
     required this.onEditResult,
@@ -40,12 +41,14 @@ class _KnockoutBracketView extends StatelessWidget {
           placementMatches.where((m) => m.round == number).toList(),
       ];
       final numbers = _stageMatchNumbers([...stage.rounds, ...rounds]);
-      String sourceName(PlacementSource source) =>
-          '${source.loser ? 'Verlierer' : 'Gewinner'} Spiel ${numbers[source.match] ?? '?'}';
+      String sourceName(PlacementSource source) => matchDisplayLabel(
+        '${source.loser ? 'Verlierer' : 'Gewinner'} Spiel ${numbers[source.match] ?? '?'}',
+        fallback: '',
+      );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _KnockoutBracketView(
+          KnockoutBracketView(
             stage: stage,
             qualifyingRank: qualifyingRank,
             onEditResult: onEditResult,
@@ -1548,9 +1551,22 @@ class _BracketTreeLayout extends StatelessWidget {
             sourceCenters.reduce((sum, value) => sum + value) /
             sourceCenters.length;
       }
+      _preventColumnOverlaps(centers[roundIndex]);
     }
 
     return centers;
+  }
+
+  void _preventColumnOverlaps(List<double> centers) {
+    if (centers.length < 2) return;
+    final order = List<int>.generate(centers.length, (index) => index)
+      ..sort((left, right) => centers[left].compareTo(centers[right]));
+    final minimumGap = cardHeight + firstRoundGap;
+    for (var index = 1; index < order.length; index++) {
+      final previous = order[index - 1];
+      final current = order[index];
+      centers[current] = max(centers[current], centers[previous] + minimumGap);
+    }
   }
 
   @override
@@ -2145,9 +2161,9 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
 
   String _matchTitle() {
     if (_isPlacementMatchLabel(match.label)) {
-      return match.label!;
+      return matchDisplayLabel(match.label, fallback: '');
     }
-    return 'Spiel $matchNumber';
+    return 'Begegnung $matchNumber';
   }
 }
 
@@ -2232,7 +2248,9 @@ class _BracketPlayerSlot extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isOpen = player == null;
-    final displayLabel = label ?? player?.name ?? 'offen';
+    final displayLabel = label == null
+        ? player?.name ?? 'offen'
+        : matchDisplayLabel(label, fallback: '');
 
     final baseSlot = Container(
       padding: EdgeInsets.symmetric(

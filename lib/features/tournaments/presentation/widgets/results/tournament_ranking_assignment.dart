@@ -105,7 +105,7 @@ class _TournamentRankingAssignmentState
       if (mounted) {
         setState(
           () => _saveError =
-              'Ranglisten-Zuweisung konnte nicht geprüft oder bereinigt '
+              'Ranglistenwertung konnte nicht geprüft oder bereinigt '
               'werden: $error',
         );
       }
@@ -146,7 +146,7 @@ class _TournamentRankingAssignmentState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Ranglisten ohne teilnehmende Spieler wurden nicht zugewiesen.',
+              'Ranglisten ohne teilnehmende Teilnehmer wurden nicht zugewiesen.',
             ),
           ),
         );
@@ -157,7 +157,7 @@ class _TournamentRankingAssignmentState
         ..rankingIds = oldRankingIds;
       if (mounted) {
         setState(
-          () => _saveError = 'Ranglisten-Zuweisung nicht gespeichert: $error',
+          () => _saveError = 'Ranglistenwertung nicht gespeichert: $error',
         );
       }
     } finally {
@@ -195,7 +195,7 @@ class _TournamentRankingAssignmentState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Ranglisten-Zuweisung',
+                  'Ranglistenwertung',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 4),

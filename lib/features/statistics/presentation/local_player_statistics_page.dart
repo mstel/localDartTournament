@@ -139,13 +139,13 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
         bytes: bytes,
         fileName:
             'spielerprofil-${widget.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}-${orientation.name}.png',
-        successMessage: 'Spielerprofil-Grafik erfolgreich exportiert.',
+        successMessage: 'Teilnehmerprofil-Grafik erfolgreich exportiert.',
       );
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Spielerprofil-Grafik fehlgeschlagen: $error'),
+            content: Text('Teilnehmerprofil-Grafik fehlgeschlagen: $error'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -286,7 +286,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
 
                 const SizedBox(height: 16),
                 Text(
-                  'Turniere & Spiele',
+                  'Turniere & Begegnungen',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 Wrap(
@@ -294,20 +294,23 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   runSpacing: 12,
                   children: [
                     _StatCard(
-                      label: 'Spiele gespielt',
+                      label: 'Begegnungen gespielt',
                       value: '${stats.matches}',
                     ),
-                    _StatCard(label: 'Spiele gewonnen', value: '${stats.wins}'),
                     _StatCard(
-                      label: 'Spiele verloren',
+                      label: 'Begegnungen gewonnen',
+                      value: '${stats.wins}',
+                    ),
+                    _StatCard(
+                      label: 'Begegnungen verloren',
                       value: '${stats.losses}',
                     ),
                     _StatCard(
-                      label: 'Spiele unentschieden',
+                      label: 'Begegnungen unentschieden',
                       value: '${stats.draws}',
                     ),
                     _StatCard(
-                      label: 'Siegquote Spiele',
+                      label: 'Siegquote Begegnungen',
                       value: '${stats.matchWinRate.toStringAsFixed(1)} %',
                     ),
                     _StatCard(

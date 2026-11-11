@@ -16,7 +16,7 @@ void main() {
 
       expect(find.byType(ExpansionTile), findsNWidgets(3));
       expect(find.textContaining('Begegnungen'), findsNWidgets(3));
-      expect(find.text('Spieler 1'), findsNothing);
+      expect(find.text('Teilnehmer 1'), findsNothing);
 
       for (var index = 0; index < 3; index++) {
         final phase = find.byKey(ValueKey('triple-preview-loss-level-$index'));
@@ -24,12 +24,12 @@ void main() {
         await tester.tap(phase);
         await tester.pumpAndSettle();
 
-        expect(find.text('Spieler ${index + 1}'), findsOneWidget);
+        expect(find.text('Teilnehmer ${index + 1}'), findsOneWidget);
         await tester.tap(phase);
         await tester.pumpAndSettle();
       }
 
-      expect(find.text('Spieler 1'), findsNothing);
+      expect(find.text('Teilnehmer 1'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -69,7 +69,7 @@ Widget _previewApp({required Size size, double textScale = 1}) {
                   ][index],
                   roundCount: 3 - index,
                   encounterCount: 7 - index * 2,
-                  child: Text('Spieler ${index + 1}'),
+                  child: Text('Teilnehmer ${index + 1}'),
                 ),
             ],
             finalChild: const Text('Finale'),

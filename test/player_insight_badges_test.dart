@@ -152,12 +152,12 @@ void main() {
 
       final home = TournamentPlayer(
         profileId: 'home',
-        name: 'Spieler mit einem sehr langen Namen',
+        name: 'Teilnehmer mit einem sehr langen Namen',
         isGenerated: false,
       );
       final away = TournamentPlayer(
         profileId: 'away',
-        name: 'Ein weiterer langer Spielername',
+        name: 'Ein weiterer langer Teilnehmername',
         isGenerated: false,
       );
       final match = GroupMatch(homePlayer: home, awayPlayer: away, round: 1);

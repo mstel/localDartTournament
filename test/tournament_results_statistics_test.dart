@@ -100,7 +100,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Spielerstatistiken'), findsNothing);
+      expect(find.text('Teilnehmerstatistiken'), findsNothing);
       expect(find.textContaining('Gewonnene / verlorene Legs'), findsNothing);
       final player = find.text('Anna Musterfrau').first;
       await tester.drag(find.byType(ListView).first, const Offset(0, -300));

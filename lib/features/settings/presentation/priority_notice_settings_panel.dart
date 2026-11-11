@@ -118,7 +118,7 @@ class _PriorityNoticeSettingsPanelState
                 enabled: !_loading && !_saving,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Prioritätshinweis pro Spieler ab Verzug von',
+                  labelText: 'Prioritätshinweis pro Teilnehmer ab Verzug von',
                   suffixText: 'Partien',
                   border: OutlineInputBorder(),
                 ),

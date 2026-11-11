@@ -8,10 +8,12 @@ class ExpertSetupSection extends StatefulWidget {
     required this.summary,
     required this.children,
     this.initiallyExpanded = false,
+    this.enabled = true,
   });
   final String title, summary;
   final List<Widget> children;
   final bool initiallyExpanded;
+  final bool enabled;
   @override
   State<ExpertSetupSection> createState() => _ExpertSetupSectionState();
 }
@@ -22,6 +24,7 @@ class _ExpertSetupSectionState extends State<ExpertSetupSection> {
   Widget build(BuildContext context) => Card(
     child: ExpansionTile(
       key: PageStorageKey(widget.title),
+      enabled: widget.enabled,
       maintainState: true,
       initiallyExpanded: widget.initiallyExpanded,
       title: Text(widget.title, style: Theme.of(context).textTheme.titleMedium),

@@ -129,8 +129,8 @@ class _MonthlyStatisticsImportPageState
         title: const Text('Monatswerte importieren?'),
         content: Text(
           '${document.rows.length} Monatszeilen für '
-          '${document.playerNames.length} Spieler werden gespeichert. '
-          '$replacedRows vorhandene Spieler-Monate werden ersetzt; alle '
+          '${document.playerNames.length} Teilnehmer werden gespeichert. '
+          '$replacedRows vorhandene Teilnehmer-Monate werden ersetzt; alle '
           'anderen gespeicherten Monate bleiben erhalten. Die Werte werden '
           'als Monatsdurchschnitte gespeichert, nicht als rekonstruierte '
           'Einzelspiele. Checkout bleibt leer, sofern die Excel-Zelle leer ist.',
@@ -166,7 +166,7 @@ class _MonthlyStatisticsImportPageState
             '${result.importedRows} Monatszeilen gespeichert. '
             '${result.replacedRows} vorhandene Monatszeilen aktualisiert. '
             'Die Werte sind jetzt lokal in der App und werden in den '
-            'Spielerstatistiken angezeigt. Für Supabase gehe zurück zu '
+            'Teilnehmerstatistiken angezeigt. Für Supabase gehe zurück zu '
             'Einstellungen > Daten und nutze „Lokalen Stand hochladen“. '
             'Dabei wird nach Bestätigung das Cloud-Backup ersetzt.';
       });
@@ -188,7 +188,7 @@ class _MonthlyStatisticsImportPageState
       padding: const EdgeInsets.all(20),
       children: [
         const Text(
-          'Importiert pro Spieler und Monat 3-Dart Average, First 9, Partien '
+          'Importiert pro Teilnehmer und Monat 3-Dart Average, First 9, Partien '
           'und Legs. Die Monatswerte werden getrennt von Einzelspielen '
           'gespeichert; leere Checkout-Werte bleiben leer.',
         ),
@@ -206,7 +206,7 @@ class _MonthlyStatisticsImportPageState
           const SizedBox(height: 20),
           Text(
             'Vorschau: ${document.rows.length} Monatszeilen · '
-            '${document.playerNames.length} Spieler',
+            '${document.playerNames.length} Teilnehmer',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 4),
@@ -231,7 +231,7 @@ class _MonthlyStatisticsImportPageState
                   labelText: 'Excel: $sourceName',
                   border: const OutlineInputBorder(),
                   helperText: _profileIdBySourceName[sourceName] == null
-                      ? 'Spielerprofil zuordnen'
+                      ? 'Teilnehmerprofil zuordnen'
                       : null,
                 ),
                 items: [
@@ -254,7 +254,7 @@ class _MonthlyStatisticsImportPageState
             ),
           if (_duplicateTargetKeys.isNotEmpty)
             Text(
-              'Mehrere Excel-Namen sind demselben Spieler und Monat '
+              'Mehrere Excel-Namen sind demselben Teilnehmer und Monat '
               'zugeordnet. Bitte ändere die Zuordnung vor dem Import.',
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
@@ -297,7 +297,7 @@ class _ImportPreviewTable extends StatelessWidget {
     scrollDirection: Axis.horizontal,
     child: DataTable(
       columns: const [
-        DataColumn(label: Text('Spieler')),
+        DataColumn(label: Text('Teilnehmer')),
         DataColumn(label: Text('Monat')),
         DataColumn(label: Text('3-Dart Ø'), numeric: true),
         DataColumn(label: Text('First 9'), numeric: true),

@@ -110,7 +110,7 @@ void main() {
     expect(
       tester
           .widget<Text>(
-            find.byKey(const ValueKey('player-comparison-left-Spiele')),
+            find.byKey(const ValueKey('player-comparison-left-Begegnungen')),
           )
           .data,
       '2',
@@ -128,7 +128,7 @@ void main() {
     expect(
       tester
           .widget<Text>(
-            find.byKey(const ValueKey('player-comparison-left-Spiele')),
+            find.byKey(const ValueKey('player-comparison-left-Begegnungen')),
           )
           .data,
       '1',
@@ -136,7 +136,7 @@ void main() {
     expect(
       tester
           .widget<Text>(
-            find.byKey(const ValueKey('player-comparison-right-Spiele')),
+            find.byKey(const ValueKey('player-comparison-right-Begegnungen')),
           )
           .data,
       '1',
@@ -173,17 +173,17 @@ void main() {
       );
       for (var frame = 0; frame < 20; frame++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.textContaining('Spielervergleich').evaluate().isNotEmpty) {
+        if (find.textContaining('Teilnehmervergleich').evaluate().isNotEmpty) {
           break;
         }
       }
 
-      expect(find.text('Spieler vergleichen'), findsOneWidget);
-      expect(find.text('Spieler Links'), findsOneWidget);
-      expect(find.text('Spieler Rechts'), findsOneWidget);
-      expect(find.textContaining('Spielervergleich'), findsOneWidget);
+      expect(find.text('Teilnehmer vergleichen'), findsOneWidget);
+      expect(find.text('Teilnehmer Links'), findsOneWidget);
+      expect(find.text('Teilnehmer Rechts'), findsOneWidget);
+      expect(find.textContaining('Teilnehmervergleich'), findsOneWidget);
       expect(find.text('Kategorie'), findsOneWidget);
-      expect(find.text('Spiele'), findsOneWidget);
+      expect(find.text('Begegnungen'), findsOneWidget);
       expect(find.text('Legquote'), findsOneWidget);
       expect(find.text('Direkte Begegnungen'), findsOneWidget);
       expect(
@@ -194,7 +194,7 @@ void main() {
       final comparisonTable = tester.widget<DataTable>(find.byType(DataTable));
       expect(comparisonTable.border?.verticalInside, isNotNull);
       expect(
-        tester.widget<Text>(find.text('Spiele')).textAlign,
+        tester.widget<Text>(find.text('Begegnungen')).textAlign,
         TextAlign.center,
       );
       final left = tester.widget<DropdownButtonFormField<String>>(

@@ -51,7 +51,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Offene Spiele'), findsOneWidget);
+      expect(find.text('Offene Begegnungen'), findsOneWidget);
       expect(find.text('Runde 1'), findsOneWidget);
       expect(find.text('Runde 2').hitTestable(), findsNothing);
       await tester.tap(find.byType(DropdownButtonFormField<int>));
@@ -72,15 +72,15 @@ void main() {
         1,
       );
       await tester.scrollUntilVisible(
-        find.text('Abgeschlossene Spiele (1)'),
+        find.text('Abgeschlossene Begegnungen (1)'),
         150,
       );
       await Scrollable.ensureVisible(
-        tester.element(find.text('Abgeschlossene Spiele (1)')),
+        tester.element(find.text('Abgeschlossene Begegnungen (1)')),
         alignment: .5,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Abgeschlossene Spiele (1)'));
+      await tester.tap(find.text('Abgeschlossene Begegnungen (1)'));
       await tester.pumpAndSettle();
       expect(find.text('3:1'), findsOneWidget);
       expect(tester.takeException(), isNull);

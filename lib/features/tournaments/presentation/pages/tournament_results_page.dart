@@ -274,7 +274,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               title: 'Ergebnisse ansehen',
               actions: [
                 SportMenuAction(
-                  label: 'Spielergebnisse',
+                  label: 'Teilnehmerergebnisse',
                   icon: Icons.groups_outlined,
                   onTap: () => _openPlayerList(context, summary),
                 ),
@@ -794,12 +794,12 @@ class _TournamentPlayerListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Spielerübersicht')),
+    appBar: AppBar(title: const Text('Teilnehmerübersicht')),
     body: AdaptiveContentList(
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          'Spieler auswählen, um alle Begegnungen und Ergebnisse zu sehen.',
+          'Teilnehmer auswählen, um alle Begegnungen und Ergebnisse zu sehen.',
         ),
         const SizedBox(height: 12),
         Card(
@@ -911,7 +911,7 @@ class _TournamentPlayerResultsPageState
                     child: Padding(
                       padding: EdgeInsets.all(16),
                       child: Text(
-                        'Für diesen Spieler liegen keine Begegnungen vor.',
+                        'Für diesen Teilnehmer liegen keine Begegnungen vor.',
                       ),
                     ),
                   )

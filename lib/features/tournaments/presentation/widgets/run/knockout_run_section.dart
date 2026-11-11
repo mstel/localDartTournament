@@ -61,14 +61,14 @@ class KnockoutRunSection extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           canEditResults
-              ? 'Positionen können nur geändert werden, solange in dieser K.-o.-Etappe noch kein Ergebnis eingetragen ist.'
-              : 'Positionen können nur in der aktuellen Etappe bearbeitet werden.',
+              ? 'Positionen können nur geändert werden, solange in dieser K.-o.-Phase noch kein Ergebnis eingetragen ist.'
+              : 'Positionen können nur in der aktuellen Phase bearbeitet werden.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ] else if (isEditMode) ...[
         const SizedBox(height: 8),
         Text(
-          'Ziehe Spieler in Runde 1 auf einen anderen Platz oder ein Freilos.',
+          'Ziehe Teilnehmer in Runde 1 auf einen anderen Platz oder ein Freilos.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
@@ -98,7 +98,7 @@ class KnockoutRunSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '3–6 Spieler pro Board spielen gleichzeitig. Es gibt keinen Sieger: pro Partie wird genau ein Kratzer eingetragen.',
+                  '3–6 Teilnehmer pro Board spielen gleichzeitig. Es gibt keinen Sieger: pro Partie wird genau ein Kratzer eingetragen.',
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -201,7 +201,7 @@ class KnockoutRunSection extends StatelessWidget {
                   children: [
                     _editControls(context),
                     if (stage.rounds.isEmpty)
-                      const Text('Keine Paarungen in dieser Etappe.')
+                      const Text('Keine Paarungen in dieser Phase.')
                     else
                       bracketBuilder(
                         stage,
@@ -216,7 +216,7 @@ class KnockoutRunSection extends StatelessWidget {
               ] else ...[
                 _editControls(context),
                 if (stage.rounds.isEmpty)
-                  const Text('Keine Paarungen in dieser Etappe.')
+                  const Text('Keine Paarungen in dieser Phase.')
                 else
                   bracketBuilder(
                     stage,

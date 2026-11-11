@@ -146,7 +146,7 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
         if (parsed.groups[index].length != _groups[index].length) {
           throw FormatException(
             '${parsed.groupNames[index]} enthält ${parsed.groups[index].length} '
-            'Spieler; ${widget.stage.groups[index].name} benötigt '
+            'Teilnehmer; ${widget.stage.groups[index].name} benötigt '
             '${_groups[index].length}.',
           );
         }
@@ -164,7 +164,7 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
           currentKeys.length != importedKeys.length ||
           !currentKeys.containsAll(importedKeys)) {
         throw const FormatException(
-          'Gruppenanzahl und Spielernamen müssen exakt zum Turnier passen. '
+          'Gruppenanzahl und Teilnehmernamen müssen exakt zum Turnier passen. '
           'Die aktuelle Zuweisung wurde nicht verändert.',
         );
       }
@@ -196,16 +196,18 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
             content: const Text(
               'Namen aus der Zwischenablage sind im lokalen Spielerkatalog '
               'vorhanden. Sollen die passenden Katalogprofile verwendet oder '
-              'lokale Spieler angelegt werden?',
+              'lokale Teilnehmer angelegt werden?',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Lokalen Spieler anlegen'),
+                child: const Text('Lokalen Teilnehmer anlegen'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Spieler aus dem Spielerkatalog verwenden'),
+                child: const Text(
+                  'Teilnehmer aus dem Spielerkatalog verwenden',
+                ),
               ),
             ],
           ),
@@ -352,13 +354,13 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Verteilung auswählen oder Spieler per Drag-and-drop '
+                'Verteilung auswählen oder Teilnehmer per Drag-and-drop '
                 'zwischen den Gruppen verschieben. Änderungen werden erst '
                 'mit „Übernehmen“ gespeichert.',
               ),
               const SizedBox(height: 4),
               Text(
-                'Stärkestufen nutzen lokale ELO-Wertungen; Spieler ohne '
+                'Stärkestufen nutzen lokale ELO-Wertungen; Teilnehmer ohne '
                 'Wertung werden gleich gewichtet.',
                 style: theme.textTheme.bodySmall,
               ),

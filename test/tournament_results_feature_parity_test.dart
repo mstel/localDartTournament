@@ -125,10 +125,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Ranglisten-Zuweisung'), findsOneWidget);
+    expect(find.text('Ranglistenwertung'), findsOneWidget);
     expect(find.text('Gesamtwertung'), findsNothing);
     expect(find.text('Turnierstatistik'), findsNothing);
-    expect(find.text('Spielerstatistiken'), findsNothing);
+    expect(find.text('Teilnehmerstatistiken'), findsNothing);
     expect(find.text('Vereinsrangliste 2026'), findsOneWidget);
     expect(find.text('1 Siege · 0 Niederlagen · 3:1 Legs'), findsOneWidget);
     final exportButton = find.text('Turnier exportieren');

@@ -70,11 +70,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Sprachassistenz aktivieren'));
+      await tester.tap(find.text('Sprachausgabe aktivieren'));
       await tester.pumpAndSettle();
       expect(tournament.tournamentSettings.soundModeEnabled, isTrue);
-      expect(find.text('Alternative Empfehlungen vorlesen'), findsOneWidget);
-      await tester.tap(find.text('Alternative Empfehlungen vorlesen'));
+      expect(find.text('Weitere Vorschläge vorlesen'), findsOneWidget);
+      await tester.tap(find.text('Weitere Vorschläge vorlesen'));
       await tester.pumpAndSettle();
       final alternativeCount = find.byKey(
         const ValueKey('alternative-recommendation-count'),
@@ -86,7 +86,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tournament.tournamentSettings.alternativeRecommendationCount, 2);
 
-      await tester.tap(find.text('Hinweise akustisch ankündigen'));
+      await tester.tap(find.text('Signalton bei neuen Hinweisen'));
       await tester.pumpAndSettle();
       expect(tournament.tournamentSettings.announceHintsAudibly, isTrue);
 
@@ -100,9 +100,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tournament.tournamentSettings.playerMatchDeficitThreshold, 123);
 
-      await tester.tap(
-        find.text('Bei Board-Leerstand regelmäßig ein Signal abspielen'),
-      );
+      await tester.tap(find.text('Freie Boards akustisch signalisieren'));
       await tester.pumpAndSettle();
       expect(find.byType(TextFormField), findsNWidgets(5));
       expect(saves, 6);
@@ -133,11 +131,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Zahlenwerte speichern'), findsNothing);
-      await tester.tap(find.text('Sprachassistenz aktivieren'));
+      await tester.tap(find.text('Sprachausgabe aktivieren'));
       await tester.pumpAndSettle();
       expect(find.text('Zahlenwerte speichern'), findsOneWidget);
 
-      await tester.tap(find.text('Sprachassistenz aktivieren'));
+      await tester.tap(find.text('Sprachausgabe aktivieren'));
       await tester.pumpAndSettle();
       expect(find.text('Zahlenwerte speichern'), findsNothing);
       expect(tester.takeException(), isNull);

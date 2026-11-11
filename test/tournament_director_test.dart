@@ -87,7 +87,7 @@ void main() {
     expect(find.text('Vollständigen Spielplan öffnen'), findsNothing);
     expect(find.text('Spielplan'), findsOneWidget);
     expect(find.byTooltip('Ergebnis eintragen'), findsNothing);
-    expect(find.textContaining('Spiele in dieser Etappe'), findsOneWidget);
+    expect(find.textContaining('Begegnungen in dieser Phase'), findsOneWidget);
     expect(find.textContaining(' gesamt'), findsOneWidget);
     expect(find.textContaining('offen'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -160,21 +160,21 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Dashboard'), findsOneWidget);
-        expect(find.textContaining('Aktive Etappe:'), findsNothing);
+        expect(find.text('Übersicht'), findsOneWidget);
+        expect(find.textContaining('Aktive Phase:'), findsNothing);
         expect(
-          find.textContaining('1/15 Spiele in dieser Etappe'),
+          find.textContaining('1/15 Begegnungen in dieser Phase'),
           findsOneWidget,
         );
         expect(find.textContaining('1/15 gesamt'), findsOneWidget);
         expect(find.textContaining('Uhrzeit:'), findsNothing);
         expect(find.text('Spielplan'), findsOneWidget);
         expect(find.text('Letzte Ergebnisse'), findsOneWidget);
-        expect(find.text('Fortschritt nach Etappen'), findsNothing);
+        expect(find.text('Fortschritt nach Phasen'), findsNothing);
         expect(find.text('180er'), findsOneWidget);
         expect(find.text('3:1'), findsOneWidget);
         expect(tester.takeException(), isNull);
-        for (final section in ['Übersicht', 'Boards', 'Spiele']) {
+        for (final section in ['Übersicht', 'Boards', 'Begegnungen']) {
           final tab = find.widgetWithText(ChoiceChip, section);
           if (tab.evaluate().isNotEmpty) {
             await tester.ensureVisible(tab);
@@ -559,12 +559,18 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const MaterialApp(home: DirectorPreview()));
     expect(find.byType(TournamentDirectorDashboard), findsOneWidget);
-    expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsNothing);
+    expect(
+      find.text('Zweitbildschirm-Modus (TV-Vollbild) öffnen'),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
     tester.view.physicalSize = const Size(1440, 900);
     await tester.pumpAndSettle();
     expect(find.byType(TournamentDirectorDashboard), findsOneWidget);
-    expect(find.text('2. Bildschirm (TV-Vollbild) öffnen'), findsNothing);
+    expect(
+      find.text('Zweitbildschirm-Modus (TV-Vollbild) öffnen'),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -599,8 +605,8 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1440, 900);
     addTearDown(tester.view.reset);
-    final first = TournamentPlayer.generated(1).copyWith(name: 'Spieler A');
-    final second = TournamentPlayer.generated(2).copyWith(name: 'Spieler B');
+    final first = TournamentPlayer.generated(1).copyWith(name: 'Teilnehmer A');
+    final second = TournamentPlayer.generated(2).copyWith(name: 'Teilnehmer B');
     final tournament = CreatedTournament(
       name: 'Testturnier',
       players: [first, second],
@@ -657,7 +663,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final previewButton = find.text('Vorschau nächste Etappe');
+    final previewButton = find.text('Vorschau nächste Phase');
     expect(previewButton, findsOneWidget);
     await tester.tap(previewButton);
     await tester.pumpAndSettle();
@@ -684,7 +690,7 @@ void main() {
     matches[2].bestPerformances = const [
       BestPerformance(
         type: BestPerformanceType.score180,
-        playerName: 'Spieler 3',
+        playerName: 'Teilnehmer 3',
         value: 180,
       ),
     ];
@@ -736,7 +742,7 @@ void main() {
       findsNothing,
     );
     expect(find.text('Bestleistungen'), findsNothing);
-    expect(find.text('Spieler 3 · 180+ 180'), findsNothing);
+    expect(find.text('Teilnehmer 3 · 180+ 180'), findsNothing);
     expect(find.byTooltip('Ergebnis eintragen'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });

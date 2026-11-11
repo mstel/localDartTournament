@@ -7,7 +7,7 @@ enum PlanningParameter {
     120,
   ),
   maximumGroups('Turnieraufbau', 'Maximale Gruppenzahl', 4, 1, 64),
-  qualifiersPerGroup('Turnieraufbau', 'Qualifikation je Gruppe', 2, 1, 64),
+  qualifiersPerGroup('Turnieraufbau', 'Weiterkommen je Gruppe', 2, 1, 64),
   maximumSuggestions('Turnieraufbau', 'Anzahl Vorschläge', 3, 1, 64),
   minutes301DoubleOut('Minuten pro Leg', '301 · Double Out', 3, 1, 120),
   minutes501DoubleOut('Minuten pro Leg', '501 · Double Out', 5, 1, 120),
@@ -36,7 +36,7 @@ enum PlanningParameter {
   ),
   missingMatchPenalty(
     'Bewertung (Strafpunkte)',
-    'Je fehlendem Mindestspiel pro Spieler',
+    'Je fehlendem Mindestspiel pro Teilnehmer',
     10000,
     0,
     1000000,

@@ -62,10 +62,10 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
           tournament: tournament,
           child: BoardMatchCard(
             home: entry.stageIndex > activeStage
-                ? 'Qualifikation noch offen'
+                ? 'Weiterkommen noch offen'
                 : entry.match.homePlayer?.name ?? 'Noch offen',
             away: entry.stageIndex > activeStage
-                ? 'Qualifikation noch offen'
+                ? 'Weiterkommen noch offen'
                 : entry.match.awayPlayer?.name ?? 'Noch offen',
             origin: entry.origin,
             status: detail,
@@ -332,12 +332,12 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
               ),
             title('Geplante Reihenfolge'),
             const Text(
-              'Unverbindliche Empfehlung zur gleichmäßigen Auslastung. Spiele im selben Block sind parallel vorgesehen. Ergebnisse können jederzeit direkt ohne Startschritt erfasst werden.',
+              'Unverbindliche Empfehlung zur gleichmäßigen Auslastung. Begegnungen im selben Block sind parallel vorgesehen. Ergebnisse können jederzeit direkt ohne Startschritt erfasst werden.',
             ),
             const SizedBox(height: 12),
             if (orderedBlocks.isEmpty)
               const Text(
-                'Keine weiteren spielbereiten Matches in der aktiven Etappe.',
+                'Keine weiteren spielbereiten Matches in der aktiven Phase.',
               ),
             for (final block in orderedBlocks)
               PlayQueueBlock(
@@ -365,7 +365,7 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
                           ? 'Annulliert'
                           : !entry.match.hasPlayers
                           ? 'Freilos · kein Board nötig'
-                          : '${entry.match.scoreLabel} · ${entry.match.boardNumber == null ? 'Board nicht erfasst' : 'Board ${entry.match.boardNumber}'} · ${entry.match.finishedAt?.toLocal().toString().substring(0, 16) ?? 'Reihenfolge früherer Spiele nicht erfasst'}',
+                          : '${entry.match.scoreLabel} · ${entry.match.boardNumber == null ? 'Board nicht erfasst' : 'Board ${entry.match.boardNumber}'} · ${entry.match.finishedAt?.toLocal().toString().substring(0, 16) ?? 'Reihenfolge früherer Begegnungen nicht erfasst'}',
                       action:
                           entry.stageIndex == activeStage &&
                               entry.match.hasPlayers
@@ -385,9 +385,9 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
                 summary:
                     '${schedule.waiting.length} warten auf Ergebnisse oder Freigabe',
                 children: [
-                  title('Wartet auf Ergebnisse / Etappenfreigabe'),
+                  title('Wartet auf Ergebnisse / Phasenfreigabe'),
                   const Text(
-                    'Diese Matches bekommen ihre Board-Zuordnung, sobald die Paarungen und die Etappe freigegeben sind.',
+                    'Diese Matches bekommen ihre Board-Zuordnung, sobald die Paarungen und die Phase freigegeben sind.',
                   ),
                   for (final entry in schedule.waiting)
                     row(entry, 'Noch nicht eingeplant'),
@@ -400,7 +400,7 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
               icon: Icons.info_outline,
               children: [
                 Text(
-                  'Gleiche Blöcke laufen parallel. Die Planung bevorzugt lange Pausen und belegte Boards; gleichmäßige Pausen sind nicht immer möglich. Starten reserviert Board und Spieler. Vorziehen ist auf jedem freien Board möglich und plant die restlichen Matches neu. Zeitblöcke sind eine Reihenfolge, keine festen Uhrzeiten.',
+                  'Gleiche Blöcke laufen parallel. Die Planung bevorzugt lange Pausen und belegte Boards; gleichmäßige Pausen sind nicht immer möglich. Starten reserviert Board und Teilnehmer. Vorziehen ist auf jedem freien Board möglich und plant die restlichen Matches neu. Zeitblöcke sind eine Reihenfolge, keine festen Uhrzeiten.',
                 ),
               ],
             ),

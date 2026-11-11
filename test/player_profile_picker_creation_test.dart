@@ -18,7 +18,7 @@ class PlayerPickerCreationPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     body: PlayerProfilePickerDialog(
-      profiles: [profile('old', 'Alexandra mit langem Spielernamen')],
+      profiles: [profile('old', 'Alexandra mit langem Teilnehmernamen')],
       selectedProfileIds: const {'old'},
       createPlayer: (firstName, lastName) async =>
           profile('new', '$firstName $lastName'.trim()),
@@ -37,7 +37,7 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Neuen Spieler anlegen'), findsNothing);
+    expect(find.text('Neuen Teilnehmer anlegen'), findsNothing);
   });
   testWidgets(
     'failed creation retains input; successful retry selects new and existing players',
@@ -70,16 +70,16 @@ void main() {
       );
       await tester.tap(find.text('Öffnen'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField).first, 'Neuer Spieler');
-      await tester.tap(find.text('Neuen Spieler anlegen'));
+      await tester.enterText(find.byType(TextField).first, 'Neuer Teilnehmer');
+      await tester.tap(find.text('Neuen Teilnehmer anlegen'));
       await tester.pumpAndSettle();
-      expect(find.text('Neuer Spieler'), findsOneWidget);
+      expect(find.text('Neuer Teilnehmer'), findsOneWidget);
       expect(
         find.textContaining('Verbindung und Berechtigung'),
         findsOneWidget,
       );
       reject = false;
-      await tester.tap(find.text('Neuen Spieler anlegen'));
+      await tester.tap(find.text('Neuen Teilnehmer anlegen'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('2 übernehmen'));
       await tester.pumpAndSettle();

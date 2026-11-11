@@ -61,14 +61,14 @@ class _TeamParticipantListState extends State<TeamParticipantList> {
                   children: [
                     Text(
                       widget.players.any((p) => p.isTeam)
-                          ? '${widget.players.length} Teilnehmer · ${widget.players.expand((p) => p.individuals).length} Spieler'
-                          : '${widget.players.length} Spieler im Turnier',
+                          ? '${widget.players.length} Teams · ${widget.players.expand((p) => p.individuals).length} Teilnehmer'
+                          : '${widget.players.length} Teilnehmer im Turnier',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     Text(
                       _isReordering
-                          ? 'Ziehe die Spieler in die gewünschte Setzreihenfolge.'
-                          : 'Ziehe Spieler aufeinander, um Teams zu bilden.',
+                          ? 'Ziehe die Teilnehmer in die gewünschte Setzreihenfolge.'
+                          : 'Ziehe Teilnehmer aufeinander, um Teams zu bilden.',
                     ),
                   ],
                 ),
@@ -106,7 +106,7 @@ class _TeamParticipantListState extends State<TeamParticipantList> {
                     title: Text(player.name),
                     subtitle: player.isTeam
                         ? Text(
-                            '${player.members.length} Spieler · ${player.members.map((p) => p.name).join(', ')}',
+                            '${player.members.length} Teilnehmer · ${player.members.map((p) => p.name).join(', ')}',
                           )
                         : null,
                     trailing: _actions(context, i),
@@ -143,7 +143,7 @@ class _TeamParticipantListState extends State<TeamParticipantList> {
                                 ),
                                 if (widget.players[i].isTeam)
                                   Text(
-                                    '${widget.players[i].members.length} Spieler · ${widget.players[i].members.map((p) => p.name).join(', ')}',
+                                    '${widget.players[i].members.length} Teilnehmer · ${widget.players[i].members.map((p) => p.name).join(', ')}',
                                   ),
                                 _actions(context, i),
                               ],
@@ -203,7 +203,7 @@ class _TeamParticipantListState extends State<TeamParticipantList> {
             const PopupMenuItem(
               value: 'merge',
               child: SportMenuLabel(
-                label: 'Mit Spieler / Team verbinden',
+                label: 'Mit Teilnehmer / Team verbinden',
                 icon: Icons.group_add_outlined,
               ),
             ),

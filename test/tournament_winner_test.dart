@@ -8,7 +8,7 @@ void main() {
   CreatedTournament completedKratzerTournament() {
     final players = [
       for (var index = 1; index <= 3; index++)
-        TournamentPlayer.generated(index).copyWith(name: 'Spieler $index'),
+        TournamentPlayer.generated(index).copyWith(name: 'Teilnehmer $index'),
     ];
     final tournament = CreatedTournament(
       name: 'Kratzer',
@@ -88,7 +88,9 @@ void main() {
   CreatedTournament knockoutTournament({required bool thirdPlacePlayed}) {
     final players = [
       for (var index = 1; index <= 4; index++)
-        TournamentPlayer.generated(index).copyWith(name: 'KO Spieler $index'),
+        TournamentPlayer.generated(
+          index,
+        ).copyWith(name: 'KO Teilnehmer $index'),
     ];
     final thirdPlaceMatch = GroupMatch(
       homePlayer: players[1],

@@ -147,7 +147,7 @@ class ChallongeTournamentConversionService {
     if (profiles.values.toSet().length != profiles.length) {
       throw const FormatException(
         'Die aktualisierten Challonge-Teilnehmer können nicht eindeutig den '
-        'Spielerprofilen zugeordnet werden. Bitte Zuordnung prüfen.',
+        'Teilnehmerprofilen zugeordnet werden. Bitte Zuordnung prüfen.',
       );
     }
 
@@ -190,7 +190,7 @@ class ChallongeTournamentConversionService {
     }
     if (profileIds.toSet().length != profileIds.length) {
       throw const FormatException(
-        'Jedes zugewiesene Challonge-Spielerprofil darf nur einmal verwendet '
+        'Jedes zugewiesene Challonge-Teilnehmerprofil darf nur einmal verwendet '
         'werden.',
       );
     }

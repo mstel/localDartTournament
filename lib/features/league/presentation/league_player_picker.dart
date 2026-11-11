@@ -35,7 +35,7 @@ class _LeaguePlayerPickerState extends State<LeaguePlayerPicker> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Spieler auswählen'),
+    title: const Text('Teilnehmer auswählen'),
     content: SizedBox(
       width: 520,
       child: Column(
@@ -44,7 +44,7 @@ class _LeaguePlayerPickerState extends State<LeaguePlayerPicker> {
           TextField(
             controller: _search,
             decoration: const InputDecoration(
-              labelText: 'Spieler suchen',
+              labelText: 'Teilnehmer suchen',
               prefixIcon: Icon(Icons.search),
             ),
             onChanged: (_) => setState(() {}),
@@ -69,7 +69,9 @@ class _LeaguePlayerPickerState extends State<LeaguePlayerPicker> {
                     )
                     .toList();
                 if (profiles.isEmpty) {
-                  return const Center(child: Text('Keine Spieler gefunden.'));
+                  return const Center(
+                    child: Text('Keine Teilnehmer gefunden.'),
+                  );
                 }
                 return ListView.builder(
                   shrinkWrap: true,

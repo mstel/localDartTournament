@@ -169,7 +169,7 @@ class _GroupStageRunSectionState extends State<GroupStageRunSection> {
                     label: const Text('Positionen bearbeiten'),
                   ),
                   const Text(
-                    'Spieler können vor dem ersten Spielstart oder Ergebnis getauscht werden.',
+                    'Teilnehmer können vor der ersten Begegnung oder Ergebniseingabe getauscht werden.',
                   ),
                 ],
               ),

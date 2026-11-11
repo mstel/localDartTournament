@@ -60,7 +60,7 @@ void main() {
         ),
         {'player': profile},
       ),
-      'Ada L. gegen Spieler 1',
+      'Ada L. gegen Teilnehmer 1',
     );
     expect(
       spokenMatchLabel(
@@ -71,7 +71,7 @@ void main() {
         ),
         {'player': profile},
       ),
-      'Enchantress gegen Spieler 1',
+      'Enchantress gegen Teilnehmer 1',
     );
   });
 
@@ -105,9 +105,7 @@ void main() {
       find.byType(DropdownButtonFormField<AnnouncementNameFormat>),
     );
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.text('Vorname + ersten Buchstaben des Nachnamens aussprechen').last,
-    );
+    await tester.tap(find.text('Vorname + Nachnameninitial').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byType(CheckboxListTile));
     await tester.pumpAndSettle();

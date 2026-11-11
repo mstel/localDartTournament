@@ -149,7 +149,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final newName = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Spieler umbenennen'),
+        title: const Text('Teilnehmer umbenennen'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -215,7 +215,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         }
         t.addActivity(
           'player_renamed',
-          'Spieler umbenannt: $oldName → $newName',
+          'Teilnehmer umbenannt: $oldName → $newName',
         );
       });
       await _saveTournamentProgress();
@@ -255,7 +255,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       );
       widget.tournament.addActivity(
         'players_reseeded',
-        'Spielerreihenfolge für die Setzung angepasst',
+        'Teilnehmerreihenfolge für die Setzung angepasst',
       );
     });
     await _saveTournamentProgress();
@@ -280,7 +280,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             style: TextStyle(color: Colors.red),
           ),
         if (player.profileId != null)
-          const Text('Name aus Spielerkartei · Umbenennen gesperrt'),
+          const Text('Name aus Spielerkatalog · Umbenennen gesperrt'),
       ],
     ),
     trailing: Wrap(
@@ -289,7 +289,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         if (widget.tournament.finishedAt == null &&
             _restorableWithdrawal(player) != null)
           IconButton(
-            tooltip: 'Spieler in dieser Phase wieder aufnehmen',
+            tooltip: 'Teilnehmer in dieser Phase wieder aufnehmen',
             icon: const Icon(Icons.person_add_alt_1_outlined, size: 20),
             onPressed: () {
               final withdrawal = _restorableWithdrawal(player);
@@ -300,7 +300,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           ),
         if (player.profileId == null)
           IconButton(
-            tooltip: 'Spieler umbenennen',
+            tooltip: 'Teilnehmer umbenennen',
             icon: const Icon(Icons.edit_outlined, size: 20),
             onPressed: () => _renamePlayer(player),
           ),
@@ -308,7 +308,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             PlayerWithdrawalService.policy(widget.tournament, player) == null &&
             _canAdjustParticipants)
           IconButton(
-            tooltip: 'Spieler entfernen',
+            tooltip: 'Teilnehmer entfernen',
             icon: const Icon(
               Icons.person_remove_outlined,
               size: 20,
@@ -321,7 +321,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             !_canAdjustParticipants &&
             _hasRecordedTournamentResults())
           IconButton(
-            tooltip: 'Spieler zurückziehen',
+            tooltip: 'Teilnehmer zurückziehen',
             icon: const Icon(
               Icons.person_off_outlined,
               size: 20,
@@ -341,7 +341,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       leading: const Icon(Icons.people_alt_outlined),
       title: Text(title),
       subtitle: const Text(
-        'Namen anpassen oder Spieler aus dem Turnier entfernen.',
+        'Namen anpassen oder Teilnehmer aus dem Turnier entfernen.',
       ),
       childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
       children: [
@@ -350,7 +350,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             padding: EdgeInsets.only(bottom: 8),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('Spieler ziehen, um die Setzung festzulegen.'),
+              child: Text('Teilnehmer ziehen, um die Setzung festzulegen.'),
             ),
           ),
         if (_canAdjustParticipants)
@@ -361,7 +361,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               child: FilledButton.icon(
                 onPressed: _addParticipantToTournament,
                 icon: const Icon(Icons.person_add_alt_1_outlined),
-                label: const Text('Spieler hinzufügen'),
+                label: const Text('Teilnehmer hinzufügen'),
               ),
             ),
           ),
@@ -380,7 +380,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                 leading: ReorderableDragStartListener(
                   index: index,
                   child: const Tooltip(
-                    message: 'Spieler ziehen, um die Setzung zu ändern',
+                    message: 'Teilnehmer ziehen, um die Setzung zu ändern',
                     child: SizedBox(
                       width: 48,
                       height: 48,
@@ -402,7 +402,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (league == null) {
       return [
         _playerManagementCard(
-          title: 'Spieler (${widget.tournament.players.length})',
+          title: 'Teilnehmer (${widget.tournament.players.length})',
           players: widget.tournament.players,
         ),
       ];
@@ -569,7 +569,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final annulResults = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Spieler wieder aufnehmen?'),
+        title: const Text('Teilnehmer wieder aufnehmen?'),
         content: Text(
           '„${player.name}“ wird wieder in das Turnier aufgenommen. '
           'Sollen alle durch den Ausstieg eingetragenen Partien annulliert '
@@ -607,7 +607,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _ensureGroupDeciders(startStageIndex: withdrawal.stageIndex ?? 0);
       widget.tournament.addActivity(
         'player_reinstated',
-        'Spieler ${player.name} wieder aufgenommen; '
+        'Teilnehmer ${player.name} wieder aufgenommen; '
             'durch Ausstieg eingetragene Partien '
             '${annulResults ? 'annulliert' : 'beibehalten'}',
       );
@@ -680,9 +680,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Spieler hinzufügen'),
+        title: const Text('Teilnehmer hinzufügen'),
         content: const Text(
-          'Wähle aus, ob du einen neuen Namen eingeben oder einen Spieler aus dem Katalog übernehmen möchtest.',
+          'Wähle aus, ob du einen neuen Namen eingeben oder einen Teilnehmer aus dem Katalog übernehmen möchtest.',
         ),
         actions: [
           TextButton(
@@ -691,7 +691,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, 'catalog'),
-            child: const Text('Aus Spielerkatalog'),
+            child: const Text('Aus Spielerkatalog auswählen'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, 'manual'),
@@ -710,14 +710,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       )) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Dieser Spieler ist bereits eingetragen.'),
+            content: Text('Dieser Teilnehmer ist bereits eingetragen.'),
           ),
         );
         return;
       }
       final confirmed = await _confirmParticipantFormatAdjustment(
         action: 'Turnierformat anpassen',
-        title: 'Spieler hinzufügen',
+        title: 'Teilnehmer hinzufügen',
       );
       if (confirmed != true || !mounted || !_canAdjustParticipants) return;
       await _planParticipantChange([
@@ -762,13 +762,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         .toList();
     if (candidates.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Keine neuen Spieler ausgewählt.')),
+        const SnackBar(content: Text('Keine neuen Teilnehmer ausgewählt.')),
       );
       return;
     }
     final confirmed = await _confirmParticipantFormatAdjustment(
       action: 'Turnierformat anpassen',
-      title: 'Spieler aus Katalog hinzufügen',
+      title: 'Teilnehmer aus Katalog hinzufügen',
     );
     if (confirmed != true || !mounted || !_canAdjustParticipants) return;
     await _planParticipantChange([...widget.tournament.players, ...candidates]);
@@ -778,7 +778,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (!_canAdjustParticipants) return;
     final confirmed = await _confirmParticipantFormatAdjustment(
       action: 'Turnierformat anpassen',
-      title: 'Spieler entfernen',
+      title: 'Teilnehmer entfernen',
       message:
           '„${player.name}“ wird aus dem Turnier entfernt. Dafür muss das '
           'Turnierformat an die neue Teilnehmerzahl angepasst werden. '
@@ -792,7 +792,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (players.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ein Turnier benötigt mindestens zwei Spieler.'),
+          content: Text('Ein Turnier benötigt mindestens zwei Teilnehmer.'),
         ),
       );
       return;
@@ -1091,7 +1091,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         title: const Text('Partie zurücksetzen?'),
         content: const Text(
           'Das Board wird freigegeben und der noch nicht eingetragene '
-          'Spielstand verworfen.',
+          'Ergebnis verworfen.',
         ),
         actions: [
           TextButton(
@@ -1279,6 +1279,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   @override
   void initState() {
     super.initState();
+    if (widget.tournament.leagueMatch != null) {
+      widget.tournament.directorModeEnabled = true;
+    }
     _stageViewMode = widget.tournament.directorModeEnabled
         ? StageViewMode.director
         : StageViewMode.dashboard;
@@ -1496,7 +1499,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               const Icon(Icons.tv),
               const SizedBox(width: 8),
               Text(
-                '2. Bildschirm (TV-Anzeige)',
+                'Zweitbildschirm-Modus (TV-Anzeige)',
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -1543,13 +1546,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                 ),
               ),
               IconButton(
-                tooltip: 'Information zum 2. Bildschirm',
+                tooltip: 'Information zum Zweitbildschirm-Modus',
                 onPressed: () => showDialog<void>(
                   context: context,
                   builder: (dialogContext) => AlertDialog(
-                    title: const Text('2. Bildschirm (TV-Anzeige)'),
+                    title: const Text('Zweitbildschirm-Modus (TV-Anzeige)'),
                     content: const Text(
-                      'Öffnet die Tabellen, Spielansetzungen, Ergebnisse und Turnieruhr '
+                      'Öffnet die Tabellen, Begegnungspläne, Ergebnisse und Turnieruhr '
                       'in einem eigenen Fenster. Ziehe dieses Fenster auf den zweiten '
                       'Monitor und maximiere es. Ergebnisse kannst du weiterhin hier '
                       'am Hauptbildschirm eintragen.',
@@ -2287,6 +2290,28 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _editTournamentConfiguration() async {
+    if (widget.tournament.leagueMatch != null) {
+      final updatedTournament = await Navigator.of(context)
+          .push<CreatedTournament>(
+            MaterialPageRoute<CreatedTournament>(
+              builder: (_) => LeagueMatchPage(
+                tournament: widget.tournament,
+                storage: _tournamentStorage,
+                editConfigurationOnly: true,
+              ),
+            ),
+          );
+      if (!mounted || updatedTournament == null) return;
+      Navigator.of(context).pushReplacement<void, void>(
+        MaterialPageRoute<void>(
+          builder: (_) => TournamentRunPage(
+            tournament: updatedTournament,
+            tournamentStorage: _tournamentStorage,
+          ),
+        ),
+      );
+      return;
+    }
     final updatedTournament = await Navigator.of(context)
         .push<CreatedTournament>(
           MaterialPageRoute<CreatedTournament>(
@@ -2596,7 +2621,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       widget.tournament.runStages[stageIndex] = updatedRunStage;
       widget.tournament.addActivity(
         'tiebreakers_changed',
-        'Tie-Breaker-Einstellungen in Etappe „${previousStage.name}“ geändert',
+        'Tie-Breaker-Einstellungen in Phase „${previousStage.name}“ geändert',
       );
     });
     try {
@@ -2692,7 +2717,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
       widget.tournament.addActivity(
         'kratzer_handicaps_changed',
-        'Handicap-Einstellungen in Etappe „${runStage.name}“ geändert',
+        'Handicap-Einstellungen in Phase „${runStage.name}“ geändert',
       );
     });
     try {
@@ -2820,7 +2845,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         builder: (context) => AlertDialog(
           title: const Text('Spätere Swiss-Runden zurücksetzen?'),
           content: const Text(
-            'Die Paarungen späterer Runden hängen von diesem Ergebnis ab. Ihre Ergebnisse und laufenden Spiele werden zurückgesetzt und die nächste Runde neu gepaart.',
+            'Die Paarungen späterer Runden hängen von diesem Ergebnis ab. Ihre Ergebnisse und laufenden Begegnungen werden zurückgesetzt und die nächste Runde neu gepaart.',
           ),
           actions: [
             TextButton(
@@ -2931,9 +2956,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         );
   }
 
-  bool _hasRecordedTournamentResults() => widget.tournament.runStages.any(
-    (stage) => _matchesForStage(stage).any((match) => match.hasResult),
-  );
+  bool _hasRecordedTournamentResults() {
+    final league = widget.tournament.leagueMatch;
+    if (league != null && league.games.any((game) => game.complete)) {
+      return true;
+    }
+    return widget.tournament.runStages.any(
+      (stage) => _matchesForStage(stage).any((match) => match.hasResult),
+    );
+  }
 
   bool _canEditGroupPositions(GroupTournamentRunStage stage, int stageIndex) {
     return stageIndex == _activeStageIndex &&
@@ -2977,7 +3008,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         _replaceTournamentPlayerReferences(result.playerReplacements);
         widget.tournament.addActivity(
           'groups_changed',
-          'Gruppen in Etappe „${stage.name}“ verändert',
+          'Gruppen in Phase „${stage.name}“ verändert',
         );
         _completedStageIndexes.remove(_activeStageIndex);
         widget.tournament.completedStageIndexes.remove(_activeStageIndex);
@@ -5152,7 +5183,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           widget.tournament.runStages[_activeStageIndex].name;
       widget.tournament.addActivity(
         'stage_completed',
-        'Etappe beendet: $completedStageName',
+        'Phase beendet: $completedStageName',
       );
       if (!hasNextStage) {
         widget.tournament.reopenedForCorrections = false;
@@ -5264,10 +5295,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Etappe zurücksetzen?'),
+        title: const Text('Phase zurücksetzen?'),
         content: const Text(
-          'Möchten Sie die aktuelle Etappe wirklich zurücksetzen? '
-          'Alle in dieser Etappe eingetragenen Ergebnisse werden gelöscht.',
+          'Möchten Sie die aktuelle Phase wirklich zurücksetzen? '
+          'Alle in dieser Phase eingetragenen Ergebnisse werden gelöscht.',
         ),
         actions: [
           TextButton(
@@ -5320,7 +5351,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       widget.tournament.completedStageIndexes.remove(resetStageIndex);
       widget.tournament.addActivity(
         'stage_reset',
-        'Etappe zurückgesetzt: $resetStageName',
+        'Phase zurückgesetzt: $resetStageName',
       );
     });
     _advanceKnockoutWinners(startStageIndex: resetStageIndex);
@@ -5410,7 +5441,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         const Padding(
                           padding: EdgeInsets.only(bottom: 12),
                           child: Text(
-                            'Vorschau: Teilnehmer und Setzung stehen erst nach Abschluss der vorherigen Etappe fest.',
+                            'Vorschau: Teilnehmer und Setzung stehen erst nach Abschluss der vorherigen Phase fest.',
                           ),
                         ),
                       if (_stageViewMode == StageViewMode.dashboard ||
@@ -5549,9 +5580,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                       },
                                     ),
                                     const Divider(height: 28),
-                                    if (widget.tournament.leagueMatch == null &&
-                                        widget.tournament.importedArchive ==
-                                            null)
+                                    if (widget.tournament.importedArchive ==
+                                            null &&
+                                        (widget.tournament.leagueMatch ==
+                                                null ||
+                                            !widget
+                                                .tournament
+                                                .leagueMatch!
+                                                .games
+                                                .any((game) => game.complete)))
                                       Align(
                                         alignment:
                                             AlignmentDirectional.centerStart,
@@ -5561,8 +5598,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               ? null
                                               : _editTournamentConfiguration,
                                           icon: const Icon(Icons.edit_outlined),
-                                          label: const Text(
-                                            'Turnierkonfiguration bearbeiten',
+                                          label: Text(
+                                            widget.tournament.leagueMatch ==
+                                                    null
+                                                ? 'Turnierkonfiguration bearbeiten'
+                                                : 'Mannschaftsspiel-Einstellungen bearbeiten',
                                           ),
                                         ),
                                       ),
@@ -5583,11 +5623,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     children: [
                                       _secondScreenSettingsCard(),
                                       const SizedBox(height: 12),
-                                      Align(
-                                        alignment:
-                                            AlignmentDirectional.centerStart,
-                                        child: pdfButton,
-                                      ),
+                                      pdfButton,
                                     ],
                                   );
                                 }
@@ -5598,13 +5634,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                       child: _secondScreenSettingsCard(),
                                     ),
                                     const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Align(
-                                        alignment:
-                                            AlignmentDirectional.topStart,
-                                        child: pdfButton,
-                                      ),
-                                    ),
+                                    Expanded(child: pdfButton),
                                   ],
                                 );
                               },
@@ -5620,7 +5650,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     SwitchListTile(
                                       contentPadding: EdgeInsets.zero,
                                       title: const Text(
-                                        'Turnierleiter-Modus aktivieren',
+                                        'Spielleiter-Modus aktivieren',
                                       ),
                                       subtitle: Text(
                                         widget.tournament.leagueMatch == null
@@ -5629,15 +5659,18 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                       ),
                                       value:
                                           widget.tournament.directorModeEnabled,
-                                      onChanged: (enabled) async {
-                                        final strategy = widget
-                                            .tournament
-                                            .directorSchedulingStrategy;
-                                        await _saveDirectorMode(
-                                          enabled: enabled,
-                                          strategy: strategy,
-                                        );
-                                      },
+                                      onChanged:
+                                          widget.tournament.leagueMatch != null
+                                          ? null
+                                          : (enabled) async {
+                                              final strategy = widget
+                                                  .tournament
+                                                  .directorSchedulingStrategy;
+                                              await _saveDirectorMode(
+                                                enabled: enabled,
+                                                strategy: strategy,
+                                              );
+                                            },
                                     ),
                                     if (widget.tournament.leagueMatch == null &&
                                         widget.tournament.directorModeEnabled)
@@ -5648,7 +5681,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               .tournament
                                               .directorSchedulingStrategy,
                                           decoration: const InputDecoration(
-                                            labelText: 'Board-Strategie',
+                                            labelText: 'Board Zuweisung',
                                             border: OutlineInputBorder(),
                                             suffixIcon: Tooltip(
                                               message:
@@ -5668,7 +5701,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                             ),
                                             DropdownMenuItem(
                                               value: 'global',
-                                              child: Text('Global optimiert'),
+                                              child: Text(
+                                                'Turnierweit optimiert',
+                                              ),
                                             ),
                                           ],
                                           onChanged: (value) async {
@@ -5722,7 +5757,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           'Player Insights anzeigen',
                                         ),
                                         subtitle: const Text(
-                                          'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
+                                          'Zeigt kompakte Merkmale neben Teilnehmernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
                                         ),
                                         value: widget
                                             .tournament
@@ -5815,7 +5850,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     'Sonderregel Einstellungen',
                                   ),
                                   subtitle: const Text(
-                                    'Handicaps verwalten und Spielern zuweisen',
+                                    'Handicaps verwalten und Teilnehmern zuweisen',
                                   ),
                                   childrenPadding: const EdgeInsets.fromLTRB(
                                     16,
@@ -6029,20 +6064,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                   final disabledReason = _isApplyingStartDraw
                                       ? 'Die Gruppenauslosung wird gerade angewendet.'
                                       : !isViewingActiveStage
-                                      ? 'Gruppen können nur in der aktiven Etappe bearbeitet werden.'
+                                      ? 'Gruppen können nur in der aktiven Phase bearbeitet werden.'
                                       : _hasRecordedTournamentResults()
-                                      ? 'Die Gruppen lassen sich nur bearbeiten, bevor Ergebnisse vorliegen oder nachdem alle Etappen zurückgesetzt wurden.'
+                                      ? 'Die Gruppen lassen sich nur bearbeiten, bevor Ergebnisse vorliegen oder nachdem alle Phasen zurückgesetzt wurden.'
                                       : 'Mindestens eine Partie wurde bereits gestartet oder zurückgesetzt.';
                                   return Card(
                                     child: ListTile(
                                       leading: const Icon(Icons.grid_view),
                                       title: const Text('Gruppen verwalten'),
                                       subtitle: const Text(
-                                        'Positionen der Spieler in den Gruppen tauschen.',
+                                        'Positionen der Teilnehmer in den Gruppen tauschen.',
                                       ),
                                       trailing: Tooltip(
                                         message: canEdit
-                                            ? 'Spielerpositionen in den Gruppen tauschen'
+                                            ? 'Teilnehmerpositionen in den Gruppen tauschen'
                                             : disabledReason,
                                         child: OutlinedButton(
                                           onPressed: canEdit
@@ -6074,7 +6109,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     'Tie Breaker Einstellungen',
                                   ),
                                   subtitle: const Text(
-                                    'Reihenfolge für Gleichstände in dieser Etappe',
+                                    'Reihenfolge für Gleichstände in dieser Phase',
                                   ),
                                   childrenPadding: const EdgeInsets.fromLTRB(
                                     16,
@@ -6130,7 +6165,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               const SizedBox(height: 12),
                               _leagueTeamSettingsCard(),
                             ],
-                            // 4. Spieler verwalten
+                            // 4. Teilnehmer verwalten
                             ..._playerManagementSections(),
                             if (widget.tournament.leagueMatch == null &&
                                 !widget.tournament.isKratzerTournament) ...[
@@ -6196,7 +6231,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  'Spieler',
+                                  'Teilnehmer',
                                   style: Theme.of(context).textTheme.titleLarge,
                                 ),
                                 if (_canAdjustParticipants)
@@ -6205,7 +6240,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     icon: const Icon(
                                       Icons.person_add_alt_1_outlined,
                                     ),
-                                    label: const Text('Spieler hinzufügen'),
+                                    label: const Text('Teilnehmer hinzufügen'),
                                   ),
                               ],
                             ),
@@ -6282,7 +6317,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 onSwapSlot,
                               ) {
                                 return RepaintBoundary(
-                                  child: _KnockoutBracketView(
+                                  child: KnockoutBracketView(
                                     stage: stage,
                                     placementMatches: stage.placementMatches,
                                     qualifyingRank: qualifyingRank,
@@ -6342,13 +6377,13 @@ class _ParticipantNameDialogState extends State<_ParticipantNameDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Spieler hinzufügen'),
+    title: const Text('Teilnehmer hinzufügen'),
     content: TextField(
       controller: _controller,
       autofocus: true,
       maxLength: 80,
       decoration: const InputDecoration(
-        labelText: 'Spielername',
+        labelText: 'Teilnehmername',
         border: OutlineInputBorder(),
       ),
     ),

@@ -153,7 +153,7 @@ void main() {
       expect(first.parallelCount, 2);
       expect(first.children.length, 2);
       expect(
-        find.text('2 Spiele parallel auf verschiedenen Boards'),
+        find.text('2 Begegnungen parallel auf verschiedenen Boards'),
         findsWidgets,
       );
       for (final board in [1, 2]) {

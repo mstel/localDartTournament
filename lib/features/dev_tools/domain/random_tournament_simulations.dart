@@ -34,7 +34,8 @@ TournamentSimulationScenario randomTournamentScenario(int seed) {
   final stages = <SimulationStageSpec>[];
   var remaining = players;
   if (random.nextBool() && players >= minimumPlayersPerGroup * 2) {
-    final groups = 2 + random.nextInt(min(4, players ~/ minimumPlayersPerGroup) - 1);
+    final groups =
+        2 + random.nextInt(min(4, players ~/ minimumPlayersPerGroup) - 1);
     final sizes = List.generate(
       groups,
       (i) => players ~/ groups + (i < players % groups ? 1 : 0),
@@ -73,7 +74,7 @@ TournamentSimulationScenario randomTournamentScenario(int seed) {
     ),
   );
   return TournamentSimulationScenario(
-    name: 'Zufall · $players Spieler · Seed $seed',
+    name: 'Zufall · $players Teilnehmer · Seed $seed',
     playerCount: players,
     stages: stages,
   );

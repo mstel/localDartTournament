@@ -110,11 +110,15 @@ class _GroupRunSectionState extends State<GroupRunSection> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Spiele',
+                          'Begegnungen',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
-                      Chip(label: Text('${widget.group.playType == 'swiss' ? (widget.group.players.length ~/ 2) * widget.group.matches.map((m) => m.round).toSet().length : widget.group.matches.length}')),
+                      Chip(
+                        label: Text(
+                          '${widget.group.playType == 'swiss' ? (widget.group.players.length ~/ 2) * widget.group.matches.map((m) => m.round).toSet().length : widget.group.matches.length}',
+                        ),
+                      ),
                     ],
                   ),
                 ),

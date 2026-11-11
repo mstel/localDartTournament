@@ -150,7 +150,7 @@ void main() {
       );
       for (
         var attempt = 0;
-        attempt < 20 && find.text('Spiele gespielt').evaluate().isEmpty;
+        attempt < 20 && find.text('Begegnungen gespielt').evaluate().isEmpty;
         attempt++
       ) {
         await tester.runAsync(
@@ -162,7 +162,7 @@ void main() {
         find.text('Statistiken konnten nicht geladen werden.'),
         findsNothing,
       );
-      expect(find.text('Spiele gespielt'), findsOneWidget);
+      expect(find.text('Begegnungen gespielt'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       final (
@@ -227,7 +227,9 @@ void main() {
       );
       addTearDown(() => directory.delete(recursive: true));
       final database = LocalAppDatabase(baseDirectory: directory);
-      final player = await database.createPlayerProfile(displayName: 'Spieler');
+      final player = await database.createPlayerProfile(
+        displayName: 'Teilnehmer',
+      );
       const ranking = LocalRanking(id: 'ranking', name: 'Rangliste');
       await database.saveLocalRanking(ranking);
       final progress = [
@@ -322,10 +324,10 @@ void main() {
       addTearDown(() => directory.delete(recursive: true));
       final database = LocalAppDatabase(baseDirectory: directory);
       final firstPlayer = await database.createPlayerProfile(
-        displayName: 'Spieler Eins',
+        displayName: 'Teilnehmer Eins',
       );
       final secondPlayer = await database.createPlayerProfile(
-        displayName: 'Spieler Zwei',
+        displayName: 'Teilnehmer Zwei',
       );
       await database.savePlayerMonthlyPerformance(
         PlayerMonthlyPerformance(

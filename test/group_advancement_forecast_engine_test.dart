@@ -129,9 +129,15 @@ void main() {
   test(
     'forecast applies direct comparison before aggregate leg difference',
     () {
-      final first = TournamentPlayer.generated(1).copyWith(name: 'Spieler A');
-      final second = TournamentPlayer.generated(2).copyWith(name: 'Spieler B');
-      final third = TournamentPlayer.generated(3).copyWith(name: 'Spieler C');
+      final first = TournamentPlayer.generated(
+        1,
+      ).copyWith(name: 'Teilnehmer A');
+      final second = TournamentPlayer.generated(
+        2,
+      ).copyWith(name: 'Teilnehmer B');
+      final third = TournamentPlayer.generated(
+        3,
+      ).copyWith(name: 'Teilnehmer C');
       final matches = [
         GroupMatch(
           homePlayer: second,

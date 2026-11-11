@@ -165,7 +165,7 @@ class _BestOfComparisonTableState extends State<BestOfComparisonTable> {
                 columns: const [
                   DataColumn(label: Text('#')),
                   DataColumn(label: Text('Gruppe')),
-                  DataColumn(label: Text('Spieler')),
+                  DataColumn(label: Text('Teilnehmer')),
                   DataColumn(label: Text('Pkt')),
                   DataColumn(label: Text('Legs')),
                   DataColumn(label: Text('Diff')),

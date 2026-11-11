@@ -15,7 +15,7 @@ List<Map<String, Object>> runDevelopmentSimulations(bool unused) {
         if (report.finalPlayers.length != scenario.stages.last.qualifiers ||
             report.finalPlayers.map((p) => p.name).toSet().length !=
                 report.finalPlayers.length) {
-          throw StateError('Ungültige Anzahl oder doppelte Weiterkommende');
+          throw StateError('Ungültige Anzahl oder doppelte Teilnehmer');
         }
         for (final stage in report.stageReports) {
           if (stage.outputCount < 1 || stage.outputCount > stage.inputCount) {
@@ -28,11 +28,11 @@ List<Map<String, Object>> runDevelopmentSimulations(bool unused) {
             if (match.isKratzer) {
               if (match.players.map((player) => player.name).toSet().length !=
                   match.players.length) {
-                throw StateError('Spieler gegen sich selbst');
+                throw StateError('Teilnehmer gegen sich selbst');
               }
             } else if (match.hasPlayers &&
                 match.homePlayer!.name == match.awayPlayer!.name) {
-              throw StateError('Spieler gegen sich selbst');
+              throw StateError('Teilnehmer gegen sich selbst');
             }
           }
         }

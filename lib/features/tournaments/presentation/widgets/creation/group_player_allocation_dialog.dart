@@ -66,13 +66,13 @@ class _GroupPlayerAllocationDialogState
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                'Spieler per Drag-and-drop zwischen den Gruppen tauschen. '
-                'Alternativ zwei Spieler nacheinander antippen.',
+                'Teilnehmer per Drag-and-drop zwischen den Gruppen tauschen. '
+                'Alternativ zwei Teilnehmer nacheinander antippen.',
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               if (_selectedPosition != null) ...[
                 const SizedBox(height: 8),
-                const Text('Jetzt den Spieler zum Tauschen auswählen.'),
+                const Text('Jetzt den Teilnehmer zum Tauschen auswählen.'),
               ],
               const SizedBox(height: 16),
               Wrap(
@@ -93,7 +93,7 @@ class _GroupPlayerAllocationDialogState
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
-                                '${groupLabel(groupIndex + 1)} · ${_groups[groupIndex].length} Spieler',
+                                '${groupLabel(groupIndex + 1)} · ${_groups[groupIndex].length} Teilnehmer',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               const SizedBox(height: 8),

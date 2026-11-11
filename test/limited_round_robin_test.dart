@@ -183,14 +183,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byType(DropdownButtonFormField<int>));
       await tester.pumpAndSettle();
-      expect(find.text('5 Spiele'), findsOneWidget);
+      expect(find.text('5 Begegnungen'), findsOneWidget);
       await tester.tap(find.byType(DropdownButtonFormField<int>));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('4 Spiele').last);
+      await tester.tap(find.text('4 Begegnungen').last);
       await tester.pumpAndSettle();
       tester.view.physicalSize = const Size(360, 800);
       await tester.pumpAndSettle();
-      expect(find.text('4 Spiele'), findsOneWidget);
+      expect(find.text('4 Begegnungen'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

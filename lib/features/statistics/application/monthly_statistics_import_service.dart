@@ -30,12 +30,12 @@ class MonthlyStatisticsImportService {
       final profileId = profileIdBySourceName[row.playerName];
       if (profileId == null || profileId.isEmpty) {
         throw FormatException(
-          'Kein Spielerprofil für "${row.playerName}" ausgewählt.',
+          'Kein Teilnehmerprofil für "${row.playerName}" ausgewählt.',
         );
       }
       if (!keys.add('$profileId|${row.month}')) {
         throw FormatException(
-          'Mehrere Excel-Zeilen wurden demselben Spieler und Monat zugeordnet '
+          'Mehrere Excel-Zeilen wurden demselben Teilnehmer und Monat zugeordnet '
           '(${row.playerName}, ${row.month}).',
         );
       }

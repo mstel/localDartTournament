@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 List<int> _xlsx({
   String rows =
-      '<row r="2"><c r="A2" t="inlineStr"><is><t>Alex Spieler</t></is></c>'
+      '<row r="2"><c r="A2" t="inlineStr"><is><t>Alex Teilnehmer</t></is></c>'
       '<c r="B2" t="inlineStr"><is><t>2026-07</t></is></c>'
       '<c r="C2"><v>36.92</v></c><c r="D2"><v>42.76</v></c>'
       '<c r="E2"></c><c r="F2"><v>26</v></c><c r="G2"><v>13</v></c></row>',
@@ -41,7 +41,7 @@ List<int> _xlsx({
         <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
           <sheetData>
             <row r="1">
-              <c r="A1" t="inlineStr"><is><t>Spieler</t></is></c>
+              <c r="A1" t="inlineStr"><is><t>Teilnehmer</t></is></c>
               <c r="B1" t="inlineStr"><is><t>Monat</t></is></c>
               <c r="C1" t="inlineStr"><is><t>3-Dart Average</t></is></c>
               <c r="D1" t="inlineStr"><is><t>First 9</t></is></c>
@@ -64,7 +64,7 @@ void main() {
     expect(document.rows, hasLength(1));
     final row = document.rows.single;
     expect(row.sourceRow, 2);
-    expect(row.playerName, 'Alex Spieler');
+    expect(row.playerName, 'Alex Teilnehmer');
     expect(row.month, '2026-07');
     expect(row.threeDartAverage, 36.92);
     expect(row.firstNineAverage, 42.76);
@@ -76,11 +76,11 @@ void main() {
   test('rejects duplicate player-month rows before any import', () {
     final bytes = _xlsx(
       rows:
-          '<row r="2"><c r="A2" t="inlineStr"><is><t>Alex Spieler</t></is></c>'
+          '<row r="2"><c r="A2" t="inlineStr"><is><t>Alex Teilnehmer</t></is></c>'
           '<c r="B2" t="inlineStr"><is><t>2026-07</t></is></c>'
           '<c r="C2"><v>36.92</v></c><c r="D2"><v>42.76</v></c>'
           '<c r="E2"></c><c r="F2"><v>26</v></c><c r="G2"><v>13</v></c></row>'
-          '<row r="3"><c r="A3" t="inlineStr"><is><t>Alex Spieler</t></is></c>'
+          '<row r="3"><c r="A3" t="inlineStr"><is><t>Alex Teilnehmer</t></is></c>'
           '<c r="B3" t="inlineStr"><is><t>2026-07</t></is></c>'
           '<c r="C3"><v>38</v></c><c r="D3"><v>44</v></c>'
           '<c r="E3"></c><c r="F3"><v>8</v></c><c r="G3"><v>4</v></c></row>',
@@ -105,13 +105,13 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final database = LocalAppDatabase(baseDirectory: directory);
     final profile = await database.createPlayerProfile(
-      displayName: 'Alex Spieler',
+      displayName: 'Alex Teilnehmer',
     );
     final document = const MonthlyStatisticsXlsxParser().parse(_xlsx());
     final first = await MonthlyStatisticsImportService(database: database)
         .importDocument(
           document: document,
-          profileIdBySourceName: {'Alex Spieler': profile.id},
+          profileIdBySourceName: {'Alex Teilnehmer': profile.id},
         );
     expect(first.importedRows, 1);
     expect(first.replacedRows, 0);
@@ -119,7 +119,7 @@ void main() {
     final secondDocument = const MonthlyStatisticsXlsxParser().parse(
       _xlsx(
         rows:
-            '<row r="2"><c r="A2" t="inlineStr"><is><t>Alex Spieler</t></is></c>'
+            '<row r="2"><c r="A2" t="inlineStr"><is><t>Alex Teilnehmer</t></is></c>'
             '<c r="B2" t="inlineStr"><is><t>2026-07</t></is></c>'
             '<c r="C2"><v>40</v></c><c r="D2"><v>47</v></c>'
             '<c r="E2"></c><c r="F2"><v>30</v></c><c r="G2"><v>15</v></c></row>',
@@ -128,7 +128,7 @@ void main() {
     final second = await MonthlyStatisticsImportService(database: database)
         .importDocument(
           document: secondDocument,
-          profileIdBySourceName: {'Alex Spieler': profile.id},
+          profileIdBySourceName: {'Alex Teilnehmer': profile.id},
         );
 
     expect(second.importedRows, 1);
@@ -158,14 +158,14 @@ void main() {
       addTearDown(() => directory.delete(recursive: true));
       final database = LocalAppDatabase(baseDirectory: directory);
       final profile = await database.createPlayerProfile(
-        displayName: 'Alex Spieler',
+        displayName: 'Alex Teilnehmer',
       );
       final document = const MonthlyStatisticsXlsxParser().parse(_xlsx());
 
       await expectLater(
         MonthlyStatisticsImportService(database: database).importDocument(
           document: document,
-          profileIdBySourceName: {'Alex Spieler': 'missing-profile'},
+          profileIdBySourceName: {'Alex Teilnehmer': 'missing-profile'},
         ),
         throwsStateError,
       );

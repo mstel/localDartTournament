@@ -271,7 +271,7 @@ class _CloudBackupPanelState extends State<CloudBackupPanel> {
                       Text(
                         user == null
                             ? 'Mit demselben Supabase-Konto kannst du deinen Datenstand zwischen Laptop und Handy übertragen. Jedes Konto hat einen eigenen Cloud-Speicher. Der Abgleich erfolgt nur manuell.'
-                            : 'Angemeldet als ${user.email ?? 'Betreiber'}. Spieler, Turniere, Bestleistungen und Ranglisten bleiben lokal, bis du den Cloud-Abgleich manuell startest.',
+                            : 'Angemeldet als ${user.email ?? 'Betreiber'}. Teilnehmer, Turniere, Bestleistungen und Ranglisten bleiben lokal, bis du den Cloud-Abgleich manuell startest.',
                       ),
                       const SizedBox(height: 8),
                       if (user == null)

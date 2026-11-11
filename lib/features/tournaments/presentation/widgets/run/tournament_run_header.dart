@@ -63,7 +63,7 @@ class TournamentRunDetails extends StatelessWidget {
     child: SportSettingsSection(
       title: 'Turnierdetails',
       summary:
-          '${tournament.players.length} Spieler · ${tournament.boardCount} Boards · Uhr & Regeln',
+          '${tournament.players.length} Teilnehmer · ${tournament.boardCount} Boards · Uhr & Regeln',
       icon: Icons.info_outline,
       children: children,
     ),

@@ -6,8 +6,9 @@ class TournamentStatisticsView extends StatelessWidget {
   const TournamentStatisticsView({
     super.key,
     required this.rows,
-    this.title = 'Spielerstatistiken',
-    this.description = 'Aus lokal gespeicherten Turnier- und Spielergebnissen.',
+    this.title = 'Teilnehmerstatistiken',
+    this.description =
+        'Aus lokal gespeicherten Turnier- und Teilnehmerergebnissen.',
   });
   final List<TournamentPlayerStatistics> rows;
   final String description;
@@ -45,11 +46,15 @@ class TournamentStatisticsCard extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
-          Text('${row.tournaments.length} Turniere · ${row.matches} Spiele'),
+          Text(
+            '${row.tournaments.length} Turniere · ${row.matches} Begegnungen',
+          ),
           Text(
             '${row.wins} Siege · ${row.draws} Unentschieden · ${row.losses} Niederlagen',
           ),
-          Text('Gewonnene / verlorene Legs: ${row.legsFor} / ${row.legsAgainst}'),
+          Text(
+            'Gewonnene / verlorene Legs: ${row.legsFor} / ${row.legsAgainst}',
+          ),
         ],
       ),
     ),

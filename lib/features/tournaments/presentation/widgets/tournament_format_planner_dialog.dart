@@ -91,13 +91,13 @@ class _TournamentFormatPlannerDialogState
         'Wer eine Begegnung verliert, scheidet sofort aus dem Turnier aus. Der Gewinner zieht in die nächste Runde ein, bis im Finale der Turniersieger ermittelt wird.',
     'double_knockout':
         'Doppel-K.-o.-System (Double Elimination):\n\n'
-        'Jeder Spieler hat zwei Chancen. Wer in der Hauptrunde (Winners Bracket) verliert, scheidet nicht aus, sondern wechselt in die Verliererrunde (Losers Bracket). Erst bei der zweiten Niederlage scheidet ein Teilnehmer endgültig aus.',
+        'Jeder Teilnehmer hat zwei Chancen. Wer in der Hauptrunde (Winners Bracket) verliert, scheidet nicht aus, sondern wechselt in die Verliererrunde (Losers Bracket). Erst bei der zweiten Niederlage scheidet ein Teilnehmer endgültig aus.',
     'triple_knockout':
         'Triple-K.-o.-System (Triple Elimination):\n\n'
-        'Jeder Spieler scheidet erst nach der dritten Niederlage aus. Neben der Hauptrunde gibt es zwei Auffangrunden (B- und C-Bracket), wodurch allen Teilnehmern mindestens drei garantierte K.-o.-Partien geboten werden.',
+        'Jeder Teilnehmer scheidet erst nach der dritten Niederlage aus. Neben der Hauptrunde gibt es zwei Auffangrunden (B- und C-Bracket), wodurch allen Teilnehmern mindestens drei garantierte K.-o.-Partien geboten werden.',
     'kratzer':
         'Kratzer-Modus (Leben-System):\n\n'
-        'Alle Teilnehmer starten mit einer festen Anzahl an Leben (z. B. 3 bis 5 Leben). Jede verlorene Partie kostet ein Leben („Kratzer“). Wer alle Leben aufgebraucht hat, scheidet aus. Die verbleibenden Spieler treten gegeneinander an, bis nur noch ein Sieger übrig ist.',
+        'Alle Teilnehmer starten mit einer festen Anzahl an Leben (z. B. 3 bis 5 Leben). Jede verlorene Partie kostet ein Leben („Kratzer“). Wer alle Leben aufgebraucht hat, scheidet aus. Die verbleibenden Teilnehmer treten gegeneinander an, bis nur noch ein Sieger übrig ist.',
     'groups:round_robin':
         'Gruppenphase: Jeder gegen jeden (einmal):\n\n'
         'Innerhalb jeder Gruppe spielt jeder Teilnehmer genau einmal gegen jeden anderen Gruppengegner. Die Rangfolge ergibt sich aus Siegen, Leg-Differenz und direktem Vergleich.',
@@ -106,10 +106,10 @@ class _TournamentFormatPlannerDialogState
         'Innerhalb jeder Gruppe spielt jeder Teilnehmer zweimal gegen jeden anderen Gruppengegner. Die doppelte Spielanzahl gibt eine breitere Bewertungsgrundlage, verlängert aber die Turnierdauer.',
     'groups:limited_round_robin':
         'Gruppenphase: Rundenformat mit max. 5 Spielen:\n\n'
-        'Für größere Teilnehmergruppen: Jeder Spieler absolviert maximal 5 festgelegte Runden gegen verschiedene Gegner, um die Turnierdauer verlässlich einzugrenzen, ohne dass alle Kombinationen ausgespielt werden müssen.',
+        'Für größere Teilnehmergruppen: Jeder Teilnehmer absolviert maximal 5 festgelegte Runden gegen verschiedene Gegner, um die Turnierdauer verlässlich einzugrenzen, ohne dass alle Kombinationen ausgespielt werden müssen.',
     'groups:swiss':
         'Schweizer System:\n\n'
-        'In jeder Spielrunde werden Teilnehmer mit identischem oder ähnlichem Punktestand gegeneinander gepaart. Niemand scheidet vorzeitig aus, und die Spiele bleiben durch das dynamische Nachrücken bis zum Ende ausgeglichen.',
+        'In jeder Runde werden Teilnehmer mit identischem oder ähnlichem Punktestand gegeneinander gepaart. Niemand scheidet vorzeitig aus, und die Begegnungen bleiben durch das dynamische Nachrücken bis zum Ende ausgeglichen.',
   };
 
   void _activateDurationRange() {
@@ -546,13 +546,16 @@ class _TournamentFormatPlannerDialogState
               AdaptiveTileLayout(
                 minTileWidth: 220,
                 children: [
-                  _numberField(_players, 'Anzahl Spieler'),
+                  _numberField(_players, 'Anzahl Teilnehmer'),
                   _numberField(
                     _boards,
                     'Anzahl Boards',
                     enabled: !_calculating && !widget.lockBoardCount,
                   ),
-                  _numberField(_minimumMatches, 'Mindestens Spiele/Spieler'),
+                  _numberField(
+                    _minimumMatches,
+                    'Mindestens Begegnungen/Teilnehmer',
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -632,7 +635,7 @@ class _TournamentFormatPlannerDialogState
                 children: [
                   const Text('Berücksichtigte Turnierformen'),
                   const Text(
-                    'Die Auswahl gilt für jede Etappe. Gruppen-Spielarten können unabhängig von den KO-Etappen gewählt werden.',
+                    'Die Auswahl gilt für jede Phase. Gruppen-Spielarten können unabhängig von den KO-Phasen gewählt werden.',
                   ),
                   for (final mode
                       in TournamentPlanningRequest.modeLabels.entries)
@@ -693,7 +696,7 @@ class _TournamentFormatPlannerDialogState
                 key: _structureKey,
                 title: 'Aufbau & Gruppen',
                 summary:
-                    'Bis zu $_maximumStages Etappen · ${_requireGroupPhase ? 'mit Gruppenphase' : 'Gruppenphase optional'}',
+                    'Bis zu $_maximumStages Phasen · ${_requireGroupPhase ? 'mit Gruppenphase' : 'Gruppenphase optional'}',
                 icon: Icons.groups_outlined,
                 children: [
                   TextField(
@@ -703,7 +706,7 @@ class _TournamentFormatPlannerDialogState
                     decoration: InputDecoration(
                       labelText: 'Maximale Gruppenzahl',
                       helperText:
-                          'Obergrenze je Gruppenphase, keine Pflicht für Gruppen. Leer: gespeicherter Wert. Mindestens 3 Spieler je Gruppe.',
+                          'Obergrenze je Gruppenphase, keine Pflicht für Gruppen. Leer: gespeicherter Wert. Mindestens 3 Teilnehmer je Gruppe.',
                       helperMaxLines: 3,
                       errorText: _maximumGroupsError,
                       border: const OutlineInputBorder(),
@@ -715,9 +718,9 @@ class _TournamentFormatPlannerDialogState
                     controller: _manualQualifiers,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: 'Weiterkommende Spieler (Top X / Finalrunde)',
+                      labelText: 'Teilnehmer (Top X / Finalrunde)',
                       helperText:
-                          'Anzahl Qualifikanten für die Final-/KO-Runde (z. B. 6 für Top 6 mit Freilosen bei 12 Spielern). Leer: automatisch.',
+                          'Anzahl Teilnehmer für die Final-/KO-Runde (z. B. 6 für Top 6 mit Freilosen bei 12 Teilnehmern). Leer: automatisch.',
                       helperMaxLines: 3,
                       errorText: _manualQualifiersError,
                       border: const OutlineInputBorder(),
@@ -737,13 +740,13 @@ class _TournamentFormatPlannerDialogState
                           }),
                   ),
                   const Text(
-                    'Nur Vorschläge mit Gruppenphase. Weitere Etappen bleiben möglich.',
+                    'Nur Vorschläge mit Gruppenphase. Weitere Phasen bleiben möglich.',
                   ),
                   DropdownButtonFormField<int>(
                     initialValue: _maximumStages,
                     isExpanded: true,
                     decoration: const InputDecoration(
-                      labelText: 'Maximale Etappen',
+                      labelText: 'Maximale Phasen',
                       helperText: 'Suche nach Kombinationen aller Turniermodi.',
                       helperMaxLines: 3,
                     ),
@@ -764,7 +767,7 @@ class _TournamentFormatPlannerDialogState
                     initialValue: _preferredFinalStage,
                     isExpanded: true,
                     decoration: const InputDecoration(
-                      labelText: 'Gewünschte letzte Etappe',
+                      labelText: 'Gewünschte letzte Phase',
                       helperText:
                           'Legt fest, mit welchem Format das Turnier enden soll.',
                     ),
@@ -948,7 +951,7 @@ class _TournamentFormatPlannerDialogState
                     key: const ValueKey('planner-allow-draws'),
                     title: const Text('Unentschieden erlauben'),
                     subtitle: const Text(
-                      'Zusätzlich gerade Leg-Längen in Liga-/Gruppenphasen: 1 Punkt je Spieler. K.-o. und Set-Formate benötigen einen Sieger.',
+                      'Zusätzlich gerade Leg-Längen in Liga-/Gruppenphasen: 1 Punkt je Teilnehmer. K.-o. und Set-Formate benötigen einen Sieger.',
                     ),
                     value: _allowDraws,
                     onChanged: _calculating
@@ -981,7 +984,7 @@ class _TournamentFormatPlannerDialogState
                   style: TextStyle(fontSize: 14),
                 ),
                 subtitle: const Text(
-                  'Spieldistanz, Zeitansatz und weitere Etappen',
+                  'Spieldistanz, Zeitansatz und weitere Phasen',
                   style: TextStyle(fontSize: 12),
                 ),
                 leading: const Icon(Icons.info_outline, size: 20),
@@ -990,7 +993,7 @@ class _TournamentFormatPlannerDialogState
                   Padding(
                     padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: Text(
-                      'Spätere Etappen bleiben bei gleicher Distanz oder steigen höchstens um eine Best-of-Stufe (Bo3 → Bo5); dies gilt für Legs und Sets. Jede Etappe erhält einen eigenen Vorschlag: Best of 1 bis 101 Legs; bei erlaubtem Unentschieden zusätzlich gerade Leg-Längen bis 100 und optional Best of 3 oder 5 Sets. Bei variabler Punktzahl werden 301 und 501 je Etappe verglichen. Zeitansatz: Mittelwert aus minimaler und maximaler Anzahl Legs bzw. Sets. Bo3 = 2,5; Bo4 = 3,5; Bo5 = 4; Bo101 = 76. Bo1 = 1.',
+                      'Spätere Phasen bleiben bei gleicher Distanz oder steigen höchstens um eine Best-of-Stufe (Bo3 → Bo5); dies gilt für Legs und Sets. Jede Phase erhält einen eigenen Vorschlag: Best of 1 bis 101 Legs; bei erlaubtem Unentschieden zusätzlich gerade Leg-Längen bis 100 und optional Best of 3 oder 5 Sets. Bei variabler Punktzahl werden 301 und 501 je Phase verglichen. Zeitansatz: Mittelwert aus minimaler und maximaler Anzahl Legs bzw. Sets. Bo3 = 2,5; Bo4 = 3,5; Bo5 = 4; Bo101 = 76. Bo1 = 1.',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
@@ -1011,7 +1014,7 @@ class _TournamentFormatPlannerDialogState
                   Text(
                     _requireGroupPhase &&
                             (int.tryParse(_players.text.trim()) ?? 0) < 3
-                        ? 'Keine Gruppenaufteilung möglich: Jede Gruppe benötigt mindestens 3 Spieler.'
+                        ? 'Keine Gruppenaufteilung möglich: Jede Gruppe benötigt mindestens 3 Teilnehmer.'
                         : 'Keine passende Turnierform im gewählten Zeitfenster gefunden. Bitte Dauer anpassen oder weitere Spielarten zulassen.',
                   ),
                 PlanningSuggestionList(

@@ -252,7 +252,7 @@ class _SetResultDialogState extends State<SetResultDialog> {
         TextButton(
           onPressed: () =>
               Navigator.of(context).pop(const MatchResult.annulled()),
-          child: const Text('Spiel annullieren'),
+          child: const Text('Begegnung annullieren'),
         ),
       TextButton(
         onPressed: () => Navigator.of(context).pop(),

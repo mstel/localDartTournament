@@ -42,7 +42,7 @@ class PlayerStatisticsImageGenerator {
     );
     _text(
       canvas,
-      'Spielerprofil · Turniere, Spiele und Bestleistungen',
+      'Teilnehmerprofil · Turniere, Begegnungen und Bestleistungen',
       Offset(padding, padding + 64),
       maxWidth: contentWidth,
       fontSize: 22,
@@ -51,7 +51,7 @@ class PlayerStatisticsImageGenerator {
 
     final metrics = <(String, String)>[
       ('Turniere', '${statistics.tournaments}'),
-      ('Spiele', '${statistics.matches}'),
+      ('Begegnungen', '${statistics.matches}'),
       ('Siege', '${statistics.wins}'),
       ('Niederlagen', '${statistics.losses}'),
       ('Unentschieden', '${statistics.draws}'),

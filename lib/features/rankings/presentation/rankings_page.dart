@@ -234,7 +234,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                     ),
                     ButtonSegment(
                       value: _YearReviewMode.player,
-                      label: Text('Nach Spieler'),
+                      label: Text('Nach Teilnehmer'),
                       icon: Icon(Icons.person_outline),
                     ),
                   ],
@@ -289,7 +289,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                 if (rankings.isEmpty) ...[
                   const SizedBox(height: 16),
                   const Text(
-                    'Lege zuerst eine Rangliste an und weise Spieler zu.',
+                    'Lege zuerst eine Rangliste an und weise Teilnehmer zu.',
                   ),
                 ],
                 if (_rankingReview != null && _selectedRanking != null) ...[
@@ -510,7 +510,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                 ],
               ] else ...[
                 Text(
-                  'Rückblick nach Spieler',
+                  'Rückblick nach Teilnehmer',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 14),
@@ -519,7 +519,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                   isExpanded: true,
                   itemHeight: null,
                   decoration: const InputDecoration(
-                    labelText: 'Spieler auswählen',
+                    labelText: 'Teilnehmer auswählen',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.person_search_outlined),
                   ),
@@ -553,7 +553,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                 ),
                 if (players.isEmpty) ...[
                   const SizedBox(height: 16),
-                  const Text('Noch keine Spielerprofile vorhanden.'),
+                  const Text('Noch keine Teilnehmerprofile vorhanden.'),
                 ],
                 if (_playerReview != null && _selectedPlayer != null) ...[
                   const SizedBox(height: 20),
@@ -595,7 +595,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                 value: '${stats.tournaments}',
                               ),
                               _StatMiniCard(
-                                label: 'Spiele',
+                                label: 'Begegnungen',
                                 value: '${stats.matches}',
                               ),
                               _StatMiniCard(
@@ -1195,7 +1195,7 @@ class _RankingsPageState extends State<RankingsPage> {
       builder: (context) => AlertDialog(
         title: const Text('Rangliste löschen?'),
         content: Text(
-          '„${ranking.name}“ und ihre Spielerzuweisungen werden gelöscht.',
+          '„${ranking.name}“ und ihre Teilnehmerzuweisungen werden gelöscht.',
         ),
         actions: [
           TextButton(
@@ -1326,7 +1326,7 @@ class _RankingsPageState extends State<RankingsPage> {
                           itemBuilder: (_) => const [
                             PopupMenuItem(
                               value: 'players',
-                              child: Text('Spieler zuweisen'),
+                              child: Text('Teilnehmer zuweisen'),
                             ),
                             PopupMenuItem(
                               value: 'tournaments',
@@ -1379,8 +1379,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
     'K-Faktor Neu': TextEditingController(text: '25'),
     'K-Faktor Normal': TextEditingController(text: '15'),
     'K-Faktor Pro': TextEditingController(text: '10'),
-    'Spiele bis Normal': TextEditingController(text: '10'),
-    'Pro-Spieler ab Wertung': TextEditingController(text: '2400'),
+    'Begegnungen bis Normal': TextEditingController(text: '10'),
+    'Pro-Teilnehmer ab Wertung': TextEditingController(text: '2400'),
     'Punkte Teilnahme': TextEditingController(text: '1'),
     'Punkte je gewonnenem Set': TextEditingController(text: '1'),
     'Punkte Platz 1': TextEditingController(text: '10'),
@@ -1452,8 +1452,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
         'K-Faktor Neu': initial.newPlayerK,
         'K-Faktor Normal': initial.normalPlayerK,
         'K-Faktor Pro': initial.proPlayerK,
-        'Spiele bis Normal': initial.matchesBeforeNormal,
-        'Pro-Spieler ab Wertung': initial.proRatingThreshold,
+        'Begegnungen bis Normal': initial.matchesBeforeNormal,
+        'Pro-Teilnehmer ab Wertung': initial.proRatingThreshold,
         'Punkte Teilnahme': initial.participationPoints,
         'Punkte je gewonnenem Set': initial.setWinPoints,
         'Punkte Platz 1': initial.firstPlacePoints,
@@ -1565,8 +1565,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
         newPlayerK: _value('K-Faktor Neu'),
         normalPlayerK: _value('K-Faktor Normal'),
         proPlayerK: _value('K-Faktor Pro'),
-        matchesBeforeNormal: _value('Spiele bis Normal'),
-        proRatingThreshold: _value('Pro-Spieler ab Wertung'),
+        matchesBeforeNormal: _value('Begegnungen bis Normal'),
+        proRatingThreshold: _value('Pro-Teilnehmer ab Wertung'),
         participationPoints: _value('Punkte Teilnahme'),
         setWinPoints: _value('Punkte je gewonnenem Set'),
         firstPlacePoints: _value('Punkte Platz 1'),
@@ -1820,8 +1820,8 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
                   if (_type == RankingType.elo
                       ? entry.key.startsWith('Start') ||
                             entry.key.startsWith('K-Faktor') ||
-                            entry.key.startsWith('Spiele') ||
-                            entry.key.startsWith('Pro-Spieler')
+                            entry.key.startsWith('Begegnungen') ||
+                            entry.key.startsWith('Pro-Teilnehmer')
                       : entry.key.startsWith('Punkte'))
                     Padding(
                       padding: const EdgeInsets.only(bottom: 14),
@@ -1844,9 +1844,9 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
             if (_type == RankingType.elo) ...[
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Begegnungen mit lokalen Spielern Werten'),
+                title: const Text('Begegnungen mit lokalen Teilnehmern werten'),
                 subtitle: const Text(
-                  'Nicht zugeordnete Spieler starten je Turnier mit 1000 Elo. Ihre Wertung wird nur innerhalb dieses Turniers fortgeschrieben; Mitglieder dieser Rangliste behalten ihre Elo.',
+                  'Nicht zugeordnete Teilnehmer starten je Turnier mit 1000 Elo. Ihre Wertung wird nur innerhalb dieses Turniers fortgeschrieben; Mitglieder dieser Rangliste behalten ihre Elo.',
                 ),
                 value: _countUnassignedPlayers,
                 onChanged: (value) =>
@@ -2057,9 +2057,11 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Spieler erst ab X Turnierteilnahmen werten'),
+              title: const Text(
+                'Teilnehmer erst ab X Turnierteilnahmen werten',
+              ),
               subtitle: const Text(
-                'Begegnungen eines Spielers werden erst berücksichtigt, wenn er die Mindestanzahl erreicht hat.',
+                'Begegnungen eines Teilnehmers werden erst berücksichtigt, wenn diese Mindestanzahl erreicht ist.',
               ),
               value: _requireMinimumParticipations,
               onChanged: (value) =>
@@ -2183,7 +2185,7 @@ class _RankingTournamentsPageState extends State<_RankingTournamentsPage> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const Text(
-              'Bei Elo zählen nur Begegnungen, bei denen beide zugewiesenen Spieler Mitglieder dieser Rangliste sind.',
+              'Bei Elo zählen nur Begegnungen, bei denen beide zugewiesenen Teilnehmer Mitglieder dieser Rangliste sind.',
             ),
             if (tournaments.isEmpty)
               const Text('Noch keine Turniere vorhanden.'),
@@ -2271,16 +2273,16 @@ class _RankingPlayersPageState extends State<_RankingPlayersPage> {
           padding: const EdgeInsets.all(20),
           children: [
             Text(
-              'Spieler zuweisen',
+              'Teilnehmer zuweisen',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const Text(
-              'Nur zugewiesene Spieler zählen in dieser Rangliste. Bei Elo werden Begegnungen nur gewertet, wenn beide Spieler Mitglied sind.',
+              'Nur zugewiesene Teilnehmer zählen in dieser Rangliste. Bei Elo werden Begegnungen nur gewertet, wenn beide Teilnehmer Mitglied sind.',
             ),
             if (players.isEmpty)
               const Card(
                 child: ListTile(
-                  title: Text('Lege zuerst Spieler im Hauptmenü an.'),
+                  title: Text('Lege zuerst Teilnehmer im Hauptmenü an.'),
                 ),
               ),
             for (final player in players)
@@ -2399,7 +2401,7 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
             ),
           if (snapshot.data case final entries?) ...[
             const Text(
-              'Elo wird chronologisch aus abgeschlossenen Turnierspielen berechnet. Nur zugewiesene Spieler und für diese Rangliste markierte Turniere zählen.',
+              'Elo wird chronologisch aus abgeschlossenen Turnierspielen berechnet. Nur zugewiesene Teilnehmer und für diese Rangliste markierte Turniere zählen.',
             ),
             for (var i = 0; i < entries.entries.length; i++)
               Card(
@@ -2455,7 +2457,7 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
                 child: ListTile(
                   title: Text('Noch keine gewerteten Ergebnisse.'),
                   subtitle: Text(
-                    'Spieler zuweisen und ein Turnier für diese Rangliste markieren.',
+                    'Teilnehmer zuweisen und ein Turnier für diese Rangliste markieren.',
                   ),
                 ),
               ),
@@ -2507,7 +2509,7 @@ class _LocalRankingSeriesStandingsPageState
       ];
       final bytes = await const RankingStandingsImageGenerator().generateRows(
         title: widget.ranking.name,
-        subtitle: 'Ranglistenstand · ${entries.length} Spieler',
+        subtitle: 'Ranglistenstand · ${entries.length} Teilnehmer',
         rows: rows,
         colorScheme: colorScheme,
       );
@@ -2699,7 +2701,7 @@ class PlayerEloHistoryPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Tooltip(
-                      message: 'Spielerprofil von ${player.name} öffnen',
+                      message: 'Teilnehmerprofil von ${player.name} öffnen',
                       child: TextButton(
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(

@@ -345,7 +345,9 @@ void main() {
     );
     addTearDown(() => directory.delete(recursive: true));
     final database = LocalAppDatabase(baseDirectory: directory);
-    final profile = await database.createPlayerProfile(displayName: 'Spieler');
+    final profile = await database.createPlayerProfile(
+      displayName: 'Teilnehmer',
+    );
     final ranking = const LocalRanking(
       id: 'disabled-ranking',
       name: 'Disabled',
@@ -372,7 +374,7 @@ void main() {
 
       final database = LocalAppDatabase(baseDirectory: directory);
       final playerProfile = await database.createPlayerProfile(
-        displayName: 'Spieler',
+        displayName: 'Teilnehmer',
       );
       final opponentProfile = await database.createPlayerProfile(
         displayName: 'Gegner',
@@ -519,7 +521,9 @@ void main() {
       addTearDown(() => directory.delete(recursive: true));
 
       final database = LocalAppDatabase(baseDirectory: directory);
-      final player = await database.createPlayerProfile(displayName: 'Spieler');
+      final player = await database.createPlayerProfile(
+        displayName: 'Teilnehmer',
+      );
       const ranking = LocalRanking(
         id: 'monthly-ranking',
         name: 'Rangliste 2026',

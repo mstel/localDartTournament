@@ -70,9 +70,9 @@ void main() {
         if (size.width < 840 * scale) {
           await tester.tap(find.byType(DropdownButtonFormField<StageViewMode>));
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Ergebnisse').last);
+          await tester.tap(find.text('Partien & Ergebnisse').last);
         } else {
-          await tester.tap(find.text('Ergebnisse'));
+          await tester.tap(find.text('Partien & Ergebnisse'));
         }
         await tester.pumpAndSettle();
         expect(selected, StageViewMode.results);

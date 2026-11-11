@@ -127,7 +127,7 @@ class TournamentFlowPriority {
       playerNotices.add(
         'Priorität: ${names.join(', ')} haben in ${group.name} mindestens '
         '${settings.playerMatchDeficitThreshold} Partien Rückstand. Offene Partien mit '
-        'diesen Spielern bevorzugt ansetzen.',
+        'diesen Teilnehmern bevorzugt ansetzen.',
       );
       for (final match in group.matches.where(_isPrioritizable)) {
         final matchPlayers = {

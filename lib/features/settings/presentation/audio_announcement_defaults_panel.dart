@@ -66,7 +66,7 @@ class _AudioAnnouncementDefaultsPanelState
   Widget build(BuildContext context) => ExpansionTile(
     leading: const Icon(Icons.record_voice_over_outlined),
     title: const Text('Ton Modus Einstellungen'),
-    subtitle: const Text('Legt fest, wie Spielernamen angesagt werden.'),
+    subtitle: const Text('Legt fest, wie Teilnehmernamen angesagt werden.'),
     childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
     children: [
       if (_loading) const LinearProgressIndicator(),
@@ -75,7 +75,7 @@ class _AudioAnnouncementDefaultsPanelState
         initialValue: _settings.nameFormat,
         isExpanded: true,
         decoration: const InputDecoration(
-          labelText: 'Namensformat',
+          labelText: 'Namenswiedergabe',
           border: OutlineInputBorder(),
         ),
         items: const [
@@ -85,9 +85,7 @@ class _AudioAnnouncementDefaultsPanelState
           ),
           DropdownMenuItem(
             value: AnnouncementNameFormat.firstNameLastInitial,
-            child: Text(
-              'Vorname + ersten Buchstaben des Nachnamens aussprechen',
-            ),
+            child: Text('Vorname + Nachnameninitial'),
           ),
         ],
         onChanged: _loading || _saving
@@ -100,58 +98,54 @@ class _AudioAnnouncementDefaultsPanelState
       ),
       CheckboxListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Spitzname aussprechen, wenn vorhanden'),
+        title: const Text('Spitzname bevorzugen'),
         subtitle: const Text(
-          'Ein vorhandener Spitzname hat Vorrang vor dem Namensformat.',
+          'Ein vorhandener Spitzname hat Vorrang vor der Namenswiedergabe.',
         ),
         value: _settings.speakNicknameWhenAvailable,
         onChanged: _loading || _saving
             ? null
             : (enabled) {
-                _save(
-                  _settings.copyWith(speakNicknameWhenAvailable: enabled),
-                );
+                _save(_settings.copyWith(speakNicknameWhenAvailable: enabled));
               },
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Alternative Empfehlungen vorlesen'),
+        title: const Text('Weitere Vorschläge vorlesen'),
         subtitle: const Text(
-          'Zusätzliche empfohlene Partien werden mit „oder“ angekündigt.',
+          'Liest zusätzliche Vorschläge nach der Hauptempfehlung vor.',
         ),
         value: _settings.readAlternativeRecommendations,
         onChanged: _loading || _saving
             ? null
             : (enabled) {
                 _save(
-                  _settings.copyWith(
-                    readAlternativeRecommendations: enabled,
-                  ),
+                  _settings.copyWith(readAlternativeRecommendations: enabled),
                 );
               },
       ),
       if (_settings.readAlternativeRecommendations)
         DropdownButtonFormField<int>(
-          key: ValueKey('audio-alt-count-${_settings.alternativeRecommendationCount}'),
+          key: ValueKey(
+            'audio-alt-count-${_settings.alternativeRecommendationCount}',
+          ),
           initialValue: _settings.alternativeRecommendationCount.clamp(1, 3),
           isExpanded: true,
           decoration: const InputDecoration(
-            labelText: 'Alternative Empfehlungen',
+            labelText: 'Anzahl weiterer Vorschläge',
             border: OutlineInputBorder(),
           ),
           items: const [
-            DropdownMenuItem(value: 1, child: Text('1 alternative Empfehlung')),
-            DropdownMenuItem(value: 2, child: Text('2 alternative Empfehlungen')),
-            DropdownMenuItem(value: 3, child: Text('3 alternative Empfehlungen')),
+            DropdownMenuItem(value: 1, child: Text('1 weiterer Vorschlag')),
+            DropdownMenuItem(value: 2, child: Text('2 weitere Vorschläge')),
+            DropdownMenuItem(value: 3, child: Text('3 weitere Vorschläge')),
           ],
           onChanged: _loading || _saving
               ? null
               : (count) {
                   if (count != null) {
                     _save(
-                      _settings.copyWith(
-                        alternativeRecommendationCount: count,
-                      ),
+                      _settings.copyWith(alternativeRecommendationCount: count),
                     );
                   }
                 },

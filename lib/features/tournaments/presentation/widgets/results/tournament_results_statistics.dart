@@ -64,7 +64,7 @@ class TournamentResultsStatistics extends StatelessWidget {
             ),
         ],
         const SizedBox(height: 20),
-        Text('Spielerstatistiken', style: heading),
+        Text('Teilnehmerstatistiken', style: heading),
         const SizedBox(height: 12),
         if (players.isEmpty)
           const Text('Noch keine abgeschlossenen Begegnungen gespeichert.'),

@@ -31,7 +31,13 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    final workflow = find.text('2 · Turnierablauf');
+    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '8');
+    final generatePlayers = find.text('Teilnehmer erzeugen');
+    await reveal(generatePlayers);
+    await tester.tap(generatePlayers);
+    await tester.pumpAndSettle();
+
+    final workflow = find.text('2 · Turnierstruktur');
     await reveal(workflow);
     await tester.tap(workflow);
     await tester.pumpAndSettle();

@@ -23,7 +23,7 @@ Map<String, dynamic> fixture(
   'completed_at': '2020-01-01T18:00:00Z',
   'participants': [
     for (var i = 0; i < ranks.length; i++)
-      {'id': i + 1, 'name': 'Spieler ${i + 1}', 'final_rank': ranks[i]},
+      {'id': i + 1, 'name': 'Teilnehmer ${i + 1}', 'final_rank': ranks[i]},
   ],
   'matches': [
     for (final e in games.indexed)
@@ -234,7 +234,6 @@ void main() {
         runtime.matches(restoredBracket).where((match) => match.hasResult),
         hasLength(14),
       );
-
     },
   );
 }

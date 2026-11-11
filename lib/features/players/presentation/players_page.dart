@@ -112,7 +112,7 @@ class _PlayersPageState extends State<PlayersPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Für diesen Spieler sind keine Challonge-Namen verknüpft.',
+            'Für diesen Teilnehmer sind keine Challonge-Namen verknüpft.',
           ),
         ),
       );
@@ -177,14 +177,14 @@ class _PlayersPageState extends State<PlayersPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.statisticsOnly ? 'Statistik' : 'Spieler'),
+        title: Text(widget.statisticsOnly ? 'Statistik' : 'Teilnehmer'),
       ),
       floatingActionButton: widget.statisticsOnly
           ? null
           : FloatingActionButton.extended(
               onPressed: () => _openPlayerDialog(),
               icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: const Text('Spieler'),
+              label: const Text('Teilnehmer'),
             ),
       body: SafeArea(
         child: FutureBuilder<List<PlayerProfile>>(
@@ -197,10 +197,10 @@ class _PlayersPageState extends State<PlayersPage> {
                 SportPageHeading(
                   title: widget.statisticsOnly
                       ? 'Statistiken'
-                      : 'Spieler verwalten',
+                      : 'Teilnehmer verwalten',
                   subtitle: widget.statisticsOnly
-                      ? 'Spieler- und Ranglisten-Statistiken sowie Jahresrückblicke auswerten.'
-                      : 'Spielerprofile anlegen und für Turniere vorbereiten.',
+                      ? 'Teilnehmer- und Ranglisten-Statistiken sowie Jahresrückblicke auswerten.'
+                      : 'Teilnehmerprofile anlegen und für Turniere vorbereiten.',
                   icon: Icons.groups_outlined,
                 ),
                 const SizedBox(height: 24),
@@ -210,7 +210,7 @@ class _PlayersPageState extends State<PlayersPage> {
                       leading: const Icon(Icons.calendar_month_outlined),
                       title: const Text('Jahresrückblick'),
                       subtitle: const Text(
-                        'Teilnahmen, Turniersiege, Legs und Bestleistungen je Rangliste oder Spieler auswerten.',
+                        'Teilnahmen, Turniersiege, Legs und Bestleistungen je Rangliste oder Teilnehmer auswerten.',
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.of(context).push(
@@ -223,9 +223,9 @@ class _PlayersPageState extends State<PlayersPage> {
                   Card(
                     child: ListTile(
                       leading: const Icon(Icons.compare_arrows_outlined),
-                      title: const Text('Spieler vergleichen'),
+                      title: const Text('Teilnehmer vergleichen'),
                       subtitle: const Text(
-                        'Spielwerte und Elo-Entwicklung zweier Spieler gegenüberstellen.',
+                        'Spielwerte und Elo-Entwicklung zweier Teilnehmer gegenüberstellen.',
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.of(context).push(
@@ -241,7 +241,7 @@ class _PlayersPageState extends State<PlayersPage> {
                   TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      labelText: 'Spieler suchen',
+                      labelText: 'Teilnehmer suchen',
                       hintText: 'Name, Spitzname oder ID eingeben…',
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: _searchQuery.isNotEmpty
@@ -272,7 +272,7 @@ class _PlayersPageState extends State<PlayersPage> {
                   const Card(
                     child: Padding(
                       padding: EdgeInsets.all(16),
-                      child: Text('Noch keine Spieler angelegt.'),
+                      child: Text('Noch keine Teilnehmer angelegt.'),
                     ),
                   )
                 else if (players
@@ -292,7 +292,7 @@ class _PlayersPageState extends State<PlayersPage> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        'Keine Spieler für „$_searchQuery“ gefunden.',
+                        'Keine Teilnehmer für „$_searchQuery“ gefunden.',
                       ),
                     ),
                   )
@@ -316,7 +316,7 @@ class _PlayersPageState extends State<PlayersPage> {
                         trailing: widget.statisticsOnly
                             ? null
                             : PopupMenuButton<String>(
-                                tooltip: 'Spieleraktionen',
+                                tooltip: 'Teilnehmeraktionen',
                                 onSelected: (action) {
                                   if (action == 'edit') {
                                     _openPlayerDialog(player);
@@ -368,7 +368,7 @@ class _PlayersPageState extends State<PlayersPage> {
                                   PopupMenuItem(
                                     value: 'edit',
                                     child: SportMenuLabel(
-                                      label: 'Spieler bearbeiten',
+                                      label: 'Teilnehmer bearbeiten',
                                       icon: Icons.edit_outlined,
                                     ),
                                   ),
@@ -382,7 +382,7 @@ class _PlayersPageState extends State<PlayersPage> {
                                   PopupMenuItem(
                                     value: 'deactivate',
                                     child: SportMenuLabel(
-                                      label: 'Spieler deaktivieren',
+                                      label: 'Teilnehmer deaktivieren',
                                       icon: Icons.arrow_forward_outlined,
                                     ),
                                   ),
@@ -535,7 +535,7 @@ class _PlayerDialogState extends State<_PlayerDialog> {
     final isEditing = widget.player != null;
 
     return AlertDialog(
-      title: Text(isEditing ? 'Spieler bearbeiten' : 'Spieler anlegen'),
+      title: Text(isEditing ? 'Teilnehmer bearbeiten' : 'Teilnehmer anlegen'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,

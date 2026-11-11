@@ -124,9 +124,9 @@ void main() {
         if (size.width < 840 || scale > 1) {
           await tester.tap(find.byType(DropdownButtonFormField<StageViewMode>));
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Ergebnisse').last);
+          await tester.tap(find.text('Partien & Ergebnisse').last);
         } else {
-          await tester.tap(find.text('Ergebnisse'));
+          await tester.tap(find.text('Partien & Ergebnisse'));
         }
         await tester.pumpAndSettle();
         expect(find.text('Turnieruhr starten'), findsNothing);
@@ -317,8 +317,8 @@ void main() {
       int position(String label) => labels.indexOf(label);
 
       expect(
-        position('2. Bildschirm (TV-Anzeige)'),
-        lessThan(position('Turnierleiter-Modus aktivieren')),
+        position('Zweitbildschirm-Modus (TV-Anzeige)'),
+        lessThan(position('Spielleiter-Modus aktivieren')),
       );
       expect(
         position('Errungenschaften'),
@@ -488,7 +488,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byType(DropdownButtonFormField<StageViewMode>));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Ergebnisse').last);
+        await tester.tap(find.text('Partien & Ergebnisse').last);
         await tester.pumpAndSettle();
         expect(find.byType(TournamentRunPage), findsOneWidget);
         expect(find.byTooltip('Ergebnis eingeben'), findsWidgets);
