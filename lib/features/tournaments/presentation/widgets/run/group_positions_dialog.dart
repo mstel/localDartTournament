@@ -378,11 +378,11 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
                         items: const [
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.strengthLevels,
-                            child: Text('Stärkestufen bündeln'),
+                            child: Text('Nach Spielstärke gruppieren'),
                           ),
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.balanced,
-                            child: Text('Stärke ausgeglichen verteilen'),
+                            child: Text('Spielstärke gleichmäßig verteilen'),
                           ),
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.random,
@@ -390,7 +390,7 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
                           ),
                           DropdownMenuItem(
                             value: GroupPlayerAllocationMode.manual,
-                            child: Text('Manuell per Drag-and-drop'),
+                            child: Text('Gruppen manuell festlegen'),
                           ),
                         ],
                         onChanged: (mode) {

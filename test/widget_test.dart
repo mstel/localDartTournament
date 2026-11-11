@@ -69,7 +69,7 @@ void main() {
   }
 
   Future<void> openReviewSection(WidgetTester tester) async {
-    final review = find.text('3 · Prüfen & anlegen');
+    final review = find.text('3 · Zusammenfassung & Start');
     for (
       var attempt = 0;
       attempt < 12 && review.hitTestable().evaluate().isEmpty;
@@ -1235,10 +1235,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Schweizer System 1'), findsOneWidget);
-    expect(find.textContaining('Ein Schweizer System mit 6'), findsOneWidget);
+    expect(find.textContaining('Ein Schweizer System'), findsNothing);
     expect(find.byKey(const ValueKey('group-count-field')), findsNothing);
     expect(find.byKey(const ValueKey('group-play-type-field')), findsNothing);
-    expect(find.text('Rundenanzahl'), findsOneWidget);
+    expect(find.text('Anzahl Runden'), findsOneWidget);
+    expect(find.text('Gruppe A'), findsNothing);
 
     expect(tester.takeException(), isNull);
   });

@@ -40,6 +40,7 @@ import '../../../../league/presentation/league_overview.dart';
 
 const Map<String, String> _monitorWidgetTitles = {
   'combined': 'Tabellen/Siegprognose mit Umschalter',
+  'knockoutBracket': 'K.-o.-Turnierbaum',
   'recent': 'Zuletzt beendete Matches',
   'boards': 'Nächste Begegnungen',
   'stageProgress': 'Fortschritt nach Phasen',
@@ -221,6 +222,11 @@ class _TournamentSecondScreenViewState
             stage is KnockoutTournamentRunStage &&
             stage.isKratzer &&
             stage.kratzerHandicapsEnabled,
+      );
+    }
+    if (placement.widgetId == 'knockoutBracket') {
+      return widget.tournament.runStages.any(
+        (stage) => stage is KnockoutTournamentRunStage && !stage.isKratzer,
       );
     }
     return true;
@@ -1587,6 +1593,23 @@ class _TournamentSecondScreenViewState
           activeIndex,
           activeStage,
         );
+      case 'knockoutBracket':
+        final stage = activeStage is KnockoutTournamentRunStage
+            ? activeStage
+            : _nextKnockoutStage(tournament, activeIndex, activeStage);
+        if (stage == null || stage.isKratzer) return const SizedBox.shrink();
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SingleChildScrollView(
+            child: KnockoutBracketView(
+              stage: stage,
+              qualifyingRank: 1,
+              placementMatches: stage.placementMatches,
+              onEditResult: (_) {},
+              canEditResults: false,
+            ),
+          ),
+        );
       case 'recent':
         return _buildRecentMatchesAndEloPanel(
           context,
@@ -1918,18 +1941,36 @@ class _TournamentSecondScreenViewState
         columnHeights[placement.columnIndex!] += placement.heightUnits;
       }
     }
-    setState(
-      () => _monitorPlacements.add(
-        SecondScreenWidgetPlacement(
-          widgetId: selected,
-          columnIndex: hasIndependentColumns
-              ? columnHeights[0] <= columnHeights[1]
-                    ? 0
-                    : 1
-              : null,
-        ),
-      ),
-    );
+    setState(() {
+      if (selected == 'knockoutBracket') {
+        _monitorPlacements = [
+          for (final placement in _monitorPlacements)
+            SecondScreenWidgetPlacement(
+              widgetId: placement.widgetId,
+              widthUnits: placement.widthUnits.clamp(1, 2),
+              heightUnits: placement.heightUnits,
+              startsNewRow: placement.startsNewRow,
+            ),
+          const SecondScreenWidgetPlacement(
+            widgetId: 'knockoutBracket',
+            widthUnits: 4,
+            heightUnits: 3,
+            startsNewRow: true,
+          ),
+        ];
+      } else {
+        _monitorPlacements.add(
+          SecondScreenWidgetPlacement(
+            widgetId: selected,
+            columnIndex: hasIndependentColumns
+                ? columnHeights[0] <= columnHeights[1]
+                      ? 0
+                      : 1
+                : null,
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _saveMonitorLayout() async {

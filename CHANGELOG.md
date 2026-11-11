@@ -1,3 +1,12 @@
+# 2.7.0+90
+
+- Behebt die Begegnungsfilterung für eingewechselte Teilnehmer in Liga- und
+  Freundschaftsspielen, auch wenn Kader und Spielplan unterschiedliche
+  Profil-IDs verwenden.
+- Entfernt Gruppenhinweise aus der Swiss-Konfiguration und vereinheitlicht
+  Gruppenverteilung, Weiterkommen und Dauerbezeichnungen.
+- Ergänzt den Zweitbildschirm um ein vollbreites K.-o.-Turnierbaum-Widget.
+
 # 2.6.9+89
 
 - Vereinheitlicht die Turnierbegriffe von der Erstellung über den laufenden

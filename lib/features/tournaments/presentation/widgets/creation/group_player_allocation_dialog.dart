@@ -49,7 +49,7 @@ class _GroupPlayerAllocationDialogState
   @override
   Widget build(BuildContext context) => Dialog.fullscreen(
     child: Scaffold(
-      appBar: AppBar(title: const Text('Benutzerdefinierte Gruppen')),
+      appBar: AppBar(title: const Text('Gruppen manuell festlegen')),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.maxWidth;

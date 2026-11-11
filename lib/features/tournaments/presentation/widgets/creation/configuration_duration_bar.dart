@@ -154,7 +154,7 @@ class _ConfigurationDurationBarState extends State<ConfigurationDurationBar> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Geschätzte Gesamtdauer',
+            'Geschätzte Turnierdauer',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),

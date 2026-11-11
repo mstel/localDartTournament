@@ -321,6 +321,81 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('player filtering matches active substitute by name', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final rosterPlayer = TournamentPlayer(
+      profileId: 'catalog-substitute',
+      name: 'Eingewechselt',
+      isGenerated: false,
+    );
+    final opponents = [
+      TournamentPlayer.generated(1).copyWith(name: 'Gegner A'),
+      TournamentPlayer.generated(2).copyWith(name: 'Gegner B'),
+      TournamentPlayer.generated(3).copyWith(name: 'Anderer Spieler'),
+    ];
+    final activeSubstitute = TournamentPlayer(
+      profileId: 'league:match:home:5',
+      name: 'Eingewechselt',
+      isGenerated: false,
+    );
+    final stage = GroupTournamentRunStage(
+      name: 'Ligaspiel',
+      groupPlayType: 'round_robin',
+      qualificationPlan: null,
+      tieBreakers: const [],
+      groups: [
+        TournamentGroup(
+          name: 'Spielplan',
+          playType: 'round_robin',
+          players: [rosterPlayer, ...opponents],
+          matches: [
+            GroupMatch(
+              homePlayer: activeSubstitute,
+              awayPlayer: opponents[0],
+              round: 1,
+            ),
+            GroupMatch(
+              homePlayer: opponents[1],
+              awayPlayer: opponents[2],
+              round: 2,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StageResultsSplitView(
+            stage: stage,
+            standingsFor: (group, _) => [
+              for (final player in group.players) PlayerStanding(player),
+            ],
+            onEditResult: (_) {},
+            canEditResults: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Eingewechselt').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Begegnungen von Eingewechselt'), findsOneWidget);
+    expect(find.byType(MatchResultTile), findsOneWidget);
+    expect(
+      tester.widget<MatchResultTile>(find.byType(MatchResultTile)).match,
+      same(stage.groups.single.matches.first),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('knockout results open a responsive full bracket preview', (
     tester,
   ) async {

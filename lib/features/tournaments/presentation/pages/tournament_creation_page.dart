@@ -3440,22 +3440,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         child: GroupSizePreview(groupSizes: groupSizes),
                       ),
                       breakpoint: 520,
-                    )
-                  else
-                    Text(
-                      'Ein Schweizer System mit ${groupSizes.isEmpty ? 0 : groupSizes.first} Teilnehmenden.',
                     ),
                   const SizedBox(height: 12),
-                  ExpertSetupSection(
-                    title: _selectedStageType == 'swiss'
-                        ? 'Swiss-Einstellungen'
-                        : 'Gruppenoptionen',
-                    summary: _selectedStageType == 'swiss'
-                        ? 'Rundenanzahl'
-                        : 'Verteilung und Wiederholungen',
-                    initiallyExpanded: true,
-                    children: [
-                      if (_selectedStageType == 'groups') ...[
+                  if (_selectedStageType == 'groups')
+                    ExpertSetupSection(
+                      title: 'Gruppenoptionen',
+                      summary: 'Verteilung und Wiederholungen',
+                      initiallyExpanded: true,
+                      children: [
                         DropdownButtonFormField<GroupPlayerAllocationMode>(
                           key: const ValueKey('group-player-allocation'),
                           isExpanded: true,
@@ -3468,20 +3460,20 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           items: [
                             DropdownMenuItem(
                               value: GroupPlayerAllocationMode.strengthLevels,
-                              child: Text('Wertungsstufen bündeln'),
+                              child: Text('Nach Spielstärke gruppieren'),
                             ),
                             DropdownMenuItem(
                               value: GroupPlayerAllocationMode.balanced,
-                              child: Text('Stärken gleichmäßig verteilen'),
+                              child: Text('Spielstärke gleichmäßig verteilen'),
                             ),
                             DropdownMenuItem(
                               value: GroupPlayerAllocationMode.random,
-                              child: Text('Zufällig verteilen'),
+                              child: Text('Zufällige Verteilung'),
                             ),
                             DropdownMenuItem(
                               value: GroupPlayerAllocationMode.manual,
                               enabled: canConfigureManualGroups,
-                              child: Text('Benutzerdefinierte Gruppen'),
+                              child: Text('Gruppen manuell festlegen'),
                             ),
                           ],
                           onChanged: (mode) {
@@ -3524,24 +3516,22 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         const SizedBox(height: 8),
                         Text(switch (_groupAllocationMode) {
                           GroupPlayerAllocationMode.strengthLevels =>
-                            'Nach Wertung sortieren und nacheinander Gruppenblöcke bilden. '
+                            'Nach Spielstärke sortieren und nacheinander Gruppenblöcke bilden. '
                                 'Die stärksten Wertungen starten in der ersten Gruppe.',
                           GroupPlayerAllocationMode.balanced =>
-                            'Nach Wertung sortieren und abwechselnd auf die Gruppen verteilen.',
+                            'Nach Spielstärke sortieren und abwechselnd auf die Gruppen verteilen.',
                           GroupPlayerAllocationMode.random =>
-                            'Teilnehmer zufällig auf die Gruppen verteilen.',
+                            'Zufällige Verteilung der Teilnehmer auf die Gruppen.',
                           GroupPlayerAllocationMode.manual =>
                             'Teilnehmer per Drag-and-drop den gewünschten Gruppen zuordnen.',
                         }),
                         const SizedBox(height: 12),
-                      ],
-                      RoundRobinRepeatsSetup(
-                        groupSizes: groupSizes,
-                        playTypes: _playTypesForGroupSizes(groupSizes),
-                        repeats: _roundRobinRepeatsForGroupSizes(groupSizes),
-                        onChangeRepeats: _changeGroupRoundRobinRepeats,
-                      ),
-                      if (_selectedStageType == 'groups')
+                        RoundRobinRepeatsSetup(
+                          groupSizes: groupSizes,
+                          playTypes: _playTypesForGroupSizes(groupSizes),
+                          repeats: _roundRobinRepeatsForGroupSizes(groupSizes),
+                          onChangeRepeats: _changeGroupRoundRobinRepeats,
+                        ),
                         GroupGameLimitSetup(
                           groupSizes: groupSizes,
                           playTypes: _playTypesForGroupSizes(groupSizes),
@@ -3549,9 +3539,16 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           limits: _gameLimitsForGroupSizes(groupSizes),
                           onChanged: _setGroupGameLimit,
                         ),
-                      const SizedBox(height: 12),
-                    ],
-                  ),
+                        const SizedBox(height: 12),
+                      ],
+                    )
+                  else
+                    RoundRobinRepeatsSetup(
+                      groupSizes: groupSizes,
+                      playTypes: _playTypesForGroupSizes(groupSizes),
+                      repeats: _roundRobinRepeatsForGroupSizes(groupSizes),
+                      onChangeRepeats: _changeGroupRoundRobinRepeats,
+                    ),
                   StageMatchCountPreview(
                     matchCount: _currentStageMatchCount(),
                     details: _currentStageMatchDetails(),
@@ -3564,7 +3561,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        labelText: 'Weiter',
+                        labelText: 'Weiterkommende',
                       ),
                       onChanged: (_) => setState(() {}),
                     ),
@@ -3646,7 +3643,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                             '${_knockoutAdvancingCount ?? max(4, (knockoutParticipantCount ?? 4) ~/ 2)}',
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Teilnehmer',
+                          labelText: 'Weiterkommende',
                           helperText:
                               'Mindestens 4 Teilnehmer, weniger als die aktuelle Teilnehmerzahl.',
                         ),
@@ -3731,7 +3728,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               ],
             ),
             ExpertSetupSection(
-              title: '3 · Prüfen & anlegen',
+              title: '3 · Zusammenfassung & Start',
               summary:
                   '${_players.length} Teilnehmer · ${_stages.length} Phasen · $_plannedBoardCount Boards',
               enabled: _stages.isNotEmpty,

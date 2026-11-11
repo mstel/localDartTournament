@@ -99,8 +99,6 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     });
   }
 
-  String _playerKey(TournamentPlayer player) => player.profileId ?? player.name;
-
   void _selectPlayer(TournamentPlayer player) {
     setState(() => _filteredPlayer = player);
   }
@@ -115,10 +113,20 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   bool _matchesPlayerFilter(GroupMatch match) {
     final player = _filteredPlayer;
     if (player == null) return true;
-    final selectedKeys = player.individuals.map(_playerKey).toSet();
-    bool includesSelectedPlayer(TournamentPlayer participant) => participant
-        .individuals
-        .any((individual) => selectedKeys.contains(_playerKey(individual)));
+    final selectedIds = player.individuals
+        .map((individual) => individual.profileId)
+        .whereType<String>()
+        .toSet();
+    final selectedNames = player.individuals
+        .map((individual) => individual.name.trim().toLowerCase())
+        .toSet();
+    bool includesSelectedPlayer(TournamentPlayer participant) =>
+        participant.individuals.any(
+          (individual) =>
+              (individual.profileId != null &&
+                  selectedIds.contains(individual.profileId)) ||
+              selectedNames.contains(individual.name.trim().toLowerCase()),
+        );
 
     if (match.isKratzer) {
       return match.players.any(includesSelectedPlayer);

@@ -108,10 +108,6 @@ class RoundRobinRepeatsSetup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Anzahl Runden', style: Theme.of(context).textTheme.titleMedium),
-        if (playTypes.contains('swiss'))
-          const Text(
-            'Swiss: feste Rundenzahl, maximal die aufgerundete halbe Teilnehmerzahl je Gruppe. Die nächste Runde wartet auf alle Ergebnisse.',
-          ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -132,7 +128,8 @@ class RoundRobinRepeatsSetup extends StatelessWidget {
                   child: Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(groupLabel(index + 1)),
+                      if (playTypes[index] != 'swiss')
+                        Text(groupLabel(index + 1)),
                       const SizedBox(width: 8),
                       IconButton(
                         key: ValueKey('round-robin-repeat-minus-${index + 1}'),

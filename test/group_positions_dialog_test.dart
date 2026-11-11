@@ -89,7 +89,11 @@ void main() {
       find.byWidgetPredicate((widget) => widget is DropdownButtonFormField),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Stärke ausgeglichen verteilen').last);
+    expect(find.text('Nach Spielstärke gruppieren'), findsOneWidget);
+    expect(find.text('Spielstärke gleichmäßig verteilen'), findsOneWidget);
+    expect(find.text('Zufällige Verteilung'), findsOneWidget);
+    expect(find.text('Gruppen manuell festlegen'), findsAtLeastNWidgets(1));
+    await tester.tap(find.text('Spielstärke gleichmäßig verteilen').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Neu einteilen'));
     await tester.pumpAndSettle();

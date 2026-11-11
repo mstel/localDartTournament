@@ -1003,6 +1003,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('KO layouts can add a full-width tournament bracket widget', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..activeStageIndex = 1
+      ..secondScreenActiveLayout = 'KO-Layout'
+      ..secondScreenLayouts['KO-Layout'] = const [
+        SecondScreenWidgetPlacement(widgetId: 'boards'),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Widget hinzufügen'));
+    await tester.pumpAndSettle();
+
+    final picker = find.byType(SimpleDialog);
+    expect(
+      find.descendant(of: picker, matching: find.text('K.-o.-Turnierbaum')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('K.-o.-Turnierbaum'));
+    await tester.pumpAndSettle();
+
+    final bracketWidget = find.byKey(
+      const ValueKey('monitor-widget-knockoutBracket'),
+    );
+    expect(bracketWidget, findsOneWidget);
+    expect(
+      tester.getSize(bracketWidget).width,
+      greaterThan(tester.view.physicalSize.width * 0.9),
+    );
+    expect(find.byKey(const ValueKey('knockout-match-card-1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('legacy layouts hide retired second-screen widgets', (
     tester,
   ) async {

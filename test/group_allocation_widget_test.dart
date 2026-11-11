@@ -49,10 +49,10 @@ void main() {
     await tester.tap(allocation);
     await tester.pumpAndSettle();
 
-    expect(find.text('Wertungsstufen bündeln'), findsWidgets);
-    expect(find.text('Stärken gleichmäßig verteilen'), findsWidgets);
-    expect(find.textContaining('Zufällig verteilen'), findsWidgets);
-    expect(find.text('Benutzerdefinierte Gruppen'), findsWidgets);
+    expect(find.text('Nach Spielstärke gruppieren'), findsWidgets);
+    expect(find.text('Spielstärke gleichmäßig verteilen'), findsWidgets);
+    expect(find.text('Zufällige Verteilung'), findsWidgets);
+    expect(find.text('Gruppen manuell festlegen'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }
