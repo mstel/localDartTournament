@@ -62,10 +62,29 @@ void main() {
             .value,
         isTrue,
       );
-      await tester.tap(find.byKey(const ValueKey('final-ends-tournament')));
+      final finalEndsToggle = find.byKey(
+        const ValueKey('final-ends-tournament'),
+      );
+      for (
+        var attempt = 0;
+        attempt < 8 && finalEndsToggle.hitTestable().evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).last, const Offset(0, -300));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(finalEndsToggle.hitTestable());
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('kratzer-lives-3')), findsNothing);
-      await tester.tap(type);
+      for (
+        var attempt = 0;
+        attempt < 8 && type.hitTestable().evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).last, const Offset(0, 300));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(type.hitTestable());
       await tester.pumpAndSettle();
       await tester.tap(find.text('Kratzer-Modus').last);
       await tester.pumpAndSettle();

@@ -5571,199 +5571,234 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               ),
                             ),
                             const SizedBox(height: 12),
-                            _secondScreenSettingsCard(),
-                            const SizedBox(height: 12),
-                            if (widget.tournament.leagueMatch == null)
-                              Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final pdfButton = TournamentSchedulePdfButton(
+                                  tournament: widget.tournament,
+                                );
+                                if (constraints.maxWidth < 760) {
+                                  return Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      SwitchListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: const Text(
-                                          'Turnierleiter-Modus aktivieren',
-                                        ),
-                                        subtitle: const Text(
-                                          'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.',
-                                        ),
-                                        value: widget
-                                            .tournament
-                                            .directorModeEnabled,
-                                        onChanged: (enabled) async {
-                                          final strategy = widget
-                                              .tournament
-                                              .directorSchedulingStrategy;
-                                          await _saveDirectorMode(
-                                            enabled: enabled,
-                                            strategy: strategy,
-                                          );
-                                        },
+                                      _secondScreenSettingsCard(),
+                                      const SizedBox(height: 12),
+                                      Align(
+                                        alignment:
+                                            AlignmentDirectional.centerStart,
+                                        child: pdfButton,
                                       ),
-                                      if (widget.tournament.directorModeEnabled)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 8,
-                                          ),
-                                          child: DropdownButtonFormField<String>(
-                                            initialValue: widget
-                                                .tournament
-                                                .directorSchedulingStrategy,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Board-Strategie',
-                                              border: OutlineInputBorder(),
-                                              suffixIcon: Tooltip(
-                                                message:
-                                                    'Gruppenbasiert: Jede Gruppe '
-                                                    'spielt nur auf den ihr '
-                                                    'zugewiesenen Boards. Global '
-                                                    'optimiert: Alle offenen '
-                                                    'Partien werden gemeinsam '
-                                                    'auf die Boards verteilt.',
-                                                child: Icon(Icons.help_outline),
-                                              ),
+                                    ],
+                                  );
+                                }
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: _secondScreenSettingsCard(),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Align(
+                                        alignment:
+                                            AlignmentDirectional.topStart,
+                                        child: pdfButton,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text(
+                                        'Turnierleiter-Modus aktivieren',
+                                      ),
+                                      subtitle: Text(
+                                        widget.tournament.leagueMatch == null
+                                            ? 'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.'
+                                            : 'Manuelle Aktiv-Markierung von Spielen und Board-Anzahl für die Leitungsansicht.',
+                                      ),
+                                      value:
+                                          widget.tournament.directorModeEnabled,
+                                      onChanged: (enabled) async {
+                                        final strategy = widget
+                                            .tournament
+                                            .directorSchedulingStrategy;
+                                        await _saveDirectorMode(
+                                          enabled: enabled,
+                                          strategy: strategy,
+                                        );
+                                      },
+                                    ),
+                                    if (widget.tournament.leagueMatch == null &&
+                                        widget.tournament.directorModeEnabled)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: DropdownButtonFormField<String>(
+                                          initialValue: widget
+                                              .tournament
+                                              .directorSchedulingStrategy,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Board-Strategie',
+                                            border: OutlineInputBorder(),
+                                            suffixIcon: Tooltip(
+                                              message:
+                                                  'Gruppenbasiert: Jede Gruppe '
+                                                  'spielt nur auf den ihr '
+                                                  'zugewiesenen Boards. Global '
+                                                  'optimiert: Alle offenen '
+                                                  'Partien werden gemeinsam '
+                                                  'auf die Boards verteilt.',
+                                              child: Icon(Icons.help_outline),
                                             ),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: 'group',
-                                                child: Text('Gruppenbasiert'),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'global',
-                                                child: Text('Global optimiert'),
-                                              ),
-                                            ],
-                                            onChanged: (value) async {
-                                              if (value == null) return;
-                                              final previous = widget
-                                                  .tournament
-                                                  .directorSchedulingStrategy;
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'group',
+                                              child: Text('Gruppenbasiert'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'global',
+                                              child: Text('Global optimiert'),
+                                            ),
+                                          ],
+                                          onChanged: (value) async {
+                                            if (value == null) return;
+                                            final previous = widget
+                                                .tournament
+                                                .directorSchedulingStrategy;
+                                            setState(() {
+                                              widget
+                                                      .tournament
+                                                      .directorSchedulingStrategy =
+                                                  value;
+                                            });
+                                            try {
+                                              await _saveTournamentProgress(
+                                                propagateError: true,
+                                              );
+                                            } catch (_) {
+                                              if (!mounted) return;
                                               setState(() {
                                                 widget
                                                         .tournament
                                                         .directorSchedulingStrategy =
-                                                    value;
+                                                    previous;
                                               });
-                                              try {
-                                                await _saveTournamentProgress(
-                                                  propagateError: true,
-                                                );
-                                              } catch (_) {
-                                                if (!mounted) return;
-                                                setState(() {
-                                                  widget
-                                                          .tournament
-                                                          .directorSchedulingStrategy =
-                                                      previous;
-                                                });
-                                              }
-                                            },
-                                          ),
+                                            }
+                                          },
                                         ),
-                                      if (widget
-                                              .tournament
-                                              .directorModeEnabled &&
-                                          widget
-                                                  .tournament
-                                                  .directorSchedulingStrategy ==
-                                              'group')
-                                        _groupBoardAssignmentsSettings(),
-                                      if (widget.tournament.directorModeEnabled)
-                                        TournamentRunSettingsPanel(
-                                          tournament: widget.tournament,
-                                          onChanged: _saveTournamentSettings,
-                                          showAudioSettings: true,
-                                          showPrioritySettings: false,
-                                          showHintAudioSettings: false,
+                                      ),
+                                    if (widget.tournament.leagueMatch == null &&
+                                        widget.tournament.directorModeEnabled &&
+                                        widget
+                                                .tournament
+                                                .directorSchedulingStrategy ==
+                                            'group')
+                                      _groupBoardAssignmentsSettings(),
+                                    if (widget.tournament.leagueMatch == null &&
+                                        widget.tournament.directorModeEnabled)
+                                      TournamentRunSettingsPanel(
+                                        tournament: widget.tournament,
+                                        onChanged: _saveTournamentSettings,
+                                        showAudioSettings: true,
+                                        showPrioritySettings: false,
+                                        showHintAudioSettings: false,
+                                      ),
+                                    if (widget.tournament.leagueMatch == null &&
+                                        widget.tournament.directorModeEnabled)
+                                      SwitchListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text(
+                                          'Player Insights anzeigen',
                                         ),
-                                      if (widget.tournament.directorModeEnabled)
-                                        SwitchListTile(
-                                          contentPadding: EdgeInsets.zero,
-                                          title: const Text(
-                                            'Player Insights anzeigen',
-                                          ),
-                                          subtitle: const Text(
-                                            'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
-                                          ),
-                                          value: widget
-                                              .tournament
-                                              .showPlayerInsights,
-                                          onChanged: _savePlayerInsightsSetting,
+                                        subtitle: const Text(
+                                          'Zeigt kompakte Merkmale neben Spielernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
                                         ),
-                                      if (widget.tournament.directorModeEnabled)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 12,
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              Text(
-                                                'Boards: ${widget.tournament.boardCount}',
-                                                style: Theme.of(
-                                                  context,
-                                                ).textTheme.titleMedium,
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Wrap(
-                                                spacing: 8,
-                                                runSpacing: 8,
-                                                children: [
-                                                  OutlinedButton.icon(
-                                                    onPressed:
-                                                        widget
-                                                                .tournament
-                                                                .boardCount <=
-                                                            1
-                                                        ? null
-                                                        : () => _handleDirectorSettings(
-                                                            () => _changeDirectorBoardCount(
-                                                              widget
-                                                                      .tournament
-                                                                      .boardCount -
-                                                                  1,
-                                                            ),
+                                        value: widget
+                                            .tournament
+                                            .showPlayerInsights,
+                                        onChanged: _savePlayerInsightsSetting,
+                                      ),
+                                    if (widget.tournament.directorModeEnabled)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 12),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            Text(
+                                              'Boards: ${widget.tournament.boardCount}',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: [
+                                                OutlinedButton.icon(
+                                                  onPressed:
+                                                      widget
+                                                              .tournament
+                                                              .boardCount <=
+                                                          1
+                                                      ? null
+                                                      : () => _handleDirectorSettings(
+                                                          () => _changeDirectorBoardCount(
+                                                            widget
+                                                                    .tournament
+                                                                    .boardCount -
+                                                                1,
                                                           ),
-                                                    icon: const Icon(
-                                                      Icons.remove,
-                                                    ),
-                                                    label: const Text(
-                                                      'Board entfernen',
-                                                    ),
+                                                        ),
+                                                  icon: const Icon(
+                                                    Icons.remove,
                                                   ),
-                                                  OutlinedButton.icon(
-                                                    onPressed:
-                                                        widget
-                                                                .tournament
-                                                                .boardCount >=
-                                                            64
-                                                        ? null
-                                                        : () => _handleDirectorSettings(
-                                                            () => _changeDirectorBoardCount(
-                                                              widget
-                                                                      .tournament
-                                                                      .boardCount +
-                                                                  1,
-                                                            ),
+                                                  label: const Text(
+                                                    'Board entfernen',
+                                                  ),
+                                                ),
+                                                OutlinedButton.icon(
+                                                  onPressed:
+                                                      widget
+                                                              .tournament
+                                                              .boardCount >=
+                                                          64
+                                                      ? null
+                                                      : () => _handleDirectorSettings(
+                                                          () => _changeDirectorBoardCount(
+                                                            widget
+                                                                    .tournament
+                                                                    .boardCount +
+                                                                1,
                                                           ),
-                                                    icon: const Icon(Icons.add),
-                                                    label: const Text(
-                                                      'Board hinzufügen',
-                                                    ),
+                                                        ),
+                                                  icon: const Icon(Icons.add),
+                                                  label: const Text(
+                                                    'Board hinzufügen',
                                                   ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 8),
-                                            ],
-                                          ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                          ],
                                         ),
-                                    ],
-                                  ),
+                                      ),
+                                  ],
                                 ),
                               ),
+                            ),
 
                             if (isViewingActiveStage &&
                                 activeStage is KnockoutTournamentRunStage &&

@@ -88,10 +88,20 @@ void main() {
         4,
         swissParameters,
       )!;
+      final fourMatchesOnFourBoards = estimator.preview(
+        [swissGroup(9)],
+        4,
+        swissParameters,
+      )!;
       expect(fiveMatchesOnFourBoards.totalMatches, 5);
       expect(fiveMatchesOnFourBoards.minimumMatches, 1);
       expect(fiveMatchesOnFourBoards.minutes, 58);
       expect(fiveMatchesOnFourBoards.waitMinutes, 8);
+      expect(fourMatchesOnFourBoards.totalMatches, 4);
+      expect(
+        fourMatchesOnFourBoards.waitMinutes,
+        lessThan(fiveMatchesOnFourBoards.waitMinutes),
+      );
 
       final eightMatchesOnFourBoards = estimator.preview(
         [swissGroup(16)],

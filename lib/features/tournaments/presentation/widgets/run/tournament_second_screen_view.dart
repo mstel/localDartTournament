@@ -4151,6 +4151,9 @@ class _TournamentSecondScreenViewState
         if (dateComparison != 0) return dateComparison;
         return (enteredOrder[right] ?? 0).compareTo(enteredOrder[left] ?? 0);
       });
+    final recentSubstitutions =
+        t.activityLog.where((entry) => entry.type == 'substitution').toList()
+          ..sort((left, right) => right.timestamp.compareTo(left.timestamp));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4159,9 +4162,11 @@ class _TournamentSecondScreenViewState
           children: [
             const Icon(Icons.history, size: 20, color: Color(0xFF70E0BA)),
             const SizedBox(width: 8),
-            const Flexible(
+            Flexible(
               child: Text(
-                'Zuletzt beendete Matches',
+                t.leagueMatch == null
+                    ? 'Zuletzt beendete Matches'
+                    : 'Aktuelles',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -4224,16 +4229,38 @@ class _TournamentSecondScreenViewState
                               ),
                             ),
                           );
-                    return expand
-                        ? recentContent
-                        : SizedBox(
+                    final activityRows = [
+                      for (final entry in recentSubstitutions.take(3))
+                        ListTile(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          leading: const Icon(
+                            Icons.swap_horiz,
+                            color: Color(0xFF70E0BA),
+                          ),
+                          title: Text(
+                            entry.message,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                    ];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ...activityRows,
+                        if (expand)
+                          Expanded(child: recentContent)
+                        else
+                          SizedBox(
                             key: const ValueKey('recent-results-scroll'),
                             height: recent.isEmpty
                                 ? itemExtent
                                 : itemExtent *
                                       recent.length.clamp(1, visibleItemCount),
                             child: recentContent,
-                          );
+                          ),
+                      ],
+                    );
                   },
                 );
             return expand ? Expanded(child: recentList) : recentList;

@@ -76,7 +76,6 @@ void main() {
           'groups',
           'single_knockout',
           'double_knockout',
-          'triple_knockout',
           'kratzer',
         ]),
       );
@@ -169,6 +168,64 @@ void main() {
       swiss.estimatedMinutes,
     );
   });
+  test(
+    'elimination and Swiss suggestions respect minimum field sizes',
+    () async {
+      Future<List<TournamentFormatSuggestion>> find({
+        required int players,
+        required Set<String> modes,
+        bool requireGroup = false,
+        int? qualifiers,
+        int stages = 1,
+      }) => ExpandedFormatPlanner(parameters: parameters).suggest(
+        TournamentPlanningRequest(
+          players: players,
+          boards: 4,
+          minimumMatchesPerPlayer: 0,
+          minimumMinutes: 0,
+          maximumMinutes: 1000,
+          targetMinutes: 1,
+          x01Selection: '501',
+          checkoutType: 'double_out',
+          maximumGroups: 4,
+          maximumStages: stages,
+          maximumLives: 5,
+          requireGroupPhase: requireGroup,
+          manualQualifiers: qualifiers,
+          enabledModes: modes,
+        ),
+        allResults: true,
+      );
+
+      expect(await find(players: 7, modes: {'double_knockout'}), isEmpty);
+      expect(await find(players: 8, modes: {'double_knockout'}), isNotEmpty);
+      expect(await find(players: 15, modes: {'triple_knockout'}), isEmpty);
+      expect(await find(players: 16, modes: {'triple_knockout'}), isNotEmpty);
+      expect(
+        await find(players: 7, modes: {'groups:swiss'}, requireGroup: true),
+        isEmpty,
+      );
+      expect(
+        await find(players: 8, modes: {'groups:swiss'}, requireGroup: true),
+        isNotEmpty,
+      );
+
+      final grouped = await find(
+        players: 12,
+        modes: {'double_knockout'},
+        requireGroup: true,
+        qualifiers: 6,
+        stages: 2,
+      );
+      expect(
+        grouped.any(
+          (suggestion) =>
+              suggestion.configurations.last.type == 'double_knockout',
+        ),
+        isFalse,
+      );
+    },
+  );
 
   test(
     'worst-case duration filtering omits out-of-range closest alternatives',

@@ -9,6 +9,7 @@ import 'features/tournaments/presentation/widgets/run/tournament_run_header.dart
 import 'features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_timing_panel.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_run_settings_panel.dart';
+import 'features/tournaments/presentation/widgets/run/tournament_schedule_pdf_button.dart';
 import 'features/tournaments/presentation/widgets/creation/expert_setup_section.dart';
 import 'features/tournaments/presentation/widgets/creation/triple_ko_preview_sections.dart';
 import 'features/tournaments/presentation/widgets/tournament_summary_card.dart';

@@ -72,6 +72,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final Set<int> _placementPlaces = {};
   bool _finalEndsTournament = true;
   int? _knockoutAdvancingCount;
+  bool _playKnockoutFully = true;
   int _kratzerLives = 3;
   int get _selectedLossLimit => _selectedStageType == 'kratzer'
       ? _kratzerLives
@@ -264,6 +265,87 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Turniere konnten nicht geladen werden: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickTournamentSettings() async {
+    try {
+      final tournaments =
+          await (widget.tournamentStorage ?? TournamentStorage())
+              .loadTournaments();
+      final candidates =
+          tournaments
+              .where((tournament) => tournament.leagueMatch == null)
+              .toList()
+            ..sort((a, b) => b.effectiveDate.compareTo(a.effectiveDate));
+      if (!mounted) return;
+      final selected = await showDialog<CreatedTournament>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Einstellungen eines anderen Turniers öffnen'),
+          content: SizedBox(
+            width: 520,
+            height: 360,
+            child: candidates.isEmpty
+                ? const Center(
+                    child: Text('Keine passenden Turniere gespeichert.'),
+                  )
+                : ListView.separated(
+                    itemCount: candidates.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final tournament = candidates[index];
+                      return ListTile(
+                        title: Text(tournament.name),
+                        subtitle: Text(
+                          '${tournament.players.length} Spieler · '
+                          '${tournament.stages.length} Etappen · '
+                          '${tournament.boardCount} Boards',
+                        ),
+                        onTap: () => Navigator.pop(context, tournament),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen'),
+            ),
+          ],
+        ),
+      );
+      if (selected == null || !mounted) return;
+      setState(() {
+        _players
+          ..clear()
+          ..addAll(
+            selected.players.map(
+              (player) => TournamentPlayer.fromJson(player.toJson()),
+            ),
+          );
+        _playerCountController.text = '${_players.length}';
+        _plannedBoardCount = selected.boardCount;
+        _stages
+          ..clear()
+          ..addAll(
+            selected.stages.map(
+              (stage) => TournamentStage.fromJson(stage.toJson()),
+            ),
+          );
+        _editingStageIndex = null;
+        _manualGroupSlotOrder = null;
+        _manualKnockoutSlotOrder = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Turniereinstellungen konnten nicht geladen werden: $error',
+          ),
         ),
       );
     }
@@ -1467,7 +1549,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       children: [
         const Text('Optionale Platzierungsspiele'),
         const Text(
-          'Mehrere Plätze auswählbar. Nötige Vorrunden werden automatisch ergänzt. In Mini-KO-Gruppen gilt die Auswahl je Gruppe.',
+          'Mehrere Plätze auswählbar. Nötige Vorrunden werden automatisch ergänzt.',
         ),
         Wrap(
           spacing: 8,
@@ -1660,7 +1742,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           : null,
       knockoutAdvancingCount:
           _isKnockoutStageType(_selectedStageType) &&
-              _selectedStageType != 'kratzer'
+              _selectedStageType != 'kratzer' &&
+              !_playKnockoutFully
           ? _knockoutAdvancingCount
           : null,
       knockoutBracketSize: _isKnockoutStageType(_selectedStageType)
@@ -1707,6 +1790,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _placementPlaces.clear();
     _finalEndsTournament = true;
     _knockoutAdvancingCount = null;
+    _playKnockoutFully = true;
     _kratzerLives = 3;
     _kratzerBoardDistribution = 'balanced';
     _kratzerPreferSameScratchCount = false;
@@ -1748,6 +1832,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ..addAll(stage.placementPlaces);
       _finalEndsTournament = stage.finalEndsTournament;
       _knockoutAdvancingCount = stage.knockoutAdvancingCount;
+      _playKnockoutFully = stage.knockoutAdvancingCount == null;
       _kratzerLives = stage.lossLimit;
       _kratzerBoardDistribution =
           stage.kratzerPlayersPerBoard?.toString() ?? 'balanced';
@@ -2804,10 +2889,47 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   },
                 ),
                 const SizedBox(height: 12),
-                TournamentDatePickerField(
-                  value: _tournamentDate,
-                  onChanged: (date) => setState(() => _tournamentDate = date),
-                ),
+                if (widget.existingTournament == null)
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final datePicker = TournamentDatePickerField(
+                        value: _tournamentDate,
+                        onChanged: (date) =>
+                            setState(() => _tournamentDate = date),
+                      );
+                      final settingsButton = OutlinedButton.icon(
+                        onPressed: _isCreatingTournament
+                            ? null
+                            : _pickTournamentSettings,
+                        icon: const Icon(Icons.settings_backup_restore),
+                        label: const Text(
+                          'Einstellungen eines anderen Turniers öffnen',
+                        ),
+                      );
+                      if (constraints.maxWidth < 720) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            datePicker,
+                            const SizedBox(height: 8),
+                            settingsButton,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(flex: 2, child: datePicker),
+                          const SizedBox(width: 12),
+                          Expanded(flex: 3, child: settingsButton),
+                        ],
+                      );
+                    },
+                  )
+                else
+                  TournamentDatePickerField(
+                    value: _tournamentDate,
+                    onChanged: (date) => setState(() => _tournamentDate = date),
+                  ),
                 const SizedBox(height: 32),
                 if (!_hasKratzerStage) ...[
                   SwitchListTile(
@@ -3050,18 +3172,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         },
                 ),
                 const SizedBox(height: 12),
-                if (_selectedStageType == 'double_knockout' ||
-                    _selectedStageType == 'triple_knockout')
-                  SwitchListTile(
-                    key: const ValueKey('final-ends-tournament'),
-                    title: const Text('Ein großes Finale entscheidet'),
-                    subtitle: const Text(
-                      'Der Verlierer des großen Finales scheidet unabhängig von übrigen Leben aus.',
-                    ),
-                    value: _finalEndsTournament,
-                    onChanged: (value) =>
-                        setState(() => _finalEndsTournament = value),
-                  ),
                 if (_selectedStageType == 'kratzer')
                   DropdownButtonFormField<int>(
                     isExpanded: true,
@@ -3252,10 +3362,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     ],
                   ),
                 ],
-                if (_selectedStageType == 'single_knockout' ||
-                    _selectedStageType == 'double_knockout' ||
-                    _selectedStageType == 'triple_knockout')
-                  _placementSelection(),
                 ExpertSetupSection(
                   title: 'Spielregeln anpassen',
                   summary: _stageGameFormat.label,
@@ -3451,34 +3557,76 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 if (_isKnockoutStageType(_selectedStageType) &&
                     _selectedStageType != 'kratzer') ...[
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: _knockoutAdvancingCount ?? 0,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Weiterkommende',
-                      helperText:
-                          'Optional: Etappe beenden, sobald nur noch die '
-                          'gewählte Anzahl im K.-o.-System aktiv ist.',
-                    ),
-                    items: [
-                      const DropdownMenuItem(
-                        value: 0,
-                        child: Text('Turnierform vollständig ausspielen'),
-                      ),
-                      for (
-                        var count = 2;
-                        count < (knockoutParticipantCount ?? 0);
-                        count++
-                      )
-                        DropdownMenuItem(
-                          value: count,
-                          child: Text('$count Spieler weiterkommen lassen'),
-                        ),
-                    ],
-                    onChanged: (value) => setState(
-                      () => _knockoutAdvancingCount = value == 0 ? null : value,
-                    ),
+                  SwitchListTile(
+                    key: const ValueKey('play-knockout-fully'),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Turnierform vollständig ausspielen'),
+                    value: _playKnockoutFully,
+                    onChanged: (value) {
+                      if (!value && (knockoutParticipantCount ?? 0) < 5) {
+                        return;
+                      }
+                      setState(() {
+                        _playKnockoutFully = value;
+                        if (!value) {
+                          _finalEndsTournament = false;
+                          _placementPlaces.clear();
+                          _knockoutAdvancingCount =
+                              max(
+                                4,
+                                (knockoutParticipantCount ?? 4) ~/ 2,
+                              ).clamp(
+                                4,
+                                max(4, (knockoutParticipantCount ?? 4) - 1),
+                              );
+                        } else {
+                          _knockoutAdvancingCount = null;
+                        }
+                      });
+                    },
                   ),
+                  if (!_playKnockoutFully)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: TextFormField(
+                        key: ValueKey(
+                          'knockout-advancing-count-$_knockoutAdvancingCount',
+                        ),
+                        initialValue:
+                            '${_knockoutAdvancingCount ?? max(4, (knockoutParticipantCount ?? 4) ~/ 2)}',
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Weiterkommende',
+                          helperText:
+                              'Mindestens 4 Spieler, weniger als die aktuelle Teilnehmerzahl.',
+                        ),
+                        validator: (value) {
+                          final count = int.tryParse(value ?? '');
+                          final participants = knockoutParticipantCount ?? 0;
+                          if (count == null ||
+                              count < 4 ||
+                              count >= participants) {
+                            return 'Bitte eine Zahl von 4 bis ${participants - 1} eingeben.';
+                          }
+                          return null;
+                        },
+                        onChanged: (value) => setState(
+                          () => _knockoutAdvancingCount = int.tryParse(value),
+                        ),
+                      ),
+                    ),
+                  if (_playKnockoutFully &&
+                      (_selectedStageType == 'double_knockout' ||
+                          _selectedStageType == 'triple_knockout'))
+                    SwitchListTile(
+                      key: const ValueKey('final-ends-tournament'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Großes Finale ausspielen'),
+                      value: _finalEndsTournament,
+                      onChanged: (value) =>
+                          setState(() => _finalEndsTournament = value),
+                    ),
+                  if (_playKnockoutFully) _placementSelection(),
                   const SizedBox(height: 12),
                   _InheritedKnockoutSetup(
                     placementPlaces: _placementPlaces.toList(),

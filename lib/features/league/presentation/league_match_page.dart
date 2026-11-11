@@ -290,6 +290,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     (_) => GlobalKey<SportSettingsSectionState>(),
   );
   final _name = TextEditingController(text: 'Ligaspiel');
+  final _starterCountInput = TextEditingController(text: '4');
+  final _singlesPerPlayerInput = TextEditingController(text: '4');
+  final _doublesCountInput = TextEditingController(text: '2');
   final _teams = [
     TextEditingController(text: 'Heim'),
     TextEditingController(text: 'Gast'),
@@ -380,7 +383,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
   int _boards = 1;
   LeagueMatchVariant _variant = LeagueMatchVariant.traditional;
   TournamentGameFormat _gameFormat = const TournamentGameFormat(bestOfLegs: 5);
-  int _singlesPerPlayer = 2;
+  int _singlesPerPlayer = 4;
   int _doublesCount = 2;
   int _starterCount = 4;
   int _maxReservePlayers = 2;
@@ -431,10 +434,13 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         _doublesCount = 2;
       } else {
         _starterCount = 4;
-        _maxReservePlayers = 2;
+        _maxReservePlayers = max(
+          0,
+          max(_rosters[0].length - 4, _rosters[1].length - 4),
+        );
         _substitutionLimit = 2;
         _allowReentry = false;
-        _singlesPerPlayer = 2;
+        _singlesPerPlayer = 4;
         _doublesCount = min(_doublesCount, _starterCount ~/ 2);
         for (var team = 0; team < _rosters.length; team++) {
           while (_rosters[team].length > _starterCount + _maxReservePlayers) {
@@ -442,6 +448,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
           }
         }
       }
+      _starterCountInput.text = '$_starterCount';
+      _singlesPerPlayerInput.text = '$_singlesPerPlayer';
+      _doublesCountInput.text = '$_doublesCount';
     });
   }
 
@@ -470,6 +479,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       );
       _substitutionLimit = min(_substitutionLimit, _maxReservePlayers);
       _doublesCount = min(_doublesCount, _starterCount ~/ 2);
+      _starterCountInput.text = '$_starterCount';
+      _singlesPerPlayerInput.text = '$_singlesPerPlayer';
+      _doublesCountInput.text = '$_doublesCount';
       _error = null;
     });
   }
@@ -560,7 +572,14 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
 
   @override
   void dispose() {
-    for (final c in [_name, ..._teams, ..._rosters.expand((r) => r)]) {
+    for (final c in [
+      _name,
+      _starterCountInput,
+      _singlesPerPlayerInput,
+      _doublesCountInput,
+      ..._teams,
+      ..._rosters.expand((r) => r),
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -772,6 +791,18 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         outPlayerIndex: choice.$1,
         inPlayerIndex: choice.$2,
       );
+      final homeSide = teamSide == 0;
+      final teamName = homeSide
+          ? next.leagueMatch!.homeTeam
+          : next.leagueMatch!.awayTeam;
+      final roster = homeSide
+          ? next.leagueMatch!.homePlayers
+          : next.leagueMatch!.awayPlayers;
+      next.addActivity(
+        'substitution',
+        '$teamName hat ${roster[choice.$1]} ausgewechselt und '
+            '${roster[choice.$2]} eingewechselt',
+      );
       await _save(next, rethrowError: true);
     } catch (error) {
       if (mounted) {
@@ -911,143 +942,149 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
           const SizedBox(height: 16),
           SportSettingsSection(
             title: 'Angepasster Spielplan',
-            summary: 'Begegnungen und voraussichtliche Dauer planen',
+            summary: 'Kader, Begegnungen und Dauer festlegen',
             icon: Icons.tune,
             children: [
-              DropdownButtonFormField<int>(
-                key: ValueKey(
-                  'starter-count-$_starterCount-${_rosters[0].length}-${_rosters[1].length}',
-                ),
-                initialValue: _starterCount,
-                decoration: const InputDecoration(
-                  labelText: 'Stammspieler je Team',
-                ),
-                items: [
-                  for (
-                    var count = 1;
-                    count <= min(_rosters[0].length, _rosters[1].length);
-                    count++
-                  )
-                    DropdownMenuItem(value: count, child: Text('$count')),
+              AdaptiveTileLayout(
+                minTileWidth: 180,
+                children: [
+                  TextFormField(
+                    key: const ValueKey('league-starter-count'),
+                    controller: _starterCountInput,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Stammspieler je Team',
+                    ),
+                    validator: (value) {
+                      final count = int.tryParse(value ?? '');
+                      if (count == null ||
+                          count < 1 ||
+                          count > min(_rosters[0].length, _rosters[1].length)) {
+                        return 'Zwischen 1 und ${min(_rosters[0].length, _rosters[1].length)} eingeben.';
+                      }
+                      return null;
+                    },
+                    onChanged: (value) {
+                      final count = int.tryParse(value);
+                      if (count == null || count < 1) return;
+                      setState(() {
+                        _starterCount = count;
+                        _maxReservePlayers = max(
+                          0,
+                          max(
+                            _rosters[0].length - count,
+                            _rosters[1].length - count,
+                          ),
+                        );
+                        _doublesCount = min(_doublesCount, count ~/ 2);
+                        _doublesCountInput.text = '$_doublesCount';
+                        _substitutionLimit = min(
+                          _substitutionLimit,
+                          _maxReservePlayers,
+                        );
+                      });
+                    },
+                  ),
+                  TextFormField(
+                    controller: _singlesPerPlayerInput,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Einzel je Spieler',
+                    ),
+                    validator: (value) {
+                      final count = int.tryParse(value ?? '');
+                      return count == null || count < 1
+                          ? 'Mindestens 1 Einzel eingeben.'
+                          : null;
+                    },
+                    onChanged: (value) {
+                      final count = int.tryParse(value);
+                      if (count != null && count > 0) {
+                        setState(() => _singlesPerPlayer = count);
+                      }
+                    },
+                  ),
+                  TextFormField(
+                    controller: _doublesCountInput,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Doppel je Mannschaft',
+                    ),
+                    validator: (value) {
+                      final count = int.tryParse(value ?? '');
+                      return count == null ||
+                              count < 0 ||
+                              count > _starterCount ~/ 2
+                          ? 'Zwischen 0 und ${_starterCount ~/ 2} eingeben.'
+                          : null;
+                    },
+                    onChanged: (value) {
+                      final count = int.tryParse(value);
+                      if (count != null && count >= 0) {
+                        setState(() => _doublesCount = count);
+                      }
+                    },
+                  ),
                 ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _starterCount = value;
-                    _maxReservePlayers = max(
-                      0,
-                      max(
-                        _rosters[0].length - value,
-                        _rosters[1].length - value,
-                      ),
-                    );
-                    _doublesCount = min(_doublesCount, value ~/ 2);
-                    _singlesPerPlayer = min(_singlesPerPlayer, value);
-                    _substitutionLimit = min(
-                      _substitutionLimit,
-                      _maxReservePlayers,
-                    );
-                  });
-                },
-              ),
-              DropdownButtonFormField<int>(
-                key: ValueKey(
-                  'maximum-reserves-$_maxReservePlayers-$_starterCount-${_rosters[0].length}-${_rosters[1].length}',
-                ),
-                initialValue: _maxReservePlayers,
-                decoration: const InputDecoration(
-                  labelText: 'Maximale Ersatzspieler je Team',
-                ),
-                items: [
-                  for (
-                    var count = max(
-                      0,
-                      max(
-                        _rosters[0].length - _starterCount,
-                        _rosters[1].length - _starterCount,
-                      ),
-                    );
-                    count <= 16;
-                    count++
-                  )
-                    DropdownMenuItem(value: count, child: Text('$count')),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      _maxReservePlayers = value;
-                      _substitutionLimit = min(_substitutionLimit, value);
-                    });
-                  }
-                },
-              ),
-              DropdownButtonFormField<int>(
-                key: ValueKey(
-                  'substitution-limit-$_substitutionLimit-$_maxReservePlayers',
-                ),
-                initialValue: _substitutionLimit,
-                decoration: const InputDecoration(
-                  labelText: 'Mögliche Auswechselungen je Team',
-                ),
-                items: [
-                  for (var count = 0; count <= _maxReservePlayers; count++)
-                    DropdownMenuItem(value: count, child: Text('$count')),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _substitutionLimit = value);
-                  }
-                },
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Bereits ausgewechselte Spieler dürfen wieder eingewechselt werden',
-                ),
-                value: _allowReentry,
-                onChanged: (value) =>
-                    setState(() => _allowReentry = value ?? false),
-              ),
-              DropdownButtonFormField<int>(
-                key: ValueKey(
-                  'singles-per-player-$_singlesPerPlayer-${_rosters[0].length}',
-                ),
-                initialValue: _singlesPerPlayer,
-                decoration: const InputDecoration(
-                  labelText: 'Einzel je Spieler',
-                ),
-                items: [
-                  for (var count = 1; count <= _rosters[0].length; count++)
-                    DropdownMenuItem(value: count, child: Text('$count')),
-                ],
-                onChanged: (value) {
-                  if (value != null) setState(() => _singlesPerPlayer = value);
-                },
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                key: ValueKey(
-                  'doubles-count-$_doublesCount-${_rosters[0].length}',
-                ),
-                initialValue: _doublesCount,
-                decoration: const InputDecoration(
-                  labelText: 'Doppel je Mannschaft',
-                ),
-                items: [
-                  for (var count = 0; count <= _starterCount ~/ 2; count++)
-                    DropdownMenuItem(value: count, child: Text('$count')),
-                ],
-                onChanged: (value) {
-                  if (value != null) setState(() => _doublesCount = value);
-                },
-              ),
-              const SizedBox(height: 8),
               LeagueGameFormatSetup(
                 value: _gameFormat,
                 onChanged: (format) => setState(() => _gameFormat = format),
+                additionalSettings: [
+                  DropdownButtonFormField<int>(
+                    key: ValueKey('league-create-boards-$_boards'),
+                    initialValue: _boards,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Boards'),
+                    items: [
+                      for (var count = 1; count <= 64; count++)
+                        DropdownMenuItem(value: count, child: Text('$count')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _boards = value);
+                    },
+                  ),
+                  DropdownButtonFormField<int>(
+                    key: ValueKey(
+                      'substitution-limit-$_substitutionLimit-$_maxReservePlayers',
+                    ),
+                    initialValue: _substitutionLimit.clamp(
+                      0,
+                      _maxReservePlayers,
+                    ),
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Auswechselungen je Team',
+                    ),
+                    items: [
+                      for (var count = 0; count <= _maxReservePlayers; count++)
+                        DropdownMenuItem(value: count, child: Text('$count')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _substitutionLimit = value);
+                      }
+                    },
+                  ),
+                  DropdownButtonFormField<bool>(
+                    key: ValueKey('league-reentry-$_allowReentry'),
+                    initialValue: _allowReentry,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Erneut einwechseln',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: false, child: Text('Nein')),
+                      DropdownMenuItem(value: true, child: Text('Ja')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _allowReentry = value);
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              _boardControls(),
+              const SizedBox(height: 12),
               Builder(
                 builder: (context) {
                   final duration = _estimatedAdjustedMinutes();
@@ -1070,6 +1107,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
               ),
             ],
           ),
+        ] else ...[
+          const SizedBox(height: 12),
+          _boardSetupField(),
         ],
         AdaptiveTileLayout(
           children: [
@@ -1216,45 +1256,19 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     return '$hours Std. $remaining Min.';
   }
 
-  Widget _boardControls() {
-    final count = _tournament?.boardCount ?? _boards;
-    final running =
-        _tournament?.leagueMatch?.games.any(
-          (g) => !g.complete && g.runtime?['startedAt'] != null,
-        ) ??
-        false;
-    Future<void> change(int value) async {
-      if (_tournament == null) {
-        setState(() => _boards = value);
-        return;
-      }
-      final next = CreatedTournament.fromJson(_tournament!.toJson())
-        ..boardCount = value;
-      await _save(next);
-    }
-
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 12,
-      children: [
-        Text('$count Boards'),
-        IconButton(
-          tooltip: 'Weniger Boards',
-          onPressed: _busy || running || count <= 1
-              ? null
-              : () => change(count - 1),
-          icon: const Icon(Icons.remove),
-        ),
-        IconButton(
-          tooltip: 'Mehr Boards',
-          onPressed: _busy || running || count >= 64
-              ? null
-              : () => change(count + 1),
-          icon: const Icon(Icons.add),
-        ),
-      ],
-    );
-  }
+  Widget _boardSetupField() => DropdownButtonFormField<int>(
+    key: ValueKey('traditional-board-count-$_boards'),
+    initialValue: _boards,
+    isExpanded: true,
+    decoration: const InputDecoration(labelText: 'Boards'),
+    items: [
+      for (var count = 1; count <= 64; count++)
+        DropdownMenuItem(value: count, child: Text('$count')),
+    ],
+    onChanged: (value) {
+      if (value != null) setState(() => _boards = value);
+    },
+  );
 
   List<Widget> _games(BuildContext context) {
     final league = _tournament!.leagueMatch!;

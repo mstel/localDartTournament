@@ -137,8 +137,13 @@ void main() {
     expect(find.text('Leitung'), findsOneWidget);
     await tester.tap(find.text('Einstellungen'));
     await tester.pumpAndSettle();
-    expect(find.text('Turnierleiter-Modus aktivieren'), findsNothing);
+    expect(find.text('Turnierleiter-Modus aktivieren'), findsOneWidget);
     expect(find.text('2. Bildschirm (TV-Anzeige)'), findsOneWidget);
+    await tester.tap(find.text('Turnierleiter-Modus aktivieren'));
+    await tester.pumpAndSettle();
+    expect(find.text('Boards: 1'), findsOneWidget);
+    expect(find.text('Board-Strategie'), findsNothing);
+    expect(find.text('Player Insights anzeigen'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

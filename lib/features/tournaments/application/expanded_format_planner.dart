@@ -377,6 +377,8 @@ class ExpandedFormatPlanner {
       'triple_knockout',
       'kratzer',
     ]) {
+      if (type == 'double_knockout' && n < 8) continue;
+      if (type == 'triple_knockout' && n < 16) continue;
       for (final lives
           in type == 'kratzer'
               ? [for (var l = 2; l <= maxLives; l++) l]
@@ -418,7 +420,7 @@ class ExpandedFormatPlanner {
         'round_robin',
         'double_round_robin',
         if (sizes.any((size) => size > 6)) 'limited_round_robin',
-        'swiss',
+        if (n >= 8) 'swiss',
       ]) {
         final List<(int, List<int>)> qualifierPlans;
         if (manualQualifiers != null) {

@@ -81,9 +81,14 @@ class HomeOverviewCard {
 }
 
 class HomeOverviewSnapshot {
-  const HomeOverviewSnapshot({this.activeTournament, this.cards = const []});
+  const HomeOverviewSnapshot({
+    this.activeTournament,
+    this.latestTournament,
+    this.cards = const [],
+  });
 
   final HomeOverviewActiveTournament? activeTournament;
+  final HomeOverviewCard? latestTournament;
   final List<HomeOverviewCard> cards;
 }
 
@@ -105,29 +110,47 @@ class HomeOverviewService {
             (left, right) =>
                 _activityDate(right).compareTo(_activityDate(left)),
           );
-    for (final tournament in active) {
-      final matches = TournamentTiming.matches(tournament);
-      if (_isActive(tournament, matches)) {
-        return HomeOverviewSnapshot(
-          activeTournament: _activeSummary(tournament, matches),
-        );
-      }
-    }
-
     final matchesByTournament = {
       for (final tournament in tournaments)
         tournament.id: TournamentTiming.matches(tournament),
     };
+    HomeOverviewActiveTournament? activeSummary;
+    for (final tournament in active) {
+      final matches =
+          matchesByTournament[tournament.id] ?? const <GroupMatch>[];
+      if (_isActive(tournament, matches)) {
+        activeSummary = _activeSummary(tournament, matches);
+        break;
+      }
+    }
+    if (activeSummary != null) {
+      final cards = _cards(
+        const LocalRanking(id: 'all-tournaments', name: 'Alle Turniere'),
+        tournaments,
+        tournaments,
+        matchesByTournament,
+        null,
+      );
+      return HomeOverviewSnapshot(
+        activeTournament: activeSummary,
+        latestTournament: cards[1],
+        cards: cards,
+      );
+    }
+
     final rankings = await _source.loadRankings();
     if (rankings.isEmpty) {
+      final cards = _cards(
+        const LocalRanking(id: 'all-tournaments', name: 'Alle Turniere'),
+        tournaments,
+        tournaments,
+        matchesByTournament,
+        null,
+      );
       return HomeOverviewSnapshot(
-        cards: _cards(
-          const LocalRanking(id: 'all-tournaments', name: 'Alle Turniere'),
-          tournaments,
-          tournaments,
-          matchesByTournament,
-          null,
-        ),
+        activeTournament: activeSummary,
+        latestTournament: cards[1],
+        cards: cards,
       );
     }
     final ranking = rankings.firstWhere(
@@ -145,14 +168,17 @@ class HomeOverviewService {
             .toList()
           ..sort(_compareTournaments);
     final elo = await _source.loadEloSnapshot(ranking, eligible);
+    final cards = _cards(
+      ranking,
+      eligible.isEmpty ? tournaments : eligible,
+      eligible,
+      matchesByTournament,
+      elo,
+    );
     return HomeOverviewSnapshot(
-      cards: _cards(
-        ranking,
-        eligible.isEmpty ? tournaments : eligible,
-        eligible,
-        matchesByTournament,
-        elo,
-      ),
+      activeTournament: activeSummary,
+      latestTournament: cards[1],
+      cards: cards,
     );
   }
 
@@ -288,10 +314,15 @@ class HomeOverviewService {
       lines: [
         for (var index = 0; index < podium.length; index++)
           '${index + 1}. ${podium[index].player.name} (${podium[index].wins}:${podium[index].losses})',
+        'Datum: ${_formatDate(tournament.effectiveDate)}',
         if (podium.isEmpty) 'Noch keine Ergebnisse eingetragen.',
       ],
     );
   }
+
+  String _formatDate(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}.'
+      '${value.month.toString().padLeft(2, '0')}.${value.year}';
 
   HomeOverviewCard _rankingSummaryCard(
     LocalRanking ranking,

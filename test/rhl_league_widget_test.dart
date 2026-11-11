@@ -120,13 +120,20 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Einzel je Spieler'), findsOneWidget);
+    final singlesField = tester.widget<TextFormField>(
+      find.widgetWithText(TextFormField, 'Einzel je Spieler'),
+    );
+    expect(singlesField.controller!.text, '4');
     expect(find.text('Doppel je Mannschaft'), findsOneWidget);
     expect(find.text('X01-Punktzahl'), findsOneWidget);
     expect(
       find.text('Angepasstes Liga-/Freundschaftsspiel anlegen'),
       findsOneWidget,
     );
-    expect(find.textContaining('10 Begegnungen'), findsOneWidget);
+    expect(
+      find.textContaining('18 Begegnungen · 4 Stammspieler je Team'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Voraussichtliche Dauer:'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -201,16 +208,14 @@ void main() {
       }
     }
 
-    final starterCount = find.byKey(const ValueKey('starter-count-4-10-10'));
+    final starterCount = find.byKey(const ValueKey('league-starter-count'));
     await tester.scrollUntilVisible(
       starterCount,
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    await tester.tap(starterCount);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('10').last);
+    await tester.enterText(starterCount, '10');
     await tester.pumpAndSettle();
 
     final addButtons = find.text('Spieler / Ersatzspieler hinzufügen');
@@ -340,7 +345,32 @@ void main() {
     expect(storage.saved!.leagueMatch!.games[0].home, [4]);
     expect(storage.saved!.leagueMatch!.activePlayers(0), contains(4));
     expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 1);
+    expect(
+      storage.saved!.activityLog.last.message,
+      'Heim hat H1 ausgewechselt und H5 eingewechselt',
+    );
     expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('traditional setup allows choosing the board count', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: LeagueMatchPage(storage: _MemoryStorage())),
+    );
+    final boardSelector = find.byKey(
+      const ValueKey('traditional-board-count-1'),
+    );
+    expect(boardSelector, findsOneWidget);
+    await tester.tap(boardSelector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3').last);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('traditional-board-count-3')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

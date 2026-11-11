@@ -86,24 +86,41 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
       }
       final overview = snapshot.data!;
       final active = overview.activeTournament;
-      if (active != null) {
+      final latest = overview.latestTournament;
+      final carouselCards = overview.cards
+          .where((card) => card != latest)
+          .toList();
+      if (carouselCards.isEmpty && active == null && latest == null) {
+        return const SizedBox.shrink();
+      }
+      if (carouselCards.length > 1) {
+        _rotationTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+          if (!mounted) return;
+          setState(() => _cardIndex++);
+        });
+      } else {
         _rotationTimer?.cancel();
         _rotationTimer = null;
-        return _activeCard(context, active);
       }
-      if (overview.cards.isEmpty) return const SizedBox.shrink();
-      _rotationTimer ??= overview.cards.length > 1
-          ? Timer.periodic(const Duration(seconds: 5), (_) {
-              if (!mounted) return;
-              setState(() => _cardIndex++);
-            })
-          : null;
-      final card = overview.cards[_cardIndex % overview.cards.length];
-      return _rotatingCard(
-        context,
-        card,
-        _cardIndex % overview.cards.length,
-        overview.cards.length,
+      final carousel = carouselCards.isEmpty
+          ? null
+          : _rotatingCard(
+              context,
+              carouselCards[_cardIndex % carouselCards.length],
+              _cardIndex % carouselCards.length,
+              carouselCards.length,
+            );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (active != null) _activeCard(context, active),
+          if (active == null && latest != null)
+            _rotatingCard(context, latest, -1, 0),
+          if (carousel != null) ...[
+            if (active != null || latest != null) const SizedBox(height: 12),
+            carousel,
+          ],
+        ],
       );
     },
   );

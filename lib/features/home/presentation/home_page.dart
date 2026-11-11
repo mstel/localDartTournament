@@ -101,8 +101,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _openTournamentArea() => _open(const TournamentHomePage(), 1);
-  void _openPlayersArea() => _open(const PlayersPage(), 3);
   void _openSettings() => Navigator.of(
     context,
   ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
@@ -137,46 +135,6 @@ class _HomePageState extends State<HomePage> {
       body: AdaptiveContentList(
         children: [
           SportHero(onTournament: _createTournament),
-          const SizedBox(height: 28),
-          SportMenuGroup(
-            title: 'Spielzentrale',
-            actions: [
-              SportMenuAction(
-                label: 'Turniere',
-                icon: Icons.emoji_events_outlined,
-                description: 'Planung, Ergebnisse und Ranglisten für Turniere.',
-                onTap: _openTournamentArea,
-              ),
-              SportMenuAction(
-                label: 'Freundschafts- & Ligaspiele',
-                icon: Icons.sports,
-                description: 'Eigenständige Übersicht für Mannschaftsspiele.',
-                onTap: () =>
-                    _open(const TournamentHomePage(leagueMatchesOnly: true), 2),
-              ),
-              SportMenuAction(
-                label: 'Spieler',
-                icon: Icons.groups_outlined,
-                description: 'Spielerkartei und persönliche Daten verwalten.',
-                onTap: _openPlayersArea,
-              ),
-              SportMenuAction(
-                label: 'Statistiken',
-                icon: Icons.bar_chart_outlined,
-                description: 'Leistungen und Verläufe der Spieler auswerten.',
-                onTap: () => _open(const PlayersPage(statisticsOnly: true), 4),
-              ),
-              SportMenuAction(
-                label: 'Ranglisten',
-                icon: Icons.leaderboard_outlined,
-                description: 'Ranglisten führen und Platzierungen verfolgen.',
-                onTap: () => _open(
-                  RankingsPage(onOpenTournament: _openTournamentById),
-                  5,
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 20),
           HomeActivityPanel(
             key: ValueKey(_activityRevision),

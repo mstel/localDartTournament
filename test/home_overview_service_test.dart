@@ -134,6 +134,8 @@ void main() {
     expect(snapshot.activeTournament?.participantCount, 2);
     expect(snapshot.activeTournament?.totalMatches, 1);
     expect(snapshot.activeTournament?.openMatches, 1);
+    expect(snapshot.cards, hasLength(7));
+    expect(snapshot.latestTournament?.title, startsWith('Letztes Turnier'));
     expect(source.tournamentLoads, 1);
     expect(source.rankingLoads, 0);
     expect(source.eloLoads, 0);
@@ -160,6 +162,8 @@ void main() {
     final snapshot = await HomeOverviewService(source).load();
 
     expect(snapshot.activeTournament, isNull);
+    expect(snapshot.latestTournament?.title, contains('Sommerpokal'));
+    expect(snapshot.latestTournament?.lines.join(' '), contains('Datum:'));
     expect(snapshot.cards, hasLength(7));
     expect(
       snapshot.cards.first.lines.single,
@@ -282,6 +286,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.text('AKTUELLES TURNIER'), findsOneWidget);
+      expect(find.text('LETZTE 3 BEGEGNUNGEN'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
 

@@ -13,21 +13,21 @@ void main() {
       await tester.tap(normal);
       await tester.pumpAndSettle();
     }
-      final workflow = find.text('2 · Turnierablauf');
-      for (
-        var attempt = 0;
-        attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
-        attempt++
-      ) {
-        await tester.drag(find.byType(ListView).last, const Offset(0, -400));
-        await tester.pumpAndSettle();
-      }
-      if (workflow.evaluate().isNotEmpty &&
-          find.byKey(const ValueKey('stage-type-field')).evaluate().isEmpty) {
-        await tester.tap(workflow);
-        await tester.pumpAndSettle();
-      }
+    final workflow = find.text('2 · Turnierablauf');
+    for (
+      var attempt = 0;
+      attempt < 8 && workflow.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
     }
+    if (workflow.evaluate().isNotEmpty &&
+        find.byKey(const ValueKey('stage-type-field')).evaluate().isEmpty) {
+      await tester.tap(workflow);
+      await tester.pumpAndSettle();
+    }
+  }
 
   Future<void> revealPlayerGenerator(WidgetTester tester) async {
     final target = find.text('Spieler erzeugen');
@@ -1480,18 +1480,7 @@ void main() {
     await tester.pumpWidget(const DartTournamentApp());
 
     expect(find.text('Dart Turnierverwaltung'), findsWidgets);
-    expect(find.text('Turniere'), findsWidgets);
-    await tester.scrollUntilVisible(
-      find.text('Ranglisten'),
-      200,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView).last,
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    expect(find.text('Ranglisten'), findsWidgets);
+    expect(find.text('BEREIT FÜR DEN NÄCHSTEN WURF?'), findsOneWidget);
 
     await openTournamentCreation(tester);
 

@@ -1121,7 +1121,7 @@ class _DoubleEliminationBracketView extends StatelessWidget {
   }
 }
 
-class _TripleEliminationBracketView extends StatelessWidget {
+class _TripleEliminationBracketView extends StatefulWidget {
   const _TripleEliminationBracketView({
     required this.stage,
     required this.matchNumbers,
@@ -1146,72 +1146,165 @@ class _TripleEliminationBracketView extends StatelessWidget {
   final void Function(int fromSlotIndex, int toSlotIndex)? onSwapSlot;
 
   @override
-  Widget build(BuildContext context) {
-    final finalMatches = _matchesWithLabel(stage.rounds, _tripleFinalLabel);
+  State<_TripleEliminationBracketView> createState() =>
+      _TripleEliminationBracketViewState();
+}
 
+class _TripleEliminationBracketViewState
+    extends State<_TripleEliminationBracketView>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  KnockoutTournamentRunStage get stage => widget.stage;
+  Map<GroupMatch, int> get matchNumbers => widget.matchNumbers;
+  Map<GroupMatch, ({String? first, String? second})> get sourceLabels =>
+      widget.sourceLabels;
+  Map<GroupMatch, ({GroupMatch? first, GroupMatch? second})>
+  get sourceMatches => widget.sourceMatches;
+  int get qualifyingRank => widget.qualifyingRank;
+  FutureOr<void> Function(GroupMatch match) get onEditResult =>
+      widget.onEditResult;
+  bool get canEditResults => widget.canEditResults;
+  bool get isEditMode => widget.isEditMode;
+  void Function(int fromSlotIndex, int toSlotIndex)? get onSwapSlot =>
+      widget.onSwapSlot;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewportHeight = (MediaQuery.sizeOf(context).height * 0.72)
+        .clamp(360.0, 680.0)
+        .toDouble();
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: 'Ungeschlagen'),
+              Tab(text: '1 Niederlage'),
+              Tab(text: '2 Niederlagen'),
+            ],
+          ),
+          SizedBox(
+            height: viewportHeight,
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _lossTree(context, 0),
+                _lossTree(context, 1),
+                _eliminationTree(context),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _lossTree(BuildContext context, int lossCount) {
+    final rounds = _lossLevelRounds(lossCount);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (
-          var lossCount = 0;
-          lossCount < stage.eliminationLossLimit;
-          lossCount++
-        ) ...[
-          _BracketBandTitle(title: _lossLevelBracketLabel(lossCount)),
+        _BracketBandTitle(title: _lossLevelBracketLabel(lossCount)),
+        const SizedBox(height: 8),
+        Expanded(
+          child: rounds.isEmpty
+              ? const Center(child: Text('Noch keine Begegnungen.'))
+              : _BracketTreeLayout(
+                  totalRounds: rounds.length,
+                  columnWidth: 260,
+                  cardHeight: _compactBracketCardHeight(context),
+                  firstRoundGap: 12,
+                  useBalancedColumnLayout: true,
+                  roundMatches: rounds,
+                  sourceMatches: sourceMatches,
+                  roundTitles: [
+                    for (var index = 0; index < rounds.length; index++)
+                      _bracketRoundTitle(index, rounds.length),
+                  ],
+                  roundCards: [
+                    for (var index = 0; index < rounds.length; index++)
+                      _matchCards(rounds[index], index, rounds.length),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _eliminationTree(BuildContext context) {
+    final finalMatches = _matchesWithLabel(stage.rounds, _tripleFinalLabel);
+    final levels = [
+      for (
+        var lossCount = 2;
+        lossCount < stage.eliminationLossLimit;
+        lossCount++
+      )
+        (lossCount: lossCount, rounds: _lossLevelRounds(lossCount)),
+    ];
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final level in levels)
+            if (level.rounds.isNotEmpty) ...[
+              _BracketBandTitle(title: _lossLevelBracketLabel(level.lossCount)),
+              const SizedBox(height: 8),
+              _BracketTreeLayout(
+                totalRounds: level.rounds.length,
+                columnWidth: 260,
+                cardHeight: _compactBracketCardHeight(context),
+                firstRoundGap: 12,
+                useBalancedColumnLayout: true,
+                roundMatches: level.rounds,
+                sourceMatches: sourceMatches,
+                roundTitles: [
+                  for (var index = 0; index < level.rounds.length; index++)
+                    _bracketRoundTitle(index, level.rounds.length),
+                ],
+                roundCards: [
+                  for (var index = 0; index < level.rounds.length; index++)
+                    _matchCards(
+                      level.rounds[index],
+                      index,
+                      level.rounds.length,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          _BracketBandTitle(title: 'Finale'),
           const SizedBox(height: 8),
           _BracketTreeLayout(
-            totalRounds: _lossLevelRounds(lossCount).length,
+            totalRounds: finalMatches.isEmpty ? 0 : 1,
             columnWidth: 260,
             cardHeight: _compactBracketCardHeight(context),
             firstRoundGap: 12,
             useBalancedColumnLayout: true,
-            roundMatches: _lossLevelRounds(lossCount),
+            roundMatches: [finalMatches],
             sourceMatches: sourceMatches,
             roundTitles: [
-              for (
-                var roundIndex = 0;
-                roundIndex < _lossLevelRounds(lossCount).length;
-                roundIndex++
-              )
-                lossCount == 0
-                    ? _bracketRoundTitle(
-                        roundIndex,
-                        _lossLevelRounds(lossCount).length,
-                      )
-                    : _bracketRoundTitle(
-                        roundIndex,
-                        _lossLevelRounds(lossCount).length,
-                      ),
+              for (var i = 0; i < finalMatches.length; i++) 'Finale',
             ],
-            roundCards: [
-              for (
-                var roundIndex = 0;
-                roundIndex < _lossLevelRounds(lossCount).length;
-                roundIndex++
-              )
-                _matchCards(
-                  _lossLevelRounds(lossCount)[roundIndex],
-                  roundIndex,
-                  _lossLevelRounds(lossCount).length,
-                ),
-            ],
+            roundCards: [_matchCards(finalMatches, 0, 1)],
           ),
-          const SizedBox(height: 18),
         ],
-        _BracketBandTitle(title: 'Finale'),
-        const SizedBox(height: 8),
-        _BracketTreeLayout(
-          totalRounds: finalMatches.isEmpty ? 0 : 1,
-          columnWidth: 260,
-          cardHeight: _compactBracketCardHeight(context),
-          firstRoundGap: 12,
-          useBalancedColumnLayout: true,
-          roundMatches: [finalMatches],
-          sourceMatches: sourceMatches,
-          roundTitles: [for (var i = 0; i < finalMatches.length; i++) 'Finale'],
-          roundCards: [_matchCards(finalMatches, 0, 1)],
-        ),
-      ],
+      ),
     );
   }
 

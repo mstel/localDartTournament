@@ -9,16 +9,37 @@ import 'package:dart_tournament_manager/tournament_workspace.dart'
 
 class _HomeOverviewSource implements HomeOverviewDataSource {
   @override
-  Future<List<CreatedTournament>> loadTournaments() async => [
-    CreatedTournament(
-      id: 'active',
-      name: 'Laufendes Turnier',
-      players: const [],
-      stages: const [],
-      runStages: const [],
-      startedAt: DateTime(2026, 8, 1),
-    ),
-  ];
+  Future<List<CreatedTournament>> loadTournaments() async {
+    final home = TournamentPlayer(name: 'Spieler A', isGenerated: false);
+    final away = TournamentPlayer(name: 'Spieler B', isGenerated: false);
+    return [
+      CreatedTournament(
+        id: 'active',
+        name: 'Laufendes Turnier',
+        players: [home, away],
+        stages: const [],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppe A',
+            groupPlayType: 'round_robin',
+            qualificationPlan: null,
+            tieBreakers: defaultGroupTieBreakers,
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: [home, away],
+                matches: [
+                  GroupMatch(homePlayer: home, awayPlayer: away, round: 1),
+                ],
+              ),
+            ],
+          ),
+        ],
+        startedAt: DateTime(2026, 8, 1),
+      ),
+    ];
+  }
 
   @override
   Future<List<LocalRanking>> loadRankings() async => const [];
@@ -59,34 +80,22 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('BEREIT FÜR DEN NÄCHSTEN WURF?'), findsOneWidget);
+      expect(find.text('Deine Spielzentrale.'), findsOneWidget);
       if (size.width < 1100) {
         await tester.tap(find.byTooltip('Bereich wechseln'));
         await tester.pumpAndSettle();
-      }
-
-      for (final label in [
-        'Turniere',
-        'Freundschafts- & Ligaspiele',
-        'Spieler',
-        'Statistiken',
-        'Ranglisten',
-      ]) {
-        expect(find.text(label), findsWidgets);
-      }
-      if (size.width < 1100) {
+        for (final label in [
+          'Turniere',
+          'Freundschafts- & Ligaspiele',
+          'Spieler',
+          'Statistiken',
+          'Ranglisten',
+        ]) {
+          expect(find.text(label), findsWidgets);
+        }
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
-      }
-      await tester.drag(find.byType(ListView).first, const Offset(0, -600));
-      await tester.pumpAndSettle();
-      for (final description in [
-        'Planung, Ergebnisse und Ranglisten für Turniere.',
-        'Eigenständige Übersicht für Mannschaftsspiele.',
-        'Spielerkartei und persönliche Daten verwalten.',
-        'Leistungen und Verläufe der Spieler auswerten.',
-        'Ranglisten führen und Platzierungen verfolgen.',
-      ]) {
-        expect(find.text(description), findsOneWidget);
       }
       expect(tester.takeException(), isNull);
     });
