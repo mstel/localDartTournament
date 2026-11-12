@@ -155,17 +155,66 @@ class GroupStandingsEngine {
     PlayerStanding second,
     List<GroupMatch> matches,
   ) {
+    var firstPoints = 0;
+    var secondPoints = 0;
+    var firstLegsFor = 0;
+    var secondLegsFor = 0;
+    var firstLegsAgainst = 0;
+    var secondLegsAgainst = 0;
     for (final match in matches.where(
-      (match) => match.isDecider && match.hasResult,
+      (match) => match.isDecider && match.label == 'Decider' && match.hasResult,
     )) {
       final home = match.homePlayer;
       final away = match.awayPlayer;
-      if (home == null || away == null || match.winner == null) continue;
-      final direct =
-          (home.name == first.player.name && away.name == second.player.name) ||
-          (home.name == second.player.name && away.name == first.player.name);
-      if (direct) return match.winner!.name == first.player.name ? -1 : 1;
+      if (home == null || away == null) continue;
+      final firstIsHome = home.name == first.player.name;
+      final firstIsAway = away.name == first.player.name;
+      final secondIsHome = home.name == second.player.name;
+      final secondIsAway = away.name == second.player.name;
+      if (!(firstIsHome || firstIsAway) && !(secondIsHome || secondIsAway)) {
+        continue;
+      }
+      final homeLegs = match.homeLegs ?? 0;
+      final awayLegs = match.awayLegs ?? 0;
+      if (firstIsHome || firstIsAway) {
+        if (firstIsHome) {
+          firstLegsFor += homeLegs;
+          firstLegsAgainst += awayLegs;
+        } else {
+          firstLegsFor += awayLegs;
+          firstLegsAgainst += homeLegs;
+        }
+      }
+      if (secondIsHome || secondIsAway) {
+        if (secondIsHome) {
+          secondLegsFor += homeLegs;
+          secondLegsAgainst += awayLegs;
+        } else {
+          secondLegsFor += awayLegs;
+          secondLegsAgainst += homeLegs;
+        }
+      }
+      if (firstIsHome || firstIsAway) {
+        firstPoints += match.winner?.name == first.player.name
+            ? 3
+            : match.winner == null
+            ? 1
+            : 0;
+      }
+      if (secondIsHome || secondIsAway) {
+        secondPoints += match.winner?.name == second.player.name
+            ? 3
+            : match.winner == null
+            ? 1
+            : 0;
+      }
     }
-    return 0;
+    final points = secondPoints.compareTo(firstPoints);
+    if (points != 0) return points;
+    final legDifference = (secondLegsFor - secondLegsAgainst).compareTo(
+      firstLegsFor - firstLegsAgainst,
+    );
+    if (legDifference != 0) return legDifference;
+    return secondLegsFor.compareTo(firstLegsFor);
   }
 }

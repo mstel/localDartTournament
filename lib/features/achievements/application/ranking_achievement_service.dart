@@ -38,7 +38,7 @@ class RankingAchievementService {
   String notificationExplanation(AchievementProgress progress) {
     final value = _formatMetric(progress.currentValue);
     final target = _formatMetric(progress.definition.target);
-    return switch (progress.definition.metric) {
+    final detail = switch (progress.definition.metric) {
       AchievementMetric.eloUpsetWins =>
         'Du hast einen Gegner besiegt, der zum Zeitpunkt des Matches '
             'mindestens ${_formatMetric(progress.definition.parameterTarget ?? 200)} ELO-Punkte mehr hatte.',
@@ -72,6 +72,7 @@ class RankingAchievementService {
       _ =>
         'Du hast $value von $target für „${progress.definition.name}“ erreicht.',
     };
+    return 'Aufgabe: ${progress.definition.description}\n$detail';
   }
 
   Future<AchievementEvaluation?> loadPlayerEvaluation({
@@ -390,6 +391,9 @@ class RankingAchievementService {
           highFinishes++;
         case BestPerformanceType.bullseyeFinish:
           bullseyeFinishes++;
+          if (performance.value != null && performance.value! > 100) {
+            highFinishes++;
+          }
         case BestPerformanceType.shortLeg:
           shortLegs++;
           if (performance.value == 9) nineDarters++;
@@ -401,6 +405,7 @@ class RankingAchievementService {
     }
 
     for (final tournament in tournaments) {
+      if (tournament.players.any((player) => player.isTeam)) continue;
       final date = tournament.effectiveDate;
       final participationDate =
           tournament.startedAt ??
@@ -432,6 +437,7 @@ class RankingAchievementService {
 
       final matches = _matches(tournament);
       for (final match in matches) {
+        if (match.hasTeamParticipant) continue;
         if (!match.countsForStatistics) continue;
         final matchDate = match.finishedAt ?? date;
         if (through != null && matchDate.isAfter(through)) continue;

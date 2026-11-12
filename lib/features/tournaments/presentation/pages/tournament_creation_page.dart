@@ -22,8 +22,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   bool _showEntryChoices = true;
   bool _countsForRanking = false;
   bool _rankingSetupTouched = false;
+  bool _hasSelectedEloRanking = false;
+  bool _loadingEloRatingsForSeeding = false;
+  Map<String, int> _eloRatingsByPlayerId = const {};
   final List<String> _localRankingIds = [];
   final _tournamentNameController = TextEditingController();
+  final _nameParticipantSectionController = ExpansibleController();
+  final _structureSectionController = ExpansibleController();
+  final _summarySectionController = ExpansibleController();
   final _playerNameController = TextEditingController();
   final _playerCountController = TextEditingController(text: '8');
   final _groupCountController = TextEditingController(text: '2');
@@ -64,6 +70,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   int? _manualExtraRank;
   int? _manualExtraCount;
   bool _autoAdjustQualification = true;
+  String _qualificationAdvancementPolicy = 'larger_group';
+  bool _allowGroupTieBreakDeciders = false;
+  TournamentGameFormat _tieBreakGameFormat = const TournamentGameFormat(
+    bestOfLegs: 1,
+  );
   int? _editingStageIndex;
   GroupPlayerAllocationMode _groupAllocationMode =
       GroupPlayerAllocationMode.strengthLevels;
@@ -94,6 +105,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   String get _selectedGroupPlayType =>
       _selectedStageType == 'swiss' ? 'swiss' : 'round_robin';
   String _knockoutSeedingMode = 'cross';
+  bool get _hasTeamParticipants => _players.any((player) => player.isTeam);
+  bool get _effectiveCountsForRanking =>
+      _countsForRanking && !_hasTeamParticipants;
+  List<String> get _effectiveRankingIds =>
+      _effectiveCountsForRanking ? _localRankingIds : const [];
   bool _groupDrawOnStart = false;
   String _kratzerBoardDistribution = 'balanced';
   bool _kratzerPreferSameScratchCount = false;
@@ -122,9 +138,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       _playerCountController.text = '${existing.players.length}';
       _plannedBoardCount = existing.boardCount;
       _stages.addAll(existing.stages);
+      if (_stages.isNotEmpty) {
+        _editStage(0);
+      }
     }
     unawaited(_loadGroupTieBreakers());
     unawaited(_applyDefaultRanking());
+    unawaited(_refreshEloRankingAvailability());
   }
 
   Future<void> _loadGroupTieBreakers() async {
@@ -181,6 +201,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ..clear()
         ..add(preferred!.id);
     });
+    unawaited(_refreshEloRankingAvailability());
   }
 
   Future<void> _configureRankingSelection(bool enabled) async {
@@ -188,6 +209,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       setState(() {
         _rankingSetupTouched = true;
         _countsForRanking = false;
+        _hasSelectedEloRanking = false;
         _localRankingIds.clear();
       });
       return;
@@ -251,6 +273,40 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ..clear()
         ..addAll(result);
     });
+    unawaited(_refreshEloRankingAvailability());
+  }
+
+  Future<void> _refreshEloRankingAvailability() async {
+    final rankings = await _localRankings;
+    if (!mounted) return;
+    final available =
+        _effectiveCountsForRanking &&
+        rankings.any(
+          (ranking) =>
+              ranking.type == RankingType.elo &&
+              _localRankingIds.contains(ranking.id),
+        );
+    if (available == _hasSelectedEloRanking) return;
+    setState(() => _hasSelectedEloRanking = available);
+  }
+
+  Future<void> _loadEloRatingsForSeeding() async {
+    setState(() => _loadingEloRatingsForSeeding = true);
+    try {
+      final ratings = await _loadGroupRatings();
+      if (!mounted) return;
+      setState(() => _eloRatingsByPlayerId = ratings);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ELO-Setzliste konnte nicht geladen werden: $error'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingEloRatingsForSeeding = false);
+    }
   }
 
   Future<void> _saveTournamentNameDraft() async {
@@ -429,6 +485,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _groupCountController.dispose();
     _groupQualifierCountController.dispose();
     _bestOfQualifierCountController.dispose();
+    _nameParticipantSectionController.dispose();
+    _structureSectionController.dispose();
+    _summarySectionController.dispose();
     super.dispose();
   }
 
@@ -794,21 +853,66 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     int bracketSize,
   ) {
     if (_effectiveKnockoutSeedingMode() == 'random') {
-      return _randomKnockoutSlotOrder(participantCount, bracketSize);
+      return _seedOrderForSize(
+        bracketSize,
+      ).map((seed) => seed <= participantCount ? seed : null).toList();
+    }
+    if (_effectiveKnockoutSeedingMode() == 'random_cross') {
+      return _randomCrossSeededKnockoutSlotOrder(participantCount, bracketSize);
+    }
+    if (_effectiveKnockoutSeedingMode() == 'elo' && !_hasGroupSeedSources()) {
+      final rankedPlayers =
+          List<int>.generate(participantCount, (index) => index + 1)
+            ..sort((a, b) {
+              final aId = _players[a - 1].profileId;
+              final bId = _players[b - 1].profileId;
+              final rating = (_eloRatingsByPlayerId[bId] ?? 1000).compareTo(
+                _eloRatingsByPlayerId[aId] ?? 1000,
+              );
+              return rating != 0 ? rating : a.compareTo(b);
+            });
+      final rankBySeed = <int, int>{
+        for (var rank = 0; rank < rankedPlayers.length; rank++)
+          rank + 1: rankedPlayers[rank],
+      };
+      return [
+        for (final bracketSeed in _seedOrderForSize(bracketSize))
+          bracketSeed <= participantCount ? rankBySeed[bracketSeed] : null,
+      ];
     }
 
     return _crossSeededKnockoutSlotOrder(participantCount, bracketSize);
   }
 
-  List<int?> _randomKnockoutSlotOrder(int participantCount, int bracketSize) {
-    final shuffledSeeds = <int>[
-      for (var seed = 1; seed <= participantCount; seed++) seed,
-    ]..shuffle(Random());
-
-    var seedIndex = 0;
+  List<int?> _randomCrossSeededKnockoutSlotOrder(
+    int participantCount,
+    int bracketSize,
+  ) {
+    if (bracketSize > participantCount) {
+      return _crossSeededKnockoutSlotOrder(participantCount, bracketSize);
+    }
+    final ranked = _knockoutSeedSources(participantCount)
+      ..sort(_compareKnockoutSeedStrength);
+    final half = (participantCount / 2).ceil();
+    final stronger = ranked.take(half).toList()..shuffle(Random());
+    final weaker = ranked.skip(half).toList()..shuffle(Random());
+    final pairs = <List<_KnockoutSeedSource>>[];
+    while (stronger.isNotEmpty && weaker.isNotEmpty) {
+      final first = stronger.removeAt(0);
+      var opponentIndex = weaker.indexWhere(
+        (candidate) => !_sameKnownGroup(first, candidate),
+      );
+      if (opponentIndex < 0) opponentIndex = 0;
+      pairs.add([first, weaker.removeAt(opponentIndex)]);
+    }
+    final remaining = [...stronger, ...weaker]..shuffle(Random());
+    for (var index = 0; index + 1 < remaining.length; index += 2) {
+      pairs.add([remaining[index], remaining[index + 1]]);
+    }
+    if (remaining.length.isOdd) pairs.add([remaining.last]);
     return [
-      for (final bracketSeed in _seedOrderForSize(bracketSize))
-        bracketSeed <= participantCount ? shuffledSeeds[seedIndex++] : null,
+      for (final pair in pairs) ...pair.map((source) => source.seed),
+      ...List<int?>.filled(bracketSize - participantCount, null),
     ];
   }
 
@@ -1070,9 +1174,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       participantCount,
       bracketSize,
     );
-    if (seedingMode == 'random') {
-      _manualKnockoutSlotOrder = List<int?>.from(automaticOrder);
-    }
     return automaticOrder;
   }
 
@@ -1163,13 +1264,16 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
   void _resetKnockoutSlots() {
     setState(() {
-      if (_effectiveKnockoutSeedingMode() == 'random') {
+      if (_effectiveKnockoutSeedingMode() == 'random_cross') {
         final participantCount = _knockoutParticipantCount();
         final bracketSize = _knockoutBracketSize();
         _manualKnockoutSlotOrder =
             participantCount == null || bracketSize == null
             ? null
-            : _randomKnockoutSlotOrder(participantCount, bracketSize);
+            : _randomCrossSeededKnockoutSlotOrder(
+                participantCount,
+                bracketSize,
+              );
       } else {
         _manualKnockoutSlotOrder = null;
       }
@@ -1178,18 +1282,17 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
   void _setKnockoutSeedingMode(String mode) {
     setState(() {
-      _knockoutSeedingMode = _hasGroupSeedSources() ? mode : 'random';
-      if (_knockoutSeedingMode == 'random') {
-        final participantCount = _knockoutParticipantCount();
-        final bracketSize = _knockoutBracketSize();
-        _manualKnockoutSlotOrder =
-            participantCount == null || bracketSize == null
-            ? null
-            : _randomKnockoutSlotOrder(participantCount, bracketSize);
-      } else {
-        _manualKnockoutSlotOrder = null;
-      }
+      _knockoutSeedingMode = mode;
+      final participantCount = _knockoutParticipantCount();
+      final bracketSize = _knockoutBracketSize();
+      _manualKnockoutSlotOrder =
+          mode == 'random_cross' &&
+              participantCount != null &&
+              bracketSize != null
+          ? _randomCrossSeededKnockoutSlotOrder(participantCount, bracketSize)
+          : null;
     });
+    if (mode == 'elo') unawaited(_loadEloRatingsForSeeding());
   }
 
   bool _hasGroupSeedSources() {
@@ -1200,7 +1303,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   String _effectiveKnockoutSeedingMode() {
-    return _hasGroupSeedSources() ? _knockoutSeedingMode : 'random';
+    return _knockoutSeedingMode == 'elo' && _hasGroupSeedSources()
+        ? 'cross'
+        : _knockoutSeedingMode;
   }
 
   Widget _responsiveFormRow({
@@ -1303,40 +1408,56 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ? maxQualifiers
         : participantCount;
     final fixedPerGroup = cappedParticipantCount ~/ groupCount;
-    final automaticExtraCount = cappedParticipantCount % groupCount;
     final hasManualFixed = _fixedQualifiersByGroup.length == groupSizes.length;
-    final fixedByGroup = hasManualFixed
+    var fixedByGroup = hasManualFixed
         ? _currentFixedQualifiersByGroup(groupSizes, null)
         : [
             for (final groupSize in groupSizes)
               fixedPerGroup > groupSize ? groupSize : fixedPerGroup,
           ];
-    final fixedTotal = fixedByGroup.fold<int>(0, (sum, value) => sum + value);
-    final extraCount = !_autoAdjustQualification && hasManualFixed
-        ? (_manualExtraCount ?? 0).clamp(0, groupCount).toInt()
-        : hasManualFixed
-        ? (cappedParticipantCount - fixedTotal).clamp(0, groupCount).toInt()
-        : automaticExtraCount;
     final extraRank = hasManualFixed
         ? (_manualExtraRank ?? fixedPerGroup + 1)
         : fixedPerGroup + 1;
-    final eligibleGroupSize = extraCount == 0
+    var remainingExtraCount =
+        cappedParticipantCount -
+        fixedByGroup.fold<int>(0, (sum, value) => sum + value);
+    if (_autoAdjustQualification &&
+        _qualificationAdvancementPolicy == 'larger_group' &&
+        !hasManualFixed &&
+        remainingExtraCount > 0) {
+      final orderedGroupIndexes = List<int>.generate(groupCount, (i) => i)
+        ..sort((a, b) => groupSizes[b].compareTo(groupSizes[a]));
+      for (
+        var index = 0;
+        index < orderedGroupIndexes.length && remainingExtraCount > 0;
+        index++
+      ) {
+        final groupIndex = orderedGroupIndexes[index];
+        final nextSize = index + 1 < orderedGroupIndexes.length
+            ? groupSizes[orderedGroupIndexes[index + 1]]
+            : -1;
+        if (groupSizes[groupIndex] <= nextSize ||
+            groupSizes[groupIndex] < fixedByGroup[groupIndex] + 1) {
+          continue;
+        }
+        fixedByGroup = List<int>.from(fixedByGroup)
+          ..[groupIndex] = fixedByGroup[groupIndex] + 1;
+        remainingExtraCount--;
+      }
+    }
+    final extraCount = !_autoAdjustQualification && hasManualFixed
+        ? (_manualExtraCount ?? 0).clamp(0, groupCount).toInt()
+        : remainingExtraCount.clamp(0, groupCount).toInt();
+    final eligibleGroups = [
+      for (var index = 0; index < groupSizes.length; index++)
+        if (groupSizes[index] >= extraRank && fixedByGroup[index] < extraRank)
+          index + 1,
+    ];
+    final eligibleGroupSize = eligibleGroups.isEmpty
         ? null
-        : groupSizes
-              .where((size) => size >= extraRank)
-              .fold<int>(0, (largest, size) => size > largest ? size : largest);
-    final eligibleGroups = extraCount == 0
-        ? const <int>[]
-        : [
-            for (var index = 0; index < groupSizes.length; index++)
-              if (groupSizes[index] >= extraRank) index + 1,
-          ];
-    final automaticExtraGroups = eligibleGroupSize == null
-        ? const <int>[]
-        : [
-            for (var index = 0; index < groupSizes.length; index++)
-              if (groupSizes[index] == eligibleGroupSize) index + 1,
-          ];
+        : eligibleGroups
+              .map((groupNumber) => groupSizes[groupNumber - 1])
+              .reduce(max);
     final manualExtraGroups =
         _selectedExtraGroups
             .where((groupNumber) => eligibleGroups.contains(groupNumber))
@@ -1345,7 +1466,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     final extraGroups =
         manualExtraGroups.isNotEmpty || !_autoAdjustQualification
         ? manualExtraGroups
-        : automaticExtraGroups;
+        : eligibleGroups;
 
     return QualificationPlan(
       totalQualifiers: cappedParticipantCount,
@@ -1384,7 +1505,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ? maxQualifiers
         : participantCount;
     final fixedPerGroup = cappedParticipantCount ~/ groupCount;
-    final storedFixedByGroup = stage.fixedQualifiersByGroup.length == groupCount
+    var storedFixedByGroup = stage.fixedQualifiersByGroup.length == groupCount
         ? [
             for (var index = 0; index < groupCount; index++)
               stage.fixedQualifiersByGroup[index]
@@ -1395,6 +1516,31 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             for (final groupSize in stage.groupSizes)
               fixedPerGroup > groupSize ? groupSize : fixedPerGroup,
           ];
+    if (stage.qualificationAutoAdjust) {
+      storedFixedByGroup = [
+        for (final groupSize in stage.groupSizes)
+          fixedPerGroup > groupSize ? groupSize : fixedPerGroup,
+      ];
+      var remaining =
+          cappedParticipantCount -
+          storedFixedByGroup.fold<int>(0, (sum, value) => sum + value);
+      if (stage.qualificationAdvancementPolicy == 'larger_group') {
+        final ordered = List<int>.generate(groupCount, (index) => index)
+          ..sort((a, b) => stage.groupSizes[b].compareTo(stage.groupSizes[a]));
+        for (var index = 0; index < ordered.length && remaining > 0; index++) {
+          final groupIndex = ordered[index];
+          final nextSize = index + 1 < ordered.length
+              ? stage.groupSizes[ordered[index + 1]]
+              : -1;
+          if (stage.groupSizes[groupIndex] <= nextSize ||
+              stage.groupSizes[groupIndex] <= storedFixedByGroup[groupIndex]) {
+            continue;
+          }
+          storedFixedByGroup[groupIndex]++;
+          remaining--;
+        }
+      }
+    }
     final fixedTotal = storedFixedByGroup.fold<int>(
       0,
       (sum, value) => sum + value,
@@ -1408,11 +1554,17 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               .clamp(0, groupCount)
               .toInt();
     final extraRank = stage.extraQualifierRank ?? fixedPerGroup + 1;
-    final eligibleGroupSize = extraCount == 0
+    final eligibleGroups = [
+      for (var index = 0; index < groupCount; index++)
+        if (stage.groupSizes[index] >= extraRank &&
+            storedFixedByGroup[index] < extraRank)
+          index + 1,
+    ];
+    final eligibleGroupSize = eligibleGroups.isEmpty
         ? null
-        : stage.groupSizes
-              .where((size) => size >= extraRank)
-              .fold<int>(0, (largest, size) => size > largest ? size : largest);
+        : eligibleGroups
+              .map((groupNumber) => stage.groupSizes[groupNumber - 1])
+              .reduce(max);
 
     return QualificationPlan(
       totalQualifiers: cappedParticipantCount,
@@ -1420,7 +1572,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       extraCount: extraCount,
       extraRank: extraRank,
       eligibleGroupSize: eligibleGroupSize,
-      extraGroups: stage.qualifiersByGroup,
+      extraGroups: stage.qualificationAutoAdjust
+          ? eligibleGroups
+          : stage.qualifiersByGroup,
       fixedByGroup: storedFixedByGroup,
     );
   }
@@ -1796,6 +1950,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       groupTieBreakers: _isGroupStageForm
           ? List.unmodifiable(_groupTieBreakers)
           : defaultGroupTieBreakers,
+      allowGroupTieBreakDeciders:
+          _isGroupStageForm && _allowGroupTieBreakDeciders,
+      tieBreakGameFormat: _tieBreakGameFormat,
       groupMaxGamesPerPlayer: _isGroupStageForm
           ? _gameLimitsForGroupSizes(_calculateGroupSizes())
           : const [],
@@ -1823,12 +1980,16 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ? _knockoutByeCount()
           : 0,
       knockoutSlotOrder: _isKnockoutStageType(_selectedStageType)
-          ? _knockoutSlotOrder()
+          ? _effectiveKnockoutSeedingMode() == 'random'
+                ? const []
+                : _knockoutSlotOrder()
           : const [],
       knockoutSeedingMode: _isKnockoutStageType(_selectedStageType)
           ? _effectiveKnockoutSeedingMode()
           : 'cross',
-      knockoutDrawOnStart: false,
+      knockoutDrawOnStart:
+          _isKnockoutStageType(_selectedStageType) &&
+          _effectiveKnockoutSeedingMode() == 'random',
       qualifiersByGroup: _isGroupStageForm
           ? groupQualificationPlan?.extraGroups ?? const []
           : const [],
@@ -1844,6 +2005,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       qualificationAutoAdjust: _isGroupStageForm
           ? _autoAdjustQualification
           : true,
+      qualificationAdvancementPolicy: _isGroupStageForm
+          ? _qualificationAdvancementPolicy
+          : 'larger_group',
       qualifiedParticipantCount: _isGroupStageForm
           ? groupQualificationPlan?.totalQualifiers
           : null,
@@ -1875,6 +2039,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _manualExtraCount = null;
     _bestOfQualifierCountController.text = '0';
     _autoAdjustQualification = true;
+    _qualificationAdvancementPolicy = 'larger_group';
+    _allowGroupTieBreakDeciders = false;
+    _tieBreakGameFormat = const TournamentGameFormat(bestOfLegs: 1);
     _selectedExtraGroups.clear();
     _groupTieBreakers
       ..clear()
@@ -1912,6 +2079,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       _kratzerBonusLifeForHighFinish = stage.kratzerBonusLifeForHighFinish;
       _kratzerHandicapsEnabled = stage.kratzerHandicapsEnabled;
       _stageGameFormat = stage.gameFormat;
+      _allowGroupTieBreakDeciders = stage.allowGroupTieBreakDeciders;
+      _tieBreakGameFormat = stage.tieBreakGameFormat;
 
       if (stage.isGroupStage) {
         _groupCountController.text = '${stage.groupSizes.length}';
@@ -1931,12 +2100,17 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ..addAll(stage.groupTieBreakers);
         _fixedQualifiersByGroup
           ..clear()
-          ..addAll(stage.fixedQualifiersByGroup);
+          ..addAll(
+            stage.qualificationAutoAdjust
+                ? const <int>[]
+                : stage.fixedQualifiersByGroup,
+          );
         _manualExtraRank = stage.extraQualifierRank;
         _manualExtraCount = stage.extraQualifierCount;
         _bestOfQualifierCountController.text =
             '${stage.extraQualifierCount ?? 0}';
         _autoAdjustQualification = stage.qualificationAutoAdjust;
+        _qualificationAdvancementPolicy = stage.qualificationAdvancementPolicy;
         _groupDrawOnStart = false;
         if (stage.groupDrawOnStart) {
           _groupAllocationMode = GroupPlayerAllocationMode.random;
@@ -1957,6 +2131,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _manualExtraCount = null;
         _bestOfQualifierCountController.text = '0';
         _autoAdjustQualification = true;
+        _qualificationAdvancementPolicy = 'larger_group';
+        _allowGroupTieBreakDeciders = false;
+        _tieBreakGameFormat = const TournamentGameFormat(bestOfLegs: 1);
         _groupTieBreakers
           ..clear()
           ..addAll(defaultGroupTieBreakers);
@@ -2219,12 +2396,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       final name = _tournamentNameController.text.trim().isEmpty
           ? 'Neues Turnier'
           : _tournamentNameController.text.trim();
-      final stages = List<TournamentStage>.unmodifiable(_stages);
+      final existing = widget.existingTournament;
+      final stages = List<TournamentStage>.unmodifiable(
+        _preserveExistingGroupAssignment(existing, _stages),
+      );
       final groupRatings =
           _groupAllocationMode == GroupPlayerAllocationMode.random
           ? const <String, int>{}
           : await _loadGroupRatings();
-      final existing = widget.existingTournament;
       final settingsChanged =
           existing != null &&
           (jsonEncode(
@@ -2261,8 +2440,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         tournament = await controller.updateTournament(
           existing,
           boardCount: _plannedBoardCount,
-          countsForRanking: _countsForRanking,
-          rankingIds: _localRankingIds,
+          countsForRanking: _effectiveCountsForRanking,
+          rankingIds: _effectiveRankingIds,
           name: name,
           players: _players,
           stages: stages,
@@ -2276,8 +2455,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       } else if (existing != null) {
         tournament = await controller.createTournamentCopy(
           boardCount: _plannedBoardCount,
-          countsForRanking: _countsForRanking,
-          rankingIds: _localRankingIds,
+          countsForRanking: _effectiveCountsForRanking,
+          rankingIds: _effectiveRankingIds,
           name: name,
           players: _players,
           stages: stages,
@@ -2290,8 +2469,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       } else {
         tournament = await controller.createTournament(
           boardCount: _plannedBoardCount,
-          countsForRanking: _countsForRanking,
-          rankingIds: _localRankingIds,
+          countsForRanking: _effectiveCountsForRanking,
+          rankingIds: _effectiveRankingIds,
           name: name,
           players: _players,
           stages: stages,
@@ -2333,7 +2512,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       title: const Text('Turnier speichern'),
       content: Text(
         canUpdate
-            ? 'Soll die bestehende Konfiguration ersetzt oder ein neues Turnier mit diesen Einstellungen angelegt werden?'
+            ? 'Soll die bestehende Konfiguration ersetzt oder ein neues Turnier mit diesen Einstellungen angelegt werden? Gruppen müssen nach dem Aktualisieren gegebenenfalls neu zugewiesen werden.'
             : 'Das bestehende Turnier enthält Ergebnisse und kann deshalb nicht überschrieben werden. Du kannst die Einstellungen als neues Turnier speichern.',
       ),
       actions: [
@@ -2356,15 +2535,16 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   );
 
   Future<Map<String, int>> _loadGroupRatings() async {
-    if (_players.every((player) => player.profileId == null)) {
+    if (!_effectiveCountsForRanking ||
+        _localRankingIds.isEmpty ||
+        _players.every((player) => player.profileId == null)) {
       return const {};
     }
     final rankings = (await _localRankings)
         .where(
           (ranking) =>
               ranking.type == RankingType.elo &&
-              (_localRankingIds.isEmpty ||
-                  _localRankingIds.contains(ranking.id)),
+              _localRankingIds.contains(ranking.id),
         )
         .toList();
     final ratingsByPlayer = <String, List<int>>{};
@@ -2383,6 +2563,54 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     entry.value.length)
                 .round(),
     };
+  }
+
+  List<TournamentStage> _preserveExistingGroupAssignment(
+    CreatedTournament? existing,
+    List<TournamentStage> stages,
+  ) {
+    if (existing == null ||
+        stages.isEmpty ||
+        !stages.first.isGroupStage ||
+        existing.runStages.isEmpty ||
+        existing.runStages.first is! GroupTournamentRunStage) {
+      return stages;
+    }
+    final oldStage = existing.runStages.first as GroupTournamentRunStage;
+    final ordered = oldStage.groups.expand((group) => group.players).toList();
+    String identity(TournamentPlayer player) =>
+        player.profileId ?? player.name.trim().toLowerCase();
+    final currentByIdentity = {
+      for (final player in _players) identity(player): player,
+    };
+    final preserved = <TournamentPlayer>[];
+    final seen = <String>{};
+    for (final player in ordered) {
+      final key = identity(player);
+      final current = currentByIdentity[key];
+      if (current != null && seen.add(key)) preserved.add(current);
+    }
+    final slotsNeeded = stages.first.groupSizes.fold<int>(
+      0,
+      (sum, size) => sum + size,
+    );
+    for (final player in _players) {
+      if (preserved.length >= slotsNeeded) break;
+      if (seen.add(identity(player))) preserved.add(player);
+    }
+    if (preserved.length != slotsNeeded) return stages;
+    final slotOrder = preserved
+        .map((player) => _players.indexOf(player) + 1)
+        .toList();
+    if (slotOrder.any((slot) => slot < 1) ||
+        slotOrder.toSet().length != slotOrder.length) {
+      return stages;
+    }
+    final firstStage = stages.first.copyWith(
+      groupDrawOnStart: false,
+      groupSlotOrder: List.unmodifiable(slotOrder),
+    );
+    return [firstStage, ...stages.skip(1)];
   }
 
   List<TournamentRunStage> _buildRunStages({
@@ -2429,6 +2657,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             groups: groups,
             qualificationPlan: _storedGroupQualificationPlan(stage),
             tieBreakers: stage.groupTieBreakers,
+            allowTieBreakDeciders: stage.allowGroupTieBreakDeciders,
+            tieBreakGameFormat: stage.tieBreakGameFormat,
           ),
         );
         incomingPlayers = incomingPlayers
@@ -2755,6 +2985,12 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     });
   }
 
+  void _setQualificationAdvancementPolicy(String policy) => setState(() {
+    _qualificationAdvancementPolicy = policy;
+    _fixedQualifiersByGroup.clear();
+    _selectedExtraGroups.clear();
+  });
+
   void _setBestOfQualifierCount(String value) {
     final parsed = int.tryParse(value);
     setState(() {
@@ -2906,7 +3142,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             ExpertSetupSection(
               title: '1 · Name & Teilnehmer',
               summary: '${_players.length} Teilnehmer ausgewählt',
+              controller: _nameParticipantSectionController,
               initiallyExpanded: true,
+              onExpansionChanged: (expanded) {
+                if (expanded) {
+                  _structureSectionController.collapse();
+                  _summarySectionController.collapse();
+                }
+              },
               children: [
                 LayoutBuilder(
                   builder: (context, constraints) {
@@ -2921,6 +3164,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         counterText: '',
                       ),
                       onSubmitted: (_) => _saveTournamentNameDraft(),
+                      onChanged: (_) => setState(() {}),
                     );
                     final pickNameButton = OutlinedButton.icon(
                       onPressed: _pickTournamentName,
@@ -3000,7 +3244,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   },
                 ),
                 const SizedBox(height: 32),
-                if (!_hasKratzerStage) ...[
+                if (!_hasKratzerStage && !_hasTeamParticipants) ...[
                   SwitchListTile(
                     title: const Text('Ranglistenwertung'),
                     subtitle: const Text(
@@ -3120,7 +3364,16 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               title: '2 · Turnierstruktur',
               summary:
                   '${_stages.length} Phasen gespeichert · Gruppen, KO und Spielregeln',
-              enabled: _players.isNotEmpty,
+              enabled:
+                  _players.isNotEmpty &&
+                  _tournamentNameController.text.trim().isNotEmpty,
+              controller: _structureSectionController,
+              onExpansionChanged: (expanded) {
+                if (expanded) {
+                  _nameParticipantSectionController.collapse();
+                  _summarySectionController.collapse();
+                }
+              },
               children: [
                 Text(
                   'Phasen',
@@ -3575,11 +3828,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           groupPlayTypes: _playTypesForGroupSizes(groupSizes),
                           qualificationPlan: groupQualificationPlan,
                           autoAdjust: _autoAdjustQualification,
+                          advancementPolicy: _qualificationAdvancementPolicy,
                           bestOfQualifierCountController:
                               _bestOfQualifierCountController,
                           onSetExtraGroup: _setExtraGroupSelection,
                           onCyclePlace: _cycleQualificationPlace,
                           onAutoAdjustChanged: _setQualificationAutoAdjust,
+                          onAdvancementPolicyChanged:
+                              _setQualificationAdvancementPolicy,
                           onBestOfQualifierCountChanged:
                               _setBestOfQualifierCount,
                         ),
@@ -3596,6 +3852,51 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         tieBreakers: _groupTieBreakers,
                         onMoveTieBreaker: _moveGroupTieBreaker,
                       ),
+                      SwitchListTile(
+                        key: const ValueKey('allow-group-deciders'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Stechen bei Gleichstand erlauben'),
+                        subtitle: const Text(
+                          'Entscheidungsspiele werden nur bei einem Gleichstand an einer Weiterkommensgrenze angelegt.',
+                        ),
+                        value: _allowGroupTieBreakDeciders,
+                        onChanged: (value) =>
+                            setState(() => _allowGroupTieBreakDeciders = value),
+                      ),
+                      if (_allowGroupTieBreakDeciders) ...[
+                        Text(
+                          'Spielformat fürs Stechen: ${_tieBreakGameFormat.x01Score} Double Out',
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<int>(
+                          key: const ValueKey('tie-break-best-of-legs'),
+                          isExpanded: true,
+                          initialValue: _tieBreakGameFormat.bestOfLegs,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'Stechen · Best of Legs',
+                          ),
+                          items: TournamentGameFormat.supportedBestOfLegs
+                              .map(
+                                (legs) => DropdownMenuItem(
+                                  value: legs,
+                                  child: Text('Best of $legs Legs'),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (legs) {
+                            if (legs == null) return;
+                            setState(
+                              () => _tieBreakGameFormat = TournamentGameFormat(
+                                gameType: 'x01',
+                                x01Score: 501,
+                                checkoutType: 'double_out',
+                                bestOfLegs: legs,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -3687,6 +3988,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     slotOrder: _knockoutSlotOrder(),
                     participantLabels: _knockoutParticipantLabels(),
                     allowCrossSeed: _hasGroupSeedSources(),
+                    allowEloSeed:
+                        _hasSelectedEloRanking && !_hasGroupSeedSources(),
                     onSeedingModeChanged: _setKnockoutSeedingMode,
                     onSwapSlot: _swapKnockoutSlots,
                     onResetSlots: _resetKnockoutSlots,
@@ -3705,7 +4008,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   key: const ValueKey('save-stage-form-button'),
                   onPressed:
                       _stages.any((stage) => stage.type == 'kratzer') &&
-                          _editingStageIndex == null
+                              _editingStageIndex == null ||
+                          _loadingEloRatingsForSeeding
                       ? null
                       : _saveStage,
                   icon: Icon(
@@ -3731,7 +4035,16 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               title: '3 · Zusammenfassung & Start',
               summary:
                   '${_players.length} Teilnehmer · ${_stages.length} Phasen · $_plannedBoardCount Boards',
-              enabled: _stages.isNotEmpty,
+              enabled:
+                  _stages.isNotEmpty &&
+                  _tournamentNameController.text.trim().isNotEmpty,
+              controller: _summarySectionController,
+              onExpansionChanged: (expanded) {
+                if (expanded) {
+                  _nameParticipantSectionController.collapse();
+                  _structureSectionController.collapse();
+                }
+              },
               children: [
                 if (_hasKratzerStage)
                   KratzerDurationPreview(

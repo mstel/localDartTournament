@@ -67,6 +67,19 @@ class BoardSchedulingEngine {
     }
 
     final planned = <BoardAssignment>[];
+    final entryOrder = {
+      for (var index = 0; index < all.length; index++) all[index]: index,
+    };
+    final playedCounts = <String, int>{};
+    final activeStage =
+        ready.firstOrNull?.stageIndex ?? running.firstOrNull?.stageIndex;
+    for (final entry in [...finished, ...running]) {
+      if (activeStage != null && entry.stageIndex != activeStage) continue;
+      if (!entry.match.hasResult && !running.contains(entry)) continue;
+      for (final player in entry.players) {
+        playedCounts[player] = (playedCounts[player] ?? 0) + 1;
+      }
+    }
     final groupBoards = <String, Set<int>>{
       for (final entry in preferredBoardsByGroup.entries)
         entry.key: entry.value.toSet(),
@@ -138,30 +151,12 @@ class BoardSchedulingEngine {
           .map((p) => remainingCount[p] ?? 0)
           .fold<int>(0, (a, b) => a > b ? a : b);
 
-      final playedCounts = <String, int>{};
-      for (final finishedEntry in finished) {
-        if (!finishedEntry.match.hasResult) continue;
-        for (final player in finishedEntry.players) {
-          playedCounts[player] = (playedCounts[player] ?? 0) + 1;
-        }
-      }
-      for (final runningEntry in running) {
-        for (final player in runningEntry.players) {
-          playedCounts[player] = (playedCounts[player] ?? 0) + 1;
-        }
-      }
-
-      int fairnessSpread(PlayEntry e) {
-        final counts = Map<String, int>.from(playedCounts);
-        for (final player in e.players) {
-          counts[player] = (counts[player] ?? 0) + 1;
-        }
-        final values = e.players.map((player) => counts[player] ?? 0).toList();
-        if (values.length < 2) return 0;
-        final min = values.reduce((a, b) => a < b ? a : b);
-        final max = values.reduce((a, b) => a > b ? a : b);
-        return max - min;
-      }
+      int lowestPlayedAfter(PlayEntry entry) => entry.players
+          .map((player) => (playedCounts[player] ?? 0) + 1)
+          .reduce((a, b) => a < b ? a : b);
+      int highestPlayedAfter(PlayEntry entry) => entry.players
+          .map((player) => (playedCounts[player] ?? 0) + 1)
+          .reduce((a, b) => a > b ? a : b);
 
       final available =
           pending.where((e) => !e.players.any(busy.contains)).toList()..sort((
@@ -175,8 +170,12 @@ class BoardSchedulingEngine {
               if (groupCompare != 0) return groupCompare;
             }
 
-            final fairness = fairnessSpread(a).compareTo(fairnessSpread(b));
-            if (fairness != 0) return fairness;
+            final lowest = lowestPlayedAfter(a).compareTo(lowestPlayedAfter(b));
+            if (lowest != 0) return lowest;
+            final highest = highestPlayedAfter(
+              a,
+            ).compareTo(highestPlayedAfter(b));
+            if (highest != 0) return highest;
 
             final preferredGap = minimumRestGap(b).compareTo(minimumRestGap(a));
             if ((minimumRestGap(a) < preferredPlayerRestBlocks) !=
@@ -187,7 +186,7 @@ class BoardSchedulingEngine {
             final r = rest(a).compareTo(rest(b));
             if (r != 0) return r;
             final rem = maxRemaining(b).compareTo(maxRemaining(a));
-            return rem != 0 ? rem : all.indexOf(a).compareTo(all.indexOf(b));
+            return rem != 0 ? rem : entryOrder[a]!.compareTo(entryOrder[b]!);
           });
       var selectedEntries = <PlayEntry>[];
       var bestPreferenceScore = -1;
@@ -272,6 +271,7 @@ class BoardSchedulingEngine {
         pending.remove(entry);
         for (final player in entry.players) {
           lastPlayed[player] = block;
+          playedCounts[player] = (playedCounts[player] ?? 0) + 1;
         }
       }
 

@@ -68,7 +68,24 @@ class TournamentSchedulePdfButton extends StatelessWidget {
 
   Future<void> _print(BuildContext context) async {
     try {
-      final document = _buildDocument();
+      int? selectedStage;
+      if (tournament.leagueMatch == null && tournament.runStages.length > 1) {
+        selectedStage = await showDialog<int>(
+          context: context,
+          builder: (context) => SimpleDialog(
+            title: const Text('Phase für den Export auswählen'),
+            children: [
+              for (var index = 0; index < tournament.runStages.length; index++)
+                SimpleDialogOption(
+                  onPressed: () => Navigator.of(context).pop(index),
+                  child: Text(tournament.runStages[index].name),
+                ),
+            ],
+          ),
+        );
+        if (selectedStage == null || !context.mounted) return;
+      }
+      final document = _buildDocument(stageIndex: selectedStage);
       await Printing.layoutPdf(
         onLayout: (_) => document.save(),
         name: '${_safeFileName(tournament.name)}-spielplan.pdf',
@@ -81,7 +98,7 @@ class TournamentSchedulePdfButton extends StatelessWidget {
     }
   }
 
-  pw.Document _buildDocument() {
+  pw.Document _buildDocument({int? stageIndex}) {
     final document = pw.Document();
     document.addPage(
       pw.MultiPage(
@@ -100,12 +117,12 @@ class TournamentSchedulePdfButton extends StatelessWidget {
             style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 4),
-          pw.Text(_formatDate(tournament.effectiveDate)),
+          pw.Text('Datum: __.__.____'),
           pw.SizedBox(height: 18),
           if (tournament.leagueMatch != null)
             ..._leagueContent(tournament.leagueMatch!)
           else
-            ..._tournamentContent(),
+            ..._tournamentContent(stageIndex: stageIndex),
         ],
       ),
     );
@@ -140,16 +157,15 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         height: 75,
         decoration: pw.BoxDecoration(border: pw.Border.all()),
       ),
-      pw.SizedBox(height: 18),
-      pw.Text('Unterschrift Heimteam: ____________________'),
-      pw.SizedBox(height: 8),
-      pw.Text('Unterschrift Gastteam: ____________________'),
     ];
   }
 
-  List<pw.Widget> _tournamentContent() {
+  List<pw.Widget> _tournamentContent({int? stageIndex}) {
     final content = <pw.Widget>[];
-    for (final stage in tournament.runStages) {
+    final stages = stageIndex == null
+        ? tournament.runStages
+        : [tournament.runStages[stageIndex]];
+    for (final stage in stages) {
       content.add(
         pw.Padding(
           padding: const pw.EdgeInsets.only(top: 14, bottom: 6),
@@ -351,10 +367,6 @@ class TournamentSchedulePdfButton extends StatelessWidget {
   String _leaguePlayers(List<String> roster, List<int> indices) => indices
       .map((index) => index >= 0 && index < roster.length ? roster[index] : '?')
       .join(' / ');
-
-  String _formatDate(DateTime value) =>
-      '${value.day.toString().padLeft(2, '0')}.'
-      '${value.month.toString().padLeft(2, '0')}.${value.year}';
 
   String _safeFileName(String value) =>
       value.replaceAll(RegExp(r'[^\w-]+'), '_').replaceAll(RegExp(r'_+'), '_');

@@ -93,7 +93,11 @@ class LocalStatisticsService {
     for (final tournament in tournaments) {
       final tournamentMatches = _matches(tournament).toSet().toList();
       for (final match in tournamentMatches) {
-        if (!match.hasResult || match.withdrawalIgnored) continue;
+        if (!match.hasResult ||
+            match.withdrawalIgnored ||
+            match.hasTeamParticipant) {
+          continue;
+        }
         final homeIds = _profileIds(match.homePlayer, profileByName);
         final awayIds = _profileIds(match.awayPlayer, profileByName);
         final leftHome = homeIds.contains(leftId);
@@ -192,6 +196,7 @@ class LocalStatisticsService {
     final performances = <BestPerformance>[];
     final performanceOccurrences = <BestPerformanceOccurrence>[];
     for (final tournament in tournaments) {
+      if (tournament.players.any((player) => player.isTeam)) continue;
       if (year != null) {
         final tDate =
             (tournament.tournamentDate ??

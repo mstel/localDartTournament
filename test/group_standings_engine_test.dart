@@ -100,4 +100,59 @@ void main() {
       returnsNormally,
     );
   });
+
+  test(
+    'decider round robin orders three or more tied players by its table',
+    () {
+      final first = TournamentPlayer.generated(1).copyWith(name: 'A');
+      final second = TournamentPlayer.generated(2).copyWith(name: 'B');
+      final third = TournamentPlayer.generated(3).copyWith(name: 'C');
+      final standings = [first, second, third].map(PlayerStanding.new).toList();
+      final matches = [
+        GroupMatch(
+          homePlayer: first,
+          awayPlayer: third,
+          round: 1,
+          label: 'Decider',
+          isDecider: true,
+          homeLegs: 2,
+          awayLegs: 0,
+        ),
+        GroupMatch(
+          homePlayer: third,
+          awayPlayer: second,
+          round: 1,
+          label: 'Decider',
+          isDecider: true,
+          homeLegs: 2,
+          awayLegs: 1,
+        ),
+      ];
+
+      expect(
+        const GroupStandingsEngine().compare(
+          standings[0],
+          standings[1],
+          defaultGroupTieBreakers,
+          matches: matches,
+        ),
+        lessThan(0),
+      );
+    },
+  );
+
+  test('stores optional decider settings and its format', () {
+    const format = TournamentGameFormat(bestOfLegs: 3);
+    final configured = TournamentStage(
+      name: 'Gruppenphase',
+      type: 'groups',
+      groupSizes: const [4, 4],
+      allowGroupTieBreakDeciders: true,
+      tieBreakGameFormat: format,
+    );
+
+    final restored = TournamentStage.fromJson(configured.toJson());
+    expect(restored.allowGroupTieBreakDeciders, isTrue);
+    expect(restored.tieBreakGameFormat.toJson(), format.toJson());
+  });
 }

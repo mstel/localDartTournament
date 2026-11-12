@@ -13,6 +13,7 @@ class _KnockoutPreview extends StatelessWidget {
     required this.slotOrder,
     required this.participantLabels,
     required this.allowCrossSeed,
+    required this.allowEloSeed,
     required this.onSeedingModeChanged,
     required this.onSwapSlot,
     required this.onResetSlots,
@@ -27,6 +28,7 @@ class _KnockoutPreview extends StatelessWidget {
   final List<int?> slotOrder;
   final List<String> participantLabels;
   final bool allowCrossSeed;
+  final bool allowEloSeed;
   final ValueChanged<String> onSeedingModeChanged;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
   final VoidCallback onResetSlots;
@@ -42,7 +44,11 @@ class _KnockoutPreview extends StatelessWidget {
 
     final resolvedParticipantCount = participantCount!;
     final resolvedBracketSize = bracketSize!;
-    final effectiveSeedingMode = allowCrossSeed ? seedingMode : 'random';
+    final effectiveSeedingMode =
+        !allowCrossSeed &&
+            (seedingMode == 'cross' || seedingMode == 'random_cross')
+        ? 'cross'
+        : seedingMode;
     final slots = slotOrder.length == resolvedBracketSize
         ? slotOrder
         : List<int?>.generate(
@@ -70,29 +76,51 @@ class _KnockoutPreview extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        if (allowCrossSeed)
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: 'cross',
-                icon: Icon(Icons.swap_horiz),
-                label: Text('Cross seeded'),
+        DropdownButtonFormField<String>(
+          isExpanded: true,
+          initialValue: effectiveSeedingMode,
+          decoration: const InputDecoration(
+            labelText: 'Auslosungsmethode',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(
+              value: 'cross',
+              child: Text(
+                allowCrossSeed
+                    ? 'Gruppenplatzierung · feste Kreuzpaarungen'
+                    : 'Setzliste nach Teilnehmerreihenfolge',
               ),
-              ButtonSegment(
-                value: 'random',
-                icon: Icon(Icons.shuffle),
-                label: Text('Zufall'),
+            ),
+            if (allowCrossSeed)
+              const DropdownMenuItem(
+                value: 'random_cross',
+                child: Text('Gruppenplatzierung · zufällige Kreuzpaarungen'),
               ),
-            ],
-            selected: {effectiveSeedingMode},
-            onSelectionChanged: (selection) {
-              onSeedingModeChanged(selection.first);
-            },
-          )
-        else
-          const Chip(
-            avatar: Icon(Icons.shuffle, size: 18),
-            label: Text('Zufall'),
+            if (allowEloSeed)
+              const DropdownMenuItem(
+                value: 'elo',
+                child: Text('Leistungsbasierte Setzliste (ELO)'),
+              ),
+            const DropdownMenuItem(
+              value: 'manual',
+              child: Text('Manuelle Paarungszuordnung'),
+            ),
+            const DropdownMenuItem(
+              value: 'random',
+              child: Text('Zufallsauslosung beim Turnierstart'),
+            ),
+          ],
+          onChanged: (value) {
+            if (value != null) onSeedingModeChanged(value);
+          },
+        ),
+        if (effectiveSeedingMode == 'manual')
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'Paarungen in der Baumvorschau durch Verschieben der Plätze zuordnen.',
+            ),
           ),
         if (effectiveSeedingMode == 'cross' && byeCount > 0) ...[
           const SizedBox(height: 8),
@@ -831,10 +859,12 @@ class _GroupQualificationSetup extends StatelessWidget {
     required this.groupPlayTypes,
     required this.qualificationPlan,
     required this.autoAdjust,
+    required this.advancementPolicy,
     required this.bestOfQualifierCountController,
     required this.onSetExtraGroup,
     required this.onCyclePlace,
     required this.onAutoAdjustChanged,
+    required this.onAdvancementPolicyChanged,
     required this.onBestOfQualifierCountChanged,
   });
 
@@ -842,11 +872,13 @@ class _GroupQualificationSetup extends StatelessWidget {
   final List<String> groupPlayTypes;
   final QualificationPlan? qualificationPlan;
   final bool autoAdjust;
+  final String advancementPolicy;
   final TextEditingController bestOfQualifierCountController;
   final void Function(int groupNumber, bool selected, List<int> currentGroups)
   onSetExtraGroup;
   final void Function(int groupNumber, int place) onCyclePlace;
   final ValueChanged<bool> onAutoAdjustChanged;
+  final ValueChanged<String> onAdvancementPolicyChanged;
   final ValueChanged<String> onBestOfQualifierCountChanged;
 
   int _selectedQualifierCount(QualificationPlan plan) {
@@ -911,6 +943,29 @@ class _GroupQualificationSetup extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
+        if (autoAdjust)
+          DropdownButtonFormField<String>(
+            initialValue: advancementPolicy,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Zusätzliche Qualifikationsplätze',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: 'larger_group',
+                child: Text('Größere Gruppe hat Vorrang'),
+              ),
+              DropdownMenuItem(
+                value: 'best_rank',
+                child: Text('Beste X. Plätze gruppenübergreifend vergleichen'),
+              ),
+            ],
+            onChanged: (value) {
+              if (value != null) onAdvancementPolicyChanged(value);
+            },
+          ),
+        if (autoAdjust) const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
           child: SegmentedButton<bool>(
@@ -1208,6 +1263,7 @@ class _InheritedKnockoutSetup extends StatelessWidget {
     required this.slotOrder,
     required this.participantLabels,
     required this.allowCrossSeed,
+    required this.allowEloSeed,
     required this.onSeedingModeChanged,
     required this.onSwapSlot,
     required this.onResetSlots,
@@ -1224,6 +1280,7 @@ class _InheritedKnockoutSetup extends StatelessWidget {
   final List<int?> slotOrder;
   final List<String> participantLabels;
   final bool allowCrossSeed;
+  final bool allowEloSeed;
   final ValueChanged<String> onSeedingModeChanged;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
   final VoidCallback onResetSlots;
@@ -1259,6 +1316,7 @@ class _InheritedKnockoutSetup extends StatelessWidget {
           slotOrder: slotOrder,
           participantLabels: participantLabels,
           allowCrossSeed: allowCrossSeed,
+          allowEloSeed: allowEloSeed,
           onSeedingModeChanged: onSeedingModeChanged,
           onSwapSlot: onSwapSlot,
           onResetSlots: onResetSlots,
@@ -1302,7 +1360,7 @@ class _StageList extends StatelessWidget {
     final details = [
       for (var index = 0; index < stage.groupSizes.length; index++)
         if (_groupPlayTypeForStage(stage, index) == 'swiss')
-          '${groupLabel(index + 1)} ${_roundRobinRepeatForStage(stage, index)} Swiss-Runden'
+          '${_roundRobinRepeatForStage(stage, index)} Swiss-Runden'
         else if (_groupPlayTypeForStage(stage, index) == 'round_robin')
           '${groupLabel(index + 1)} ${index < stage.groupRoundRobinRepeats.length ? stage.groupRoundRobinRepeats[index] : 1}x${stage.maxGamesForGroup(index) == null ? '' : ' · maximal ${stage.maxGamesForGroup(index)} Begegnungen pro Teilnehmer'}',
     ].join(', ');
@@ -1400,9 +1458,13 @@ class _StageList extends StatelessWidget {
         final qualifierText = stage.qualificationSummary == null
             ? ''
             : ' - ${stage.qualificationSummary}';
-        final seedingText = stage.knockoutSeedingMode == 'random'
-            ? ' - Zufall'
-            : ' - Cross seeded';
+        final seedingText = switch (stage.knockoutSeedingMode) {
+          'random' => ' - Zufall beim Turnierstart',
+          'random_cross' => ' - zufällige Gruppen-Kreuzpaarungen',
+          'elo' => ' - leistungsbasierte ELO-Setzliste',
+          'manual' => ' - manuelle Paarungszuordnung',
+          _ => ' - feste Gruppen-Kreuzpaarungen',
+        };
         return '${_typeLabel(stage.type)} - '
             '${stage.knockoutParticipantCount} Teilnehmer, '
             '${stage.knockoutBracketSize}er Feld, '

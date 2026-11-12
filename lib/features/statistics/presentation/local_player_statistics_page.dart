@@ -262,7 +262,11 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                 (type) => type != BestPerformanceType.score170,
               ))
                 type: stats.bestPerformances
-                    .where((item) => item.normalizedType == type)
+                    .where(
+                      (item) => type == BestPerformanceType.highFinish
+                          ? item.countsAsHighFinish
+                          : item.normalizedType == type,
+                    )
                     .length,
             };
             return AdaptiveContentList(

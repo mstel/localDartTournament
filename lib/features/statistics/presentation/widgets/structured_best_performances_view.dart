@@ -35,18 +35,15 @@ class StructuredBestPerformancesView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final type in _types)
-          if (normalized.any(
-            (performance) => performance.normalizedType == type,
-          ))
+          if (normalized.any((performance) => _belongsTo(type, performance)))
             _PerformanceGroup(
               type: type,
               performances: normalized
-                  .where((performance) => performance.normalizedType == type)
+                  .where((performance) => _belongsTo(type, performance))
                   .toList(),
               occurrences: occurrences
                   .where(
-                    (occurrence) =>
-                        occurrence.performance.normalizedType == type,
+                    (occurrence) => _belongsTo(type, occurrence.performance),
                   )
                   .toList(),
               onTournamentTap: onTournamentTap,
@@ -54,6 +51,11 @@ class StructuredBestPerformancesView extends StatelessWidget {
       ],
     );
   }
+
+  bool _belongsTo(BestPerformanceType type, BestPerformance performance) =>
+      type == BestPerformanceType.highFinish
+      ? performance.countsAsHighFinish
+      : performance.normalizedType == type;
 }
 
 class _PerformanceGroup extends StatelessWidget {

@@ -542,11 +542,13 @@ class _KnockoutTreePage extends StatelessWidget {
 }
 
 String _knockoutSeedingHint(TournamentStage stage) {
-  final seeding = stage.knockoutSeedingMode == 'random'
-      ? stage.knockoutDrawOnStart
-            ? 'Zufallsauslosung beim Turnierstart'
-            : 'Zufallsauslosung'
-      : 'Cross-Setzung nach Gruppenplatzierungen';
+  final seeding = switch (stage.knockoutSeedingMode) {
+    'random' => 'Zufallsauslosung beim Turnierstart',
+    'random_cross' => 'Gruppenplatzierung · zufällige Kreuzpaarungen',
+    'elo' => 'Leistungsbasierte ELO-Setzliste',
+    'manual' => 'Manuelle Paarungszuordnung',
+    _ => 'Gruppenplatzierung · feste Kreuzpaarungen',
+  };
   final byeText = stage.knockoutByeCount == 0
       ? ''
       : stage.lossLimit >= 3

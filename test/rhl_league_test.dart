@@ -174,7 +174,7 @@ void main() {
       final file = File('${directory.path}/tournaments.json');
       await file.writeAsString(
         jsonEncode({
-          'schemaVersion': 39,
+          'schemaVersion': 41,
           'tournaments': [tournament.toJson()],
         }),
       );
@@ -281,7 +281,7 @@ void main() {
       final restored = (await storage.loadTournaments()).single;
       expect(restored.leagueMatch!.toJson(), league.toJson());
       expect(await File('${file.path}.v8.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 39);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 41);
     },
   );
   test('legacy tournaments remain ordinary tournaments', () {

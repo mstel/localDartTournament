@@ -1,3 +1,25 @@
+# 2.7.1+91
+
+- Benennt den Teilnehmerbereich in Spielerkatalog um und verbessert den
+  Ablauf beim Anlegen und Bearbeiten von Turnierphasen.
+- Ergänzt Gruppenplatzierungs-, manuelle und ELO-basierte KO-Setzungen sowie
+  eine zufällige Auslosung erst zum Turnierstart. Bei Turnieraktualisierungen
+  bleiben bestehende Gruppenzuordnungen erhalten.
+- Ergänzt die automatische Weiterkommensregel für unterschiedlich große
+  Gruppen, vergleicht ungleich lange Gruppen fair und verbessert die
+  Fairness der vorgeschlagenen Board-Partien.
+- Ergänzt ein optionales Stechen bei Gleichstand vor dem Weiterkommen mit
+  anpassbarer Best-of-Leg-Zahl (Vorschlag: 501 Double Out, Best of 1), ELO als
+  gruppenübergreifendem Tie-Breaker sowie reproduzierbarer Zufallsauswahl,
+  wenn kein Stechen aktiviert ist.
+- Zeigt Begegnungen in Ergebnisübersichten schrittweise an, statt große
+  Matchlisten vollständig auf einmal aufzubauen.
+- Schließt Teamturniere aus persönlichen Ranglisten, Statistiken,
+  Achievements und Bestleistungen aus und reduziert unnötige Arbeit beim
+  Starten von Board-Partien.
+- Ergänzt Bullseye-Finishes als High Finish ab 101, blendet Unentschieden bei
+  Formaten ohne Remis aus und verbessert den PDF-Spielplanexport.
+
 # 2.7.0+90
 
 - Behebt die Begegnungsfilterung für eingewechselte Teilnehmer in Liga- und

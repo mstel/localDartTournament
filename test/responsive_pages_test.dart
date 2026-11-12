@@ -88,7 +88,7 @@ void main() {
         for (final label in [
           'Turniere',
           'Freundschafts- & Ligaspiele',
-          'Teilnehmer',
+          'Spielerkatalog',
           'Statistiken',
           'Ranglisten',
         ]) {

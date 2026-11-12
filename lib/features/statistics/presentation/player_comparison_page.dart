@@ -845,9 +845,9 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
         (
           category: _performanceCategory(type),
           left:
-              '${leftStats.bestPerformances.where((item) => item.normalizedType == type).length}',
+              '${leftStats.bestPerformances.where((item) => type == BestPerformanceType.highFinish ? item.countsAsHighFinish : item.normalizedType == type).length}',
           right:
-              '${rightStats.bestPerformances.where((item) => item.normalizedType == type).length}',
+              '${rightStats.bestPerformances.where((item) => type == BestPerformanceType.highFinish ? item.countsAsHighFinish : item.normalizedType == type).length}',
         ),
     ];
     if (ranking == null) {

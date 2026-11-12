@@ -45,6 +45,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _savingRankingSelection = false;
   bool _savingLeagueSettings = false;
   bool _savingTieBreakerSettings = false;
+  bool _tieBreakEloRatingsLoaded = false;
+  Map<String, int> _tieBreakEloRatings = const {};
   bool _savingKratzerHandicapSettings = false;
   int? _tieBreakerDraftStageIndex;
   List<String> _tieBreakerDraft = const [];
@@ -534,6 +536,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
       );
+      _queueAchievementRefresh(null);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -612,7 +615,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             '${annulResults ? 'annulliert' : 'beibehalten'}',
       );
     });
-    await _saveTournamentProgress();
+    await _saveTournamentProgress(checkAchievementInputs: true);
   }
 
   bool get _hasStartedMatches => widget.tournament.runStages.any(
@@ -1303,6 +1306,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     _advanceKnockoutWinners();
     _ensureGroupDeciders();
     _lastAchievementResultSignature = _achievementResultSignature();
+    unawaited(_loadTieBreakEloRatings());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _applyPendingStartDrawForActiveStage();
       if (!mounted) return;
@@ -1343,7 +1347,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       'Turnierdatum geändert: ${MaterialLocalizations.of(context).formatMediumDate(normalized)}',
     );
     try {
-      await _saveTournamentProgress(propagateError: true);
+      await _saveTournamentProgress(
+        propagateError: true,
+        checkAchievementInputs: true,
+      );
       if (mounted) setState(() {});
     } catch (_) {
       widget.tournament
@@ -1854,6 +1861,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   Future<void> _saveTournamentProgress({
     bool propagateError = false,
     GroupMatch? achievementMatch,
+    bool checkAchievementInputs = false,
   }) async {
     var achievementInputsChanged = false;
     try {
@@ -1863,9 +1871,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
       );
-      final signature = _achievementResultSignature();
-      achievementInputsChanged = signature != _lastAchievementResultSignature;
-      _lastAchievementResultSignature = signature;
+      if (checkAchievementInputs || achievementMatch != null) {
+        final signature = _achievementResultSignature();
+        achievementInputsChanged = signature != _lastAchievementResultSignature;
+        _lastAchievementResultSignature = signature;
+      }
       if (mounted && _directorSaveError != null) {
         setState(() => _directorSaveError = null);
       }
@@ -2049,7 +2059,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     GroupMatch? achievementMatch,
   ) async {
     final tournament = widget.tournament;
-    if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) return;
+    if (tournament.players.any((player) => player.isTeam) ||
+        !tournament.countsForRanking ||
+        tournament.rankingIds.isEmpty) {
+      return;
+    }
     final rankings = (await _localRankings).where(
       (ranking) =>
           ranking.achievementsEnabled &&
@@ -2430,6 +2444,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     required bool countsForRanking,
     required List<String> rankingIds,
   }) async {
+    if (widget.tournament.players.any((player) => player.isTeam)) return;
     if (_savingRankingSelection) return;
     final previousCounts = widget.tournament.countsForRanking;
     final previousIds = List<String>.from(widget.tournament.rankingIds);
@@ -2452,7 +2467,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     });
     try {
-      await _saveTournamentProgress(propagateError: true);
+      await _saveTournamentProgress(
+        propagateError: true,
+        checkAchievementInputs: true,
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -2614,6 +2632,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       groups: previousRunStage.groups,
       qualificationPlan: previousRunStage.qualificationPlan,
       tieBreakers: tieBreakers,
+      allowTieBreakDeciders: previousRunStage.allowTieBreakDeciders,
+      tieBreakGameFormat: previousRunStage.tieBreakGameFormat,
     );
     setState(() {
       _savingTieBreakerSettings = true;
@@ -2819,7 +2839,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           ? KratzerResultDialog(match: match, enabledBonusTypes: bonusTypes)
           : ResultDialog(
               match: match,
-              format: widget.tournament.stages[_activeStageIndex].gameFormat,
+              format:
+                  match.isDecider && activeRunStage is GroupTournamentRunStage
+                  ? activeRunStage.tieBreakGameFormat
+                  : widget.tournament.stages[_activeStageIndex].gameFormat,
               allowAdministration: true,
             ),
     );
@@ -3182,7 +3205,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _clearPlacementMatches(stage.placementMatches);
       _advanceKnockoutWinners();
     });
-    await _saveTournamentProgress();
+    await _saveTournamentProgress(checkAchievementInputs: true);
   }
 
   TournamentPlayer? _playerAtFirstRoundSlot(
@@ -3383,6 +3406,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (stage is! GroupTournamentRunStage) {
         continue;
       }
+      if (!stage.allowTieBreakDeciders) continue;
 
       for (var groupIndex = 0; groupIndex < stage.groups.length; groupIndex++) {
         final group = stage.groups[groupIndex];
@@ -3395,9 +3419,70 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<void> _loadTieBreakEloRatings() async {
+    try {
+      final tournament = widget.tournament;
+      if (!tournament.players.any((player) => player.isTeam) &&
+          tournament.countsForRanking &&
+          tournament.rankingIds.isNotEmpty) {
+        final rankings = (await _localRankings).where(
+          (ranking) =>
+              ranking.type == RankingType.elo &&
+              tournament.rankingIds.contains(ranking.id),
+        );
+        final ratings = <String, List<int>>{};
+        for (final ranking in rankings) {
+          final snapshot =
+              await LocalRankingEloService(
+                database: LocalAppDatabase(),
+                tournamentStorage: _tournamentStorage,
+              ).calculateThroughTournament(
+                ranking,
+                tournament,
+                includeTournament: false,
+              );
+          for (final player in snapshot.entries) {
+            ratings.putIfAbsent(player.id, () => []).add(player.rating);
+          }
+        }
+        _tieBreakEloRatings = {
+          for (final entry in ratings.entries)
+            entry.key:
+                (entry.value.reduce((sum, rating) => sum + rating) /
+                        entry.value.length)
+                    .round(),
+        };
+      }
+    } catch (_) {
+      // The tournament can still resolve ties through a configured decider.
+    } finally {
+      _tieBreakEloRatingsLoaded = true;
+      if (mounted) {
+        final before = _groupDeciderCount();
+        _ensureGroupDeciders();
+        if (_groupDeciderCount() != before) {
+          setState(() {});
+          unawaited(_saveTournamentProgress());
+        }
+      }
+    }
+  }
+
+  int _groupDeciderCount() => widget.tournament.runStages
+      .whereType<GroupTournamentRunStage>()
+      .expand((stage) => stage.groups)
+      .expand((group) => group.matches)
+      .where((match) => match.isDecider)
+      .length;
+
   void _ensureBestOfDecidersForStage(GroupTournamentRunStage stage) {
     final plan = stage.qualificationPlan;
     if (plan == null || plan.extraCount < 1 || plan.extraGroups.isEmpty) {
+      return;
+    }
+    if (widget.tournament.countsForRanking &&
+        widget.tournament.rankingIds.isNotEmpty &&
+        !_tieBreakEloRatingsLoaded) {
       return;
     }
 
@@ -3513,11 +3598,21 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   ) {
     for (final tieBreaker in stage.tieBreakers) {
       final comparison = switch (tieBreaker) {
-        'points' => b.standing.points.compareTo(a.standing.points),
-        'legDifference' => b.standing.legDifference.compareTo(
-          a.standing.legDifference,
-        ),
-        'legsFor' => b.standing.legsFor.compareTo(a.standing.legsFor),
+        'points' => _bestOfMetric(
+          stage,
+          b,
+          tieBreaker,
+        ).compareTo(_bestOfMetric(stage, a, tieBreaker)),
+        'legDifference' => _bestOfMetric(
+          stage,
+          b,
+          tieBreaker,
+        ).compareTo(_bestOfMetric(stage, a, tieBreaker)),
+        'legsFor' => _bestOfMetric(
+          stage,
+          b,
+          tieBreaker,
+        ).compareTo(_bestOfMetric(stage, a, tieBreaker)),
         _ => 0,
       };
 
@@ -3526,7 +3621,129 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
     }
 
+    if (_tieBreakEloRatingsLoaded &&
+        widget.tournament.countsForRanking &&
+        widget.tournament.rankingIds.isNotEmpty) {
+      final aRating = _tieBreakEloRatings[a.standing.player.profileId] ?? 1000;
+      final bRating = _tieBreakEloRatings[b.standing.player.profileId] ?? 1000;
+      return bRating.compareTo(aRating);
+    }
     return 0;
+  }
+
+  int _bestOfMetric(
+    GroupTournamentRunStage stage,
+    BestOfCandidate candidate,
+    String metric,
+  ) {
+    final standing = candidate.standing;
+    final groupIndex = candidate.groupNumber - 1;
+    if (groupIndex < 0 || groupIndex >= stage.groups.length) {
+      return switch (metric) {
+        'points' => standing.points,
+        'legDifference' => standing.legDifference,
+        'legsFor' => standing.legsFor,
+        _ => 0,
+      };
+    }
+    final group = stage.groups[groupIndex];
+    final plan = stage.qualificationPlan;
+    if (plan == null || group.playType != 'round_robin') {
+      return switch (metric) {
+        'points' => standing.points,
+        'legDifference' => standing.legDifference,
+        'legsFor' => standing.legsFor,
+        _ => 0,
+      };
+    }
+
+    final groupStandings = _standingsFor(group, stage.tieBreakers);
+    if (groupStandings.isEmpty) return 0;
+    final candidateStandingIndex = plan.extraRank - 1;
+    final comparablePlayedCounts = [
+      for (final groupNumber in plan.extraGroups)
+        if (groupNumber > 0 && groupNumber <= stage.groups.length)
+          if (candidateStandingIndex >= 0 &&
+              candidateStandingIndex <
+                  _standingsFor(
+                    stage.groups[groupNumber - 1],
+                    stage.tieBreakers,
+                  ).length)
+            _standingsFor(
+              stage.groups[groupNumber - 1],
+              stage.tieBreakers,
+            )[candidateStandingIndex].played,
+    ];
+    if (comparablePlayedCounts.isEmpty) {
+      return switch (metric) {
+        'points' => standing.points,
+        'legDifference' => standing.legDifference,
+        'legsFor' => standing.legsFor,
+        _ => 0,
+      };
+    }
+    final minimumComparableGames = comparablePlayedCounts.reduce(
+      (a, b) => a < b ? a : b,
+    );
+    final excessGames = standing.played - minimumComparableGames;
+    if (excessGames <= 0) {
+      return switch (metric) {
+        'points' => standing.points,
+        'legDifference' => standing.legDifference,
+        'legsFor' => standing.legsFor,
+        _ => 0,
+      };
+    }
+
+    final rankByPlayer = {
+      for (var index = 0; index < groupStandings.length; index++)
+        groupStandings[index].player.name: index,
+    };
+    final removableMatches =
+        group.matches.where((match) {
+          if (!match.countsForStatistics ||
+              match.isDecider ||
+              !match.hasResult) {
+            return false;
+          }
+          return match.homePlayer?.name == standing.player.name ||
+              match.awayPlayer?.name == standing.player.name;
+        }).toList()..sort((left, right) {
+          final leftOpponent = left.homePlayer?.name == standing.player.name
+              ? left.awayPlayer?.name
+              : left.homePlayer?.name;
+          final rightOpponent = right.homePlayer?.name == standing.player.name
+              ? right.awayPlayer?.name
+              : right.homePlayer?.name;
+          return (rankByPlayer[rightOpponent] ?? -1).compareTo(
+            rankByPlayer[leftOpponent] ?? -1,
+          );
+        });
+    var removedPoints = 0;
+    var removedLegDifference = 0;
+    var removedLegsFor = 0;
+    for (final match in removableMatches.take(excessGames)) {
+      final playerIsHome = match.homePlayer?.name == standing.player.name;
+      final ownLegs = playerIsHome
+          ? (match.homeLegs ?? 0)
+          : (match.awayLegs ?? 0);
+      final opponentLegs = playerIsHome
+          ? (match.awayLegs ?? 0)
+          : (match.homeLegs ?? 0);
+      removedLegsFor += ownLegs;
+      removedLegDifference += ownLegs - opponentLegs;
+      removedPoints += match.winner?.name == standing.player.name
+          ? 3
+          : match.winner == null
+          ? 1
+          : 0;
+    }
+    return switch (metric) {
+      'points' => standing.points - removedPoints,
+      'legDifference' => standing.legDifference - removedLegDifference,
+      'legsFor' => standing.legsFor - removedLegsFor,
+      _ => 0,
+    };
   }
 
   int _compareBestOfCandidates(
@@ -3544,11 +3761,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return deciderComparison;
     }
 
-    final groupCompare = a.groupNumber.compareTo(b.groupNumber);
-    if (groupCompare != 0) {
-      return groupCompare;
+    final aKey =
+        '${widget.tournament.id}|${a.groupNumber}|${a.standing.player.profileId ?? a.standing.player.name}';
+    final bKey =
+        '${widget.tournament.id}|${b.groupNumber}|${b.standing.player.profileId ?? b.standing.player.name}';
+    return _stableTieDrawKey(aKey).compareTo(_stableTieDrawKey(bKey));
+  }
+
+  int _stableTieDrawKey(String value) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in value.codeUnits) {
+      hash = ((hash ^ codeUnit) * 0x01000193) & 0xffffffff;
     }
-    return a.standing.player.name.compareTo(b.standing.player.name);
+    return hash;
   }
 
   int _compareBestOfDeciders(
@@ -3556,6 +3781,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     BestOfCandidate a,
     BestOfCandidate b,
   ) {
+    final candidateIds = _bestOfCandidatesForStage(
+      stage,
+    ).map((candidate) => candidate.standing.player.name).toSet();
+    final points = <String, int>{};
+    final legsFor = <String, int>{};
+    final legsAgainst = <String, int>{};
+    var hasResult = false;
     for (final group in stage.groups) {
       for (final match in group.matches.where(
         (match) =>
@@ -3565,22 +3797,37 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       )) {
         final home = match.homePlayer;
         final away = match.awayPlayer;
-        if (home == null || away == null || match.winner == null) {
+        if (home == null || away == null) continue;
+        if (!candidateIds.contains(home.name) ||
+            !candidateIds.contains(away.name)) {
           continue;
         }
-        final isDirectMatch =
-            (home.name == a.standing.player.name &&
-                away.name == b.standing.player.name) ||
-            (home.name == b.standing.player.name &&
-                away.name == a.standing.player.name);
-        if (!isDirectMatch) {
-          continue;
+        hasResult = true;
+        final homeLegs = match.homeLegs ?? 0;
+        final awayLegs = match.awayLegs ?? 0;
+        legsFor[home.name] = (legsFor[home.name] ?? 0) + homeLegs;
+        legsAgainst[home.name] = (legsAgainst[home.name] ?? 0) + awayLegs;
+        legsFor[away.name] = (legsFor[away.name] ?? 0) + awayLegs;
+        legsAgainst[away.name] = (legsAgainst[away.name] ?? 0) + homeLegs;
+        if (match.winner == home) {
+          points[home.name] = (points[home.name] ?? 0) + 3;
+        } else if (match.winner == away) {
+          points[away.name] = (points[away.name] ?? 0) + 3;
+        } else {
+          points[home.name] = (points[home.name] ?? 0) + 1;
+          points[away.name] = (points[away.name] ?? 0) + 1;
         }
-        return match.winner!.name == a.standing.player.name ? -1 : 1;
       }
     }
-
-    return 0;
+    if (!hasResult) return 0;
+    final aId = a.standing.player.name;
+    final bId = b.standing.player.name;
+    final pointsComparison = (points[bId] ?? 0).compareTo(points[aId] ?? 0);
+    if (pointsComparison != 0) return pointsComparison;
+    final legDifference = ((legsFor[bId] ?? 0) - (legsAgainst[bId] ?? 0))
+        .compareTo((legsFor[aId] ?? 0) - (legsAgainst[aId] ?? 0));
+    if (legDifference != 0) return legDifference;
+    return (legsFor[bId] ?? 0).compareTo(legsFor[aId] ?? 0);
   }
 
   void _addBestOfDeciderIfMissing(
@@ -4160,11 +4407,35 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   List<PlayerStanding> _standingsFor(
     TournamentGroup group,
     List<String> tieBreakers,
-  ) => const GroupStandingsEngine().calculate(
-    group,
-    tieBreakers,
-    tournament: widget.tournament,
-  );
+  ) {
+    final standings = const GroupStandingsEngine().calculate(
+      group,
+      tieBreakers,
+      tournament: widget.tournament,
+    );
+    final runStage = widget.tournament.runStages
+        .whereType<GroupTournamentRunStage>()
+        .where((stage) => stage.groups.contains(group))
+        .firstOrNull;
+    if (runStage?.allowTieBreakDeciders ?? false) return standings;
+    standings.sort((a, b) {
+      final comparison = _compareTieBreakersOnly(
+        a,
+        b,
+        tieBreakers,
+        group.matches,
+      );
+      if (comparison != 0) return comparison;
+      final aId = a.player.profileId ?? a.player.name;
+      final bId = b.player.profileId ?? b.player.name;
+      return _stableTieDrawKey(
+        '${widget.tournament.id}|${group.name}|$aId',
+      ).compareTo(
+        _stableTieDrawKey('${widget.tournament.id}|${group.name}|$bId'),
+      );
+    });
+    return standings;
+  }
 
   int _compareHeadToHead(
     PlayerStanding a,
@@ -4905,6 +5176,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       ),
       qualificationPlan: _qualificationPlanForStage(stage),
       tieBreakers: stage.groupTieBreakers,
+      allowTieBreakDeciders: stage.allowGroupTieBreakDeciders,
+      tieBreakGameFormat: stage.tieBreakGameFormat,
     );
   }
 
@@ -5106,7 +5379,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
 
     return _isKnockoutStageType(stage.type) &&
-        stage.knockoutSeedingMode == 'random' &&
+        (stage.knockoutSeedingMode == 'random' ||
+            stage.knockoutSeedingMode == 'random_cross') &&
         stage.knockoutDrawOnStart &&
         stage.knockoutSlotOrder.isEmpty;
   }
@@ -5155,7 +5429,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           groupSlotOrder: List.unmodifiable(slotOrder),
           groupDrawCompleted: true,
         )
-      : stage.copyWith();
+      : stage.copyWith(
+          knockoutSlotOrder: List.unmodifiable(slotOrder),
+          knockoutDrawOnStart: false,
+        );
 
   Future<void> _completeCurrentStage() async {
     final nextStageIndex = _activeStageIndex + 1;
@@ -5200,7 +5477,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     });
     _advanceKnockoutWinners();
     try {
-      await _saveTournamentProgress(propagateError: true);
+      await _saveTournamentProgress(
+        propagateError: true,
+        checkAchievementInputs: true,
+      );
     } catch (_) {
       if (wasReopenedForCorrections && !hasNextStage) {
         setState(() {
@@ -5279,7 +5559,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     });
     _advanceKnockoutWinners(startStageIndex: previousStageIndex);
     _ensureGroupDeciders(startStageIndex: previousStageIndex);
-    await _saveTournamentProgress();
+    await _saveTournamentProgress(checkAchievementInputs: true);
   }
 
   bool get _canResetCurrentStage {
@@ -5356,7 +5636,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     });
     _advanceKnockoutWinners(startStageIndex: resetStageIndex);
     _ensureGroupDeciders(startStageIndex: resetStageIndex);
-    await _saveTournamentProgress();
+    await _saveTournamentProgress(checkAchievementInputs: true);
   }
 
   @override
@@ -6168,7 +6448,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             // 4. Teilnehmer verwalten
                             ..._playerManagementSections(),
                             if (widget.tournament.leagueMatch == null &&
-                                !widget.tournament.isKratzerTournament) ...[
+                                !widget.tournament.isKratzerTournament &&
+                                !widget.tournament.players.any(
+                                  (player) => player.isTeam,
+                                )) ...[
                               const SizedBox(height: 12),
                               _rankingSettingsCard(),
                             ],
@@ -6177,6 +6460,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               const GoveeAmbiencePanel(),
                             if (widget.tournament.leagueMatch == null &&
                                 widget.tournament.countsForRanking &&
+                                !widget.tournament.players.any(
+                                  (player) => player.isTeam,
+                                ) &&
                                 widget.tournament.rankingIds.isNotEmpty) ...[
                               const SizedBox(height: 12),
                               _achievementSettingsCard(),

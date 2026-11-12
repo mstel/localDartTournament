@@ -158,6 +158,7 @@ class LocalEloCalculator {
             tournament,
           ).toList().asMap().entries)
             if (indexedMatch.value.hasResult &&
+                !indexedMatch.value.hasTeamParticipant &&
                 indexedMatch.value.homePlayer != null &&
                 indexedMatch.value.awayPlayer != null &&
                 (validFromDate == null ||

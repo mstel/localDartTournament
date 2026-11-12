@@ -16,6 +16,7 @@ class StandingsTable extends StatefulWidget {
     required this.tieBreakers,
     this.onPlayerTap,
     this.compact = false,
+    this.showDraws = true,
   });
 
   final List<PlayerStanding> standings;
@@ -25,6 +26,7 @@ class StandingsTable extends StatefulWidget {
   final List<String> tieBreakers;
   final ValueChanged<TournamentPlayer>? onPlayerTap;
   final bool compact;
+  final bool showDraws;
 
   @override
   State<StandingsTable> createState() => _StandingsTableState();
@@ -93,7 +95,10 @@ class _StandingsTableState extends State<StandingsTable> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columnCount = 9 + (widget.group.playType == 'swiss' ? 1 : 0);
+        final columnCount =
+            8 +
+            (widget.showDraws ? 1 : 0) +
+            (widget.group.playType == 'swiss' ? 1 : 0);
         final baseSpacing = widget.compact ? 8.0 : 16.0;
         final widestName = widget.standings.fold<double>(
           72,
@@ -139,7 +144,8 @@ class _StandingsTableState extends State<StandingsTable> {
                 const DataColumn(label: Text('Teilnehmer')),
                 const DataColumn(numeric: true, label: Text('Sp')),
                 const DataColumn(numeric: true, label: Text('S')),
-                const DataColumn(numeric: true, label: Text('U')),
+                if (widget.showDraws)
+                  const DataColumn(numeric: true, label: Text('U')),
                 const DataColumn(numeric: true, label: Text('N')),
                 const DataColumn(numeric: true, label: Text('Legs')),
                 const DataColumn(numeric: true, label: Text('Diff')),
@@ -243,13 +249,14 @@ class _StandingsTableState extends State<StandingsTable> {
             fontWeight: fontWeight,
           ),
         ),
-        DataCell(
-          _StandingText(
-            '${standing.draws}',
-            textColor: cellTextColor,
-            fontWeight: fontWeight,
+        if (widget.showDraws)
+          DataCell(
+            _StandingText(
+              '${standing.draws}',
+              textColor: cellTextColor,
+              fontWeight: fontWeight,
+            ),
           ),
-        ),
         DataCell(
           _StandingText(
             '${standing.losses}',

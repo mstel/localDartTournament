@@ -28,6 +28,12 @@ class BestPerformance {
       ? BestPerformanceType.score171Plus
       : type;
 
+  bool get countsAsHighFinish =>
+      normalizedType == BestPerformanceType.highFinish ||
+      (normalizedType == BestPerformanceType.bullseyeFinish &&
+          value != null &&
+          value! > 100);
+
   String get label => switch (normalizedType) {
     BestPerformanceType.bigFish170 => '170 (Big Fish)',
     BestPerformanceType.score171Plus => '171+',

@@ -289,6 +289,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final tiles = find.byType(MatchResultTile);
+    expect(tiles, findsNWidgets(8));
+    await tester.tap(find.text('Alle 15 Begegnungen anzeigen'));
+    await tester.pumpAndSettle();
     expect(tiles, findsNWidgets(15));
     final firstTile = tester.getRect(tiles.at(0));
     final secondTile = tester.getRect(tiles.at(1));

@@ -35,7 +35,7 @@ class _HomePageState extends State<HomePage> {
       () => _open(const TournamentHomePage(leagueMatchesOnly: true), 2),
     ),
     SportDestination(
-      'Teilnehmer',
+      'Spielerkatalog',
       Icons.groups_outlined,
       () => _open(const PlayersPage(), 3),
     ),

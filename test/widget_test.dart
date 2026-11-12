@@ -1131,6 +1131,7 @@ void main() {
             fixedByGroup: [1, 1, 1, 1, 1],
           ),
           tieBreakers: defaultGroupTieBreakers,
+          allowTieBreakDeciders: true,
         ),
       ],
     );

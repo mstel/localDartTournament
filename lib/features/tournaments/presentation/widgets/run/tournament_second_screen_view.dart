@@ -44,6 +44,7 @@ const Map<String, String> _monitorWidgetTitles = {
   'recent': 'Zuletzt beendete Matches',
   'boards': 'Nächste Begegnungen',
   'stageProgress': 'Fortschritt nach Phasen',
+  'hints': 'Hinweise & Empfehlungen',
   'highlights': 'Bestleistungen & Highlights',
   'ranking': 'Rangliste',
   'teamComparison': 'Mannschaftsvergleich',
@@ -401,7 +402,8 @@ class _TournamentSecondScreenViewState
     if (!widget.isStandaloneWindow ||
         widget.showNextStagePreviewInitially ||
         !tournament.directorModeEnabled ||
-        !tournament.showPlayerInsights) {
+        !tournament.showPlayerInsights ||
+        tournament.players.any((player) => player.isTeam)) {
       _playerInsights = Future.value(const {});
       return;
     }
@@ -1623,6 +1625,8 @@ class _TournamentSecondScreenViewState
         return SingleChildScrollView(
           child: _buildStageProgressPanel(context, tournament),
         );
+      case 'hints':
+        return _buildPriorityHintsPanel(context, activeStage);
       case 'highlights':
         return SingleChildScrollView(
           child: _buildHighlightsPanel(context, tournament),
@@ -3060,6 +3064,11 @@ class _TournamentSecondScreenViewState
     }
 
     if (stage is GroupTournamentRunStage) {
+      final runStageIndex = t.runStages.indexOf(stage);
+      final showDraws =
+          runStageIndex < 0 ||
+          runStageIndex >= t.stages.length ||
+          t.stages[runStageIndex].gameFormat.allowsDraws;
       final cards = [
         for (var i = 0; i < stage.groups.length; i++)
           _buildGroupStandingsCard(
@@ -3069,6 +3078,7 @@ class _TournamentSecondScreenViewState
             qualificationPlan: stage.qualificationPlan,
             tieBreakers: stage.tieBreakers,
             full: full,
+            showDraws: showDraws,
           ),
       ];
       final wrapContent = full
@@ -3149,6 +3159,7 @@ class _TournamentSecondScreenViewState
     required QualificationPlan? qualificationPlan,
     required List<String> tieBreakers,
     bool full = false,
+    bool showDraws = true,
   }) {
     final standings = _calculateGroupStandings(group, tieBreakers);
     final fixedPlaces = qualificationPlan == null
@@ -3213,6 +3224,7 @@ class _TournamentSecondScreenViewState
             qualificationPlan: qualificationPlan,
             tieBreakers: tieBreakers,
             compact: full,
+            showDraws: showDraws,
           ),
         ],
       ),
@@ -4283,6 +4295,41 @@ class _TournamentSecondScreenViewState
     }
     final key = const LocalEloCalculator().matchKey(tournament, match);
     return key == null ? const [] : changes?[key] ?? const [];
+  }
+
+  Widget _buildPriorityHintsPanel(
+    BuildContext context,
+    TournamentRunStage? stage,
+  ) {
+    final priority = TournamentFlowPriority.forStage(
+      stage,
+      settings: _prioritySettings,
+    );
+    if (priority.notices.isEmpty && _prioritySettingsError == null) {
+      return const Center(child: Text('Keine aktuellen Hinweise.'));
+    }
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final notice in priority.notices)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.priority_high),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(notice)),
+                  ],
+                ),
+              ),
+            ),
+          if (_prioritySettingsError case final error?) Text(error),
+        ],
+      ),
+    );
   }
 
   Widget _buildRecentMatchRow(

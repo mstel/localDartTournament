@@ -215,6 +215,12 @@ TournamentRunStage _runStageFromJson(Map<String, dynamic> json) {
           )
         : null,
     tieBreakers: _groupTieBreakersFromJson(json['tieBreakers']),
+    allowTieBreakDeciders: json['allowTieBreakDeciders'] as bool? ?? false,
+    tieBreakGameFormat: json['tieBreakGameFormat'] is Map<String, dynamic>
+        ? TournamentGameFormat.fromJson(
+            json['tieBreakGameFormat'] as Map<String, dynamic>,
+          )
+        : const TournamentGameFormat(bestOfLegs: 1),
   );
 }
 
@@ -374,6 +380,8 @@ class TournamentStage {
     this.groupRoundRobinRepeats = const [],
     this.groupMaxGamesPerPlayer = const [],
     this.groupTieBreakers = defaultGroupTieBreakers,
+    this.allowGroupTieBreakDeciders = false,
+    this.tieBreakGameFormat = const TournamentGameFormat(bestOfLegs: 1),
     this.groupDrawOnStart = false,
     this.groupSlotOrder = const [],
     this.groupDrawCompleted = false,
@@ -389,6 +397,7 @@ class TournamentStage {
     this.extraQualifierRank,
     this.extraQualifierCount,
     this.qualificationAutoAdjust = true,
+    this.qualificationAdvancementPolicy = 'larger_group',
     this.qualifiedParticipantCount,
     this.qualificationSummary,
     this.gameFormat = const TournamentGameFormat(),
@@ -438,6 +447,13 @@ class TournamentStage {
         json['groupMaxGamesPerPlayer'],
       ),
       groupTieBreakers: _groupTieBreakersFromJson(json['groupTieBreakers']),
+      allowGroupTieBreakDeciders:
+          json['allowGroupTieBreakDeciders'] as bool? ?? false,
+      tieBreakGameFormat: json['tieBreakGameFormat'] is Map<String, dynamic>
+          ? TournamentGameFormat.fromJson(
+              json['tieBreakGameFormat'] as Map<String, dynamic>,
+            )
+          : const TournamentGameFormat(bestOfLegs: 1),
       groupDrawOnStart: json['groupDrawOnStart'] as bool? ?? false,
       groupSlotOrder: groupSlotOrder,
       groupDrawCompleted:
@@ -454,6 +470,8 @@ class TournamentStage {
       extraQualifierRank: json['extraQualifierRank'] as int?,
       extraQualifierCount: json['extraQualifierCount'] as int?,
       qualificationAutoAdjust: json['qualificationAutoAdjust'] as bool? ?? true,
+      qualificationAdvancementPolicy:
+          json['qualificationAdvancementPolicy'] as String? ?? 'larger_group',
       qualifiedParticipantCount: json['qualifiedParticipantCount'] as int?,
       qualificationSummary: json['qualificationSummary'] as String?,
       gameFormat: json['gameFormat'] is Map<String, dynamic>
@@ -498,6 +516,8 @@ class TournamentStage {
       ? groupMaxGamesPerPlayer[index]
       : null;
   final List<String> groupTieBreakers;
+  final bool allowGroupTieBreakDeciders;
+  final TournamentGameFormat tieBreakGameFormat;
   final bool groupDrawOnStart;
   final List<int?> groupSlotOrder;
   final bool groupDrawCompleted;
@@ -513,6 +533,7 @@ class TournamentStage {
   final int? extraQualifierRank;
   final int? extraQualifierCount;
   final bool qualificationAutoAdjust;
+  final String qualificationAdvancementPolicy;
   final int? qualifiedParticipantCount;
   final String? qualificationSummary;
   final TournamentGameFormat gameFormat;
@@ -545,6 +566,8 @@ class TournamentStage {
       'groupRoundRobinRepeats': groupRoundRobinRepeats,
       'groupMaxGamesPerPlayer': groupMaxGamesPerPlayer,
       'groupTieBreakers': groupTieBreakers,
+      'allowGroupTieBreakDeciders': allowGroupTieBreakDeciders,
+      'tieBreakGameFormat': tieBreakGameFormat.toJson(),
       'groupDrawOnStart': groupDrawOnStart,
       'groupSlotOrder': groupSlotOrder,
       'groupDrawCompleted': groupDrawCompleted,
@@ -560,6 +583,7 @@ class TournamentStage {
       'extraQualifierRank': extraQualifierRank,
       'extraQualifierCount': extraQualifierCount,
       'qualificationAutoAdjust': qualificationAutoAdjust,
+      'qualificationAdvancementPolicy': qualificationAdvancementPolicy,
       'qualifiedParticipantCount': qualifiedParticipantCount,
       'qualificationSummary': qualificationSummary,
       'gameFormat': gameFormat.toJson(),
@@ -568,8 +592,14 @@ class TournamentStage {
 
   TournamentStage copyWith({
     List<String>? groupTieBreakers,
+    bool? allowGroupTieBreakDeciders,
+    TournamentGameFormat? tieBreakGameFormat,
+    bool? groupDrawOnStart,
     List<int?>? groupSlotOrder,
     bool? groupDrawCompleted,
+    List<int?>? knockoutSlotOrder,
+    bool? knockoutDrawOnStart,
+    String? qualificationAdvancementPolicy,
     bool? kratzerHandicapsEnabled,
     List<String>? kratzerHandicaps,
     Map<int, String>? kratzerHandicapAssignments,
@@ -596,21 +626,26 @@ class TournamentStage {
     groupRoundRobinRepeats: groupRoundRobinRepeats,
     groupMaxGamesPerPlayer: groupMaxGamesPerPlayer,
     groupTieBreakers: groupTieBreakers ?? this.groupTieBreakers,
-    groupDrawOnStart: groupDrawOnStart,
+    allowGroupTieBreakDeciders:
+        allowGroupTieBreakDeciders ?? this.allowGroupTieBreakDeciders,
+    tieBreakGameFormat: tieBreakGameFormat ?? this.tieBreakGameFormat,
+    groupDrawOnStart: groupDrawOnStart ?? this.groupDrawOnStart,
     groupSlotOrder: groupSlotOrder ?? this.groupSlotOrder,
     groupDrawCompleted: groupDrawCompleted ?? this.groupDrawCompleted,
     knockoutParticipantCount: knockoutParticipantCount,
     knockoutAdvancingCount: knockoutAdvancingCount,
     knockoutBracketSize: knockoutBracketSize,
     knockoutByeCount: knockoutByeCount,
-    knockoutSlotOrder: knockoutSlotOrder,
+    knockoutSlotOrder: knockoutSlotOrder ?? this.knockoutSlotOrder,
     knockoutSeedingMode: knockoutSeedingMode,
-    knockoutDrawOnStart: knockoutDrawOnStart,
+    knockoutDrawOnStart: knockoutDrawOnStart ?? this.knockoutDrawOnStart,
     qualifiersByGroup: qualifiersByGroup,
     fixedQualifiersByGroup: fixedQualifiersByGroup,
     extraQualifierRank: extraQualifierRank,
     extraQualifierCount: extraQualifierCount,
     qualificationAutoAdjust: qualificationAutoAdjust,
+    qualificationAdvancementPolicy:
+        qualificationAdvancementPolicy ?? this.qualificationAdvancementPolicy,
     qualifiedParticipantCount: qualifiedParticipantCount,
     qualificationSummary: qualificationSummary,
     gameFormat: gameFormat,
@@ -1043,12 +1078,16 @@ class GroupTournamentRunStage extends TournamentRunStage {
     required this.groups,
     required this.qualificationPlan,
     required this.tieBreakers,
+    this.allowTieBreakDeciders = false,
+    this.tieBreakGameFormat = const TournamentGameFormat(bestOfLegs: 1),
   });
 
   final String groupPlayType;
   final List<TournamentGroup> groups;
   final QualificationPlan? qualificationPlan;
   final List<String> tieBreakers;
+  final bool allowTieBreakDeciders;
+  final TournamentGameFormat tieBreakGameFormat;
 
   Map<String, dynamic> toJson() {
     return {
@@ -1058,6 +1097,8 @@ class GroupTournamentRunStage extends TournamentRunStage {
       'groups': groups.map((group) => group.toJson()).toList(),
       'qualificationPlan': qualificationPlan?.toJson(),
       'tieBreakers': tieBreakers,
+      'allowTieBreakDeciders': allowTieBreakDeciders,
+      'tieBreakGameFormat': tieBreakGameFormat.toJson(),
     };
   }
 }
@@ -1404,6 +1445,10 @@ class GroupMatch {
       : hasPlayers && homeLegs != null && awayLegs != null;
   bool get hasResult =>
       isKratzer ? scratchedPlayer != null : hasScore && !isAnnulled;
+  bool get hasTeamParticipant =>
+      homePlayer?.isTeam == true ||
+      awayPlayer?.isTeam == true ||
+      players.any((player) => player.isTeam);
   bool get isResolved => isAnnulled || hasResult || winner != null;
 
   TournamentPlayer? get winner {

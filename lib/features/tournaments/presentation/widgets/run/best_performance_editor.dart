@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../domain/tournament_models.dart';
 import '../../../../statistics/domain/best_performance.dart';
@@ -51,12 +52,12 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
       orElse: () => players.first,
     );
     final value = int.tryParse(_value.text.trim());
-    final details = _value.text.trim();
     if ((_type == BestPerformanceType.highFinish &&
             (value == null || value < 100 || value > 170)) ||
         (_type == BestPerformanceType.shortLeg &&
             (value == null || value < 1 || value > 18)) ||
-        (_type == BestPerformanceType.bullseyeFinish && details.isEmpty)) {
+        (_type == BestPerformanceType.bullseyeFinish &&
+            (value == null || value < 50 || value > 170))) {
       return;
     }
     setState(() {
@@ -66,7 +67,6 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
           playerName: player.name,
           playerProfileId: player.profileId,
           value: value,
-          details: _type == BestPerformanceType.bullseyeFinish ? details : null,
         ),
       );
       _value.clear();
@@ -131,17 +131,20 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
           TextField(
             controller: _value,
             keyboardType: _type == BestPerformanceType.bullseyeFinish
-                ? TextInputType.text
+                ? TextInputType.number
                 : TextInputType.number,
+            inputFormatters: _type == BestPerformanceType.bullseyeFinish
+                ? [FilteringTextInputFormatter.digitsOnly]
+                : null,
             decoration: InputDecoration(
               labelText: switch (_type) {
                 BestPerformanceType.highFinish => 'Finish (100–170)',
                 BestPerformanceType.shortLeg => 'Darts (1–18)',
-                BestPerformanceType.bullseyeFinish => 'Finish beschreiben',
+                BestPerformanceType.bullseyeFinish => 'Bull Finish (50–170)',
                 _ => null,
               },
-              hintText: _type == BestPerformanceType.bullseyeFinish
-                  ? 'z. B. Bullseye'
+              helperText: _type == BestPerformanceType.bullseyeFinish
+                  ? 'Ab 101 Punkten zählt es zusätzlich als High Finish.'
                   : null,
             ),
           ),

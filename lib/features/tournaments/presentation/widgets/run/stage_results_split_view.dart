@@ -66,6 +66,10 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
       widget.initialFilter ?? MatchCategoryFilter.open;
   TournamentPlayer? _filteredPlayer;
   final Map<GroupMatch, GlobalKey> _matchTileKeys = {};
+  final Map<TournamentGroup, int> _visibleGroupMatchCounts = {};
+  final Map<int, int> _visibleKnockoutMatchCounts = {};
+  static const _initialVisibleMatchCount = 8;
+  static const _matchPageSize = 8;
   bool _focusScheduled = false;
 
   @override
@@ -82,6 +86,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
   GlobalKey _keyForMatch(GroupMatch match) =>
       _matchTileKeys.putIfAbsent(match, GlobalKey.new);
+
+  int _focusedMatchIndex(List<GroupMatch> matches) =>
+      matches.indexWhere((match) => identical(match, widget.focusMatch));
 
   void _scheduleFocusScroll() {
     final match = widget.focusMatch;
@@ -340,14 +347,20 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   ) {
     final tournament = widget.tournament;
     if (tournament == null) return const SizedBox.shrink();
-    final recent = matches.where((match) => match.hasResult).toList()
-      ..sort((left, right) {
-        final leftTime = left.finishedAt ?? left.startedAt;
-        final rightTime = right.finishedAt ?? right.startedAt;
-        if (leftTime == null) return rightTime == null ? 0 : 1;
-        if (rightTime == null) return -1;
-        return rightTime.compareTo(leftTime);
+    final recent = <GroupMatch>[];
+    for (final match in matches) {
+      if (!match.hasResult) continue;
+      var insertion = recent.indexWhere((existing) {
+        final existingTime = existing.finishedAt ?? existing.startedAt;
+        final matchTime = match.finishedAt ?? match.startedAt;
+        if (matchTime == null) return existingTime != null;
+        if (existingTime == null) return false;
+        return matchTime.isAfter(existingTime);
       });
+      if (insertion < 0) insertion = recent.length;
+      recent.insert(insertion, match);
+      if (recent.length > 8) recent.removeLast();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -395,6 +408,16 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           return true;
       }
     }).toList();
+    final focusedIndex = _focusedMatchIndex(filteredMatches);
+    final visibleCount = math
+        .min(
+          filteredMatches.length,
+          math.max(
+            _visibleGroupMatchCounts[group] ?? _initialVisibleMatchCount,
+            focusedIndex + 1,
+          ),
+        )
+        .toInt();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -466,25 +489,49 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               final columns = constraints.maxWidth >= 560 ? 2 : 1;
               final width =
                   (constraints.maxWidth - (columns - 1) * 8) / columns;
-              return Wrap(
-                spacing: 8,
-                runSpacing: 4,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final match in filteredMatches)
-                    SizedBox(
-                      width: width,
-                      child: MatchResultTile(
-                        key: _keyForMatch(match),
-                        match: match,
-                        tournament: widget.tournament,
-                        onEditResult: _editResult,
-                        canEditResult: widget.canEditResults,
-                        leadingLabel: match.isDecider ? match.label : null,
-                        showRoundLabel: match.isDecider,
-                        compact: compact,
-                        onPlayerTap: _selectPlayer,
-                        isRunning: widget.runningMatches.contains(match),
-                        isFocused: identical(widget.focusMatch, match),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final match in filteredMatches.take(visibleCount))
+                        SizedBox(
+                          width: width,
+                          child: MatchResultTile(
+                            key: _keyForMatch(match),
+                            match: match,
+                            tournament: widget.tournament,
+                            onEditResult: _editResult,
+                            canEditResult: widget.canEditResults,
+                            leadingLabel: match.isDecider ? match.label : null,
+                            showRoundLabel: match.isDecider,
+                            compact: compact,
+                            onPlayerTap: _selectPlayer,
+                            isRunning: widget.runningMatches.contains(match),
+                            isFocused: identical(widget.focusMatch, match),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (visibleCount < filteredMatches.length)
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: TextButton.icon(
+                        onPressed: () => setState(() {
+                          _visibleGroupMatchCounts[group] = math.min(
+                            filteredMatches.length,
+                            visibleCount + _matchPageSize,
+                          );
+                        }),
+                        icon: const Icon(Icons.expand_more),
+                        label: Text(
+                          visibleCount + _matchPageSize >=
+                                  filteredMatches.length
+                              ? 'Alle ${filteredMatches.length} Begegnungen anzeigen'
+                              : 'Weitere $_matchPageSize Begegnungen anzeigen ($visibleCount von ${filteredMatches.length})',
+                        ),
                       ),
                     ),
                 ],
@@ -549,6 +596,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                     groupNumber: index + 1,
                     qualificationPlan: stage.qualificationPlan,
                     tieBreakers: stage.tieBreakers,
+                    showDraws: _showDrawsForStage(),
                     onPlayerTap: _selectPlayer,
                   ),
                 ],
@@ -565,6 +613,15 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           ),
       ],
     );
+  }
+
+  bool _showDrawsForStage() {
+    final tournament = widget.tournament;
+    if (tournament == null) return true;
+    final index = tournament.runStages.indexOf(widget.stage);
+    return index < 0 ||
+        index >= tournament.stages.length ||
+        tournament.stages[index].gameFormat.allowsDraws;
   }
 
   Widget _buildKnockoutStageResults(
@@ -859,7 +916,18 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               ),
             ),
           ),
-          for (final match in entry.value)
+          for (final match in entry.value.take(
+            math
+                .min(
+                  entry.value.length,
+                  math.max(
+                    _visibleKnockoutMatchCounts[entry.key] ??
+                        _initialVisibleMatchCount,
+                    _focusedMatchIndex(entry.value) + 1,
+                  ),
+                )
+                .toInt(),
+          ))
             MatchResultTile(
               key: _keyForMatch(match),
               match: match,
@@ -869,6 +937,30 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               leadingLabel: match.label,
               isRunning: widget.runningMatches.contains(match),
               isFocused: identical(widget.focusMatch, match),
+            ),
+          if (entry.value.length >
+              math.max(
+                _visibleKnockoutMatchCounts[entry.key] ??
+                    _initialVisibleMatchCount,
+                _focusedMatchIndex(entry.value) + 1,
+              ))
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: () => setState(() {
+                  _visibleKnockoutMatchCounts[entry.key] = math.min(
+                    entry.value.length,
+                    math.max(
+                          _visibleKnockoutMatchCounts[entry.key] ??
+                              _initialVisibleMatchCount,
+                          _focusedMatchIndex(entry.value) + 1,
+                        ) +
+                        _matchPageSize,
+                  );
+                }),
+                icon: const Icon(Icons.expand_more),
+                label: const Text('Weitere Begegnungen anzeigen'),
+              ),
             ),
           const SizedBox(height: 8),
         ],
