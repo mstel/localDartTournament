@@ -1871,11 +1871,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
       );
-      if (checkAchievementInputs || achievementMatch != null) {
+      if (checkAchievementInputs) {
         final signature = _achievementResultSignature();
         achievementInputsChanged = signature != _lastAchievementResultSignature;
         _lastAchievementResultSignature = signature;
       }
+      if (achievementMatch != null) achievementInputsChanged = true;
       if (mounted && _directorSaveError != null) {
         setState(() => _directorSaveError = null);
       }
@@ -2934,8 +2935,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         }
         _advanceKratzerRound(stage);
       }
-      _advanceKnockoutWinners();
-      _ensureGroupDeciders();
+      _advanceKnockoutWinners(startStageIndex: _activeStageIndex);
+      _ensureGroupDeciders(startStageIndex: _activeStageIndex);
       const OrderOfPlayController().resultRecorded(match);
       final stageName = widget.tournament.runStages[_activeStageIndex].name;
       final description = match.isKratzer

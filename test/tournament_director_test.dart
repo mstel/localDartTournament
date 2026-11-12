@@ -980,7 +980,7 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
-  testWidgets('director board shows its next and alternative recommendations', (
+  testWidgets('director board shows at most three useful recommendations', (
     tester,
   ) async {
     final tournament = fixture(boards: 3);
@@ -1005,18 +1005,37 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final board = find.byKey(const ValueKey('director-board-1'));
     expect(
-      find.text(
-        'Nächste Partie: ${recommendation.next.entry.match.participantShortLabel}',
+      find.descendant(
+        of: board,
+        matching: find.text(
+          'Nächste Partie: ${recommendation.next.entry.match.participantShortLabel}',
+        ),
       ),
       findsOneWidget,
     );
     expect(
-      find.text(
-        'Alternative: ${recommendation.alternative!.entry.match.participantShortLabel}',
+      find.descendant(
+        of: board,
+        matching: find.text(
+          'Alternative: ${recommendation.alternative!.entry.match.participantShortLabel}',
+        ),
       ),
-      findsAtLeastNWidgets(2),
+      findsOneWidget,
     );
+    final suggestionLabels = tester
+        .widgetList<Text>(
+          find.descendant(of: board, matching: find.byType(Text)),
+        )
+        .map((text) => text.data ?? '')
+        .where(
+          (text) =>
+              text.startsWith('Nächste Partie: ') ||
+              text.startsWith('Alternative: ') ||
+              text.startsWith('Weitere Partie: '),
+        );
+    expect(suggestionLabels.length, lessThanOrEqualTo(3));
 
     await tester.pumpWidget(const SizedBox());
   });

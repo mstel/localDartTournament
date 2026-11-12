@@ -84,14 +84,16 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         if (selectedStage == null || !context.mounted) return;
       }
       final document = _buildDocument(stageIndex: selectedStage);
-      final stageName = tournament.leagueMatch != null
+      final stageName =
+          tournament.leagueMatch != null || tournament.runStages.isEmpty
           ? 'Spielplan'
           : tournament.runStages[selectedStage ?? 0].name;
+      final fileName =
+          '${_safeFileName(tournament.name)}_${_safeFileName(stageName)}.pdf';
       await Printing.layoutPdf(
         onLayout: (_) => document.save(),
         format: PdfPageFormat.a4.landscape,
-        name:
-            '${_safeFileName(tournament.name)}_${_safeFileName(stageName)}.pdf',
+        name: fileName,
       );
     } catch (error) {
       if (!context.mounted) return;
@@ -300,6 +302,22 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         child: pw.Text('Turnierbaum-Vorschau'),
       );
     }
+    const drawingWidth = 740.0;
+    const drawingHeight = 320.0;
+    const roundGap = 20.0;
+    final columnWidth =
+        (drawingWidth - roundGap * (rounds.length - 1)) / rounds.length;
+    final nodeWidth = (columnWidth - 8).clamp(12.0, 150.0).toDouble();
+    final baseMatchCount = rounds.first.length;
+    final nodeHeight = (drawingHeight / baseMatchCount * 0.72)
+        .clamp(4.0, 28.0)
+        .toDouble();
+    double xForRound(int roundIndex) => roundIndex * (columnWidth + roundGap);
+    double yForMatch(int roundIndex, int matchIndex) {
+      final matchCount = rounds[roundIndex].length;
+      return drawingHeight - (matchIndex + 0.5) * drawingHeight / matchCount;
+    }
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
@@ -307,43 +325,76 @@ class TournamentSchedulePdfButton extends StatelessWidget {
           'Unausgefüllter Turnierbaum',
           style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
-        pw.SizedBox(height: 8),
+        pw.SizedBox(height: 6),
         pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
             for (var roundIndex = 0; roundIndex < rounds.length; roundIndex++)
               pw.Expanded(
-                child: pw.Padding(
-                  padding: pw.EdgeInsets.only(
-                    right: roundIndex == rounds.length - 1 ? 0 : 10,
-                  ),
-                  child: pw.Column(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                    children: [
-                      pw.Text(
-                        _roundLabel(roundIndex, rounds.length),
-                        textAlign: pw.TextAlign.center,
-                        style: pw.TextStyle(
-                          fontSize: 8,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      for (
-                        var matchIndex = 0;
-                        matchIndex < rounds[roundIndex].length;
-                        matchIndex++
-                      )
-                        _bracketMatchCard(
-                          rounds[roundIndex][matchIndex],
-                          roundIndex: roundIndex,
-                          matchIndex: matchIndex,
-                        ),
-                    ],
+                child: pw.Text(
+                  _roundLabel(roundIndex, rounds.length),
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                    fontSize: 8,
+                    fontWeight: pw.FontWeight.bold,
                   ),
                 ),
               ),
           ],
+        ),
+        pw.SizedBox(height: 4),
+        pw.CustomPaint(
+          size: const PdfPoint(drawingWidth, drawingHeight),
+          painter: (canvas, _) {
+            canvas
+              ..setStrokeColor(PdfColors.grey700)
+              ..setLineWidth(0.8);
+            for (
+              var roundIndex = 0;
+              roundIndex < rounds.length - 1;
+              roundIndex++
+            ) {
+              final currentRound = rounds[roundIndex];
+              final nextRound = rounds[roundIndex + 1];
+              for (
+                var parentIndex = 0;
+                parentIndex < nextRound.length;
+                parentIndex++
+              ) {
+                final firstChild = parentIndex * 2;
+                if (firstChild + 1 >= currentRound.length) continue;
+                final firstY = yForMatch(roundIndex, firstChild);
+                final secondY = yForMatch(roundIndex, firstChild + 1);
+                final parentY = yForMatch(roundIndex + 1, parentIndex);
+                final startX = xForRound(roundIndex) + nodeWidth;
+                final endX = xForRound(roundIndex + 1);
+                final middleX = (startX + endX) / 2;
+                canvas
+                  ..drawLine(startX, firstY, middleX, firstY)
+                  ..drawLine(startX, secondY, middleX, secondY)
+                  ..drawLine(middleX, firstY, middleX, secondY)
+                  ..drawLine(middleX, parentY, endX, parentY)
+                  ..strokePath();
+              }
+            }
+            for (var roundIndex = 0; roundIndex < rounds.length; roundIndex++) {
+              for (
+                var matchIndex = 0;
+                matchIndex < rounds[roundIndex].length;
+                matchIndex++
+              ) {
+                final y = yForMatch(roundIndex, matchIndex) - nodeHeight / 2;
+                canvas
+                  ..drawRect(xForRound(roundIndex), y, nodeWidth, nodeHeight)
+                  ..drawLine(
+                    xForRound(roundIndex),
+                    y,
+                    xForRound(roundIndex) + nodeWidth,
+                    y,
+                  )
+                  ..strokePath();
+              }
+            }
+          },
         ),
       ],
     );
@@ -353,40 +404,6 @@ class TournamentSchedulePdfButton extends StatelessWidget {
     if (roundIndex == roundCount - 1) return 'Finale';
     if (roundIndex == roundCount - 2) return 'Halbfinale';
     return 'Runde ${roundIndex + 1}';
-  }
-
-  pw.Widget _bracketMatchCard(
-    GroupMatch match, {
-    required int roundIndex,
-    required int matchIndex,
-  }) {
-    final home = roundIndex == 0
-        ? match.homePlayer?.name ?? 'Teilnehmer ${matchIndex * 2 + 1}'
-        : 'Sieger Spiel ${matchIndex * 2 + 1}';
-    final away = roundIndex == 0
-        ? match.awayPlayer?.name ?? 'Teilnehmer ${matchIndex * 2 + 2}'
-        : 'Sieger Spiel ${matchIndex * 2 + 2}';
-    return pw.Container(
-      margin: const pw.EdgeInsets.symmetric(vertical: 3),
-      padding: const pw.EdgeInsets.all(5),
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.grey600, width: 0.7),
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: [
-          pw.Text(
-            matchDisplayLabel(match.label, fallback: 'Spiel ${match.round}'),
-            style: const pw.TextStyle(fontSize: 7),
-          ),
-          pw.Divider(height: 5, thickness: 0.4),
-          pw.Text(home, maxLines: 1, style: const pw.TextStyle(fontSize: 8)),
-          pw.Divider(height: 5, thickness: 0.4),
-          pw.Text(away, maxLines: 1, style: const pw.TextStyle(fontSize: 8)),
-        ],
-      ),
-    );
   }
 
   List<String> _matchRow(GroupMatch match, String label) => [
@@ -433,6 +450,19 @@ class TournamentSchedulePdfButton extends StatelessWidget {
       .map((index) => index >= 0 && index < roster.length ? roster[index] : '?')
       .join(' / ');
 
-  String _safeFileName(String value) =>
-      value.replaceAll(RegExp(r'[^\w-]+'), '_').replaceAll(RegExp(r'_+'), '_');
+  String _safeFileName(String value) {
+    final normalized = value
+        .trim()
+        .replaceAll('ä', 'ae')
+        .replaceAll('ö', 'oe')
+        .replaceAll('ü', 'ue')
+        .replaceAll('Ä', 'Ae')
+        .replaceAll('Ö', 'Oe')
+        .replaceAll('Ü', 'Ue')
+        .replaceAll('ß', 'ss')
+        .replaceAll(RegExp(r'[^\w-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return normalized.isEmpty ? 'Turnier' : normalized;
+  }
 }

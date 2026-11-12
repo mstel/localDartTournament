@@ -768,7 +768,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     return [
       for (var index = 0; index < groupSizes.length; index++)
         playTypes[index] == 'swiss'
-            ? '${groupLabel(index + 1)} ${repeats[index]} Runden · ${(groupSizes[index] ~/ 2) * repeats[index]} Begegnungen'
+            ? '${repeats[index]} Runden · ${(groupSizes[index] ~/ 2) * repeats[index]} Begegnungen'
             : playTypes[index] == 'round_robin'
             ? '${groupLabel(index + 1)} ${_roundRobinMatchCount(groupSizes[index], repeats[index], maxGamesPerPlayer: _gameLimitsForGroupSizes(groupSizes)[index])} Begegnungen${_gameLimitsForGroupSizes(groupSizes)[index] == null ? '' : ' · maximal ${_gameLimitsForGroupSizes(groupSizes)[index]} pro Teilnehmer'}'
             : '${groupLabel(index + 1)} ${_groupEliminationMatchEstimate(groupSizes[index], _lossLimitForGroupPlayType(playTypes[index]), _requiredRankForCurrentGroup(index, qualificationPlan))}',

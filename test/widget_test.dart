@@ -1297,6 +1297,7 @@ void main() {
     expect(find.byKey(const ValueKey('group-play-type-field')), findsNothing);
     expect(find.text('Anzahl Runden'), findsOneWidget);
     expect(find.text('Gruppe A'), findsNothing);
+    expect(find.text('3 Runden · 9 Begegnungen'), findsOneWidget);
 
     expect(tester.takeException(), isNull);
   });

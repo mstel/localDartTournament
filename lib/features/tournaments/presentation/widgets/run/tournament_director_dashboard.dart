@@ -806,6 +806,26 @@ class _TournamentDirectorDashboardState
                   final recommendation = state.recommendationForBoard(board);
                   final suggestion = recommendation?.next;
                   final alternative = recommendation?.alternative;
+                  final boardSuggestions = <BoardAssignment>[];
+                  if (suggestion != null) boardSuggestions.add(suggestion);
+                  if (alternative != null &&
+                      !boardSuggestions.any(
+                        (item) => identical(
+                          item.entry.match,
+                          alternative.entry.match,
+                        ),
+                      )) {
+                    boardSuggestions.add(alternative);
+                  }
+                  for (final assignment in upcomingForBoard) {
+                    if (boardSuggestions.length >= 3) break;
+                    if (!boardSuggestions.any(
+                      (item) =>
+                          identical(item.entry.match, assignment.entry.match),
+                    )) {
+                      boardSuggestions.add(assignment);
+                    }
+                  }
                   final label = running != null
                       ? 'Läuft'
                       : blocked
@@ -982,15 +1002,19 @@ class _TournamentDirectorDashboardState
                           )
                         else if (suggestion != null)
                           const SizedBox.shrink(),
-                        if (!blocked && upcomingForBoard.isNotEmpty)
-                          for (final assignment in upcomingForBoard)
+                        if (!blocked && boardSuggestions.isNotEmpty)
+                          for (final assignment in boardSuggestions.take(3))
                             Padding(
                               padding: const EdgeInsets.only(top: 6),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Text(
-                                    '${identical(assignment.entry.match, suggestion?.entry.match) ? 'Nächste Partie: ' : ''}${assignment.entry.match.participantShortLabel}',
+                                    '${identical(assignment.entry.match, suggestion?.entry.match)
+                                        ? 'Nächste Partie: '
+                                        : identical(assignment.entry.match, alternative?.entry.match)
+                                        ? 'Alternative: '
+                                        : 'Weitere Partie: '}${assignment.entry.match.participantShortLabel}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: Theme.of(
@@ -1022,45 +1046,6 @@ class _TournamentDirectorDashboardState
                                 ],
                               ),
                             ),
-                        if (!blocked && alternative != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  'Alternative: ${alternative.entry.match.participantShortLabel}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                                if (widget.onStartOnBoard != null)
-                                  Tooltip(
-                                    message:
-                                        'Alternative auf ${t.boardDisplayName(board)} starten',
-                                    child: FilledButton.tonalIcon(
-                                      onPressed:
-                                          widget.canOperate &&
-                                              state.canStart(alternative.entry)
-                                          ? () => _act(
-                                              () => widget.onStartOnBoard!(
-                                                board,
-                                                match: alternative.entry.match,
-                                              ),
-                                            )
-                                          : null,
-                                      icon: const Icon(
-                                        Icons.play_arrow_rounded,
-                                        size: 18,
-                                      ),
-                                      label: Text(
-                                        '${t.boardDisplayName(board)} starten',
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
                         if (running == null)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),

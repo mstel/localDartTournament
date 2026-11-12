@@ -1,3 +1,14 @@
+# 2.7.3+93
+
+- Begrenzen die K.-o.-PDF-Vorschau auf eine kompakte Vektorgrafik, um Abstürze
+  bei großen Turnierbäumen zu vermeiden, und übernehmen Turnier- und Phasennamen
+  als vorgeschlagenen PDF-Dateinamen.
+- Zeigen pro Board höchstens drei Partievorschläge und beschleunigen die
+  Verarbeitung von Ergebnissen.
+- Entfernen die irreführende Gruppenbezeichnung aus den Schweizer
+  Rundenangaben und vereinheitlichen Höhe sowie Beschriftung der
+  Turniererstellungs-Steuerelemente.
+
 # 2.7.2+92
 
 - Druckt Spielpläne im Querformat mit Turnier- und Phasennamen als Dateiname;
