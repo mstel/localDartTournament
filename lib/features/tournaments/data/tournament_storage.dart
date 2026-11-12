@@ -245,14 +245,18 @@ class TournamentStorage {
 
   Future<void> saveTournament(CreatedTournament tournament) async {
     await _locked(() async {
-      final tournaments = await _loadTournamentsUnlocked();
+      final document = await _readDocument();
+      final tournaments = document['tournaments'] as List? ?? <dynamic>[];
       final incomingUpdatedAt = tournament.updatedAt;
       tournament.updatedAt = DateTime.now();
-      final index = tournaments.indexWhere((item) => item.id == tournament.id);
+      final index = tournaments.indexWhere(
+        (item) => item is Map && item['id'] == tournament.id,
+      );
       if (index < 0) {
-        tournaments.insert(0, tournament);
+        tournaments.insert(0, tournament.toJson());
       } else {
-        final stored = tournaments[index];
+        final storedJson = Map<String, dynamic>.from(tournaments[index] as Map);
+        final stored = CreatedTournament.fromJson(storedJson);
         if (stored.updatedAt.isAfter(incomingUpdatedAt)) {
           final incomingLayouts =
               Map<String, List<SecondScreenWidgetPlacement>>.from(
@@ -277,15 +281,9 @@ class TournamentStorage {
             );
           }
         }
-        tournaments[index] = tournament;
+        tournaments[index] = tournament.toJson();
       }
-      final file = await _storageFile();
-      final document = _cache[file.path]?.document != null
-          ? Map<String, dynamic>.from(_cache[file.path]!.document)
-          : await _readDocument();
-      document['tournaments'] = tournaments
-          .map((item) => item.toJson())
-          .toList();
+      document['tournaments'] = tournaments.toList();
       await _writeDocument(document);
     });
     StorageAccess.markLocalDataChanged();

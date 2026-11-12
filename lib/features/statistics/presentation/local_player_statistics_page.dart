@@ -356,22 +356,24 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                       label: 'Siegquote Legs',
                       value: '${stats.legWinRate.toStringAsFixed(1)} %',
                     ),
-                    _StatCard(
-                      label: 'Sets gespielt',
-                      value: '${stats.setsPlayed}',
-                    ),
-                    _StatCard(
-                      label: 'Sets gewonnen',
-                      value: '${stats.setsWon}',
-                    ),
-                    _StatCard(
-                      label: 'Sets verloren',
-                      value: '${stats.setsLost}',
-                    ),
-                    _StatCard(
-                      label: 'Siegquote Sets',
-                      value: '${stats.setWinRate.toStringAsFixed(1)} %',
-                    ),
+                    if (stats.setsPlayed > 0) ...[
+                      _StatCard(
+                        label: 'Sets gespielt',
+                        value: '${stats.setsPlayed}',
+                      ),
+                      _StatCard(
+                        label: 'Sets gewonnen',
+                        value: '${stats.setsWon}',
+                      ),
+                      _StatCard(
+                        label: 'Sets verloren',
+                        value: '${stats.setsLost}',
+                      ),
+                      _StatCard(
+                        label: 'Siegquote Sets',
+                        value: '${stats.setWinRate.toStringAsFixed(1)} %',
+                      ),
+                    ],
                   ],
                 ),
                 PlayerPerformanceSection(performance: profilePerformance),

@@ -5335,30 +5335,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
 
     _isApplyingStartDraw = true;
-    final labels = incomingPlayers
-        .take(participantCount)
-        .map((player) => player.name)
-        .toList();
-    final slotOrder = await showDialog<List<int?>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _RandomDrawDialog(
-        stageName: stageConfig.name,
-        participantLabels: labels,
-        bracketSize: stageConfig.isGroupStage
-            ? participantCount
-            : _drawBracketSize(stageConfig, participantCount),
-        useBracketSlots: !stageConfig.isGroupStage,
-        groupSizes: stageConfig.isGroupStage
-            ? stageConfig.groupSizes
-            : const [],
-      ),
-    );
-    _isApplyingStartDraw = false;
-
-    if (!mounted || slotOrder == null) {
-      return;
-    }
+    final slotCount = stageConfig.isGroupStage
+        ? participantCount
+        : _drawBracketSize(stageConfig, participantCount);
+    final slotOrder = List<int?>.generate(
+      slotCount,
+      (index) => index < participantCount ? index + 1 : null,
+    )..shuffle(Random());
 
     setState(() {
       final updatedStage = _copyStageWithStartDraw(stageConfig, slotOrder);
@@ -5367,6 +5350,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           _buildRunStageFromPlayers(updatedStage, incomingPlayers);
       _advanceKnockoutWinners();
       _ensureGroupDeciders();
+      _isApplyingStartDraw = false;
     });
     await _saveTournamentProgress();
   }
@@ -5907,15 +5891,18 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     ],
                                   );
                                 }
-                                return Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: _secondScreenSettingsCard(),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(child: pdfButton),
-                                  ],
+                                return IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        child: _secondScreenSettingsCard(),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: pdfButton),
+                                    ],
+                                  ),
                                 );
                               },
                             ),

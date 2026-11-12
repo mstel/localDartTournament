@@ -860,7 +860,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     if (_effectiveKnockoutSeedingMode() == 'random_cross') {
       return _randomCrossSeededKnockoutSlotOrder(participantCount, bracketSize);
     }
-    if (_effectiveKnockoutSeedingMode() == 'elo' && !_hasGroupSeedSources()) {
+    if (_effectiveKnockoutSeedingMode() == 'elo') {
       final rankedPlayers =
           List<int>.generate(participantCount, (index) => index + 1)
             ..sort((a, b) {
@@ -1303,7 +1303,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   String _effectiveKnockoutSeedingMode() {
-    return _knockoutSeedingMode == 'elo' && _hasGroupSeedSources()
+    return _knockoutSeedingMode == 'elo' && !_hasSelectedEloRanking
         ? 'cross'
         : _knockoutSeedingMode;
   }
@@ -2165,9 +2165,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   Future<void> _openFormatPlanner() async {
+    await _refreshEloRankingAvailability();
+    if (!mounted) return;
     final suggestion = await showDialog<TournamentFormatSuggestion>(
       context: context,
-      builder: (_) => const TournamentFormatPlannerDialog(),
+      builder: (_) => TournamentFormatPlannerDialog(
+        initialAllowEloSeeding: _hasSelectedEloRanking,
+      ),
     );
     if (suggestion == null || !mounted) return;
     if (suggestion.configurations.isNotEmpty) {
@@ -2263,6 +2267,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   knockoutByeCount:
                       _plannerNextPowerOfTwo(inferredPlayerCount) -
                       inferredPlayerCount,
+                  placementPlaces: suggestion.knockoutPlacementPlaces,
+                  knockoutSeedingMode: suggestion.knockoutSeedingMode,
+                  knockoutDrawOnStart:
+                      suggestion.knockoutSeedingMode == 'random',
                   gameFormat: suggestion.stages.first.format,
                 )
               : TournamentStage(
@@ -2294,6 +2302,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             knockoutBracketSize: _plannerNextPowerOfTwo(qualifierCount),
             knockoutByeCount:
                 _plannerNextPowerOfTwo(qualifierCount) - qualifierCount,
+            placementPlaces: suggestion.knockoutPlacementPlaces,
+            knockoutSeedingMode: suggestion.knockoutSeedingMode,
+            knockoutDrawOnStart: suggestion.knockoutSeedingMode == 'random',
             gameFormat: suggestion.stages.last.format,
           ),
         );
@@ -3167,11 +3178,17 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       onChanged: (_) => setState(() {}),
                     );
                     final pickNameButton = OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
                       onPressed: _pickTournamentName,
                       icon: const Icon(Icons.folder_open_outlined),
                       label: const Text('Name eines anderen Turniers öffnen'),
                     );
                     final saveButton = FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
                       onPressed: _saveTournamentNameDraft,
                       icon: const Icon(Icons.save_outlined),
                       label: const Text('Namen speichern'),
@@ -3338,10 +3355,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      labelText: 'Anzahl',
+                      labelText: 'Anzahl Teilnehmende',
                     ),
                   ),
                   trailing: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
                     onPressed: _generatePlayers,
                     icon: const Icon(Icons.group_add_outlined),
                     label: const Text('Teilnehmer erzeugen'),
@@ -3986,8 +4006,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     slotOrder: _knockoutSlotOrder(),
                     participantLabels: _knockoutParticipantLabels(),
                     allowCrossSeed: _hasGroupSeedSources(),
-                    allowEloSeed:
-                        _hasSelectedEloRanking && !_hasGroupSeedSources(),
+                    allowEloSeed: _hasSelectedEloRanking,
                     onSeedingModeChanged: _setKnockoutSeedingMode,
                     onSwapSlot: _swapKnockoutSlots,
                     onResetSlots: _resetKnockoutSlots,

@@ -24,7 +24,10 @@ void main() {
         await tester.drag(find.byType(ListView).last, const Offset(0, -400));
         await tester.pumpAndSettle();
       }
-      await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '4');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+        '4',
+      );
       final generatePlayers = find.text('Teilnehmer erzeugen');
       for (
         var attempt = 0;

@@ -52,8 +52,6 @@ class TournamentSchedulePdfButton extends StatelessWidget {
               FilledButton.icon(
                 onPressed: _isUnsupported ? null : () => _print(context),
                 style: FilledButton.styleFrom(
-                  backgroundColor: Colors.amber,
-                  foregroundColor: Colors.black,
                   minimumSize: const Size.fromHeight(48),
                 ),
                 icon: const Icon(Icons.print_outlined),
@@ -86,9 +84,14 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         if (selectedStage == null || !context.mounted) return;
       }
       final document = _buildDocument(stageIndex: selectedStage);
+      final stageName = tournament.leagueMatch != null
+          ? 'Spielplan'
+          : tournament.runStages[selectedStage ?? 0].name;
       await Printing.layoutPdf(
         onLayout: (_) => document.save(),
-        name: '${_safeFileName(tournament.name)}-spielplan.pdf',
+        format: PdfPageFormat.a4.landscape,
+        name:
+            '${_safeFileName(tournament.name)}_${_safeFileName(stageName)}.pdf',
       );
     } catch (error) {
       if (!context.mounted) return;
@@ -203,7 +206,7 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         if (stage.eliminationLossLimit >= 3) {
           content.addAll(_tripleKoContent(stage));
         } else {
-          content.add(_bracketTable(stage.rounds));
+          content.add(_bracketDiagram(stage.rounds));
         }
         if (stage.placementMatches.isNotEmpty) {
           content
@@ -277,7 +280,7 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          _bracketTable([
+          _bracketDiagram([
             for (final round in rounds.keys.toList()..sort())
               rounds[round]!
                 ..sort((left, right) => left.round.compareTo(right.round)),
@@ -286,42 +289,104 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         ],
       );
 
-  pw.Widget _bracketTable(List<List<GroupMatch>> rounds) {
+  pw.Widget _bracketDiagram(List<List<GroupMatch>> rounds) {
     if (rounds.isEmpty || rounds.first.isEmpty) {
-      return _table(
-        [
-          ['Noch keine Begegnungen'],
-        ],
-        [1],
+      return pw.Container(
+        height: 120,
+        alignment: pw.Alignment.center,
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey500),
+        ),
+        child: pw.Text('Turnierbaum-Vorschau'),
       );
     }
-    final slotCount = rounds.first.length * 2;
-    return _table(
-      [
-        [
-          for (var index = 0; index < rounds.length; index++)
-            'Runde ${index + 1}',
-        ],
-        for (var slot = 0; slot < slotCount; slot++)
-          [
-            for (var round = 0; round < rounds.length; round++)
-              _bracketCell(rounds, slot, round),
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Text(
+          'Unausgefüllter Turnierbaum',
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            for (var roundIndex = 0; roundIndex < rounds.length; roundIndex++)
+              pw.Expanded(
+                child: pw.Padding(
+                  padding: pw.EdgeInsets.only(
+                    right: roundIndex == rounds.length - 1 ? 0 : 10,
+                  ),
+                  child: pw.Column(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                    children: [
+                      pw.Text(
+                        _roundLabel(roundIndex, rounds.length),
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          fontSize: 8,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      for (
+                        var matchIndex = 0;
+                        matchIndex < rounds[roundIndex].length;
+                        matchIndex++
+                      )
+                        _bracketMatchCard(
+                          rounds[roundIndex][matchIndex],
+                          roundIndex: roundIndex,
+                          matchIndex: matchIndex,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
           ],
+        ),
       ],
-      [for (var index = 0; index < rounds.length; index++) 1],
     );
   }
 
-  String _bracketCell(List<List<GroupMatch>> rounds, int slot, int round) {
-    final span = 1 << (round + 1);
-    if (slot % span != span ~/ 2 - 1) return '';
-    final matchIndex = slot ~/ span;
-    if (matchIndex >= rounds[round].length) return '';
-    final match = rounds[round][matchIndex];
-    return '${matchDisplayLabel(match.label, fallback: 'Begegnung ${match.round}')}\n'
-        '${match.homePlayer?.name ?? '________________'}\n'
-        'vs. ${match.awayPlayer?.name ?? '________________'}\n'
-        'Ergebnis: ${match.hasResult ? '${match.homeScore ?? 0} : ${match.awayScore ?? 0}' : '__________'}';
+  String _roundLabel(int roundIndex, int roundCount) {
+    if (roundIndex == roundCount - 1) return 'Finale';
+    if (roundIndex == roundCount - 2) return 'Halbfinale';
+    return 'Runde ${roundIndex + 1}';
+  }
+
+  pw.Widget _bracketMatchCard(
+    GroupMatch match, {
+    required int roundIndex,
+    required int matchIndex,
+  }) {
+    final home = roundIndex == 0
+        ? match.homePlayer?.name ?? 'Teilnehmer ${matchIndex * 2 + 1}'
+        : 'Sieger Spiel ${matchIndex * 2 + 1}';
+    final away = roundIndex == 0
+        ? match.awayPlayer?.name ?? 'Teilnehmer ${matchIndex * 2 + 2}'
+        : 'Sieger Spiel ${matchIndex * 2 + 2}';
+    return pw.Container(
+      margin: const pw.EdgeInsets.symmetric(vertical: 3),
+      padding: const pw.EdgeInsets.all(5),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey600, width: 0.7),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Text(
+            matchDisplayLabel(match.label, fallback: 'Spiel ${match.round}'),
+            style: const pw.TextStyle(fontSize: 7),
+          ),
+          pw.Divider(height: 5, thickness: 0.4),
+          pw.Text(home, maxLines: 1, style: const pw.TextStyle(fontSize: 8)),
+          pw.Divider(height: 5, thickness: 0.4),
+          pw.Text(away, maxLines: 1, style: const pw.TextStyle(fontSize: 8)),
+        ],
+      ),
+    );
   }
 
   List<String> _matchRow(GroupMatch match, String label) => [

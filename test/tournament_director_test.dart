@@ -809,18 +809,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final lock = find.text('Board 1 sperren');
+    final board = find.byKey(const ValueKey('director-board-1'));
+    final lock = find.descendant(of: board, matching: find.text('Sperren'));
     await tester.ensureVisible(lock);
     await tester.tap(lock);
     await tester.pumpAndSettle();
-    expect(find.text('Board 1 freigeben'), findsOneWidget);
+    expect(
+      find.descendant(of: board, matching: find.text('Freigeben')),
+      findsOneWidget,
+    );
     expect(tournament.blockedBoards, contains(1));
 
-    final unlock = find.text('Board 1 freigeben');
+    final unlock = find.descendant(of: board, matching: find.text('Freigeben'));
     await tester.ensureVisible(unlock);
     await tester.tap(unlock);
     await tester.pumpAndSettle();
-    expect(find.text('Board 1 sperren'), findsOneWidget);
+    expect(
+      find.descendant(of: board, matching: find.text('Sperren')),
+      findsOneWidget,
+    );
     expect(tournament.blockedBoards, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

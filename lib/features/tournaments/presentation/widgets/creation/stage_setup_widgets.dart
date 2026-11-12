@@ -128,7 +128,7 @@ class RoundRobinRepeatsSetup extends StatelessWidget {
                   child: Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      if (playTypes[index] != 'swiss')
+                      if (!playTypes[index].toLowerCase().contains('swiss'))
                         Text(groupLabel(index + 1)),
                       const SizedBox(width: 8),
                       IconButton(

@@ -89,6 +89,8 @@ class TournamentFormatSuggestion {
     this.configurations = const [],
     this.stageMatchCounts = const [],
     this.variableMatches = false,
+    this.knockoutPlacementPlaces = const [],
+    this.knockoutSeedingMode = 'cross',
   });
 
   final String title;
@@ -105,6 +107,8 @@ class TournamentFormatSuggestion {
   final List<TournamentStage> configurations;
   final List<int> stageMatchCounts;
   final bool variableMatches;
+  final List<int> knockoutPlacementPlaces;
+  final String knockoutSeedingMode;
   TournamentGameFormat get format => stages.first.format;
   ({int minimumMinutes, int maximumMinutes}) get durationSpan =>
       TournamentDurationRange.forEstimate(

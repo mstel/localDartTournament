@@ -108,6 +108,5 @@ part 'features/tournaments/modes/triple_ko/tournament_mode_triple_ko.dart';
 part 'features/tournaments/presentation/pages/tournament_creation_page.dart';
 part 'features/tournaments/presentation/widgets/tournament_format_planner_dialog.dart';
 part 'features/tournaments/presentation/pages/tournament_run_page.dart';
-part 'features/tournaments/presentation/widgets/creation/random_draw_dialog.dart';
 part 'features/tournaments/presentation/widgets/tournament_creation_widgets.dart';
 part 'features/tournaments/presentation/widgets/run/brackets/knockout_bracket_view.dart';

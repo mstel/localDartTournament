@@ -254,7 +254,10 @@ void main() {
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '4');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '4',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();
@@ -348,7 +351,10 @@ void main() {
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '6');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '6',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();
@@ -1052,7 +1058,10 @@ void main() {
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '6');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '6',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();
@@ -1198,7 +1207,10 @@ void main() {
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '6');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '6',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();
@@ -1253,7 +1265,10 @@ void main() {
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '6');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '6',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();
@@ -1293,7 +1308,10 @@ void main() {
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '6');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '6',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();
@@ -1369,7 +1387,10 @@ void main() {
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '24');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '24',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();
@@ -1462,7 +1483,10 @@ void main() {
 
     await openTournamentCreation(tester);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '23');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '23',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();
@@ -1568,7 +1592,10 @@ void main() {
     expect(find.text('Turnierformat'), findsNothing);
     expect(find.byKey(const ValueKey('stage-type-field')), findsNothing);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '9');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '9',
+    );
     await revealPlayerGenerator(tester);
     await tester.tap(find.text('Teilnehmer erzeugen'));
     await tester.pumpAndSettle();

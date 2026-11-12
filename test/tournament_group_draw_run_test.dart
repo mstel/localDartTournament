@@ -101,7 +101,13 @@ void main() {
       expect(find.text('Vorherige Phase wieder öffnen'), findsOneWidget);
 
       final reopenTimer = Stopwatch()..start();
-      await tester.tap(find.text('Vorherige Phase wieder öffnen'));
+      final reopen = find.text('Vorherige Phase wieder öffnen');
+      await tester.drag(
+        find.byType(CustomScrollView).last,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(reopen);
       await tester.pumpAndSettle();
       reopenTimer.stop();
       expect(tournament.activeStageIndex, historyStageCount - 2);
@@ -294,109 +300,91 @@ void main() {
     },
   );
 
-  testWidgets(
-    'accepted wheel draw controls group settings and is not shown again',
-    (tester) async {
-      tester.view.physicalSize = const Size(1440, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final tournament = _tournament()..plannedMinutes = 60;
-      final storage = _MemoryTournamentStorage();
-      final controller = _RecordingRunController(storage);
+  testWidgets('start draw assigns groups immediately without showing a wheel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = _tournament()..plannedMinutes = 60;
+    final storage = _MemoryTournamentStorage();
+    final controller = _RecordingRunController(storage);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: TournamentRunPage(
-            tournament: tournament,
-            runController: controller,
-          ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: tournament,
+          runController: controller,
         ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Auslosung: Gruppenphase'), findsOneWidget);
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Auslosung: Gruppenphase'), findsNothing);
+    expect(find.text('Rad drehen'), findsNothing);
+    expect(find.text('Auslosung übernehmen'), findsNothing);
+    expect(tournament.stages.single.groupDrawCompleted, isTrue);
+    final assignedPlayers =
+        (tournament.runStages.single as GroupTournamentRunStage).groups
+            .expand((group) => group.players)
+            .map((player) => player.name)
+            .toList();
+    expect(
+      assignedPlayers.toSet(),
+      tournament.players.map((player) => player.name).toSet(),
+    );
+    expect(assignedPlayers, hasLength(tournament.players.length));
+    final groups =
+        (tournament.runStages.single as GroupTournamentRunStage).groups;
 
-      for (
-        var drawIndex = 0;
-        drawIndex < tournament.players.length;
-        drawIndex++
-      ) {
-        final buttonLabel = drawIndex == 0 ? 'Rad drehen' : 'Nächsten ziehen';
-        await tester.tap(find.text(buttonLabel));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 3600));
-        await tester.pump(const Duration(milliseconds: 100));
-        expect(find.text('${drawIndex + 1} von 8 gezogen'), findsOneWidget);
-      }
-
-      final drawnNames = tester
-          .widgetList<Chip>(find.byType(Chip))
-          .map((chip) => (chip.label as Text).data!)
-          .toList();
-      expect(drawnNames, hasLength(8));
-      await tester.tap(find.text('Auslosung übernehmen'));
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pump();
-
-      final groups =
-          (tournament.runStages.single as GroupTournamentRunStage).groups;
-      expect(
-        groups[0].players.map((player) => player.name),
-        drawnNames.take(4),
-      );
-      expect(
-        groups[1].players.map((player) => player.name),
-        drawnNames.skip(4),
-      );
-      expect(tournament.stages.single.groupDrawCompleted, isTrue);
-
-      expect(storage.savedTournament, isNotNull);
-      final restored = CreatedTournament.fromJson(storage.savedTournament!);
-      expect(restored.stages.single.groupDrawCompleted, isTrue);
-      expect(
-        (restored.runStages.single as GroupTournamentRunStage).groups
-            .map((group) => group.players.map((player) => player.name).toList())
-            .toList(),
-        [drawnNames.take(4).toList(), drawnNames.skip(4).toList()],
-      );
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: TournamentRunPage(
-            tournament: restored,
-            runController: controller,
-          ),
+    expect(storage.savedTournament, isNotNull);
+    final restored = CreatedTournament.fromJson(storage.savedTournament!);
+    expect(restored.stages.single.groupDrawCompleted, isTrue);
+    expect(
+      (restored.runStages.single as GroupTournamentRunStage).groups
+          .map((group) => group.players.map((player) => player.name).toList())
+          .toList(),
+      groups
+          .map((group) => group.players.map((player) => player.name).toList())
+          .toList(),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: restored,
+          runController: controller,
         ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Auslosung: Gruppenphase'), findsNothing);
-      expect(
-        (restored.runStages.single as GroupTournamentRunStage).groups
-            .map((group) => group.players.map((player) => player.name).toList())
-            .toList(),
-        [drawnNames.take(4).toList(), drawnNames.skip(4).toList()],
-      );
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Auslosung: Gruppenphase'), findsNothing);
+    expect(
+      (restored.runStages.single as GroupTournamentRunStage).groups
+          .map((group) => group.players.map((player) => player.name).toList())
+          .toList(),
+      groups
+          .map((group) => group.players.map((player) => player.name).toList())
+          .toList(),
+    );
 
-      await tester.tap(find.text('Einstellungen'));
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -420));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Bearbeiten'));
-      await tester.pump(const Duration(milliseconds: 300));
-      final groupDialog = find.byType(Dialog);
-      for (final playerName in drawnNames) {
-        expect(
-          find.descendant(of: groupDialog, matching: find.text(playerName)),
-          findsOneWidget,
-        );
-      }
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    },
-  );
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -420));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bearbeiten'));
+    await tester.pump(const Duration(milliseconds: 300));
+    final groupDialog = find.byType(Dialog);
+    for (final player in tournament.players) {
+      expect(
+        find.descendant(of: groupDialog, matching: find.text(player.name)),
+        findsWidgets,
+      );
+    }
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
 
   testWidgets(
     'saved slot order repairs a stale draw flag without reopening the wheel',

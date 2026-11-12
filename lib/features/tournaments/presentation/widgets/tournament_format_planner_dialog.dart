@@ -14,6 +14,7 @@ class TournamentFormatPlannerDialog extends StatefulWidget {
     this.initialRequireGroupPhase = false,
     this.lockBoardCount = false,
     this.initialPreferredFinalStage = 'single_knockout',
+    this.initialAllowEloSeeding = false,
     this.initialGameFormat,
   });
 
@@ -28,6 +29,7 @@ class TournamentFormatPlannerDialog extends StatefulWidget {
   final bool initialRequireGroupPhase;
   final bool lockBoardCount;
   final String? initialPreferredFinalStage;
+  final bool initialAllowEloSeeding;
   final TournamentGameFormat? initialGameFormat;
 
   @override
@@ -80,6 +82,9 @@ class _TournamentFormatPlannerDialogState
   int _maximumLives = 5;
   int _suggestionPageSize = 3;
   String? _preferredFinalStage = 'single_knockout';
+  bool _allowEloSeeding = false;
+  String _knockoutSeedingMode = 'cross';
+  final Set<int> _knockoutPlacementPlaces = {};
   final Set<String> _enabledModes = {
     'groups:round_robin',
     'groups:double_round_robin',
@@ -312,6 +317,7 @@ class _TournamentFormatPlannerDialogState
       4,
     );
     _preferredFinalStage = widget.initialPreferredFinalStage;
+    _allowEloSeeding = widget.initialAllowEloSeeding;
     _requireGroupPhase = widget.initialRequireGroupPhase;
     final gameFormat = widget.initialGameFormat;
     if (gameFormat != null) {
@@ -367,6 +373,8 @@ class _TournamentFormatPlannerDialogState
     _maximumStages,
     _maximumLives,
     _preferredFinalStage,
+    _knockoutSeedingMode,
+    (_knockoutPlacementPlaces.toList()..sort()).join(','),
     (_enabledModes.toList()..sort()).join(','),
   ].join('|');
 
@@ -585,7 +593,7 @@ class _TournamentFormatPlannerDialogState
                     icon: Icons.timer_outlined,
                     title: 'Wunschdauer',
                     value:
-                        '${_targetHours.text} Std. ${_targetMinutes.text.padLeft(2, '0')} Min. · Vorschläge nach Nähe',
+                        '${_targetHours.text} Std. ${_targetMinutes.text.padLeft(2, '0')} Min. · Ähnliche Vorschläge',
                     selected: _useTargetDuration,
                     onPressed: _pickTargetDuration,
                     enabled: !_considerBestWorstCase,
@@ -808,6 +816,76 @@ class _TournamentFormatPlannerDialogState
                             _suggestions = null;
                           }),
                   ),
+                  if (_preferredFinalStage != null &&
+                      _preferredFinalStage!.contains('knockout')) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Optionale Platzierungsspiele',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (
+                          var place = 3;
+                          place < (int.tryParse(_players.text) ?? 0);
+                          place += 2
+                        )
+                          FilterChip(
+                            label: Text('Platz $place'),
+                            selected: _knockoutPlacementPlaces.contains(place),
+                            onSelected: _calculating
+                                ? null
+                                : (selected) => setState(() {
+                                    if (selected) {
+                                      _knockoutPlacementPlaces.add(place);
+                                    } else {
+                                      _knockoutPlacementPlaces.remove(place);
+                                    }
+                                  }),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      key: const ValueKey('planner-knockout-seeding'),
+                      initialValue: _knockoutSeedingMode,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Auslosungsmethode',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: 'cross',
+                          child: Text('Setzliste nach Teilnehmerreihenfolge'),
+                        ),
+                        if (_allowEloSeeding)
+                          const DropdownMenuItem(
+                            value: 'elo',
+                            child: Text('Leistungsbasierte Setzliste (ELO)'),
+                          ),
+                        const DropdownMenuItem(
+                          value: 'manual',
+                          child: Text('Manuelle Paarungszuordnung'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 'random',
+                          child: Text('Zufallsauslosung beim Turnierstart'),
+                        ),
+                      ],
+                      onChanged: _calculating
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              setState(() {
+                                _knockoutSeedingMode = value;
+                                _suggestions = null;
+                              });
+                            },
+                    ),
+                  ],
                   DropdownButtonFormField<int>(
                     initialValue: _maximumLives,
                     isExpanded: true,
@@ -1020,8 +1098,9 @@ class _TournamentFormatPlannerDialogState
                 PlanningSuggestionList(
                   suggestions: _suggestions!,
                   pageSize: _suggestionPageSize,
-                  onSelected: (suggestion) =>
-                      Navigator.of(context).pop(suggestion),
+                  onSelected: (suggestion) => Navigator.of(
+                    context,
+                  ).pop(_withKnockoutOptions(suggestion)),
                 ),
               ],
             ],
@@ -1062,6 +1141,47 @@ class _TournamentFormatPlannerDialogState
       border: const OutlineInputBorder(),
     ),
   );
+
+  TournamentFormatSuggestion _withKnockoutOptions(
+    TournamentFormatSuggestion suggestion,
+  ) {
+    final lastType = suggestion.configurations.isNotEmpty
+        ? suggestion.configurations.last.type
+        : suggestion.stages.lastOrNull?.type;
+    if (lastType == null || !lastType.contains('knockout')) return suggestion;
+    final placementPlaces = _knockoutPlacementPlaces.toList()..sort();
+    final configurations = List<TournamentStage>.from(
+      suggestion.configurations,
+    );
+    if (configurations.isNotEmpty) {
+      final last = configurations.last;
+      configurations[configurations.length - 1] = TournamentStage.fromJson({
+        ...last.toJson(),
+        'placementPlaces': placementPlaces,
+        'knockoutSeedingMode': _knockoutSeedingMode,
+        'knockoutSlotOrder': const <int?>[],
+        'knockoutDrawOnStart': _knockoutSeedingMode == 'random',
+      });
+    }
+    return TournamentFormatSuggestion(
+      title: suggestion.title,
+      stages: suggestion.stages,
+      minimumMatchesPerPlayer: suggestion.minimumMatchesPerPlayer,
+      totalMatches: suggestion.totalMatches,
+      estimatedMinutes: suggestion.estimatedMinutes,
+      effectiveBoards: suggestion.effectiveBoards,
+      participantCount: suggestion.participantCount,
+      isClosestAlternative: suggestion.isClosestAlternative,
+      qualifiersPerGroup: suggestion.qualifiersPerGroup,
+      duration: suggestion.duration,
+      boardCount: suggestion.boardCount,
+      configurations: configurations,
+      stageMatchCounts: suggestion.stageMatchCounts,
+      variableMatches: suggestion.variableMatches,
+      knockoutPlacementPlaces: placementPlaces,
+      knockoutSeedingMode: _knockoutSeedingMode,
+    );
+  }
 }
 
 class _StageGameFormatSetup extends StatelessWidget {

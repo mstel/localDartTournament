@@ -31,7 +31,10 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await tester.enterText(find.widgetWithText(TextField, 'Anzahl'), '8');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '8',
+    );
     final generatePlayers = find.text('Teilnehmer erzeugen');
     await reveal(generatePlayers);
     await tester.tap(generatePlayers);

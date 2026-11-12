@@ -44,6 +44,7 @@ class _KnockoutPreview extends StatelessWidget {
 
     final resolvedParticipantCount = participantCount!;
     final resolvedBracketSize = bracketSize!;
+    final sortedPlacementPlaces = List<int>.from(placementPlaces)..sort();
     final effectiveSeedingMode =
         !allowCrossSeed &&
             (seedingMode == 'cross' || seedingMode == 'random_cross')
@@ -55,6 +56,7 @@ class _KnockoutPreview extends StatelessWidget {
             resolvedBracketSize,
             (index) => index < resolvedParticipantCount ? index + 1 : null,
           );
+    final canReorderSlots = effectiveSeedingMode == 'manual';
 
     return Column(
       key: const ValueKey('knockout-preview'),
@@ -140,10 +142,14 @@ class _KnockoutPreview extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
-            TextButton.icon(
-              onPressed: onResetSlots,
-              icon: const Icon(Icons.restart_alt),
-              label: const Text('Auto'),
+            Tooltip(
+              message:
+                  'Setzt eigene Slot-Zuordnungen zurück und stellt die gewählte Auslosungsmethode wieder her.',
+              child: TextButton.icon(
+                onPressed: onResetSlots,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Automatik wiederherstellen'),
+              ),
             ),
           ],
         ),
@@ -155,6 +161,7 @@ class _KnockoutPreview extends StatelessWidget {
             participantLabels: participantLabels,
             qualifyingRank: 0,
             onSwapSlot: onSwapSlot,
+            canReorderSlots: canReorderSlots,
           )
         else if (eliminationLossLimit >= 3)
           _TripleEliminationPreview(
@@ -164,40 +171,7 @@ class _KnockoutPreview extends StatelessWidget {
             participantLabels: participantLabels,
             qualifyingRank: 0,
             onSwapSlot: onSwapSlot,
-          )
-        else if (placementPlaces.isNotEmpty)
-          Builder(
-            builder: (context) {
-              final players = [
-                for (var i = 0; i < resolvedParticipantCount; i++)
-                  TournamentPlayer(
-                    name: i < participantLabels.length
-                        ? participantLabels[i]
-                        : 'Teilnehmer ${i + 1}',
-                    isGenerated: true,
-                  ),
-              ];
-              final rounds = _buildKnockoutRoundsForPlayers(
-                players,
-                slotOrder: slots,
-              );
-              final placements = PlacementEngine.build(
-                rounds,
-                placementPlaces.where((p) => p < players.length),
-              );
-              return KnockoutBracketView(
-                stage: KnockoutTournamentRunStage(
-                  name: 'Vorschau',
-                  rounds: rounds,
-                ),
-                qualifyingRank: 0,
-                placementMatches: placements,
-                onEditResult: (_) {},
-                canEditResults: false,
-                isEditMode: true,
-                onSwapSlot: onSwapSlot,
-              );
-            },
+            canReorderSlots: canReorderSlots,
           )
         else
           _CompactKnockoutPreviewTree(
@@ -205,8 +179,17 @@ class _KnockoutPreview extends StatelessWidget {
             slotOrder: slots,
             participantLabels: participantLabels,
             onSwapSlot: onSwapSlot,
+            canReorderSlots: canReorderSlots,
             showOnlyFirstRound: eliminationLossLimit > 1,
             qualifyingRank: 0,
+          ),
+        if (eliminationLossLimit == 1 && placementPlaces.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              'Zusätzliche Platzierungsspiele: Platz ${sortedPlacementPlaces.join(', ')}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
       ],
     );
@@ -221,6 +204,7 @@ class _TripleEliminationPreview extends StatelessWidget {
     required this.participantLabels,
     required this.qualifyingRank,
     required this.onSwapSlot,
+    required this.canReorderSlots,
   });
 
   final int lossLimit;
@@ -229,6 +213,7 @@ class _TripleEliminationPreview extends StatelessWidget {
   final List<String> participantLabels;
   final int qualifyingRank;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
+  final bool canReorderSlots;
 
   @override
   Widget build(BuildContext context) {
@@ -363,6 +348,7 @@ class _TripleEliminationPreview extends StatelessWidget {
             participantLabels: participantLabels,
             qualificationLabel: qualificationLabel,
             onSwapSlot: onSwapSlot,
+            canReorderSlots: canReorderSlots,
           )
         else
           _BracketPreviewPlaceholderMatch(
@@ -387,6 +373,7 @@ class _DoubleEliminationPreview extends StatelessWidget {
     required this.participantLabels,
     required this.qualifyingRank,
     required this.onSwapSlot,
+    required this.canReorderSlots,
   });
 
   final int bracketSize;
@@ -394,6 +381,7 @@ class _DoubleEliminationPreview extends StatelessWidget {
   final List<String> participantLabels;
   final int qualifyingRank;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
+  final bool canReorderSlots;
 
   @override
   Widget build(BuildContext context) {
@@ -541,6 +529,7 @@ class _DoubleEliminationPreview extends StatelessWidget {
             participantLabels: participantLabels,
             qualificationLabel: qualificationLabel,
             onSwapSlot: onSwapSlot,
+            canReorderSlots: canReorderSlots,
           )
         else
           _BracketPreviewPlaceholderMatch(
@@ -559,6 +548,7 @@ class _CompactKnockoutPreviewTree extends StatelessWidget {
     required this.slotOrder,
     required this.participantLabels,
     required this.onSwapSlot,
+    required this.canReorderSlots,
     this.showOnlyFirstRound = false,
     this.qualifyingRank = 1,
   });
@@ -567,6 +557,7 @@ class _CompactKnockoutPreviewTree extends StatelessWidget {
   final List<int?> slotOrder;
   final List<String> participantLabels;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
+  final bool canReorderSlots;
   final bool showOnlyFirstRound;
   final int qualifyingRank;
 
@@ -620,6 +611,7 @@ class _CompactKnockoutPreviewTree extends StatelessWidget {
                     qualifyingRank: qualifyingRank,
                   ),
                   onSwapSlot: onSwapSlot,
+                  canReorderSlots: canReorderSlots,
                 )
               else
                 _BracketPreviewPlaceholderMatch(
@@ -710,6 +702,7 @@ class _BracketPreviewMatch extends StatelessWidget {
     required this.slotOrder,
     required this.participantLabels,
     required this.onSwapSlot,
+    required this.canReorderSlots,
     this.qualificationLabel,
   });
 
@@ -719,6 +712,7 @@ class _BracketPreviewMatch extends StatelessWidget {
   final List<int?> slotOrder;
   final List<String> participantLabels;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
+  final bool canReorderSlots;
   final String? qualificationLabel;
 
   @override
@@ -743,6 +737,7 @@ class _BracketPreviewMatch extends StatelessWidget {
             seed: _seedAt(topSlotIndex),
             label: _slotLabel(_seedAt(topSlotIndex)),
             onSwapSlot: onSwapSlot,
+            canReorderSlots: canReorderSlots,
           ),
           const SizedBox(height: 5),
           _BracketPreviewSlot(
@@ -751,6 +746,7 @@ class _BracketPreviewMatch extends StatelessWidget {
             seed: _seedAt(bottomSlotIndex),
             label: _slotLabel(_seedAt(bottomSlotIndex)),
             onSwapSlot: onSwapSlot,
+            canReorderSlots: canReorderSlots,
           ),
           if (qualificationLabel != null) ...[
             const SizedBox(height: 6),
@@ -789,6 +785,7 @@ class _BracketPreviewSlot extends StatelessWidget {
     required this.seed,
     required this.label,
     required this.onSwapSlot,
+    required this.canReorderSlots,
   });
 
   final int slotIndex;
@@ -796,6 +793,7 @@ class _BracketPreviewSlot extends StatelessWidget {
   final int? seed;
   final String label;
   final void Function(int fromIndex, int toIndex) onSwapSlot;
+  final bool canReorderSlots;
 
   @override
   Widget build(BuildContext context) {
@@ -832,7 +830,7 @@ class _BracketPreviewSlot extends StatelessWidget {
           IconButton(
             constraints: const BoxConstraints.tightFor(width: 24, height: 28),
             padding: EdgeInsets.zero,
-            onPressed: !isRealSlot || slotIndex == 0
+            onPressed: !canReorderSlots || !isRealSlot || slotIndex == 0
                 ? null
                 : () => onSwapSlot(slotIndex, slotIndex - 1),
             icon: const Icon(Icons.keyboard_arrow_up, size: 18),
@@ -841,7 +839,8 @@ class _BracketPreviewSlot extends StatelessWidget {
           IconButton(
             constraints: const BoxConstraints.tightFor(width: 24, height: 28),
             padding: EdgeInsets.zero,
-            onPressed: !isRealSlot || slotIndex >= slotCount - 1
+            onPressed:
+                !canReorderSlots || !isRealSlot || slotIndex >= slotCount - 1
                 ? null
                 : () => onSwapSlot(slotIndex, slotIndex + 1),
             icon: const Icon(Icons.keyboard_arrow_down, size: 18),
@@ -1230,6 +1229,7 @@ class _GroupEliminationBracketPreview extends StatelessWidget {
           participantLabels: participantLabels,
           qualifyingRank: qualifyingRank,
           onSwapSlot: (_, _) {},
+          canReorderSlots: false,
         ),
         2 => _DoubleEliminationPreview(
           bracketSize: bracketSize,
@@ -1237,12 +1237,14 @@ class _GroupEliminationBracketPreview extends StatelessWidget {
           participantLabels: participantLabels,
           qualifyingRank: qualifyingRank,
           onSwapSlot: (_, _) {},
+          canReorderSlots: false,
         ),
         _ => _CompactKnockoutPreviewTree(
           bracketSize: bracketSize,
           slotOrder: slotOrder,
           participantLabels: participantLabels,
           onSwapSlot: (_, _) {},
+          canReorderSlots: false,
           qualifyingRank: qualifyingRank,
         ),
       },
@@ -1498,7 +1500,9 @@ class _StageList extends StatelessWidget {
           return '${groupLabel(entry.key + 1)} ${_groupPlayTypeLabel(_groupPlayTypeForStage(stage, entry.key))}';
         }).join(', ')}';
     final repeatText = _repeatDetails(stage);
-    final drawText = stage.groupDrawOnStart ? ' - Auslosungsrad aktiv' : '';
+    final drawText = stage.groupDrawOnStart
+        ? ' · Zufallsverteilung beim Turnierstart'
+        : '';
     final tieBreakerText =
         ' - Tie-Breaker: ${stage.groupTieBreakers.map(tieBreakerLabel).join(', ')}';
 

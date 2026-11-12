@@ -1,3 +1,12 @@
+# 2.7.2+92
+
+- Druckt Spielpläne im Querformat mit Turnier- und Phasennamen als Dateiname;
+  K.-o.-Bäume erscheinen als unausgefüllte Baumvorschau statt als Tabelle.
+- Ordnet den Turnierleiter-Reiter neu, beschleunigt Ergebnisspeicherungen und
+  lost beim Turnierstart ohne animiertes Rad direkt zufällig aus.
+- Verbessert KO-Setzung und Formfinder, optionale Platzierungsspiele,
+  responsive Aktionsgrößen sowie Set-Statistiken ohne gespielte Sets.
+
 # 2.7.1+91
 
 - Benennt den Teilnehmerbereich in Spielerkatalog um und verbessert den

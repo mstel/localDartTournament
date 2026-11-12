@@ -1318,6 +1318,10 @@ class _TournamentDirectorDashboardState
           return Wrap(spacing: 8, runSpacing: 8, children: cards);
         },
       ),
+      if (widget.directorModeEnabled && stageActions != null) ...[
+        const Divider(height: 28),
+        stageActions,
+      ],
     ]);
     final clock = _box([
       TournamentTimingPanel(
@@ -1387,32 +1391,6 @@ class _TournamentDirectorDashboardState
           'Alle Boards sind gesperrt. Ein Board freigeben, um fortzufahren.',
         ),
       const SizedBox(height: 8),
-      Text(
-        'Board-Verfügbarkeit',
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
-      const SizedBox(height: 4),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (var board = 1; board <= t.boardCount; board++)
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
-              onPressed: _busy ? null : () => _act(() => widget.onBlock(board)),
-              icon: Icon(
-                t.blockedBoards.contains(board)
-                    ? Icons.lock_open_outlined
-                    : Icons.lock_outline,
-              ),
-              label: Text(
-                t.blockedBoards.contains(board)
-                    ? 'Board $board freigeben'
-                    : 'Board $board sperren',
-              ),
-            ),
-        ],
-      ),
       if (!widget.directorModeEnabled &&
           active.isNotEmpty &&
           completed == active.length &&
@@ -1435,10 +1413,6 @@ class _TournamentDirectorDashboardState
       children: [
         notices,
         const SizedBox(height: 12),
-        if (widget.directorModeEnabled && stageActions != null) ...[
-          _box([stageActions]),
-          const SizedBox(height: 12),
-        ],
         if (!widget.directorModeEnabled) ...[
           status,
           const SizedBox(height: 12),
