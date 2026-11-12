@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('records a text description for a Bullseye finish', (
+  testWidgets('records a numeric Bullseye finish as a high finish', (
     tester,
   ) async {
     List<BestPerformance> changed = const [];
@@ -53,17 +53,15 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Bullseye Finish').last);
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Bullseye innen');
+      await tester.enterText(find.byType(TextField), '170');
       await tester.tap(find.text('Bestleistung hinzufügen'));
       await tester.pumpAndSettle();
 
       expect(changed, hasLength(1));
       expect(changed.single.type, BestPerformanceType.bullseyeFinish);
-      expect(changed.single.details, 'Bullseye innen');
-      expect(
-        find.text('Teilnehmer Eins: Bullseye Finish · Bullseye innen'),
-        findsOneWidget,
-      );
+      expect(changed.single.value, 170);
+      expect(changed.single.countsAsHighFinish, isTrue);
+      expect(find.text('Teilnehmer Eins: Bullseye Finish 170'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
 

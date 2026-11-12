@@ -3,6 +3,46 @@ import 'package:dart_tournament_manager/features/tournaments/presentation/widget
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<void> _expectRandomSeedingOption(WidgetTester tester) async {
+  final seedingField = find.byWidgetPredicate(
+    (widget) =>
+        widget is DropdownButtonFormField<String> &&
+        widget.decoration.labelText == 'Auslosungsmethode',
+  );
+  expect(seedingField, findsOneWidget);
+  await tester.scrollUntilVisible(
+    seedingField,
+    250,
+    scrollable: find
+        .descendant(
+          of: find.byType(ListView).last,
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(seedingField);
+  await tester.pumpAndSettle();
+  expect(find.text('Zufallsauslosung beim Turnierstart'), findsOneWidget);
+  final crossOption = find.text('Gruppenplatzierung · feste Kreuzpaarungen');
+  final defaultOption = find.text('Setzliste nach Teilnehmerreihenfolge');
+  await tester.tap(
+    crossOption.evaluate().isNotEmpty ? crossOption.last : defaultOption.last,
+  );
+  await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(
+    find.byKey(const ValueKey('stage-type-field')),
+    -250,
+    scrollable: find
+        .descendant(
+          of: find.byType(ListView).last,
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   Future<void> openTournamentCreation(WidgetTester tester) async {
     await tester.tap(find.text('Turnier erstellen'));
@@ -241,7 +281,7 @@ void main() {
     expect(find.text('4 Weiter'), findsOneWidget);
     expect(find.text('4er Feld'), findsOneWidget);
     expect(find.text('Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.text('Zufall'), findsOneWidget);
+    await _expectRandomSeedingOption(tester);
     expect(find.text('Cross seeded'), findsNothing);
 
     await tester.ensureVisible(find.byTooltip('Phase hinzufügen'));
@@ -333,7 +373,7 @@ void main() {
     await tester.tap(find.text('Doppel-KO').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Zufall'), findsOneWidget);
+    await _expectRandomSeedingOption(tester);
     expect(find.text('Cross seeded'), findsNothing);
     expect(find.text('Halbfinale'), findsWidgets);
     expect(find.text('Losers Bracket'), findsOneWidget);
@@ -344,7 +384,7 @@ void main() {
     await tester.tap(find.text('Triple-KO').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Zufall'), findsOneWidget);
+    await _expectRandomSeedingOption(tester);
     expect(find.text('Cross seeded'), findsNothing);
     expect(find.textContaining('automatisch gesetzt'), findsWidgets);
     expect(find.text('1 Niederlage Bracket'), findsOneWidget);
@@ -579,6 +619,7 @@ void main() {
         GroupTournamentRunStage(
           name: 'Gruppen',
           groupPlayType: 'round_robin',
+          allowTieBreakDeciders: true,
           groups: [group],
           qualificationPlan: const QualificationPlan(
             totalQualifiers: 2,
@@ -1479,24 +1520,39 @@ void main() {
     await tester.tap(find.text('K.-o.-Runde').last);
     await tester.pumpAndSettle();
 
-    void expectSamePreviewMatch(String firstLabel, String secondLabel) {
-      final firstFinder = find.text(firstLabel);
-      final secondFinder = find.text(secondLabel);
-      expect(firstFinder, findsOneWidget);
-      expect(secondFinder, findsOneWidget);
-      final firstTopLeft = tester.getTopLeft(firstFinder);
-      final secondTopLeft = tester.getTopLeft(secondFinder);
-      expect((firstTopLeft.dy - secondTopLeft.dy).abs() < 42, isTrue);
-    }
-
     expect(find.text('16 Weiter'), findsOneWidget);
-    expectSamePreviewMatch('1. Gruppe A', '3. Gruppe B');
-    expectSamePreviewMatch('1. Gruppe B', '3. Gruppe A');
-    expectSamePreviewMatch('1. Gruppe C', '2. Gruppe G');
-    expectSamePreviewMatch('1. Gruppe D', '2. Gruppe F');
-    expectSamePreviewMatch('1. Gruppe E', '2. Gruppe D');
-    expectSamePreviewMatch('1. Gruppe F', '2. Gruppe E');
-    expectSamePreviewMatch('1. Gruppe G', '2. Gruppe C');
+    final previewLabels = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byKey(const ValueKey('knockout-preview')),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data)
+        .whereType<String>()
+        .where((label) => RegExp(r'^[1-3]\. Gruppe [A-G]$').hasMatch(label))
+        .toList();
+    expect(previewLabels, hasLength(16));
+    final firstRoundPairings = [
+      for (var index = 0; index < 16; index += 2)
+        (previewLabels[index], previewLabels[index + 1]),
+    ];
+    for (final (first, second) in firstRoundPairings) {
+      expect(first.split(' ').last, isNot(second.split(' ').last));
+    }
+    expect(
+      firstRoundPairings.take(7).every((pair) {
+        final firstPlace = int.parse(
+          pair.$1.split(' ').first.replaceAll('.', ''),
+        );
+        final secondPlace = int.parse(
+          pair.$2.split(' ').first.replaceAll('.', ''),
+        );
+        return (firstPlace == 1 && secondPlace > 1) ||
+            (secondPlace == 1 && firstPlace > 1);
+      }),
+      isTrue,
+    );
   });
 
   testWidgets('opens tournament creation and manages players', (tester) async {
@@ -1518,6 +1574,18 @@ void main() {
     await tester.pumpAndSettle();
     await openTournamentStructure(tester);
 
+    final participantHeader = find.text('1 · Name & Teilnehmer');
+    for (
+      var attempt = 0;
+      attempt < 8 && participantHeader.hitTestable().evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, 400));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('9 Teilnehmer ausgewählt'), findsOneWidget);
+    await tester.tap(participantHeader);
+    await tester.pumpAndSettle();
     expect(find.text('9 Teilnehmer im Turnier'), findsOneWidget);
     expect(find.text('Teilnehmer 1'), findsOneWidget);
     expect(find.text('Teilnehmer 4'), findsOneWidget);
@@ -1549,6 +1617,7 @@ void main() {
     expect(find.text('10 Teilnehmer im Turnier'), findsOneWidget);
     expect(find.text('Max'), findsOneWidget);
 
+    await openTournamentStructure(tester);
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('group-count-field')),
       400,
@@ -1606,21 +1675,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('4 Teilnehmer'), findsWidgets);
-    expect(find.text('Top 1 je Gruppe'), findsOneWidget);
-    expect(find.text('Beste 1 der 2. Plätze'), findsOneWidget);
-    expect(find.text('Zusatz aus Gruppe A'), findsOneWidget);
-
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('extra-group-chip-2'), skipOffstage: false),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('extra-group-chip-2')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Zusatz aus Gruppe A, Gruppe B'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('extra-group-chip-2')));
-    await tester.pumpAndSettle();
-    expect(find.text('Zusatz aus Gruppe A'), findsOneWidget);
+    expect(find.textContaining('Gruppe A 2'), findsOneWidget);
+    expect(find.textContaining('Gruppe B 1'), findsOneWidget);
+    expect(find.textContaining('Gruppe C 1'), findsOneWidget);
 
     expect(
       find.byKey(const ValueKey('stage-name-field'), skipOffstage: false),
@@ -1669,7 +1726,7 @@ void main() {
     expect(find.text('1 Phasen im Turnier'), findsOneWidget);
     expect(find.text('Gruppenphase 1'), findsOneWidget);
     expect(find.textContaining('12 Begegnungen'), findsWidgets);
-    expect(find.textContaining('Beste 1 der 2. Plätze'), findsWidgets);
+    expect(find.textContaining('Gruppe A 2'), findsWidgets);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('stage-type-field')),
@@ -1691,8 +1748,11 @@ void main() {
     expect(find.text('4 Weiter'), findsOneWidget);
     expect(find.text('4er Feld'), findsOneWidget);
     expect(find.text('0 Freilose'), findsWidgets);
-    expect(find.text('Cross seeded'), findsOneWidget);
-    expect(find.text('Zufall'), findsOneWidget);
+    expect(
+      find.text('Gruppenplatzierung · feste Kreuzpaarungen'),
+      findsOneWidget,
+    );
+    await _expectRandomSeedingOption(tester);
     expect(find.text('Turnierbaum-Vorschau'), findsOneWidget);
     expect(find.text('Spiel 1'), findsWidgets);
     expect(find.text('Finale'), findsOneWidget);

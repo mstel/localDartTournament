@@ -120,7 +120,7 @@ void main() {
     expect(find.text('Gruppe A · Runde 1'), findsOneWidget);
     expect(find.text('3:1'), findsNWidgets(2));
     expect(
-      find.text('Setzung: Cross-Setzung nach Gruppenplatzierungen.'),
+      find.text('Setzung: Gruppenplatzierung · feste Kreuzpaarungen.'),
       findsOneWidget,
     );
     expect(find.textContaining('ausgeschieden'), findsOneWidget);

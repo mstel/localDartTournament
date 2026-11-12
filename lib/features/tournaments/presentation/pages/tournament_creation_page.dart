@@ -3364,9 +3364,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               title: '2 · Turnierstruktur',
               summary:
                   '${_stages.length} Phasen gespeichert · Gruppen, KO und Spielregeln',
-              enabled:
-                  _players.isNotEmpty &&
-                  _tournamentNameController.text.trim().isNotEmpty,
+              enabled: _players.isNotEmpty,
               controller: _structureSectionController,
               onExpansionChanged: (expanded) {
                 if (expanded) {
@@ -4035,9 +4033,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               title: '3 · Zusammenfassung & Start',
               summary:
                   '${_players.length} Teilnehmer · ${_stages.length} Phasen · $_plannedBoardCount Boards',
-              enabled:
-                  _stages.isNotEmpty &&
-                  _tournamentNameController.text.trim().isNotEmpty,
+              enabled: _stages.isNotEmpty,
               controller: _summarySectionController,
               onExpansionChanged: (expanded) {
                 if (expanded) {

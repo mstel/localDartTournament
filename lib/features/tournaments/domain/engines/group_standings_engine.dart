@@ -162,7 +162,7 @@ class GroupStandingsEngine {
     var firstLegsAgainst = 0;
     var secondLegsAgainst = 0;
     for (final match in matches.where(
-      (match) => match.isDecider && match.label == 'Decider' && match.hasResult,
+      (match) => match.isDecider && match.hasResult,
     )) {
       final home = match.homePlayer;
       final away = match.awayPlayer;

@@ -9,6 +9,12 @@ void main() {
     await tester.pumpWidget(const DartTournamentApp());
     await tester.tap(find.text('Turnier erstellen'));
     await tester.pumpAndSettle();
+    final normal = find.text('Normales- oder Ranglistenturnier erstellen');
+    if (normal.evaluate().isNotEmpty) {
+      await tester.ensureVisible(normal);
+      await tester.tap(normal);
+      await tester.pumpAndSettle();
+    }
     final workflow = find.text('2 · Turnierstruktur');
     for (
       var attempt = 0;
@@ -59,6 +65,8 @@ void main() {
       await tester.drag(find.byType(ListView).last, const Offset(0, -400));
       await tester.pumpAndSettle();
     }
+    await tester.ensureVisible(type);
+    await tester.pumpAndSettle();
     await tester.tap(type.hitTestable());
     await tester.pumpAndSettle();
     await tester.tap(find.text('K.-o.-Runde').last);
@@ -91,6 +99,12 @@ void main() {
     await tester.pumpWidget(const DartTournamentApp());
     await tester.tap(find.text('Turnier erstellen'));
     await tester.pumpAndSettle();
+    final normal = find.text('Normales- oder Ranglistenturnier erstellen');
+    if (normal.evaluate().isNotEmpty) {
+      await tester.ensureVisible(normal);
+      await tester.tap(normal);
+      await tester.pumpAndSettle();
+    }
     final workflow = find.text('2 · Turnierstruktur');
     for (
       var attempt = 0;
@@ -142,6 +156,8 @@ void main() {
       await tester.drag(find.byType(ListView).last, const Offset(0, -400));
       await tester.pumpAndSettle();
     }
+    await tester.ensureVisible(type);
+    await tester.pumpAndSettle();
     await tester.tap(type.hitTestable());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Doppel-KO').last);

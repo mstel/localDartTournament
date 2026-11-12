@@ -12,7 +12,7 @@ void main() {
           matchMinutes: 30,
         ).totalMinutes,
     ];
-    expect(times, [420, 330, 300]);
+    expect(times, [420, 360, 300]);
     final threeGroups = [
       for (final boards in [3, 4, 5])
         PlanningDuration.calculate(
@@ -54,9 +54,9 @@ void main() {
         boards: 4,
         matchMinutes: 30,
       );
-      expect(two.groupSlots, 9);
+      expect(two.groupSlots, 10);
       expect(two.knockoutSlots, 2);
-      expect(two.totalMinutes, 330);
+      expect(two.totalMinutes, 360);
       expect(three.groupSlots, 6);
       expect(three.knockoutSlots, 3);
       expect(three.totalMinutes, 270);

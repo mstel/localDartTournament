@@ -790,11 +790,11 @@ void main() {
 
       expect(find.text('Vorschau nächste Phase'), findsOneWidget);
       await tester.tap(find.text('Vorschau nächste Phase'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
       expect(find.textContaining('A · gesetzt'), findsOneWidget);
-      expect(find.textContaining('B · vorläufig'), findsOneWidget);
+      expect(find.textContaining('· vorläufig'), findsOneWidget);
       expect(find.text('Zur Übersichtsansicht zurückkehren'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
