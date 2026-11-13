@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/backups/application/supabase_workspace_sync_service.dart';
+import 'package:dart_tournament_manager/features/backups/data/supabase_backup_repository.dart';
 
 void main() {
   late Directory root;
@@ -114,6 +115,22 @@ void main() {
         File('${root.path}/missing.json'),
       ),
       isFalse,
+    );
+  });
+
+  test('website sync hash ignores generation time but tracks content', () {
+    String hash(Map<String, Object> value) =>
+        SupabaseBackupRepository.websiteContentHash(
+          utf8.encode(jsonEncode(value)),
+        );
+
+    expect(
+      hash({'generatedAt': '2026-01-01', 'players': [1, 2]}),
+      hash({'generatedAt': '2026-02-01', 'players': [1, 2]}),
+    );
+    expect(
+      hash({'generatedAt': '2026-01-01', 'players': [1, 2]}),
+      isNot(hash({'generatedAt': '2026-01-01', 'players': [1, 2, 3]})),
     );
   });
 }

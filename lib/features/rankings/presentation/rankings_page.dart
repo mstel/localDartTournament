@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../application/ranking_year_review_image_generator.dart';
 import '../application/ranking_standings_image_generator.dart';
 
@@ -1006,6 +1007,7 @@ class _RankingsPageState extends State<RankingsPage> {
   late final LocalAppDatabase _database =
       widget._database ?? LocalAppDatabase();
   late Future<List<LocalRanking>> _rankings = _database.loadLocalRankings();
+  List<LocalRanking> _loadedRankings = const [];
   RankingSortMode _sortMode = RankingSortMode.alphabetical;
   bool _saving = false;
 
@@ -1153,11 +1155,44 @@ class _RankingsPageState extends State<RankingsPage> {
   }
 
   Future<void> _assignTournaments(LocalRanking ranking) async {
+    if (ranking.isCompleted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => _RankingTournamentsPage(ranking: ranking),
       ),
     );
+  }
+
+  Future<void> _toggleRankingFlag(
+    LocalRanking ranking, {
+    bool? completed,
+    bool? isDefault,
+  }) async {
+    final updated = ranking.copyWith(
+      isCompleted: completed,
+      isDefaultForStatistics: isDefault,
+    );
+    try {
+      await _database.saveLocalRanking(updated);
+      if (mounted) {
+        final refreshed = [
+          for (final item in _loadedRankings)
+            if (item.id == updated.id) updated else item,
+        ];
+        setState(() {
+          _loadedRankings = refreshed;
+          _rankings = Future.value(refreshed);
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Rangliste konnte nicht aktualisiert werden: $error'),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _assignPlayers(LocalRanking ranking) async {
@@ -1226,6 +1261,7 @@ class _RankingsPageState extends State<RankingsPage> {
       child: FutureBuilder<List<LocalRanking>>(
         future: _rankings,
         builder: (context, snapshot) {
+          if (snapshot.hasData) _loadedRankings = snapshot.data!;
           final rankings = sortRankings(
             snapshot.data ?? const <LocalRanking>[],
             _sortMode,
@@ -1322,21 +1358,68 @@ class _RankingsPageState extends State<RankingsPage> {
                             if (value == 'delete') {
                               _delete(rankings[index]);
                             }
+                            if (value == 'complete') {
+                              _toggleRankingFlag(
+                                rankings[index],
+                                completed: true,
+                              );
+                            }
+                            if (value == 'reopen') {
+                              _toggleRankingFlag(
+                                rankings[index],
+                                completed: false,
+                              );
+                            }
+                            if (value == 'default') {
+                              _toggleRankingFlag(
+                                rankings[index],
+                                isDefault: true,
+                              );
+                            }
+                            if (value == 'unset-default') {
+                              _toggleRankingFlag(
+                                rankings[index],
+                                isDefault: false,
+                              );
+                            }
                           },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(
+                          itemBuilder: (_) => [
+                            if (!rankings[index].isCompleted)
+                              const PopupMenuItem(
+                                value: 'complete',
+                                child: Text(
+                                  'Rangliste als abgeschlossen markieren',
+                                ),
+                              )
+                            else
+                              const PopupMenuItem(
+                                value: 'reopen',
+                                child: Text('Rangliste wieder öffnen'),
+                              ),
+                            if (rankings[index].isDefaultForStatistics)
+                              const PopupMenuItem(
+                                value: 'unset-default',
+                                child: Text('Nicht mehr als Standard'),
+                              )
+                            else
+                              const PopupMenuItem(
+                                value: 'default',
+                                child: Text('Als Standard markieren'),
+                              ),
+                            const PopupMenuItem(
                               value: 'players',
                               child: Text('Teilnehmer zuweisen'),
                             ),
-                            PopupMenuItem(
-                              value: 'tournaments',
-                              child: Text('Turniere zuweisen'),
-                            ),
-                            PopupMenuItem(
+                            if (!rankings[index].isCompleted)
+                              const PopupMenuItem(
+                                value: 'tournaments',
+                                child: Text('Turniere zuweisen'),
+                              ),
+                            const PopupMenuItem(
                               value: 'table',
                               child: Text('Ranglistenstand öffnen'),
                             ),
-                            PopupMenuItem(
+                            const PopupMenuItem(
                               value: 'delete',
                               child: Text('Rangliste löschen'),
                             ),
@@ -1719,16 +1802,6 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
                   ? 'Bitte einen Namen eingeben.'
                   : null,
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Als Standard markieren'),
-              subtitle: const Text(
-                'Wird im Jahresrückblick vorausgewählt und für neue Turniere verwendet.',
-              ),
-              value: _isDefaultForStatistics,
-              onChanged: (value) =>
-                  setState(() => _isDefaultForStatistics = value),
-            ),
             const SizedBox(height: 20),
             Text(
               'Gültigkeitszeitraum (optional)',
@@ -2048,15 +2121,6 @@ class _RankingEditorDialogState extends State<_RankingEditorDialog> {
               ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Rangliste als abgeschlossen markieren'),
-              subtitle: const Text(
-                'Erst dann werden finale Ranglisten-Auszeichnungen vergeben.',
-              ),
-              value: _isCompleted,
-              onChanged: (value) => setState(() => _isCompleted = value),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
               title: const Text(
                 'Teilnehmer erst ab X Turnierteilnahmen werten',
               ),
@@ -2125,17 +2189,20 @@ class _RankingTournamentsPageState extends State<_RankingTournamentsPage> {
     setState(() => _saving = true);
     try {
       for (final tournament in tournaments) {
-        final ids = tournament.rankingIds.toSet();
-        if (_selected.contains(tournament.id)) {
-          ids.add(widget.ranking.id);
-        } else {
-          ids.remove(widget.ranking.id);
+        final ids = _selected.contains(tournament.id)
+            ? [widget.ranking.id]
+            : tournament.rankingIds
+                  .where((id) => id != widget.ranking.id)
+                  .toList();
+        if (ids.toSet().containsAll(tournament.rankingIds) &&
+            tournament.rankingIds.toSet().containsAll(ids)) {
+          continue;
         }
         await _storage.saveTournament(
           CreatedTournament.fromJson({
             ...tournament.toJson(),
             'countsForRanking': ids.isNotEmpty,
-            'rankingIds': ids.toList(),
+            'rankingIds': ids,
           }),
         );
       }
@@ -2168,7 +2235,15 @@ class _RankingTournamentsPageState extends State<_RankingTournamentsPage> {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final tournaments = snapshot.data!;
+        final tournaments = snapshot.data!
+            .where(
+              (tournament) =>
+                  !tournament.countsForRanking ||
+                  tournament.rankingIds.isEmpty ||
+                  tournament.rankingIds.length == 1 &&
+                      tournament.rankingIds.single == widget.ranking.id,
+            )
+            .toList();
         if (!_ready) {
           for (final t in tournaments) {
             if (t.countsForRanking &&

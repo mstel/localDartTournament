@@ -60,6 +60,7 @@ class PlayerInsightsService {
     final eloRanking = rankings
         .where(
           (ranking) =>
+              !(ranking.isCompleted && tournament.finishedAt == null) &&
               ranking.type == RankingType.elo &&
               tournament.rankingIds.contains(ranking.id),
         )
@@ -86,7 +87,9 @@ class PlayerInsightsService {
           .map((profile) => profile.id)
           .toSet();
       for (final ranking in rankings.where(
-        (ranking) => tournament.rankingIds.contains(ranking.id),
+        (ranking) =>
+            !(ranking.isCompleted && tournament.finishedAt == null) &&
+            tournament.rankingIds.contains(ranking.id),
       )) {
         rankedPlayerIds.addAll(
           (await _database.loadRankingPlayerIds(

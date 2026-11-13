@@ -77,6 +77,7 @@ class TournamentRankingChangesService {
     final selected = rankings.where(
       (ranking) =>
           tournament.countsForRanking &&
+          !(ranking.isCompleted && tournament.finishedAt == null) &&
           ranking.type == RankingType.elo &&
           tournament.rankingIds.contains(ranking.id),
     );

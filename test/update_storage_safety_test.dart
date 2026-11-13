@@ -50,7 +50,7 @@ void main() {
         players: const [],
         stages: const [],
         runStages: const [],
-      ),
+      )..finishedAt = DateTime(2026, 1, 1),
     );
     expect(await File('${file.path}.bak').readAsString(), first);
     expect(await File('${file.path}.v1.bak').readAsString(), original);
@@ -60,7 +60,7 @@ void main() {
   test(
     'unknown tournament version reports its version and remains untouched',
     () async {
-      const content = '{"schemaVersion":42,"tournaments":[]}';
+      const content = '{"schemaVersion":43,"tournaments":[]}';
       await file.writeAsString(content);
       final storage = TournamentStorage(file: file);
 
@@ -68,8 +68,8 @@ void main() {
         await storage.loadTournaments();
         fail('A future storage version must not be interpreted as supported.');
       } on FormatException catch (error) {
-        expect(error.message, contains('Version 42'));
-        expect(error.message, contains('1 bis 41'));
+        expect(error.message, contains('Version 43'));
+        expect(error.message, contains('1 bis 42'));
       }
 
       await expectLater(
@@ -115,21 +115,17 @@ void main() {
       );
 
       final saved = jsonDecode(await file.readAsString());
-      expect(saved['schemaVersion'], 41);
+      expect(saved['schemaVersion'], 42);
       expect(saved['playerStatistics'], {'total': 7});
-      expect((saved['tournaments'] as List).length, 2);
-      expect(
-        (saved['tournaments'] as List).singleWhere(
-          (item) => item['name'] == 'Safety',
-        )['countsForRanking'],
-        isFalse,
+      expect(saved['archiveGeneration'], isA<String>());
+      expect(saved['tournaments'], isEmpty);
+      final allAfterSave = await storage.loadTournaments();
+      final migratedSafety = allAfterSave.singleWhere(
+        (item) => item.name == 'Safety',
       );
-      expect(
-        (saved['tournaments'] as List).singleWhere(
-          (item) => item['name'] == 'Safety',
-        )['rankingIds'],
-        ['ranking-1'],
-      );
+      expect(migratedSafety.countsForRanking, isFalse);
+      expect(migratedSafety.rankingIds, ['ranking-1']);
+      expect(allAfterSave.map((item) => item.name), contains('New schema 24 record'));
       expect(await File('${file.path}.bak').readAsString(), current);
       expect(await File('${file.path}.v22.bak').readAsString(), backup);
     },

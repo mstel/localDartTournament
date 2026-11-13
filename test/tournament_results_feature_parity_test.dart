@@ -273,12 +273,11 @@ void main() {
 
       var changes = await service.calculate(tournament);
       expect(changes, hasLength(1));
-      expect(
-        changes.values.single.map((change) => change.rankingName).toSet(),
-        {'Rangliste 2026', 'Rangliste 2025'},
-      );
+      expect(changes.values.single.map((change) => change.rankingName), [
+        'Rangliste 2026',
+      ]);
 
-      tournament.rankingIds.remove('ranking-2025');
+      expect(tournament.rankingIds, ['ranking-2026']);
       await storage.saveTournament(tournament);
       changes = await service.calculate(tournament);
       expect(changes.values.single.map((change) => change.rankingName), [

@@ -54,7 +54,8 @@ class LocalRankingSeriesService {
     };
     final source =
         tournaments ??
-        await (_tournamentStorage ?? TournamentStorage()).loadTournaments();
+        await (_tournamentStorage ?? TournamentStorage())
+            .loadTournamentsForRanking(ranking.id);
 
     for (final tournament in source) {
       if (!tournament.countsForRanking ||

@@ -10,6 +10,63 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('ranking lifecycle and default actions are in the row menu', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final directory = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('ranking_row_menu_test_'),
+    ))!;
+    addTearDown(() => tester.runAsync(() => directory.delete(recursive: true)));
+    final database = LocalAppDatabase(baseDirectory: directory);
+    await tester.runAsync(() async {
+      await database.saveLocalRanking(
+        const LocalRanking(id: 'ranking-2026', name: 'Saison 2026'),
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: RankingsPage(database: database)),
+      );
+      await StorageAccess.run(() async {});
+    });
+    await _pumpRankingPage(tester);
+
+    await tester.tap(find.byTooltip('Weitere Aktionen').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Rangliste als abgeschlossen markieren'), findsOneWidget);
+    await tester.tap(find.text('Rangliste als abgeschlossen markieren'));
+    await tester.runAsync(() => StorageAccess.run(() async {}));
+    await _pumpRankingPage(tester);
+    var ranking = (await tester.runAsync(
+      () => database.loadLocalRankings(),
+    ))!.single;
+    expect(ranking.isCompleted, isTrue);
+
+    await tester.tap(find.byTooltip('Weitere Aktionen').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Rangliste wieder öffnen'), findsOneWidget);
+    await tester.tap(find.text('Rangliste wieder öffnen'));
+    await tester.runAsync(() => StorageAccess.run(() async {}));
+    await _pumpRankingPage(tester);
+    ranking = (await tester.runAsync(
+      () => database.loadLocalRankings(),
+    ))!.single;
+    expect(ranking.isCompleted, isFalse);
+
+    await tester.tap(find.byTooltip('Weitere Aktionen').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Als Standard markieren'));
+    await tester.runAsync(() => StorageAccess.run(() async {}));
+    await tester.pumpAndSettle();
+    ranking = (await tester.runAsync(
+      () => database.loadLocalRankings(),
+    ))!.single;
+    expect(ranking.isDefaultForStatistics, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('ranking sort modes and custom order are easy to change', (
     tester,
   ) async {

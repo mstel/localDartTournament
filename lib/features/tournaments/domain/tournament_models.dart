@@ -790,7 +790,7 @@ class CreatedTournament {
          for (final entry in directorGroupBoardAssignments.entries)
            entry.key: List<int>.from(entry.value),
        },
-       rankingIds = List<String>.from(rankingIds),
+       rankingIds = List<String>.from(rankingIds.take(1)),
        withdrawals = withdrawals ?? [],
        activityLog = activityLog ?? [];
 

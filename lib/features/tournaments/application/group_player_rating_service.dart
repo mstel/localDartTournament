@@ -20,6 +20,7 @@ class GroupPlayerRatingService {
     final rankings = (await _database.loadLocalRankings())
         .where(
           (ranking) =>
+              !ranking.isCompleted &&
               ranking.type == RankingType.elo &&
               tournament.rankingIds.contains(ranking.id),
         )

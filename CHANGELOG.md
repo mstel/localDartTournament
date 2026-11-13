@@ -1,3 +1,14 @@
+# 2.7.4+94
+
+- Trennt Ranglisten nach Saison und speichert laufende Turniere als lokale
+  SQLite-Arbeitskopien. Abgeschlossene Ranglisten bleiben von neuen Turnieren
+  und deren Berechnungen unberührt.
+- Ergänzt ein inkrementelles, verlustfreies Cloud-Archiv. Nach der einmaligen
+  Migration werden nur neue oder geänderte Turnierdaten übertragen; vollständige
+  Matchhistorien bleiben für Spielerprofile und Wiederherstellungen erhalten.
+- Prüft Cloud-Stände vor Downloads über Servermetadaten und überspringt
+  unveränderte Website-Ressourcen.
+
 # 2.7.3+93
 
 - Begrenzen die K.-o.-PDF-Vorschau auf eine kompakte Vektorgrafik, um Abstürze

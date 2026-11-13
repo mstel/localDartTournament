@@ -122,7 +122,7 @@ class RankingYearReviewService {
     final yearly = <int, int>{};
     var tournamentCount = 0;
     final tournaments = await (tournamentStorage ?? TournamentStorage())
-        .loadTournaments();
+        .loadTournamentsForRanking(ranking.id);
     for (final tournament in tournaments) {
       final date =
           (tournament.tournamentDate ??

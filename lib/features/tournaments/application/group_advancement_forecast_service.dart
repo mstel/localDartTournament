@@ -22,6 +22,7 @@ class GroupAdvancementForecastService {
         .where(
           (ranking) =>
               ranking.type == RankingType.elo &&
+              !(ranking.isCompleted && tournament.finishedAt == null) &&
               tournament.countsForRanking &&
               tournament.rankingIds.contains(ranking.id),
         )

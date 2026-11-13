@@ -2874,6 +2874,16 @@ class _MemoryTournamentStorage extends TournamentStorage {
   Future<List<CreatedTournament>> loadTournaments() async => tournaments;
 
   @override
+  Future<List<CreatedTournament>> loadTournamentsForRanking(
+    String rankingId, {
+    DateTime? from,
+    DateTime? through,
+  }) async => [
+    for (final tournament in tournaments)
+      if (tournament.rankingIds.contains(rankingId)) tournament,
+  ];
+
+  @override
   Future<void> saveSecondScreenLayout({
     required CreatedTournament tournament,
     required String name,

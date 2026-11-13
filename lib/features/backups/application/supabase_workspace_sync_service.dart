@@ -320,14 +320,47 @@ class SupabaseWorkspaceSyncService {
             'Synchronisierung pausiert · neuer lokaler Datenstand bleibt auf diesem Gerät';
         return;
       }
-      if (!await _repository.hasBackup()) {
+      final hasIncrementalWorkspace = await _repository
+          .hasIncrementalWorkspace();
+      final remoteUpdatedAt = await _repository.backupUpdatedAt();
+      if (!hasIncrementalWorkspace) {
+        if (remoteUpdatedAt == null) {
+          await _push();
+          return;
+        }
+        final legacyLastSynced = DateTime.tryParse(
+          '${state['lastSyncedAt'] ?? ''}',
+        );
+        if (state['dirty'] == true) {
+          final accountDirectory = await appDataDirectory();
+          final localHasTournamentData = await hasLocalTournamentData(
+            File(path.join(accountDirectory.path, 'tournaments.json')),
+          );
+          if (!localHasTournamentData ||
+              legacyLastSynced == null ||
+              remoteUpdatedAt.isAfter(legacyLastSynced)) {
+            status.value =
+                'Cloud und dieses Gerät haben Änderungen · vor der Archivmigration bitte einen Stand auswählen';
+            return;
+          }
+          await _push();
+          return;
+        }
+        status.value = 'Migriere das vorhandene Cloud-Backup …';
+        final backups = await BackupService.create();
+        final legacy = await _repository.download(backups);
+        await backups.restore(legacy, restartApp: false);
+        await _writeState({'dirty': true});
         await _push();
         return;
       }
-      final remote = await _repository.download(await BackupService.create());
+      if (remoteUpdatedAt == null) {
+        await _push();
+        return;
+      }
       final lastSynced = DateTime.tryParse('${state['lastSyncedAt'] ?? ''}');
       final remoteIsNewer =
-          lastSynced == null || remote.createdAt.isAfter(lastSynced);
+          lastSynced == null || remoteUpdatedAt.isAfter(lastSynced);
       if (state['dirty'] == true) {
         if (remoteIsNewer) {
           status.value =
@@ -345,11 +378,24 @@ class SupabaseWorkspaceSyncService {
           return;
         }
         status.value = 'Lade neueren Datenstand aus Supabase …';
-        await (await BackupService.create()).restore(remote, restartApp: false);
+        final backups = await BackupService.create();
+        final localSnapshot = await StorageAccess.run(backups.exportStoreFiles);
+        if (localRevision != _localChangeRevision) {
+          status.value =
+              'Lokale Änderungen während des Abgleichs · Cloud-Stand nicht geladen';
+          return;
+        }
+        final remote = await _repository.downloadChangedObjects(
+          backups,
+          currentFiles: localSnapshot,
+        );
+        await backups.restore(remote, restartApp: false);
         await _publishWebsiteReadModel();
+        final downloadedUpdatedAt =
+            await _repository.backupUpdatedAt() ?? remoteUpdatedAt;
         await _writeState({
           'dirty': false,
-          'lastSyncedAt': remote.createdAt.toUtc().toIso8601String(),
+          'lastSyncedAt': downloadedUpdatedAt.toUtc().toIso8601String(),
         });
         status.value = 'Aktueller Datenstand aus Supabase geladen';
       } else {
@@ -392,7 +438,7 @@ class SupabaseWorkspaceSyncService {
     status.value = 'Sichere Änderungen in Supabase …';
     var preparedRevision = _localChangeRevision;
     var website = await _createWebsiteReadModel();
-    late ({Uint8List bytes, int revision}) snapshot;
+    late ({Map<String, Uint8List?> files, int revision}) snapshot;
     late BackupService backups;
     while (true) {
       await _pendingLocalChangeWrite;
@@ -403,15 +449,15 @@ class SupabaseWorkspaceSyncService {
       }
       backups = await BackupService.create();
       snapshot = await StorageAccess.run(() async {
-        final bytes = await backups.exportBytes();
-        return (bytes: bytes, revision: _localChangeRevision);
+        final files = await backups.exportStoreFiles();
+        return (files: files, revision: _localChangeRevision);
       });
       if (snapshot.revision == preparedRevision) break;
       preparedRevision = snapshot.revision;
       website = await _createWebsiteReadModel();
     }
-    final timestamp = await _repository.uploadBytes(
-      snapshot.bytes,
+    final timestamp = await _repository.uploadIncrementalWorkspace(
+      snapshot.files,
       backups: backups,
     );
     await _repository.uploadWebsiteReadModel(
@@ -506,9 +552,17 @@ class SupabaseWorkspaceSyncService {
       final backups = await BackupService.create();
       final remote = preview ?? await _repository.download(backups);
       await backups.restore(remote, restartApp: false);
+      if (!await _repository.hasIncrementalWorkspace()) {
+        await _writeState({'dirty': true});
+        await _push();
+        return;
+      }
+      final downloadedUpdatedAt = await _repository.backupUpdatedAt();
       await _writeState({
         'dirty': false,
-        'lastSyncedAt': remote.createdAt.toUtc().toIso8601String(),
+        'lastSyncedAt': (downloadedUpdatedAt ?? remote.createdAt)
+            .toUtc()
+            .toIso8601String(),
       });
       status.value = 'Cloud-Datenstand geladen';
     } finally {

@@ -7,10 +7,7 @@ import '../../tournaments/domain/tournament_models.dart';
 import '../domain/local_ranking.dart';
 
 class _LocalEloCacheEntry {
-  _LocalEloCacheEntry({
-    required this.signature,
-    required this.snapshot,
-  });
+  _LocalEloCacheEntry({required this.signature, required this.snapshot});
 
   final String signature;
   final LocalEloSnapshot snapshot;
@@ -37,7 +34,12 @@ class LocalRankingEloService {
   }) async {
     final source =
         tournaments ??
-        await (_tournamentStorage ?? TournamentStorage()).loadTournaments();
+        await (_tournamentStorage ?? TournamentStorage())
+            .loadTournamentsForRanking(
+              ranking.id,
+              from: _rankingFromDate(ranking),
+              through: _rankingThroughDate(ranking),
+            );
     return _calculate(ranking, source);
   }
 
@@ -47,7 +49,11 @@ class LocalRankingEloService {
     required bool includeTournament,
   }) async {
     final tournaments = await (_tournamentStorage ?? TournamentStorage())
-        .loadTournaments();
+        .loadTournamentsForRanking(
+          ranking.id,
+          from: _rankingFromDate(ranking),
+          through: _rankingThroughDate(ranking),
+        );
     final targetDate =
         target.tournamentDate ?? target.startedAt ?? target.createdAt;
     final relevant = tournaments.where((tournament) {
@@ -184,3 +190,15 @@ class LocalRankingEloService {
     return calculated;
   }
 }
+
+DateTime? _rankingFromDate(LocalRanking ranking) =>
+    ranking.validFromDate ??
+    (ranking.validFromYear == null
+        ? null
+        : DateTime(ranking.validFromYear!, 1, 1));
+
+DateTime? _rankingThroughDate(LocalRanking ranking) =>
+    ranking.validToDate ??
+    (ranking.validToYear == null
+        ? null
+        : DateTime(ranking.validToYear!, 12, 31));

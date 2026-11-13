@@ -74,6 +74,21 @@ class BackupService {
         return bytes;
       });
 
+  /// Captures the underlying stores for incremental cloud synchronization.
+  /// The caller must keep the map within one StorageAccess lease.
+  Future<Map<String, Uint8List?>> exportStoreFiles() =>
+      _snapshot(consistentDatabase: true);
+
+  Future<Uint8List> encodeStoreFiles(Map<String, Uint8List?> snapshot) async {
+    if (snapshot.length != names.length ||
+        !snapshot.keys.toSet().containsAll(names)) {
+      throw ArgumentError('Unvollständige Speicherorte');
+    }
+    final bytes = _encode(snapshot);
+    await inspect(bytes);
+    return bytes;
+  }
+
   Future<void> exportTo(
     File destination, {
     Set<String>? categories,
@@ -298,6 +313,11 @@ class BackupService {
         selectedNames.add('tournaments.json.v22.bak');
       }
       await _install(replacement, selectedNames: selectedNames);
+      if (selectedNames != null &&
+          selectedNames.contains('tournaments.json') &&
+          !selectedNames.contains('app_database.sqlite')) {
+        await LocalAppDatabase().clearActiveTournamentCopies();
+      }
       final committed = File(path.join(_transaction.path, 'committed.tmp'));
       await committed.writeAsString('1', flush: true);
       await committed.rename(path.join(_transaction.path, 'committed'));

@@ -18,7 +18,7 @@ import '../../statistics/domain/player_monthly_performance.dart';
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 15;
+  static const schemaVersion = 16;
 
   final Directory? _baseDirectory;
 
@@ -443,6 +443,88 @@ class LocalAppDatabase {
     }
   });
 
+  Future<List<CreatedTournament>>
+  loadActiveTournamentCopies() => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      return [
+        for (final row in database.select(
+          'SELECT tournament_json FROM active_tournament_copies ORDER BY updated_at DESC',
+        ))
+          CreatedTournament.fromJson(
+            Map<String, dynamic>.from(
+              jsonDecode(row['tournament_json'] as String) as Map,
+            ),
+          ),
+      ];
+    } finally {
+      database.close();
+    }
+  });
+
+  Future<CreatedTournament?> loadActiveTournamentCopy(String id) =>
+      StorageAccess.run(() async {
+        final database = await _openDatabase();
+        try {
+          final rows = database.select(
+            'SELECT tournament_json FROM active_tournament_copies WHERE id = ?',
+            [id],
+          );
+          if (rows.isEmpty) return null;
+          return CreatedTournament.fromJson(
+            Map<String, dynamic>.from(
+              jsonDecode(rows.single['tournament_json'] as String) as Map,
+            ),
+          );
+        } finally {
+          database.close();
+        }
+      });
+
+  Future<void> saveActiveTournamentCopy(
+    CreatedTournament tournament,
+  ) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      final now = DateTime.now();
+      tournament.updatedAt = now;
+      database.execute(
+        '''INSERT INTO active_tournament_copies(id, tournament_json, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 tournament_json = excluded.tournament_json,
+                 updated_at = excluded.updated_at''',
+        [tournament.id, jsonEncode(tournament.toJson()), now.toIso8601String()],
+      );
+    } finally {
+      database.close();
+    }
+    StorageAccess.markLocalDataChanged();
+  });
+
+  Future<void> deleteActiveTournamentCopy(String id) =>
+      StorageAccess.run(() async {
+        final database = await _openDatabase();
+        try {
+          database.execute(
+            'DELETE FROM active_tournament_copies WHERE id = ?',
+            [id],
+          );
+        } finally {
+          database.close();
+        }
+      });
+
+  Future<void> clearActiveTournamentCopies() => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      database.execute('DELETE FROM active_tournament_copies');
+    } finally {
+      database.close();
+    }
+    StorageAccess.markLocalDataChanged();
+  });
+
   Future<void> deleteLocalRanking(String rankingId) =>
       StorageAccess.run(() async {
         final database = await _openDatabase();
@@ -771,7 +853,9 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion == 14) {
+      if (currentVersion == 15) {
+        _createActiveTournamentCopiesTable(database);
+      } else if (currentVersion == 14) {
         _createRankingAchievementProgressTable(database);
       } else if (currentVersion == 13) {
         _createRankingAchievementProgressTable(database);
@@ -821,6 +905,7 @@ class LocalAppDatabase {
         }
         _createSchema(database);
       }
+      _createActiveTournamentCopiesTable(database);
       database.execute('PRAGMA user_version = $schemaVersion');
       database.execute('COMMIT');
     } catch (_) {
@@ -880,6 +965,19 @@ class LocalAppDatabase {
     _createPlayerMonthlyPerformanceTable(database);
     _createRankingAchievementProgressTable(database);
     _createMonthlyPlayerStatisticsTable(database);
+    _createActiveTournamentCopiesTable(database);
+  }
+
+  void _createActiveTournamentCopiesTable(Database database) {
+    database.execute('''
+      CREATE TABLE IF NOT EXISTS active_tournament_copies (
+        id TEXT PRIMARY KEY,
+        tournament_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_active_tournament_copies_updated
+        ON active_tournament_copies(updated_at);
+    ''');
   }
 
   void _createMonthlyPlayerStatisticsTable(Database database) {

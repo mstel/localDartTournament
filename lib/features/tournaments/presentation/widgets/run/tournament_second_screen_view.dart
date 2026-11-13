@@ -427,6 +427,7 @@ class _TournamentSecondScreenViewState
         .where(
           (ranking) =>
               ranking.type == RankingType.elo &&
+              !(ranking.isCompleted && tournament.finishedAt == null) &&
               tournament.rankingIds.contains(ranking.id),
         )
         .toList();

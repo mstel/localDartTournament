@@ -134,7 +134,20 @@ class RankingAchievementService {
     final playerIds = await _eligibleRankingPlayerIds(ranking);
     final source =
         tournaments?.toList() ??
-        await (_tournamentStorage ?? TournamentStorage()).loadTournaments();
+        await (_tournamentStorage ?? TournamentStorage())
+            .loadTournamentsForRanking(
+              ranking.id,
+              from:
+                  ranking.validFromDate ??
+                  (ranking.validFromYear == null
+                      ? null
+                      : DateTime(ranking.validFromYear!, 1, 1)),
+              through:
+                  ranking.validToDate ??
+                  (ranking.validToYear == null
+                      ? null
+                      : DateTime(ranking.validToYear!, 12, 31)),
+            );
     final eloSnapshot = ranking.type == RankingType.elo
         ? await LocalRankingEloService(
             database: _database,
@@ -175,7 +188,20 @@ class RankingAchievementService {
 
     final allTournaments =
         tournaments ??
-        await (_tournamentStorage ?? TournamentStorage()).loadTournaments();
+        await (_tournamentStorage ?? TournamentStorage())
+            .loadTournamentsForRanking(
+              ranking.id,
+              from:
+                  ranking.validFromDate ??
+                  (ranking.validFromYear == null
+                      ? null
+                      : DateTime(ranking.validFromYear!, 1, 1)),
+              through:
+                  ranking.validToDate ??
+                  (ranking.validToYear == null
+                      ? null
+                      : DateTime(ranking.validToYear!, 12, 31)),
+            );
     final relevant =
         allTournaments
             .where(

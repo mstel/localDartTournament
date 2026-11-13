@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../shared/persistence/app_data_directory.dart';
 import '../../../shared/persistence/storage_access.dart';
+import 'app_database.dart';
 import '../domain/second_screen_widget_placement.dart';
 import '../domain/tournament_models.dart';
 
@@ -23,11 +24,19 @@ class _TournamentStorageCacheEntry {
 /// Local, account-scoped tournament archive. Supabase synchronization is
 /// handled as a complete workspace backup by SupabaseWorkspaceSyncService.
 class TournamentStorage {
-  TournamentStorage({File? file}) : _file = file;
+  TournamentStorage({File? file, LocalAppDatabase? activeDatabase})
+    : _file = file,
+      _activeDatabase =
+          activeDatabase ??
+          (file == null
+              ? LocalAppDatabase()
+              : LocalAppDatabase(baseDirectory: file.parent));
 
   final File? _file;
+  final LocalAppDatabase _activeDatabase;
   // Schema 24 is accepted only after exact verification against its v22 backup.
-  static const _schemaVersion = 41;
+  static const schemaVersion = 42;
+  static const _schemaVersion = schemaVersion;
   static const _maximumDocumentBytes = 128 * 1024 * 1024;
 
   static final Map<String, _TournamentStorageCacheEntry> _cache = {};
@@ -212,16 +221,357 @@ class TournamentStorage {
   Future<List<CreatedTournament>> loadTournaments() =>
       _locked(_loadTournamentsUnlocked);
 
+  Future<List<CreatedTournament>> loadTournamentsForRanking(
+    String rankingId, {
+    DateTime? from,
+    DateTime? through,
+  }) => _locked(() async {
+    final document = await _readDocument();
+    if (_migrateLegacyBestPerformances(document)) {
+      document.remove('archiveGeneration');
+      await _writeDocument(document);
+    }
+    final tournaments = document['archiveGeneration'] is String
+        ? await _ensureRankingYearArchives(
+            document,
+            rankingId: rankingId,
+            from: from,
+            through: through,
+          )
+        : _filterArchiveTournaments(
+            [
+              for (final item in document['tournaments'] as List? ?? const [])
+                if (item is Map<String, dynamic>)
+                  CreatedTournament.fromJson(item),
+            ],
+            rankingId: rankingId,
+            from: from,
+            through: through,
+          );
+    final active = (await _activeDatabase.loadActiveTournamentCopies()).where(
+      (item) =>
+          item.rankingIds.contains(rankingId) &&
+          _dateIsWithin(item.effectiveDate, from, through),
+    );
+    final merged = <String, CreatedTournament>{
+      for (final tournament in tournaments) tournament.id: tournament,
+    };
+    for (final tournament in active) {
+      final archived = merged[tournament.id];
+      if (tournament.finishedAt != null && archived != null) {
+        await _activeDatabase.deleteActiveTournamentCopy(tournament.id);
+        continue;
+      }
+      if (archived == null ||
+          !archived.updatedAt.isAfter(tournament.updatedAt)) {
+        merged[tournament.id] = tournament;
+      }
+    }
+    return merged.values.toList()..sort(
+      (left, right) => left.effectiveDate.compareTo(right.effectiveDate),
+    );
+  });
+
   Future<List<CreatedTournament>> _loadTournamentsUnlocked() async {
     final document = await _readDocument();
     if (_migrateLegacyBestPerformances(document)) {
+      document.remove('archiveGeneration');
       await _writeDocument(document);
     }
-    final values = document['tournaments'] as List? ?? const [];
-    return [
+    final tournaments = document['archiveGeneration'] is String
+        ? await _ensureRankingYearArchives(document)
+        : [
+            for (final item in document['tournaments'] as List? ?? const [])
+              if (item is Map<String, dynamic>)
+                CreatedTournament.fromJson(item),
+          ];
+    final activeCopies = await _activeDatabase.loadActiveTournamentCopies();
+    final merged = <String, CreatedTournament>{
+      for (final tournament in tournaments) tournament.id: tournament,
+    };
+    for (final active in activeCopies) {
+      final archived = merged[active.id];
+      if (active.finishedAt != null && archived != null) {
+        await _activeDatabase.deleteActiveTournamentCopy(active.id);
+        continue;
+      }
+      if (archived == null || !archived.updatedAt.isAfter(active.updatedAt)) {
+        merged[active.id] = active;
+      }
+    }
+    return merged.values.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  Future<List<CreatedTournament>> _ensureRankingYearArchives(
+    Map<String, dynamic> master, {
+    String? rankingId,
+    DateTime? from,
+    DateTime? through,
+  }) async {
+    final generation = master['archiveGeneration'];
+    final indexFile = await _archiveIndexFile();
+    if (generation is String && await indexFile.exists()) {
+      Object? index;
+      try {
+        index = jsonDecode(await indexFile.readAsString());
+      } on FormatException {
+        // A missing or damaged index is rebuilt from the verified master.
+      }
+      if (await _archiveIndexIsValid(index, generation)) {
+        return await _readRankingYearArchives(
+          rankingId: rankingId,
+          from: from,
+          through: through,
+        );
+      }
+    }
+
+    final values = master['tournaments'] as List? ?? const [];
+    final legacy = [
       for (final item in values)
         if (item is Map<String, dynamic>) CreatedTournament.fromJson(item),
-    ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    ];
+    final completed = legacy.where((item) => item.finishedAt != null).toList();
+    final unfinished = legacy.where((item) => item.finishedAt == null).toList();
+    for (final tournament in unfinished) {
+      await _activeDatabase.saveActiveTournamentCopy(tournament);
+    }
+    final newGeneration = DateTime.now().microsecondsSinceEpoch.toString();
+    master
+      ..['archiveGeneration'] = newGeneration
+      ..['tournaments'] = [
+        for (final tournament in completed) tournament.toJson(),
+      ];
+    await _writeDocument(master);
+    await _writeRankingYearArchives(completed, newGeneration);
+    return _filterArchiveTournaments(
+      completed,
+      rankingId: rankingId,
+      from: from,
+      through: through,
+    );
+  }
+
+  Future<List<CreatedTournament>> _readRankingYearArchives({
+    String? rankingId,
+    DateTime? from,
+    DateTime? through,
+  }) async {
+    final directory = await _archiveDirectory();
+    if (!await directory.exists()) return const [];
+    final result = <CreatedTournament>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File || !entity.path.endsWith('.json')) continue;
+      final name = entity.uri.pathSegments.last;
+      if (!name.startsWith('ranking-archive-')) continue;
+      if (rankingId != null) {
+        final encodedId = base64Url
+            .encode(utf8.encode(rankingId))
+            .replaceAll('=', '');
+        if (!name.startsWith('ranking-archive-$encodedId-')) continue;
+      }
+      final separator = name.lastIndexOf('-');
+      final year = separator < 0
+          ? null
+          : int.tryParse(name.substring(separator + 1, name.length - 5));
+      if (from != null && year != null && year < from.year) continue;
+      if (through != null && year != null && year > through.year) continue;
+      final decoded = jsonDecode(await entity.readAsString());
+      if (decoded is! Map || decoded['schemaVersion'] != 1) {
+        throw FormatException('Ungültiges Ranglistenarchiv: ${entity.path}');
+      }
+      final values = decoded['tournaments'];
+      if (values is! List || values.any((item) => item is! Map)) {
+        throw FormatException('Beschädigtes Ranglistenarchiv: ${entity.path}');
+      }
+      result.addAll([
+        for (final item in values)
+          CreatedTournament.fromJson(Map<String, dynamic>.from(item as Map)),
+      ]);
+    }
+    final byId = <String, CreatedTournament>{};
+    for (final tournament in result) {
+      final previous = byId[tournament.id];
+      if (previous == null ||
+          previous.updatedAt.isBefore(tournament.updatedAt)) {
+        byId[tournament.id] = tournament;
+      }
+    }
+    return _filterArchiveTournaments(
+      byId.values.toList(),
+      rankingId: rankingId,
+      from: from,
+      through: through,
+    );
+  }
+
+  List<CreatedTournament> _filterArchiveTournaments(
+    Iterable<CreatedTournament> tournaments, {
+    String? rankingId,
+    DateTime? from,
+    DateTime? through,
+  }) => [
+    for (final tournament in tournaments)
+      if ((rankingId == null || tournament.rankingIds.contains(rankingId)) &&
+          _dateIsWithin(tournament.effectiveDate, from, through))
+        tournament,
+  ];
+
+  bool _dateIsWithin(DateTime date, DateTime? from, DateTime? through) {
+    final day = DateTime(date.year, date.month, date.day);
+    final start = from == null
+        ? null
+        : DateTime(from.year, from.month, from.day);
+    final end = through == null
+        ? null
+        : DateTime(through.year, through.month, through.day);
+    return (start == null || !day.isBefore(start)) &&
+        (end == null || !day.isAfter(end));
+  }
+
+  Future<void> _writeRankingYearArchives(
+    List<CreatedTournament> tournaments,
+    String generation,
+  ) async {
+    final groups = <String, List<CreatedTournament>>{};
+    final rankingIds = <String, String>{};
+    final years = <String, int>{};
+    for (final tournament in tournaments) {
+      final rankingId =
+          tournament.countsForRanking && tournament.rankingIds.isNotEmpty
+          ? tournament.rankingIds.first
+          : 'unassigned';
+      final year = tournament.effectiveDate.year;
+      final key = '$rankingId|$year';
+      (groups[key] ??= []).add(tournament);
+      rankingIds[key] = rankingId;
+      years[key] = year;
+    }
+
+    final directory = await _archiveDirectory();
+    await directory.create(recursive: true);
+    final retainedPaths = <String>{};
+    for (final entry in groups.entries) {
+      final encodedId = base64Url
+          .encode(utf8.encode(rankingIds[entry.key]!))
+          .replaceAll('=', '');
+      final year = years[entry.key]!;
+      final file = File(
+        '${directory.path}${Platform.pathSeparator}ranking-archive-$encodedId-$year.json',
+      );
+      retainedPaths.add(file.path);
+      final document = {
+        'schemaVersion': 1,
+        'generation': generation,
+        'rankingId': rankingIds[entry.key],
+        'year': year,
+        'tournaments': [
+          for (final tournament in entry.value) tournament.toJson(),
+        ],
+      };
+      final temporary = File('${file.path}.tmp');
+      await temporary.writeAsString(
+        await compute(_encodeAnyJson, document),
+        flush: true,
+      );
+      await temporary.rename(file.path);
+    }
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is File &&
+          entity.uri.pathSegments.last.startsWith('ranking-archive-') &&
+          entity.path.endsWith('.json') &&
+          !retainedPaths.contains(entity.path)) {
+        await entity.delete();
+      }
+    }
+    final indexFile = await _archiveIndexFile();
+    final temporaryIndex = File('${indexFile.path}.tmp');
+    await temporaryIndex.writeAsString(
+      jsonEncode({
+        'generation': generation,
+        'files': [
+          for (final path in retainedPaths)
+            path.substring(path.lastIndexOf(Platform.pathSeparator) + 1),
+        ],
+      }),
+      flush: true,
+    );
+    await temporaryIndex.rename(indexFile.path);
+  }
+
+  Future<bool> _archiveIndexIsValid(Object? index, String generation) async {
+    if (index is! Map ||
+        index['generation'] != generation ||
+        index['files'] is! List) {
+      return false;
+    }
+    final directory = await _archiveDirectory();
+    for (final name in index['files'] as List) {
+      if (name is! String ||
+          !name.startsWith('ranking-archive-') ||
+          !name.endsWith('.json') ||
+          name.contains('/') ||
+          name.contains('\\') ||
+          !await File(
+            '${directory.path}${Platform.pathSeparator}$name',
+          ).exists()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> _writeArchiveSnapshot(
+    List<CreatedTournament> tournaments,
+  ) async {
+    final generation = DateTime.now().microsecondsSinceEpoch.toString();
+    final document = await _readDocument();
+    document
+      ..['archiveGeneration'] = generation
+      ..['tournaments'] = [
+        for (final tournament in tournaments.where(
+          (item) => item.finishedAt != null,
+        ))
+          tournament.toJson(),
+      ];
+    await _writeDocument(document);
+    await _writeRankingYearArchives(
+      tournaments.where((item) => item.finishedAt != null).toList(),
+      generation,
+    );
+  }
+
+  Future<void> _ensureArchiveLayout() => _locked(() async {
+    final master = await _readDocument();
+    if (_migrateLegacyBestPerformances(master)) {
+      master.remove('archiveGeneration');
+      await _writeDocument(master);
+    }
+    final generation = master['archiveGeneration'];
+    final indexFile = await _archiveIndexFile();
+    if (generation is String && await indexFile.exists()) {
+      Object? index;
+      try {
+        index = jsonDecode(await indexFile.readAsString());
+      } on FormatException {
+        // Force a rebuild below.
+      }
+      if (await _archiveIndexIsValid(index, generation)) return;
+    }
+    await _ensureRankingYearArchives(master);
+  });
+
+  Future<Directory> _archiveDirectory() async {
+    final file = await _storageFile();
+    return Directory(
+      '${file.parent.path}${Platform.pathSeparator}ranking_archives',
+    );
+  }
+
+  Future<File> _archiveIndexFile() async {
+    final directory = await _archiveDirectory();
+    return File('${directory.path}${Platform.pathSeparator}archive_index.json');
   }
 
   bool _migrateLegacyBestPerformances(Object? value) {
@@ -244,19 +594,49 @@ class TournamentStorage {
   }
 
   Future<void> saveTournament(CreatedTournament tournament) async {
+    if (tournament.rankingIds.length > 1) {
+      tournament.rankingIds.removeRange(1, tournament.rankingIds.length);
+    }
+    if (tournament.rankingIds.isEmpty) {
+      tournament.countsForRanking = false;
+    }
+    if (tournament.finishedAt == null) {
+      await _locked(() async {
+        await _ensureArchiveLayout();
+        final stored = await _activeDatabase.loadActiveTournamentCopy(
+          tournament.id,
+        );
+        if (stored != null && stored.updatedAt.isAfter(tournament.updatedAt)) {
+          final incomingLayouts =
+              Map<String, List<SecondScreenWidgetPlacement>>.from(
+                tournament.secondScreenLayouts,
+              );
+          tournament.secondScreenLayouts
+            ..clear()
+            ..addAll(stored.secondScreenLayouts)
+            ..addEntries(
+              incomingLayouts.entries.where(
+                (entry) => !stored.secondScreenLayouts.containsKey(entry.key),
+              ),
+            );
+          tournament.secondScreenActiveLayout =
+              stored.secondScreenActiveLayout ??
+              tournament.secondScreenActiveLayout;
+        }
+        await _activeDatabase.saveActiveTournamentCopy(tournament);
+      });
+      return;
+    }
     await _locked(() async {
-      final document = await _readDocument();
-      final tournaments = document['tournaments'] as List? ?? <dynamic>[];
+      await _ensureArchiveLayout();
+      final tournaments = await _loadTournamentsUnlocked();
       final incomingUpdatedAt = tournament.updatedAt;
       tournament.updatedAt = DateTime.now();
-      final index = tournaments.indexWhere(
-        (item) => item is Map && item['id'] == tournament.id,
-      );
+      final index = tournaments.indexWhere((item) => item.id == tournament.id);
       if (index < 0) {
-        tournaments.insert(0, tournament.toJson());
+        tournaments.insert(0, tournament);
       } else {
-        final storedJson = Map<String, dynamic>.from(tournaments[index] as Map);
-        final stored = CreatedTournament.fromJson(storedJson);
+        final stored = tournaments[index];
         if (stored.updatedAt.isAfter(incomingUpdatedAt)) {
           final incomingLayouts =
               Map<String, List<SecondScreenWidgetPlacement>>.from(
@@ -281,11 +661,11 @@ class TournamentStorage {
             );
           }
         }
-        tournaments[index] = tournament.toJson();
+        tournaments[index] = tournament;
       }
-      document['tournaments'] = tournaments.toList();
-      await _writeDocument(document);
+      await _writeArchiveSnapshot(tournaments);
     });
+    await _activeDatabase.deleteActiveTournamentCopy(tournament.id);
     StorageAccess.markLocalDataChanged();
   }
 
@@ -296,6 +676,7 @@ class TournamentStorage {
     required bool activate,
   }) async {
     await _locked(() async {
+      await _ensureArchiveLayout();
       final tournaments = await _loadTournamentsUnlocked();
       final index = tournaments.indexWhere((item) => item.id == tournament.id);
       final latest = index < 0 ? tournament : tournaments[index];
@@ -317,14 +698,11 @@ class TournamentStorage {
         tournaments[index] = latest;
       }
 
-      final file = await _storageFile();
-      final document = _cache[file.path]?.document != null
-          ? Map<String, dynamic>.from(_cache[file.path]!.document)
-          : await _readDocument();
-      document['tournaments'] = tournaments
-          .map((item) => item.toJson())
-          .toList();
-      await _writeDocument(document);
+      if (latest.finishedAt == null) {
+        await _activeDatabase.saveActiveTournamentCopy(latest);
+      } else {
+        await _writeArchiveSnapshot(tournaments);
+      }
 
       tournament.secondScreenLayouts
         ..clear()
@@ -342,17 +720,12 @@ class TournamentStorage {
 
   Future<void> deleteTournament(String id) async {
     await _locked(() async {
+      await _ensureArchiveLayout();
       final tournaments = await _loadTournamentsUnlocked();
       tournaments.removeWhere((item) => item.id == id);
-      final file = await _storageFile();
-      final document = _cache[file.path]?.document != null
-          ? Map<String, dynamic>.from(_cache[file.path]!.document)
-          : await _readDocument();
-      document['tournaments'] = tournaments
-          .map((item) => item.toJson())
-          .toList();
-      await _writeDocument(document);
+      await _writeArchiveSnapshot(tournaments);
     });
+    await _activeDatabase.deleteActiveTournamentCopy(id);
     StorageAccess.markLocalDataChanged();
   }
 
@@ -367,3 +740,5 @@ class TournamentStorage {
 
 String _encodeTournamentDocument(Map<String, dynamic> document) =>
     jsonEncode(document);
+
+String _encodeAnyJson(Object? document) => jsonEncode(document);

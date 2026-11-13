@@ -2068,10 +2068,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final rankings = (await _localRankings).where(
       (ranking) =>
           ranking.achievementsEnabled &&
+          !(ranking.isCompleted && tournament.finishedAt == null) &&
           tournament.rankingIds.contains(ranking.id),
     );
     if (rankings.isEmpty) return;
-    final tournaments = await _tournamentStorage.loadTournaments();
     final database = LocalAppDatabase();
     final catalogPlayerIds = (await database.loadPlayerProfiles())
         .map((profile) => profile.id)
@@ -2099,6 +2099,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             if (individual.profileId != null) individual.profileId!,
     };
     for (final ranking in rankings) {
+      final tournaments = await _tournamentStorage.loadTournamentsForRanking(
+        ranking.id,
+        from:
+            ranking.validFromDate ??
+            (ranking.validFromYear == null
+                ? null
+                : DateTime(ranking.validFromYear!, 1, 1)),
+        through:
+            ranking.validToDate ??
+            (ranking.validToYear == null
+                ? null
+                : DateTime(ranking.validToYear!, 12, 31)),
+      );
       final rankingPlayerIds = await database.loadRankingPlayerIds(ranking.id);
       final affectedPlayerIds = rankingPlayerIds.where((playerId) {
         if (!catalogPlayerIds.contains(playerId)) return false;
@@ -2490,6 +2503,33 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<void> _toggleRankingInclusion(bool enabled) async {
+    var rankingIds = List<String>.from(widget.tournament.rankingIds);
+    if (enabled) {
+      final rankings = await _localRankings;
+      final selected =
+          rankings
+              .where(
+                (ranking) =>
+                    !ranking.isCompleted && rankingIds.contains(ranking.id),
+              )
+              .firstOrNull ??
+          rankings
+              .where(
+                (ranking) =>
+                    !ranking.isCompleted && ranking.isDefaultForStatistics,
+              )
+              .firstOrNull;
+      rankingIds = selected == null ? const [] : [selected.id];
+    } else {
+      rankingIds = const [];
+    }
+    await _saveRankingSelection(
+      countsForRanking: enabled,
+      rankingIds: rankingIds,
+    );
+  }
+
   Widget _rankingSettingsCard() => Card(
     child: ExpansionTile(
       initiallyExpanded: false,
@@ -2505,12 +2545,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             'Nur ausgewählte Ranglisten erhalten Ergebnisse dieses Turniers.',
           ),
           value: widget.tournament.countsForRanking,
-          onChanged: _savingRankingSelection
-              ? null
-              : (value) => _saveRankingSelection(
-                  countsForRanking: value,
-                  rankingIds: value ? widget.tournament.rankingIds : const [],
-                ),
+          onChanged: _savingRankingSelection ? null : _toggleRankingInclusion,
         ),
         if (_savingRankingSelection) const LinearProgressIndicator(),
         if (widget.tournament.countsForRanking)
@@ -2525,37 +2560,36 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               if (!snapshot.hasData) {
                 return const LinearProgressIndicator();
               }
-              final rankings = snapshot.data!;
+              final rankings = snapshot.data!
+                  .where((ranking) => !ranking.isCompleted)
+                  .toList();
               if (rankings.isEmpty) {
                 return const Text(
-                  'Lege zuerst eine Rangliste im Hauptmenü an.',
+                  'Es gibt keine offene Rangliste zur Auswahl.',
                 );
               }
-              return Column(
-                children: [
-                  for (final ranking in rankings)
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(ranking.name),
-                      value: widget.tournament.rankingIds.contains(ranking.id),
-                      onChanged: _savingRankingSelection
-                          ? null
-                          : (selected) {
-                              final ids = List<String>.from(
-                                widget.tournament.rankingIds,
-                              );
-                              if (selected == true) {
-                                ids.add(ranking.id);
-                              } else {
-                                ids.remove(ranking.id);
-                              }
-                              _saveRankingSelection(
-                                countsForRanking: true,
-                                rankingIds: ids,
-                              );
-                            },
-                    ),
-                ],
+              final selectedRankingId = widget.tournament.rankingIds
+                  .where((id) => rankings.any((item) => item.id == id))
+                  .firstOrNull;
+              return RadioGroup<String>(
+                groupValue: selectedRankingId,
+                onChanged: (selected) {
+                  if (selected == null || _savingRankingSelection) return;
+                  _saveRankingSelection(
+                    countsForRanking: true,
+                    rankingIds: [selected],
+                  );
+                },
+                child: Column(
+                  children: [
+                    for (final ranking in rankings)
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(ranking.name),
+                        value: ranking.id,
+                      ),
+                  ],
+                ),
               );
             },
           ),

@@ -189,7 +189,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     if (!mounted || _rankingSetupTouched) return;
     LocalRanking? preferred;
     for (final ranking in rankings) {
-      if (ranking.isDefaultForStatistics) {
+      if (ranking.isDefaultForStatistics && !ranking.isCompleted) {
         preferred = ranking;
         break;
       }
@@ -215,10 +215,15 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       return;
     }
 
-    final rankings = await _localRankings;
+    final allRankings = await _localRankings;
+    final rankings = allRankings
+        .where((ranking) => !ranking.isCompleted)
+        .toList();
     if (!mounted) return;
-    final selected = Set<String>.from(_localRankingIds);
-    final result = await showDialog<List<String>>(
+    var selectedId = _localRankingIds
+        .where((id) => rankings.any((ranking) => ranking.id == id))
+        .firstOrNull;
+    final result = await showDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -227,23 +232,22 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             width: 440,
             child: rankings.isEmpty
                 ? const Text('Lege zuerst eine Rangliste im Hauptmenü an.')
-                : ListView(
-                    shrinkWrap: true,
-                    children: [
-                      for (final ranking in rankings)
-                        CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(ranking.name),
-                          value: selected.contains(ranking.id),
-                          onChanged: (value) => setDialogState(() {
-                            if (value == true) {
-                              selected.add(ranking.id);
-                            } else {
-                              selected.remove(ranking.id);
-                            }
-                          }),
-                        ),
-                    ],
+                : RadioGroup<String>(
+                    groupValue: selectedId,
+                    onChanged: (value) => setDialogState(() {
+                      selectedId = value;
+                    }),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final ranking in rankings)
+                          RadioListTile<String>(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(ranking.name),
+                            value: ranking.id,
+                          ),
+                      ],
+                    ),
                   ),
           ),
           actions: [
@@ -252,7 +256,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               child: const Text('Abbrechen'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, selected.toList()),
+              onPressed: () => Navigator.pop(context, selectedId),
               child: const Text('Übernehmen'),
             ),
           ],
@@ -271,7 +275,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       _countsForRanking = true;
       _localRankingIds
         ..clear()
-        ..addAll(result);
+        ..add(result);
     });
     unawaited(_refreshEloRankingAvailability());
   }
