@@ -1,6 +1,6 @@
 # 🎯 DartTournamentPro (Dart Turnierverwaltung)
 
-[![Version](https://img.shields.io/badge/version-2.6.3%2B83-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.7.5%2B95-blue.svg)](CHANGELOG.md)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
 [![Plattformen](https://img.shields.io/badge/Plattformen-Windows%20|%20Android%20|%20Linux%20|%20macOS-success.svg)]()

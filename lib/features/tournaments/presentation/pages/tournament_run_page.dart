@@ -536,7 +536,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
       );
-      _queueAchievementRefresh(null);
+      _queueAchievementRefresh(null, forceHistoricalUnlockRefresh: true);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1862,6 +1862,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     bool propagateError = false,
     GroupMatch? achievementMatch,
     bool checkAchievementInputs = false,
+    bool forceHistoricalAchievementRefresh = false,
   }) async {
     var achievementInputsChanged = false;
     try {
@@ -1899,7 +1900,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     if (achievementInputsChanged) {
       try {
-        _queueAchievementRefresh(achievementMatch);
+        _queueAchievementRefresh(
+          achievementMatch,
+          forceHistoricalUnlockRefresh:
+              forceHistoricalAchievementRefresh ||
+              (checkAchievementInputs && achievementMatch == null),
+        );
       } catch (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2057,25 +2063,31 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _refreshAchievementsForTournament(
-    GroupMatch? achievementMatch,
-  ) async {
+    GroupMatch? achievementMatch, {
+    bool forceHistoricalUnlockRefresh = false,
+  }) async {
     final tournament = widget.tournament;
     if (tournament.players.any((player) => player.isTeam) ||
         !tournament.countsForRanking ||
         tournament.rankingIds.isEmpty) {
       return;
     }
-    final rankings = (await _localRankings).where(
-      (ranking) =>
-          ranking.achievementsEnabled &&
-          !(ranking.isCompleted && tournament.finishedAt == null) &&
-          tournament.rankingIds.contains(ranking.id),
-    );
+    final rankings =
+        (await ResultEntryPerformanceTrace.measureAsync(
+          'achievement_load_rankings',
+          () => _localRankings,
+        )).where(
+          (ranking) =>
+              ranking.achievementsEnabled &&
+              !(ranking.isCompleted && tournament.finishedAt == null) &&
+              tournament.rankingIds.contains(ranking.id),
+        );
     if (rankings.isEmpty) return;
     final database = LocalAppDatabase();
-    final catalogPlayerIds = (await database.loadPlayerProfiles())
-        .map((profile) => profile.id)
-        .toSet();
+    final catalogPlayerIds = (await ResultEntryPerformanceTrace.measureAsync(
+      'achievement_load_catalog_players',
+      database.loadPlayerProfiles,
+    )).map((profile) => profile.id).toSet();
     final service = RankingAchievementService(
       database: database,
       tournamentStorage: _tournamentStorage,
@@ -2099,20 +2111,26 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             if (individual.profileId != null) individual.profileId!,
     };
     for (final ranking in rankings) {
-      final tournaments = await _tournamentStorage.loadTournamentsForRanking(
-        ranking.id,
-        from:
-            ranking.validFromDate ??
-            (ranking.validFromYear == null
-                ? null
-                : DateTime(ranking.validFromYear!, 1, 1)),
-        through:
-            ranking.validToDate ??
-            (ranking.validToYear == null
-                ? null
-                : DateTime(ranking.validToYear!, 12, 31)),
+      final tournaments = await ResultEntryPerformanceTrace.measureAsync(
+        'achievement_load_ranking_tournaments',
+        () => _tournamentStorage.loadTournamentsForRanking(
+          ranking.id,
+          from:
+              ranking.validFromDate ??
+              (ranking.validFromYear == null
+                  ? null
+                  : DateTime(ranking.validFromYear!, 1, 1)),
+          through:
+              ranking.validToDate ??
+              (ranking.validToYear == null
+                  ? null
+                  : DateTime(ranking.validToYear!, 12, 31)),
+        ),
       );
-      final rankingPlayerIds = await database.loadRankingPlayerIds(ranking.id);
+      final rankingPlayerIds = await ResultEntryPerformanceTrace.measureAsync(
+        'achievement_load_ranking_players',
+        () => database.loadRankingPlayerIds(ranking.id),
+      );
       final affectedPlayerIds = rankingPlayerIds.where((playerId) {
         if (!catalogPlayerIds.contains(playerId)) return false;
         final refreshTournament =
@@ -2123,21 +2141,32 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }).toList();
       if (affectedPlayerIds.isEmpty) continue;
       final eloSnapshot = ranking.type == RankingType.elo
-          ? await LocalRankingEloService(
-              database: database,
-              tournamentStorage: _tournamentStorage,
-            ).calculate(ranking, tournaments: tournaments)
+          ? await ResultEntryPerformanceTrace.measureAsync(
+              'achievement_calculate_elo',
+              () => LocalRankingEloService(
+                database: database,
+                tournamentStorage: _tournamentStorage,
+              ).calculate(ranking, tournaments: tournaments),
+            )
           : null;
       final snapshots = <String, RankingAchievementSnapshot>{};
       final previousProgress = <String, Map<String, Map<String, Object?>>>{};
-      for (final playerId in affectedPlayerIds) {
-        previousProgress[playerId] = await database
-            .loadRankingAchievementProgress(ranking.id, playerId);
-        snapshots[playerId] = await service.refreshPlayer(
-          ranking: ranking,
-          playerProfileId: playerId,
-          tournaments: tournaments,
-          eloSnapshot: eloSnapshot,
+      for (final (index, playerId) in affectedPlayerIds.indexed) {
+        previousProgress[playerId] =
+            await ResultEntryPerformanceTrace.measureAsync(
+              'achievement_load_previous_progress_$index',
+              () =>
+                  database.loadRankingAchievementProgress(ranking.id, playerId),
+            );
+        snapshots[playerId] = await ResultEntryPerformanceTrace.measureAsync(
+          'achievement_refresh_player_$index',
+          () => service.refreshPlayer(
+            ranking: ranking,
+            playerProfileId: playerId,
+            tournaments: tournaments,
+            eloSnapshot: eloSnapshot,
+            forceHistoricalUnlockRefresh: forceHistoricalUnlockRefresh,
+          ),
         );
       }
       for (final entry in snapshots.entries) {
@@ -2221,11 +2250,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _achievementRefreshQueue = Future<void>.value();
 
-  void _queueAchievementRefresh(GroupMatch? match) {
+  void _queueAchievementRefresh(
+    GroupMatch? match, {
+    bool forceHistoricalUnlockRefresh = false,
+  }) {
     _achievementRefreshQueue = _achievementRefreshQueue.then((_) async {
       if (!mounted) return;
       try {
-        await _refreshAchievementsForTournament(match);
+        await ResultEntryPerformanceTrace.measureAsync(
+          'achievement_refresh',
+          () => _refreshAchievementsForTournament(
+            match,
+            forceHistoricalUnlockRefresh: forceHistoricalUnlockRefresh,
+          ),
+        );
       } catch (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2848,6 +2886,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     VoidCallback? onLocalUpdate,
     VoidCallback? onSaved,
   }) async {
+    final correctingExistingResult = match.hasResult;
     if (match.withdrawalSignature != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2920,75 +2959,85 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (confirmed != true || !mounted) return;
     }
 
-    setState(() {
-      match.finishedAt =
-          result.isAnnulled ||
-              (match.isKratzer
-                  ? result.scratchedPlayer == null
-                  : result.homeLegs == null)
-          ? null
-          : match.finishedAt ?? DateTime.now();
-      final stage = widget.tournament.runStages[_activeStageIndex];
-      if (stage is GroupTournamentRunStage) {
-        for (final group in stage.groups) {
-          if (group.playType == 'swiss' && group.matches.contains(match)) {
-            SwissEngine.invalidateAfter(group, match.round);
+    ResultEntryPerformanceTrace.trackNextFrame('first_frame_after_result');
+    ResultEntryPerformanceTrace.measureSync('apply_result_and_advance', () {
+      setState(() {
+        match.finishedAt =
+            result.isAnnulled ||
+                (match.isKratzer
+                    ? result.scratchedPlayer == null
+                    : result.homeLegs == null)
+            ? null
+            : match.finishedAt ?? DateTime.now();
+        final stage = widget.tournament.runStages[_activeStageIndex];
+        if (stage is GroupTournamentRunStage) {
+          for (final group in stage.groups) {
+            if (group.playType == 'swiss' && group.matches.contains(match)) {
+              SwissEngine.invalidateAfter(group, match.round);
+            }
           }
         }
-      }
-      match.isAnnulled = result.isAnnulled;
-      match.bestPerformances = result.bestPerformances;
-      if (match.isKratzer) {
-        match.scratchedPlayer = result.isAnnulled
-            ? null
-            : result.scratchedPlayer;
-        match.kratzerBonusLives = result.isAnnulled
-            ? []
-            : result.kratzerBonusLives;
-        match.homeLegs = null;
-        match.awayLegs = null;
-        match.homeSets = null;
-        match.awaySets = null;
-      } else if (result.isAnnulled) {
-        match.homeLegs = null;
-        match.homeSets = null;
-        match.awaySets = null;
-        match.awayLegs = null;
-      } else {
-        match.homeSets = result.homeSets;
-        match.awaySets = result.awaySets;
-        match.homeLegs = result.homeLegs;
-        match.awayLegs = result.awayLegs;
-      }
-      if (stage is KnockoutTournamentRunStage && stage.isKratzer) {
-        final roundIndex = stage.rounds.indexWhere(
-          (round) => round.contains(match),
-        );
-        if (roundIndex >= 0 && roundIndex < stage.rounds.length - 1) {
-          stage.rounds.removeRange(roundIndex + 1, stage.rounds.length);
+        match.isAnnulled = result.isAnnulled;
+        match.bestPerformances = result.bestPerformances;
+        if (match.isKratzer) {
+          match.scratchedPlayer = result.isAnnulled
+              ? null
+              : result.scratchedPlayer;
+          match.kratzerBonusLives = result.isAnnulled
+              ? []
+              : result.kratzerBonusLives;
+          match.homeLegs = null;
+          match.awayLegs = null;
+          match.homeSets = null;
+          match.awaySets = null;
+        } else if (result.isAnnulled) {
+          match.homeLegs = null;
+          match.homeSets = null;
+          match.awaySets = null;
+          match.awayLegs = null;
+        } else {
+          match.homeSets = result.homeSets;
+          match.awaySets = result.awaySets;
+          match.homeLegs = result.homeLegs;
+          match.awayLegs = result.awayLegs;
         }
-        _advanceKratzerRound(stage);
-      }
-      _advanceKnockoutWinners(startStageIndex: _activeStageIndex);
-      _ensureGroupDeciders(startStageIndex: _activeStageIndex);
-      const OrderOfPlayController().resultRecorded(match);
-      final stageName = widget.tournament.runStages[_activeStageIndex].name;
-      final description = match.isKratzer
-          ? 'Verlierer ${result.scratchedPlayer?.name ?? 'ermittelt'}'
-                '${result.kratzerBonusLives.isEmpty ? '' : ' · ${result.kratzerBonusLives.length} Bonusleben'}'
-          : '${match.homePlayer?.name ?? 'Heim'} ${result.homeLegs ?? 0}:${result.awayLegs ?? 0} ${match.awayPlayer?.name ?? 'Gast'}';
-      widget.tournament.addActivity(
-        'result_entered',
-        'Ergebnis eingetragen · $stageName'
-            '${match.boardNumber == null ? '' : ' · ${widget.tournament.boardDisplayName(match.boardNumber!)}'}'
-            ' · $description',
-      );
+        if (stage is KnockoutTournamentRunStage && stage.isKratzer) {
+          final roundIndex = stage.rounds.indexWhere(
+            (round) => round.contains(match),
+          );
+          if (roundIndex >= 0 && roundIndex < stage.rounds.length - 1) {
+            stage.rounds.removeRange(roundIndex + 1, stage.rounds.length);
+          }
+          _advanceKratzerRound(stage);
+        }
+        _advanceKnockoutWinners(startStageIndex: _activeStageIndex);
+        _ensureGroupDeciders(startStageIndex: _activeStageIndex);
+        const OrderOfPlayController().resultRecorded(match);
+        final stageName = widget.tournament.runStages[_activeStageIndex].name;
+        final description = match.isKratzer
+            ? 'Verlierer ${result.scratchedPlayer?.name ?? 'ermittelt'}'
+                  '${result.kratzerBonusLives.isEmpty ? '' : ' · ${result.kratzerBonusLives.length} Bonusleben'}'
+            : '${match.homePlayer?.name ?? 'Heim'} ${result.homeLegs ?? 0}:${result.awayLegs ?? 0} ${match.awayPlayer?.name ?? 'Gast'}';
+        widget.tournament.addActivity(
+          'result_entered',
+          'Ergebnis eingetragen · $stageName'
+              '${match.boardNumber == null ? '' : ' · ${widget.tournament.boardDisplayName(match.boardNumber!)}'}'
+              ' · $description',
+        );
+      });
     });
-    onLocalUpdate?.call();
+    ResultEntryPerformanceTrace.measureSync(
+      'local_view_update_callback',
+      () => onLocalUpdate?.call(),
+    );
     try {
-      await _saveTournamentProgress(
-        propagateError: true,
-        achievementMatch: match,
+      await ResultEntryPerformanceTrace.measureAsync(
+        'save_progress',
+        () => _saveTournamentProgress(
+          propagateError: true,
+          achievementMatch: match,
+          forceHistoricalAchievementRefresh: correctingExistingResult,
+        ),
       );
     } catch (_) {
       return;

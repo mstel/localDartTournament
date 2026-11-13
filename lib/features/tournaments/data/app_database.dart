@@ -14,6 +14,7 @@ import '../domain/tournament_models.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../statistics/domain/monthly_player_performance.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
+import '../application/result_entry_performance_trace.dart';
 
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
@@ -484,18 +485,27 @@ class LocalAppDatabase {
   Future<void> saveActiveTournamentCopy(
     CreatedTournament tournament,
   ) => StorageAccess.run(() async {
-    final database = await _openDatabase();
+    final database = await ResultEntryPerformanceTrace.measureAsync(
+      'sqlite_open',
+      _openDatabase,
+    );
     try {
       final now = DateTime.now();
       tournament.updatedAt = now;
-      database.execute(
-        '''INSERT INTO active_tournament_copies(id, tournament_json, updated_at)
+      final json = ResultEntryPerformanceTrace.measureSync(
+        'tournament_json_encode',
+        () => jsonEncode(tournament.toJson()),
+      );
+      ResultEntryPerformanceTrace.measureSync('sqlite_row_write', () {
+        database.execute(
+          '''INSERT INTO active_tournament_copies(id, tournament_json, updated_at)
                VALUES (?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  tournament_json = excluded.tournament_json,
                  updated_at = excluded.updated_at''',
-        [tournament.id, jsonEncode(tournament.toJson()), now.toIso8601String()],
-      );
+          [tournament.id, json, now.toIso8601String()],
+        );
+      });
     } finally {
       database.close();
     }

@@ -1,11 +1,10 @@
-import 'dart:convert';
-
 import '../../rankings/domain/local_ranking.dart';
 import '../../rankings/application/local_ranking_elo_service.dart';
 import '../../rankings/application/local_ranking_series_service.dart';
 import '../../rankings/domain/local_elo_calculator.dart';
 import '../../statistics/domain/best_performance.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
+import '../../tournaments/application/result_entry_performance_trace.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/engines/group_standings_engine.dart';
@@ -26,6 +25,7 @@ class RankingAchievementSnapshot {
 }
 
 class RankingAchievementService {
+  static const _historicalUnlockCacheVersion = 'historical-unlocks-v1';
   const RankingAchievementService({
     required LocalAppDatabase database,
     TournamentStorage? tournamentStorage,
@@ -80,7 +80,11 @@ class RankingAchievementService {
     required String playerProfileId,
   }) async {
     if (!ranking.achievementsEnabled) return null;
-    if (!(await _eligibleRankingPlayerIds(ranking)).contains(playerProfileId)) {
+    final eligiblePlayerIds = await ResultEntryPerformanceTrace.measureAsync(
+      'achievement_check_player_eligibility',
+      () => _eligibleRankingPlayerIds(ranking),
+    );
+    if (!eligiblePlayerIds.contains(playerProfileId)) {
       return null;
     }
     final stored = await _database.loadRankingAchievementProgress(
@@ -176,59 +180,78 @@ class RankingAchievementService {
     Iterable<CreatedTournament>? tournaments,
     LocalEloSnapshot? eloSnapshot,
     Set<String>? mvpPlayerIds,
+    bool forceHistoricalUnlockRefresh = false,
   }) async {
     if (!ranking.achievementsEnabled) {
       throw StateError('Achievements sind für diese Rangliste deaktiviert.');
     }
-    if (!(await _eligibleRankingPlayerIds(ranking)).contains(playerProfileId)) {
+    final eligiblePlayerIds = await ResultEntryPerformanceTrace.measureAsync(
+      'achievement_check_player_eligibility',
+      () => _eligibleRankingPlayerIds(ranking),
+    );
+    if (!eligiblePlayerIds.contains(playerProfileId)) {
       throw StateError(
         'Teilnehmer muss im Katalog und der Rangliste zugewiesen sein.',
       );
     }
 
-    final allTournaments =
+    final Iterable<CreatedTournament> allTournaments =
         tournaments ??
-        await (_tournamentStorage ?? TournamentStorage())
-            .loadTournamentsForRanking(
-              ranking.id,
-              from:
-                  ranking.validFromDate ??
-                  (ranking.validFromYear == null
-                      ? null
-                      : DateTime(ranking.validFromYear!, 1, 1)),
-              through:
-                  ranking.validToDate ??
-                  (ranking.validToYear == null
-                      ? null
-                      : DateTime(ranking.validToYear!, 12, 31)),
-            );
-    final relevant =
-        allTournaments
-            .where(
-              (tournament) =>
-                  tournament.countsForRanking &&
-                  tournament.rankingIds.contains(ranking.id) &&
-                  ranking.includesTournamentDate(tournament.effectiveDate),
-            )
-            .toList()
-          ..sort(_compareTournaments);
-    final monthlyPerformance = combineMonthlyPlayerPerformances(
-      recorded: await _database.loadPlayerMonthlyPerformance(playerProfileId),
-      imported: await _database.loadMonthlyPlayerPerformances({
-        playerProfileId,
-      }),
+        await ResultEntryPerformanceTrace.measureAsync(
+          'achievement_player_load_tournaments',
+          () => (_tournamentStorage ?? TournamentStorage())
+              .loadTournamentsForRanking(
+                ranking.id,
+                from:
+                    ranking.validFromDate ??
+                    (ranking.validFromYear == null
+                        ? null
+                        : DateTime(ranking.validFromYear!, 1, 1)),
+                through:
+                    ranking.validToDate ??
+                    (ranking.validToYear == null
+                        ? null
+                        : DateTime(ranking.validToYear!, 12, 31)),
+              ),
+        );
+    final relevant = ResultEntryPerformanceTrace.measureSync(
+      'achievement_filter_player_tournaments',
+      () =>
+          allTournaments
+              .where(
+                (tournament) =>
+                    tournament.countsForRanking &&
+                    tournament.rankingIds.contains(ranking.id) &&
+                    ranking.includesTournamentDate(tournament.effectiveDate),
+              )
+              .toList()
+            ..sort(_compareTournaments),
     );
-    final sourceHash = _fingerprint(ranking, relevant, monthlyPerformance);
-    final stored = await _database.loadRankingAchievementProgress(
-      ranking.id,
-      playerProfileId,
+    final monthlyPerformance = await ResultEntryPerformanceTrace.measureAsync(
+      'achievement_load_monthly_performance',
+      () async => combineMonthlyPlayerPerformances(
+        recorded: await _database.loadPlayerMonthlyPerformance(playerProfileId),
+        imported: await _database.loadMonthlyPlayerPerformances({
+          playerProfileId,
+        }),
+      ),
+    );
+    // Recalculate historical unlock dates only after operations that can
+    // change past results. Re-hashing the archive here would repeat expensive
+    // work for every newly entered result and defeat the cache.
+    const sourceHash = _historicalUnlockCacheVersion;
+    final stored = await ResultEntryPerformanceTrace.measureAsync(
+      'achievement_load_player_progress',
+      () =>
+          _database.loadRankingAchievementProgress(ranking.id, playerProfileId),
     );
     final definitions = AchievementCatalog.withTargets(
       ranking.achievementTargets,
       parameters: ranking.achievementParameters,
       alternativeTargets: ranking.achievementAlternativeTargets,
     );
-    final sourceChanged =
+    final historicalSourceChanged =
+        forceHistoricalUnlockRefresh ||
         stored.isEmpty ||
         stored.values.any((row) => row['source_hash'] != sourceHash);
     final changedTargetIds = <String>{};
@@ -294,22 +317,28 @@ class RankingAchievementService {
       }
     }
 
-    final values = _calculateMetrics(
-      ranking,
-      playerProfileId,
-      relevant,
-      monthlyPerformance,
-      eloSnapshot: eloSnapshot,
+    final values = ResultEntryPerformanceTrace.measureSync(
+      'achievement_calculate_metrics',
+      () => _calculateMetrics(
+        ranking,
+        playerProfileId,
+        relevant,
+        monthlyPerformance,
+        eloSnapshot: eloSnapshot,
+      ),
     );
-    if (sourceChanged) {
+    if (historicalSourceChanged) {
       unlockedAt.addAll(
-        await _historicalUnlockDates(
-          ranking: ranking,
-          profileId: playerProfileId,
-          tournaments: relevant,
-          monthlyPerformance: monthlyPerformance,
-          definitions: definitions,
-          eloSnapshot: eloSnapshot,
+        await ResultEntryPerformanceTrace.measureAsync(
+          'achievement_scan_historical_unlocks',
+          () => _historicalUnlockDates(
+            ranking: ranking,
+            profileId: playerProfileId,
+            tournaments: relevant,
+            monthlyPerformance: monthlyPerformance,
+            definitions: definitions,
+            eloSnapshot: eloSnapshot,
+          ),
         ),
       );
     }
@@ -348,18 +377,21 @@ class RankingAchievementService {
     );
 
     final now = DateTime.now().toUtc();
-    await _database.saveRankingAchievementProgress(
-      rankingId: ranking.id,
-      playerProfileId: playerProfileId,
-      progress: [
-        for (final progress in evaluation.progress.values)
-          _storedProgress(
-            progress,
-            sourceHash: sourceHash,
-            previous: stored[progress.definition.id],
-            now: now,
-          ),
-      ],
+    await ResultEntryPerformanceTrace.measureAsync(
+      'achievement_save_player_progress',
+      () => _database.saveRankingAchievementProgress(
+        rankingId: ranking.id,
+        playerProfileId: playerProfileId,
+        progress: [
+          for (final progress in evaluation.progress.values)
+            _storedProgress(
+              progress,
+              sourceHash: sourceHash,
+              previous: stored[progress.definition.id],
+              now: now,
+            ),
+        ],
+      ),
     );
     return RankingAchievementSnapshot(
       evaluation: evaluation,
@@ -1258,6 +1290,7 @@ class RankingAchievementService {
   }) async {
     final timestamps = <DateTime>{};
     for (final tournament in tournaments) {
+      if (!_containsPlayer(tournament.players, profileId)) continue;
       timestamps.add(
         tournament.startedAt ??
             tournament.tournamentDate ??
@@ -1267,6 +1300,16 @@ class RankingAchievementService {
         timestamps.add(tournament.finishedAt!);
       }
       for (final match in _matches(tournament)) {
+        final matchPlayers = [
+          if (match.homePlayer != null) match.homePlayer!,
+          if (match.awayPlayer != null) match.awayPlayer!,
+          ...match.players,
+        ];
+        if (!matchPlayers.any(
+          (player) => _individualProfileIds(player).contains(profileId),
+        )) {
+          continue;
+        }
         final timestamp = match.finishedAt ?? match.startedAt;
         if (timestamp != null) timestamps.add(timestamp);
       }
@@ -1275,17 +1318,20 @@ class RankingAchievementService {
       if (!_rankingIncludesMonth(entry.year, entry.month, ranking)) continue;
       timestamps.add(DateTime(entry.year, entry.month + 1, 0, 23, 59, 59));
     }
-    final orderedTimestamps = timestamps.toList()..sort();
     final unlockedAt = <String, DateTime>{};
-    DateTime? rankingCompletedAt;
+    final rankingCompletedAt = ranking.isCompleted && tournaments.isNotEmpty
+        ? tournaments
+              .map(
+                (tournament) =>
+                    tournament.finishedAt ?? tournament.effectiveDate,
+              )
+              .reduce((left, right) => left.isAfter(right) ? left : right)
+        : null;
+    if (rankingCompletedAt != null) timestamps.add(rankingCompletedAt);
+    final orderedRelevantTimestamps = timestamps.toList()..sort();
     int? finalPosition;
     Set<String> mvpPlayerIds = const {};
-    if (ranking.isCompleted && tournaments.isNotEmpty) {
-      rankingCompletedAt = tournaments
-          .map(
-            (tournament) => tournament.finishedAt ?? tournament.effectiveDate,
-          )
-          .reduce((left, right) => left.isAfter(right) ? left : right);
+    if (rankingCompletedAt != null) {
       if (tournaments.any(
         (tournament) => _containsPlayer(tournament.players, profileId),
       )) {
@@ -1297,7 +1343,7 @@ class RankingAchievementService {
         );
       }
     }
-    for (final timestamp in orderedTimestamps) {
+    for (final timestamp in orderedRelevantTimestamps) {
       final values = _calculateMetrics(
         ranking,
         profileId,
@@ -1330,34 +1376,6 @@ class RankingAchievementService {
       }
     }
     return unlockedAt;
-  }
-
-  String _fingerprint(
-    LocalRanking ranking,
-    List<CreatedTournament> tournaments,
-    List<PlayerMonthlyPerformance> monthlyPerformance,
-  ) {
-    final source = jsonEncode({
-      'achievementCalculationVersion': 3,
-      'ranking': ranking.toJson(),
-      'tournaments': [for (final item in tournaments) item.toJson()],
-      'monthlyPerformance': [
-        for (final item in monthlyPerformance)
-          [
-            item.year,
-            item.month,
-            item.weightedLegs,
-            item.scoring,
-            item.average,
-            item.checkoutRate,
-          ],
-      ],
-    });
-    var hash = 0x811c9dc5;
-    for (final codeUnit in source.codeUnits) {
-      hash = ((hash ^ codeUnit) * 0x01000193) & 0xffffffff;
-    }
-    return hash.toRadixString(16).padLeft(8, '0');
   }
 
   Map<String, Object?> _storedProgress(

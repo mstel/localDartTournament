@@ -1,3 +1,11 @@
+# 2.7.5+95
+
+- Reduces repeated achievement work during live result entry by caching
+  historical unlock dates and recalculating them when results or ranking inputs
+  are corrected.
+- Adds profile-mode timeline spans around result saving and achievement refresh
+  steps to make future performance traces actionable.
+
 # 2.7.4+94
 
 - Trennt Ranglisten nach Saison und speichert laufende Turniere als lokale

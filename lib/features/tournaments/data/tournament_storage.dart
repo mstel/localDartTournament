@@ -8,6 +8,7 @@ import '../../../shared/persistence/storage_access.dart';
 import 'app_database.dart';
 import '../domain/second_screen_widget_placement.dart';
 import '../domain/tournament_models.dart';
+import '../application/result_entry_performance_trace.dart';
 
 class _TournamentStorageCacheEntry {
   _TournamentStorageCacheEntry({
@@ -602,9 +603,13 @@ class TournamentStorage {
     }
     if (tournament.finishedAt == null) {
       await _locked(() async {
-        await _ensureArchiveLayout();
-        final stored = await _activeDatabase.loadActiveTournamentCopy(
-          tournament.id,
+        await ResultEntryPerformanceTrace.measureAsync(
+          'archive_layout_check',
+          _ensureArchiveLayout,
+        );
+        final stored = await ResultEntryPerformanceTrace.measureAsync(
+          'active_copy_read',
+          () => _activeDatabase.loadActiveTournamentCopy(tournament.id),
         );
         if (stored != null && stored.updatedAt.isAfter(tournament.updatedAt)) {
           final incomingLayouts =
@@ -623,7 +628,10 @@ class TournamentStorage {
               stored.secondScreenActiveLayout ??
               tournament.secondScreenActiveLayout;
         }
-        await _activeDatabase.saveActiveTournamentCopy(tournament);
+        await ResultEntryPerformanceTrace.measureAsync(
+          'active_copy_write',
+          () => _activeDatabase.saveActiveTournamentCopy(tournament),
+        );
       });
       return;
     }
