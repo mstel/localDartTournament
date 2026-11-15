@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../application/result_entry_performance_trace.dart';
 import 'best_of_comparison_table.dart';
 import 'knockout_run_section.dart';
 import 'result_entry.dart';
@@ -145,16 +146,18 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
   @override
   Widget build(BuildContext context) {
-    _scheduleFocusScroll();
-    final stage = widget.stage;
+    return ResultEntryPerformanceTrace.measureSync('stage_results_build', () {
+      _scheduleFocusScroll();
+      final stage = widget.stage;
 
-    if (stage is GroupTournamentRunStage) {
-      return _buildGroupStageResults(context, stage);
-    } else if (stage is KnockoutTournamentRunStage) {
-      return _buildKnockoutStageResults(context, stage);
-    }
+      if (stage is GroupTournamentRunStage) {
+        return _buildGroupStageResults(context, stage);
+      } else if (stage is KnockoutTournamentRunStage) {
+        return _buildKnockoutStageResults(context, stage);
+      }
 
-    return const SizedBox.shrink();
+      return const SizedBox.shrink();
+    });
   }
 
   Widget _buildGroupStageResults(

@@ -1,3 +1,13 @@
+# 2.7.6+96
+
+- Prüft Teilnahme- und Turnierergebnis-Achievements nur bei den passenden
+  Ereignissen. Bestleistungswerte werden nur bei erfassten Bestleistungen neu
+  berechnet; Monatswerte werden nicht bei jeder Partie geladen.
+- Bewahrt abgeschlossene Achievement-Werte bei normalen Ergebnissen und
+  unterdrückt Turnier-News für Monatswerte und Ranglisten-Awards.
+- Zwischenspeichert Gruppentabellen bis zur nächsten Turnieränderung und ergänzt
+  Profil-Spans für Seitenaufbau, Tabellen, Timing und Archivspeicherung.
+
 # 2.7.5+95
 
 - Reduces repeated achievement work during live result entry by caching

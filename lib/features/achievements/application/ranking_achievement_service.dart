@@ -26,6 +26,56 @@ class RankingAchievementSnapshot {
 
 class RankingAchievementService {
   static const _historicalUnlockCacheVersion = 'historical-unlocks-v1';
+  static const liveMatchMetrics = <AchievementMetric>{
+    AchievementMetric.legsWon,
+    AchievementMetric.legsLost,
+    AchievementMetric.shutoutMatchWins,
+    AchievementMetric.legsWonAgainstSameOpponent,
+    AchievementMetric.score180Count,
+    AchievementMetric.firstScore180,
+    AchievementMetric.firstScore171,
+    AchievementMetric.score171Count,
+    AchievementMetric.nineDarterCount,
+    AchievementMetric.bigFish170Count,
+    AchievementMetric.bullseyeFinishCount,
+    AchievementMetric.highFinishCount,
+    AchievementMetric.shortLegCount,
+    AchievementMetric.matchWinStreak,
+    AchievementMetric.winsAfterLossStreak,
+    AchievementMetric.eloUpsetWins,
+    AchievementMetric.consecutiveWinsAgainstLowerElo,
+    AchievementMetric.distinctOpponentsBeaten,
+    AchievementMetric.lossesToSameOpponent,
+  };
+  static const bestPerformanceMetrics = <AchievementMetric>{
+    AchievementMetric.score180Count,
+    AchievementMetric.firstScore180,
+    AchievementMetric.firstScore171,
+    AchievementMetric.score171Count,
+    AchievementMetric.nineDarterCount,
+    AchievementMetric.bigFish170Count,
+    AchievementMetric.bullseyeFinishCount,
+    AchievementMetric.highFinishCount,
+    AchievementMetric.shortLegCount,
+  };
+  static const participationMetrics = <AchievementMetric>{
+    AchievementMetric.tournamentParticipations,
+    AchievementMetric.consecutiveTournamentParticipations,
+    AchievementMetric.consecutiveActiveMonths,
+    AchievementMetric.activeMonthsInYear,
+    AchievementMetric.trainingSessions,
+  };
+  static const tournamentOutcomeMetrics = <AchievementMetric>{
+    AchievementMetric.tournamentWins,
+    AchievementMetric.secondPlaces,
+    AchievementMetric.thirdPlaces,
+    AchievementMetric.fourthPlaces,
+    AchievementMetric.tournamentWinStreak,
+    AchievementMetric.rankingGold,
+    AchievementMetric.rankingSilver,
+    AchievementMetric.rankingBronze,
+    AchievementMetric.rankingMvp,
+  };
   const RankingAchievementService({
     required LocalAppDatabase database,
     TournamentStorage? tournamentStorage,
@@ -181,6 +231,7 @@ class RankingAchievementService {
     LocalEloSnapshot? eloSnapshot,
     Set<String>? mvpPlayerIds,
     bool forceHistoricalUnlockRefresh = false,
+    Set<AchievementMetric>? metricsToRefresh,
   }) async {
     if (!ranking.achievementsEnabled) {
       throw StateError('Achievements sind für diese Rangliste deaktiviert.');
@@ -227,15 +278,6 @@ class RankingAchievementService {
               .toList()
             ..sort(_compareTournaments),
     );
-    final monthlyPerformance = await ResultEntryPerformanceTrace.measureAsync(
-      'achievement_load_monthly_performance',
-      () async => combineMonthlyPlayerPerformances(
-        recorded: await _database.loadPlayerMonthlyPerformance(playerProfileId),
-        imported: await _database.loadMonthlyPlayerPerformances({
-          playerProfileId,
-        }),
-      ),
-    );
     // Recalculate historical unlock dates only after operations that can
     // change past results. Re-hashing the archive here would repeat expensive
     // work for every newly entered result and defeat the cache.
@@ -245,15 +287,42 @@ class RankingAchievementService {
       () =>
           _database.loadRankingAchievementProgress(ranking.id, playerProfileId),
     );
+    final historicalSourceChanged =
+        forceHistoricalUnlockRefresh ||
+        metricsToRefresh == null ||
+        stored.isEmpty ||
+        stored.values.any((row) => row['source_hash'] != sourceHash);
+    final requestedMetrics =
+        forceHistoricalUnlockRefresh || historicalSourceChanged
+        ? AchievementMetric.values.toSet()
+        : metricsToRefresh;
+    final needsMonthlyPerformance =
+        historicalSourceChanged ||
+        requestedMetrics.any(
+          const {
+            AchievementMetric.monthlyAverage,
+            AchievementMetric.monthlyScoring,
+            AchievementMetric.monthlyCheckoutRate,
+          }.contains,
+        );
+    final monthlyPerformance = needsMonthlyPerformance
+        ? await ResultEntryPerformanceTrace.measureAsync(
+            'achievement_load_monthly_performance',
+            () async => combineMonthlyPlayerPerformances(
+              recorded: await _database.loadPlayerMonthlyPerformance(
+                playerProfileId,
+              ),
+              imported: await _database.loadMonthlyPlayerPerformances({
+                playerProfileId,
+              }),
+            ),
+          )
+        : const <PlayerMonthlyPerformance>[];
     final definitions = AchievementCatalog.withTargets(
       ranking.achievementTargets,
       parameters: ranking.achievementParameters,
       alternativeTargets: ranking.achievementAlternativeTargets,
     );
-    final historicalSourceChanged =
-        forceHistoricalUnlockRefresh ||
-        stored.isEmpty ||
-        stored.values.any((row) => row['source_hash'] != sourceHash);
     final changedTargetIds = <String>{};
     for (final definition in definitions) {
       final defaultTarget = AchievementCatalog.definitions
@@ -317,6 +386,28 @@ class RankingAchievementService {
       }
     }
 
+    final effectiveMetricsToRefresh =
+        forceHistoricalUnlockRefresh || historicalSourceChanged
+        ? requestedMetrics
+        : requestedMetrics
+              .where(
+                (metric) => definitions.any((definition) {
+                  if (definition.metric != metric &&
+                      definition.alternativeMetric != metric) {
+                    return false;
+                  }
+                  final row = stored[definition.id];
+                  final targetUnchanged =
+                      (row?['target_value'] as num?)?.toDouble() ==
+                          definition.target &&
+                      (row?['alternative_target_value'] as num?)?.toDouble() ==
+                          (definition.alternativeTarget ?? 0);
+                  return !targetUnchanged ||
+                      row?['status'] != AchievementStatus.completed.name;
+                }),
+              )
+              .toSet();
+    final cachedMetricValues = _cachedMetricValues(definitions, stored);
     final values = ResultEntryPerformanceTrace.measureSync(
       'achievement_calculate_metrics',
       () => _calculateMetrics(
@@ -325,6 +416,8 @@ class RankingAchievementService {
         relevant,
         monthlyPerformance,
         eloSnapshot: eloSnapshot,
+        metricsToCalculate: effectiveMetricsToRefresh,
+        cachedValues: cachedMetricValues,
       ),
     );
     if (historicalSourceChanged) {
@@ -342,38 +435,60 @@ class RankingAchievementService {
         ),
       );
     }
+    final refreshRankingPosition = effectiveMetricsToRefresh.any(
+      const {
+        AchievementMetric.rankingGold,
+        AchievementMetric.rankingSilver,
+        AchievementMetric.rankingBronze,
+      }.contains,
+    );
+    final refreshRankingMvp = effectiveMetricsToRefresh.contains(
+      AchievementMetric.rankingMvp,
+    );
     final hasParticipation = relevant.any(
       (tournament) => _containsPlayer(tournament.players, playerProfileId),
     );
-    if (ranking.isCompleted && hasParticipation) {
-      final position = await _rankingPosition(
-        ranking,
-        playerProfileId,
-        relevant,
-      );
-      if (position == 1) {
-        values[AchievementMetric.rankingGold] = 1;
-      } else if (position == 2) {
-        values[AchievementMetric.rankingSilver] = 1;
-      } else if (position == 3) {
-        values[AchievementMetric.rankingBronze] = 1;
+    if (ranking.isCompleted &&
+        hasParticipation &&
+        (refreshRankingPosition || refreshRankingMvp)) {
+      if (refreshRankingPosition) {
+        final position = await _rankingPosition(
+          ranking,
+          playerProfileId,
+          relevant,
+        );
+        if (position == 1) {
+          values[AchievementMetric.rankingGold] = 1;
+        } else if (position == 2) {
+          values[AchievementMetric.rankingSilver] = 1;
+        } else if (position == 3) {
+          values[AchievementMetric.rankingBronze] = 1;
+        }
       }
-      final finalMvpPlayerIds =
-          mvpPlayerIds ??
-          await _rankingMvpPlayerIds(
-            ranking,
-            await _eligibleRankingPlayerIds(ranking),
-            relevant,
-          );
-      values[AchievementMetric.rankingMvp] =
-          finalMvpPlayerIds.contains(playerProfileId) ? 1 : 0;
+      if (refreshRankingMvp) {
+        final finalMvpPlayerIds =
+            mvpPlayerIds ??
+            await _rankingMvpPlayerIds(
+              ranking,
+              await _eligibleRankingPlayerIds(ranking),
+              relevant,
+            );
+        values[AchievementMetric.rankingMvp] =
+            finalMvpPlayerIds.contains(playerProfileId) ? 1 : 0;
+      }
     }
-    final evaluation = const AchievementEngine().evaluate(
+    final calculatedEvaluation = const AchievementEngine().evaluate(
       values: values,
       rankingCompleted: ranking.isCompleted,
       definitions: definitions,
       permanentlyUnlocked: permanentlyUnlocked,
       unlockedAt: unlockedAt,
+    );
+    final evaluation = _preserveCompletedProgress(
+      calculatedEvaluation,
+      definitions: definitions,
+      stored: stored,
+      forceRefresh: forceHistoricalUnlockRefresh || metricsToRefresh == null,
     );
 
     final now = DateTime.now().toUtc();
@@ -409,6 +524,72 @@ class RankingAchievementService {
     ];
   }
 
+  Map<AchievementMetric, double> _cachedMetricValues(
+    List<AchievementDefinition> definitions,
+    Map<String, Map<String, Object?>> stored,
+  ) {
+    final values = <AchievementMetric, double>{};
+    for (final definition in definitions) {
+      final row = stored[definition.id];
+      final metric = definition.metric;
+      if (metric != null && row?['current_value'] is num) {
+        values.putIfAbsent(
+          metric,
+          () => (row!['current_value'] as num).toDouble(),
+        );
+      }
+      final alternativeMetric = definition.alternativeMetric;
+      if (alternativeMetric != null &&
+          row?['alternative_current_value'] is num) {
+        values.putIfAbsent(
+          alternativeMetric,
+          () => (row!['alternative_current_value'] as num).toDouble(),
+        );
+      }
+    }
+    return values;
+  }
+
+  AchievementEvaluation _preserveCompletedProgress(
+    AchievementEvaluation evaluation, {
+    required List<AchievementDefinition> definitions,
+    required Map<String, Map<String, Object?>> stored,
+    required bool forceRefresh,
+  }) {
+    if (forceRefresh) return evaluation;
+    final definitionById = {for (final item in definitions) item.id: item};
+    final progress = Map<String, AchievementProgress>.of(evaluation.progress);
+    for (final entry in stored.entries) {
+      final definition = definitionById[entry.key];
+      final row = entry.value;
+      if (definition == null ||
+          row['status'] != AchievementStatus.completed.name ||
+          (row['target_value'] as num?)?.toDouble() != definition.target ||
+          (row['alternative_target_value'] as num?)?.toDouble() !=
+              (definition.alternativeTarget ?? 0)) {
+        continue;
+      }
+      progress[entry.key] = AchievementProgress(
+        definition: definition,
+        currentValue: (row['current_value'] as num?)?.toDouble() ?? 0,
+        alternativeCurrentValue:
+            (row['alternative_current_value'] as num?)?.toDouble() ?? 0,
+        status: AchievementStatus.completed,
+        unlockedAt: row['unlocked_at'] is String
+            ? DateTime.tryParse(row['unlocked_at']! as String)
+            : null,
+      );
+    }
+    return AchievementEvaluation(
+      progress: progress,
+      totalExperiencePoints: evaluation.totalExperiencePoints,
+      levelEligibleExperiencePoints: evaluation.levelEligibleExperiencePoints,
+      level: evaluation.level,
+      levelStartExperiencePoints: evaluation.levelStartExperiencePoints,
+      nextLevelExperiencePoints: evaluation.nextLevelExperiencePoints,
+    );
+  }
+
   Map<AchievementMetric, double> _calculateMetrics(
     LocalRanking ranking,
     String profileId,
@@ -416,8 +597,48 @@ class RankingAchievementService {
     List<PlayerMonthlyPerformance> monthlyPerformance, {
     LocalEloSnapshot? eloSnapshot,
     DateTime? through,
+    Set<AchievementMetric>? metricsToCalculate,
+    Map<AchievementMetric, double> cachedValues = const {},
   }) {
-    final values = <AchievementMetric, double>{};
+    final requiredMetrics =
+        metricsToCalculate ?? AchievementMetric.values.toSet();
+    final values = <AchievementMetric, double>{...cachedValues};
+    final needsParticipation = requiredMetrics.any(
+      participationMetrics.contains,
+    );
+    final needsTournamentOutcome = requiredMetrics.any(
+      tournamentOutcomeMetrics.contains,
+    );
+    final needsLegMetrics = requiredMetrics.any(
+      const {
+        AchievementMetric.legsWon,
+        AchievementMetric.legsLost,
+        AchievementMetric.shutoutMatchWins,
+        AchievementMetric.legsWonAgainstSameOpponent,
+      }.contains,
+    );
+    final needsOpponentMetrics = requiredMetrics.any(
+      const {
+        AchievementMetric.distinctOpponentsBeaten,
+        AchievementMetric.lossesToSameOpponent,
+      }.contains,
+    );
+    final needsMatchRecords = requiredMetrics.any(
+      const {
+        AchievementMetric.matchWinStreak,
+        AchievementMetric.winsAfterLossStreak,
+        AchievementMetric.consecutiveActiveMonths,
+        AchievementMetric.activeMonthsInYear,
+      }.contains,
+    );
+    final needsPerformances = requiredMetrics.any(
+      bestPerformanceMetrics.contains,
+    );
+    final needsMatchWalk =
+        needsLegMetrics ||
+        needsOpponentMetrics ||
+        needsMatchRecords ||
+        needsPerformances;
     final participationTournaments = <CreatedTournament>[];
     final tournamentWinsList = <CreatedTournament>[];
     final matchRecords = <_PlayerMatchRecord>[];
@@ -469,30 +690,34 @@ class RankingAchievementService {
           tournament.startedAt ??
           tournament.tournamentDate ??
           tournament.createdAt;
-      if (_containsPlayer(tournament.players, profileId) &&
+      if (needsParticipation &&
+          _containsPlayer(tournament.players, profileId) &&
           (through == null || !participationDate.isAfter(through))) {
         participationTournaments.add(tournament);
       }
 
-      final tournamentFinishedAt = tournament.finishedAt ?? date;
-      final tournamentCompleteByDate =
-          tournament.finishedAt != null &&
-          (through == null || !tournamentFinishedAt.isAfter(through));
-      final winnerId =
-          tournament.finishedAt == null || !tournamentCompleteByDate
-          ? null
-          : TournamentWinner.profileId(tournament);
-      if (winnerId == profileId) {
-        tournamentWins++;
-        tournamentWinsList.add(tournament);
+      if (needsTournamentOutcome) {
+        final tournamentFinishedAt = tournament.finishedAt ?? date;
+        final tournamentCompleteByDate =
+            tournament.finishedAt != null &&
+            (through == null || !tournamentFinishedAt.isAfter(through));
+        final winnerId =
+            tournament.finishedAt == null || !tournamentCompleteByDate
+            ? null
+            : TournamentWinner.profileId(tournament);
+        if (winnerId == profileId) {
+          tournamentWins++;
+          tournamentWinsList.add(tournament);
+        }
+        final placement = tournamentCompleteByDate
+            ? _placementFor(tournament, profileId)
+            : null;
+        if (placement == 2) secondPlaces++;
+        if (placement == 3) thirdPlaces++;
+        if (placement == 4) fourthPlaces++;
       }
-      final placement = tournamentCompleteByDate
-          ? _placementFor(tournament, profileId)
-          : null;
-      if (placement == 2) secondPlaces++;
-      if (placement == 3) thirdPlaces++;
-      if (placement == 4) fourthPlaces++;
 
+      if (!needsMatchWalk) continue;
       final matches = _matches(tournament);
       for (final match in matches) {
         if (match.hasTeamParticipant) continue;
@@ -508,7 +733,7 @@ class RankingAchievementService {
         final awayHasPlayer = awayPlayers.any(
           (player) => _individualProfileIds(player).contains(profileId),
         );
-        if (homeHasPlayer && match.homeLegs != null) {
+        if (needsLegMetrics && homeHasPlayer && match.homeLegs != null) {
           legsWon += match.homeLegs!;
           legsLost += match.awayLegs ?? 0;
           if (match.awayLegs == 0) shutoutMatchWins++;
@@ -521,7 +746,7 @@ class RankingAchievementService {
               );
             }
           }
-        } else if (awayHasPlayer && match.awayLegs != null) {
+        } else if (needsLegMetrics && awayHasPlayer && match.awayLegs != null) {
           legsWon += match.awayLegs!;
           legsLost += match.homeLegs ?? 0;
           if (match.homeLegs == 0) shutoutMatchWins++;
@@ -538,32 +763,45 @@ class RankingAchievementService {
 
         final winner = match.winner;
         final loser = match.loser;
-        if (winner != null && loser != null) {
+        if ((needsOpponentMetrics || needsMatchRecords) &&
+            winner != null &&
+            loser != null) {
           final winnerIds = _individualProfileIds(winner);
           final loserIds = _individualProfileIds(loser);
           if (winnerIds.contains(profileId)) {
-            for (final opponentId in loserIds) {
-              beatenOpponents.add(opponentId);
+            if (needsOpponentMetrics) {
+              for (final opponentId in loserIds) {
+                beatenOpponents.add(opponentId);
+              }
             }
-            matchRecords.add(_PlayerMatchRecord(date: matchDate, won: true));
+            if (needsMatchRecords) {
+              matchRecords.add(_PlayerMatchRecord(date: matchDate, won: true));
+            }
           } else if (loserIds.contains(profileId)) {
-            for (final opponentId in winnerIds) {
-              lossesByOpponent.update(
-                opponentId,
-                (count) => count + 1,
-                ifAbsent: () => 1,
-              );
+            if (needsOpponentMetrics) {
+              for (final opponentId in winnerIds) {
+                lossesByOpponent.update(
+                  opponentId,
+                  (count) => count + 1,
+                  ifAbsent: () => 1,
+                );
+              }
             }
-            matchRecords.add(_PlayerMatchRecord(date: matchDate, won: false));
+            if (needsMatchRecords) {
+              matchRecords.add(_PlayerMatchRecord(date: matchDate, won: false));
+            }
           }
         }
 
-        for (final performance in match.bestPerformances) {
-          if (!_performanceBelongsTo(match, performance, profileId)) continue;
-          recordPerformance(performance);
+        if (needsPerformances) {
+          for (final performance in match.bestPerformances) {
+            if (!_performanceBelongsTo(match, performance, profileId)) continue;
+            recordPerformance(performance);
+          }
         }
       }
-      if (!matches.any((match) => match.bestPerformances.isNotEmpty) &&
+      if (needsPerformances &&
+          !matches.any((match) => match.bestPerformances.isNotEmpty) &&
           (through == null || !date.isAfter(through))) {
         for (final archived in _archivedBestPerformances(tournament)) {
           if (archived.$2 == profileId) recordPerformance(archived.$1);
@@ -571,38 +809,67 @@ class RankingAchievementService {
       }
     }
 
-    values[AchievementMetric.tournamentParticipations] =
-        participationTournaments.length.toDouble();
-    values[AchievementMetric.tournamentWins] = tournamentWins.toDouble();
-    values[AchievementMetric.secondPlaces] = (secondPlaces + tournamentWins)
-        .toDouble();
-    values[AchievementMetric.thirdPlaces] =
-        (thirdPlaces + secondPlaces + tournamentWins).toDouble();
-    values[AchievementMetric.fourthPlaces] =
-        (fourthPlaces + thirdPlaces + secondPlaces + tournamentWins).toDouble();
-    values[AchievementMetric.legsWon] = legsWon.toDouble();
-    values[AchievementMetric.legsLost] = legsLost.toDouble();
-    values[AchievementMetric.shutoutMatchWins] = shutoutMatchWins.toDouble();
-    values[AchievementMetric.legsWonAgainstSameOpponent] = legsWonByOpponent
-        .values
-        .fold<int>(0, (maximum, count) => count > maximum ? count : maximum)
-        .toDouble();
-    values[AchievementMetric.score180Count] = score180s.toDouble();
-    values[AchievementMetric.firstScore180] = score180s > 0 ? 1 : 0;
-    values[AchievementMetric.score171Count] = score171s.toDouble();
-    values[AchievementMetric.firstScore171] = score171s > 0 ? 1 : 0;
-    values[AchievementMetric.nineDarterCount] = nineDarters.toDouble();
-    values[AchievementMetric.bigFish170Count] = bigFish170s.toDouble();
-    values[AchievementMetric.bullseyeFinishCount] = bullseyeFinishes.toDouble();
-    values[AchievementMetric.highFinishCount] = highFinishes.toDouble();
-    values[AchievementMetric.shortLegCount] = shortLegs.toDouble();
-    values[AchievementMetric.distinctOpponentsBeaten] = beatenOpponents.length
-        .toDouble();
-    values[AchievementMetric.lossesToSameOpponent] = lossesByOpponent.values
-        .fold<int>(0, (maximum, count) => count > maximum ? count : maximum)
-        .toDouble();
+    void setIfRequested(AchievementMetric metric, double value) {
+      if (requiredMetrics.contains(metric)) values[metric] = value;
+    }
 
-    matchRecords.sort((left, right) => left.date.compareTo(right.date));
+    setIfRequested(
+      AchievementMetric.tournamentParticipations,
+      participationTournaments.length.toDouble(),
+    );
+    setIfRequested(AchievementMetric.tournamentWins, tournamentWins.toDouble());
+    setIfRequested(
+      AchievementMetric.secondPlaces,
+      (secondPlaces + tournamentWins).toDouble(),
+    );
+    setIfRequested(
+      AchievementMetric.thirdPlaces,
+      (thirdPlaces + secondPlaces + tournamentWins).toDouble(),
+    );
+    setIfRequested(
+      AchievementMetric.fourthPlaces,
+      (fourthPlaces + thirdPlaces + secondPlaces + tournamentWins).toDouble(),
+    );
+    setIfRequested(AchievementMetric.legsWon, legsWon.toDouble());
+    setIfRequested(AchievementMetric.legsLost, legsLost.toDouble());
+    setIfRequested(
+      AchievementMetric.shutoutMatchWins,
+      shutoutMatchWins.toDouble(),
+    );
+    setIfRequested(
+      AchievementMetric.legsWonAgainstSameOpponent,
+      legsWonByOpponent.values
+          .fold<int>(0, (maximum, count) => count > maximum ? count : maximum)
+          .toDouble(),
+    );
+    setIfRequested(AchievementMetric.score180Count, score180s.toDouble());
+    setIfRequested(AchievementMetric.firstScore180, score180s > 0 ? 1 : 0);
+    setIfRequested(AchievementMetric.score171Count, score171s.toDouble());
+    setIfRequested(AchievementMetric.firstScore171, score171s > 0 ? 1 : 0);
+    setIfRequested(AchievementMetric.nineDarterCount, nineDarters.toDouble());
+    setIfRequested(AchievementMetric.bigFish170Count, bigFish170s.toDouble());
+    setIfRequested(
+      AchievementMetric.bullseyeFinishCount,
+      bullseyeFinishes.toDouble(),
+    );
+    setIfRequested(AchievementMetric.highFinishCount, highFinishes.toDouble());
+    setIfRequested(AchievementMetric.shortLegCount, shortLegs.toDouble());
+    setIfRequested(
+      AchievementMetric.distinctOpponentsBeaten,
+      beatenOpponents.length.toDouble(),
+    );
+    setIfRequested(
+      AchievementMetric.lossesToSameOpponent,
+      lossesByOpponent.values
+          .fold<int>(0, (maximum, count) => count > maximum ? count : maximum)
+          .toDouble(),
+    );
+
+    if (needsMatchRecords &&
+        (requiredMetrics.contains(AchievementMetric.matchWinStreak) ||
+            requiredMetrics.contains(AchievementMetric.winsAfterLossStreak))) {
+      matchRecords.sort((left, right) => left.date.compareTo(right.date));
+    }
     var winStreak = 0;
     var maxWinStreak = 0;
     var lossStreak = 0;
@@ -618,41 +885,69 @@ class RankingAchievementService {
         lossStreak++;
       }
     }
-    values[AchievementMetric.matchWinStreak] = maxWinStreak.toDouble();
-    values[AchievementMetric.winsAfterLossStreak] = winsAfterLossStreak
-        .toDouble();
+    setIfRequested(AchievementMetric.matchWinStreak, maxWinStreak.toDouble());
+    setIfRequested(
+      AchievementMetric.winsAfterLossStreak,
+      winsAfterLossStreak.toDouble(),
+    );
+    if (requiredMetrics.contains(
+      AchievementMetric.consecutiveTournamentParticipations,
+    )) {
+      setIfRequested(
+        AchievementMetric.consecutiveTournamentParticipations,
+        _longestConsecutive(participationTournaments, tournaments).toDouble(),
+      );
+    }
+    if (requiredMetrics.contains(AchievementMetric.tournamentWinStreak)) {
+      setIfRequested(
+        AchievementMetric.tournamentWinStreak,
+        _longestTournamentWinStreak(tournamentWinsList, tournaments).toDouble(),
+      );
+    }
 
-    values[AchievementMetric.consecutiveTournamentParticipations] =
-        _longestConsecutive(participationTournaments, tournaments).toDouble();
-    values[AchievementMetric.tournamentWinStreak] = _longestTournamentWinStreak(
-      tournamentWinsList,
-      tournaments,
-    ).toDouble();
-
-    final eligibleMonths = monthlyPerformance.where(
-      (entry) =>
-          entry.weightedLegs >= 10 &&
-          _rankingIncludesMonth(entry.year, entry.month, ranking) &&
-          (through == null ||
-              !DateTime(
-                entry.year,
-                entry.month + 1,
-                0,
-                23,
-                59,
-                59,
-              ).isAfter(through)),
+    final needsMonthlyMetrics = requiredMetrics.any(
+      const {
+        AchievementMetric.monthlyAverage,
+        AchievementMetric.monthlyScoring,
+        AchievementMetric.monthlyCheckoutRate,
+      }.contains,
     );
-    final months = eligibleMonths.toList();
-    values[AchievementMetric.monthlyAverage] = _maximum(
-      months.map((entry) => entry.average),
-    );
-    values[AchievementMetric.monthlyScoring] = _maximum(
-      months.map((entry) => entry.scoring),
-    );
-    values[AchievementMetric.monthlyCheckoutRate] = _maximum(
-      months.map((entry) => entry.checkoutRate),
-    );
+    final eligibleMonths = needsMonthlyMetrics
+        ? monthlyPerformance
+              .where(
+                (entry) =>
+                    entry.weightedLegs >= 10 &&
+                    _rankingIncludesMonth(entry.year, entry.month, ranking) &&
+                    (through == null ||
+                        !DateTime(
+                          entry.year,
+                          entry.month + 1,
+                          0,
+                          23,
+                          59,
+                          59,
+                        ).isAfter(through)),
+              )
+              .toList()
+        : const <PlayerMonthlyPerformance>[];
+    if (requiredMetrics.contains(AchievementMetric.monthlyAverage)) {
+      setIfRequested(
+        AchievementMetric.monthlyAverage,
+        _maximum(eligibleMonths.map((entry) => entry.average)),
+      );
+    }
+    if (requiredMetrics.contains(AchievementMetric.monthlyScoring)) {
+      setIfRequested(
+        AchievementMetric.monthlyScoring,
+        _maximum(eligibleMonths.map((entry) => entry.scoring)),
+      );
+    }
+    if (requiredMetrics.contains(AchievementMetric.monthlyCheckoutRate)) {
+      setIfRequested(
+        AchievementMetric.monthlyCheckoutRate,
+        _maximum(eligibleMonths.map((entry) => entry.checkoutRate)),
+      );
+    }
     final activePeriods =
         matchRecords
             .map((record) => DateTime(record.date.year, record.date.month))
@@ -663,32 +958,54 @@ class RankingAchievementService {
             .toSet()
             .toList()
           ..sort();
-    values[AchievementMetric.consecutiveActiveMonths] =
-        _longestConsecutiveMonths(activePeriods).toDouble();
-    values[AchievementMetric.activeMonthsInYear] = _maximumActiveMonthsInYear(
-      activePeriods,
-    ).toDouble();
-    values[AchievementMetric.trainingSessions] = participationTournaments.length
-        .toDouble();
-    values[AchievementMetric.eloUpsetWins] = _eloUpsetWins(
-      profileId,
-      tournaments,
-      eloSnapshot,
-      through: through,
-      minimumDifference: ranking.achievementParameters['elo_upset'] ?? 200.0,
-    ).toDouble();
-    values[AchievementMetric
-        .consecutiveWinsAgainstLowerElo] = _consecutiveWinsAgainstLowerElo(
-      profileId,
-      tournaments,
-      eloSnapshot,
-      through: through,
-      minimumDifference: ranking.achievementParameters['elo_upset'] ?? 200.0,
-    ).toDouble();
-    values[AchievementMetric.rankingGold] = 0;
-    values[AchievementMetric.rankingSilver] = 0;
-    values[AchievementMetric.rankingBronze] = 0;
-    values[AchievementMetric.rankingMvp] = 0;
+    if (requiredMetrics.contains(AchievementMetric.consecutiveActiveMonths)) {
+      setIfRequested(
+        AchievementMetric.consecutiveActiveMonths,
+        _longestConsecutiveMonths(activePeriods).toDouble(),
+      );
+    }
+    if (requiredMetrics.contains(AchievementMetric.activeMonthsInYear)) {
+      setIfRequested(
+        AchievementMetric.activeMonthsInYear,
+        _maximumActiveMonthsInYear(activePeriods).toDouble(),
+      );
+    }
+    setIfRequested(
+      AchievementMetric.trainingSessions,
+      participationTournaments.length.toDouble(),
+    );
+    if (requiredMetrics.contains(AchievementMetric.eloUpsetWins)) {
+      setIfRequested(
+        AchievementMetric.eloUpsetWins,
+        _eloUpsetWins(
+          profileId,
+          tournaments,
+          eloSnapshot,
+          through: through,
+          minimumDifference:
+              ranking.achievementParameters['elo_upset'] ?? 200.0,
+        ).toDouble(),
+      );
+    }
+    if (requiredMetrics.contains(
+      AchievementMetric.consecutiveWinsAgainstLowerElo,
+    )) {
+      setIfRequested(
+        AchievementMetric.consecutiveWinsAgainstLowerElo,
+        _consecutiveWinsAgainstLowerElo(
+          profileId,
+          tournaments,
+          eloSnapshot,
+          through: through,
+          minimumDifference:
+              ranking.achievementParameters['elo_upset'] ?? 200.0,
+        ).toDouble(),
+      );
+    }
+    setIfRequested(AchievementMetric.rankingGold, 0);
+    setIfRequested(AchievementMetric.rankingSilver, 0);
+    setIfRequested(AchievementMetric.rankingBronze, 0);
+    setIfRequested(AchievementMetric.rankingMvp, 0);
     return values;
   }
 

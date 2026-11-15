@@ -11,6 +11,7 @@ import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/tournament_audio_announcement_service.dart';
+import '../../../application/result_entry_performance_trace.dart';
 import '../../../domain/tournament_models.dart';
 import 'tournament_timing_panel.dart';
 import 'tournament_second_screen_view.dart';
@@ -735,7 +736,10 @@ class _TournamentDirectorDashboardState
   }
 
   @override
-  Widget build(BuildContext context) => _build(context);
+  Widget build(BuildContext context) => ResultEntryPerformanceTrace.measureSync(
+    'director_dashboard_build',
+    () => _build(context),
+  );
 
   Widget _build(BuildContext context) {
     final t = widget.tournament;

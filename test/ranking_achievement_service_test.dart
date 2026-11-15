@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_tournament_manager/features/achievements/application/ranking_achievement_service.dart';
+import 'package:dart_tournament_manager/features/achievements/domain/achievement_definition.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
@@ -179,6 +180,24 @@ void main() {
       isFalse,
     );
     expect(second.evaluation.totalExperiencePoints, 202);
+    final scopedUpdate = await service.refreshPlayer(
+      ranking: ranking,
+      playerProfileId: winnerProfile.id,
+      tournaments: [tournament],
+      metricsToRefresh: const {AchievementMetric.legsWon},
+    );
+    expect(
+      scopedUpdate.evaluation.progress['first_score180']!.isCompleted,
+      isTrue,
+    );
+    expect(scopedUpdate.evaluation.progress['first_score180']!.currentValue, 1);
+    expect(
+      scopedUpdate
+          .evaluation
+          .progress['tournament_participation_1']!
+          .currentValue,
+      1,
+    );
     final completedRanking = ranking.copyWith(isCompleted: true);
     final finalized = await service.refreshPlayer(
       ranking: completedRanking,

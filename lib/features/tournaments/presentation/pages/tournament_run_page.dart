@@ -113,6 +113,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   int _activeStageIndex = 0;
   int _viewStageIndex = 0;
   StageViewMode _stageViewMode = StageViewMode.dashboard;
+  final Map<TournamentGroup, (String, List<PlayerStanding>)> _standingsCache =
+      {};
   String? _directorSaveError;
   GroupMatch? _requestedResultMatch;
 
@@ -1864,6 +1866,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     bool checkAchievementInputs = false,
     bool forceHistoricalAchievementRefresh = false,
   }) async {
+    _standingsCache.clear();
     var achievementInputsChanged = false;
     try {
       _leagueRuntime?.writeTo(widget.tournament);
@@ -2094,6 +2097,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     );
     final achievementNotices =
         <({TournamentAchievementNotice notice, DateTime? unlockedAt})>[];
+    final allTournamentMatches = {
+      for (final stage in tournament.runStages)
+        ..._achievementMatchesForStage(stage),
+    };
     final tournamentPlayerIds = {
       for (final player in tournament.players.expand(
         (player) => player.individuals,
@@ -2140,15 +2147,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             : matchPlayerIds.contains(playerId);
       }).toList();
       if (affectedPlayerIds.isEmpty) continue;
-      final eloSnapshot = ranking.type == RankingType.elo
-          ? await ResultEntryPerformanceTrace.measureAsync(
-              'achievement_calculate_elo',
-              () => LocalRankingEloService(
-                database: database,
-                tournamentStorage: _tournamentStorage,
-              ).calculate(ranking, tournaments: tournaments),
-            )
-          : null;
+      final defaultLiveMetrics = <AchievementMetric>{
+        ...RankingAchievementService.liveMatchMetrics,
+      }..removeAll(RankingAchievementService.bestPerformanceMetrics);
       final snapshots = <String, RankingAchievementSnapshot>{};
       final previousProgress = <String, Map<String, Map<String, Object?>>>{};
       for (final (index, playerId) in affectedPlayerIds.indexed) {
@@ -2158,22 +2159,94 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               () =>
                   database.loadRankingAchievementProgress(ranking.id, playerId),
             );
+      }
+      final eloRefreshPlayerIds = affectedPlayerIds.where(
+        (playerId) =>
+            achievementMatch == null ||
+            forceHistoricalUnlockRefresh ||
+            tournament.finishedAt == null ||
+            matchPlayerIds.contains(playerId),
+      );
+      final needsEloRefresh =
+          ranking.type == RankingType.elo &&
+          eloRefreshPlayerIds.any((playerId) {
+            final eloProgress = previousProgress[playerId]?['elo_upset'];
+            return eloProgress?['status'] != AchievementStatus.completed.name;
+          });
+      final eloSnapshot = needsEloRefresh
+          ? await ResultEntryPerformanceTrace.measureAsync(
+              'achievement_calculate_elo',
+              () => LocalRankingEloService(
+                database: database,
+                tournamentStorage: _tournamentStorage,
+              ).calculate(ranking, tournaments: tournaments),
+            )
+          : null;
+      for (final (index, playerId) in affectedPlayerIds.indexed) {
         snapshots[playerId] = await ResultEntryPerformanceTrace.measureAsync(
           'achievement_refresh_player_$index',
-          () => service.refreshPlayer(
-            ranking: ranking,
-            playerProfileId: playerId,
-            tournaments: tournaments,
-            eloSnapshot: eloSnapshot,
-            forceHistoricalUnlockRefresh: forceHistoricalUnlockRefresh,
-          ),
+          () {
+            final isFullRefresh =
+                achievementMatch == null || forceHistoricalUnlockRefresh;
+            final isLiveMatchPlayer = matchPlayerIds.contains(playerId);
+            final metricsToRefresh = <AchievementMetric>{};
+            if (isFullRefresh) {
+              metricsToRefresh.addAll(AchievementMetric.values);
+            } else {
+              if (tournament.finishedAt != null) {
+                metricsToRefresh.addAll(
+                  RankingAchievementService.tournamentOutcomeMetrics,
+                );
+              }
+              if (isLiveMatchPlayer) {
+                metricsToRefresh.addAll(defaultLiveMetrics);
+              }
+              if (isLiveMatchPlayer &&
+                  achievementMatch.bestPerformances.isNotEmpty) {
+                metricsToRefresh.addAll(
+                  RankingAchievementService.bestPerformanceMetrics,
+                );
+              }
+              final hasPreviousEncounter =
+                  !isLiveMatchPlayer ||
+                  allTournamentMatches.any((match) {
+                    if (identical(match, achievementMatch) ||
+                        !match.hasResult) {
+                      return false;
+                    }
+                    return [
+                      if (match.homePlayer != null) match.homePlayer!,
+                      if (match.awayPlayer != null) match.awayPlayer!,
+                      ...match.players,
+                    ].any(
+                      (player) => player.individuals.any(
+                        (individual) => individual.profileId == playerId,
+                      ),
+                    );
+                  });
+              if (!hasPreviousEncounter) {
+                metricsToRefresh.addAll(
+                  RankingAchievementService.participationMetrics,
+                );
+              }
+            }
+            return service.refreshPlayer(
+              ranking: ranking,
+              playerProfileId: playerId,
+              tournaments: tournaments,
+              eloSnapshot: eloSnapshot,
+              forceHistoricalUnlockRefresh: forceHistoricalUnlockRefresh,
+              metricsToRefresh: metricsToRefresh,
+            );
+          },
         );
       }
       for (final entry in snapshots.entries) {
         final previous = previousProgress[entry.key] ?? const {};
         for (final progress in entry.value.evaluation.progress.values) {
           if (progress.isCompleted &&
-              previous[progress.definition.id]?['status'] != 'completed') {
+              previous[progress.definition.id]?['status'] != 'completed' &&
+              _shouldNotifyAchievement(progress.definition)) {
             achievementNotices.add((
               notice: TournamentAchievementNotice(
                 playerProfileId: entry.key,
@@ -2188,17 +2261,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         }
       }
     }
-    final matches = {
-      for (final stage in tournament.runStages)
-        ..._achievementMatchesForStage(stage),
-    };
     final matchNotices = <TournamentAchievementNotice>[];
     var changed = false;
     for (final unlock in achievementNotices) {
       final targetMatch = const AchievementMatchResolver().resolve(
         playerProfileId: unlock.notice.playerProfileId,
         unlockedAt: unlock.unlockedAt,
-        matches: matches,
+        matches: allTournamentMatches,
         tournamentDate: tournament.effectiveDate,
         tournamentFinishedAt: tournament.finishedAt,
         fallbackMatch: achievementMatch,
@@ -2249,6 +2318,18 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _achievementRefreshQueue = Future<void>.value();
+
+  bool _shouldNotifyAchievement(AchievementDefinition definition) =>
+      switch (definition.metric) {
+        AchievementMetric.monthlyCheckoutRate ||
+        AchievementMetric.monthlyAverage ||
+        AchievementMetric.monthlyScoring ||
+        AchievementMetric.rankingGold ||
+        AchievementMetric.rankingSilver ||
+        AchievementMetric.rankingBronze ||
+        AchievementMetric.rankingMvp => false,
+        _ => true,
+      };
 
   void _queueAchievementRefresh(
     GroupMatch? match, {
@@ -4492,33 +4573,43 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     TournamentGroup group,
     List<String> tieBreakers,
   ) {
-    final standings = const GroupStandingsEngine().calculate(
-      group,
-      tieBreakers,
-      tournament: widget.tournament,
-    );
     final runStage = widget.tournament.runStages
         .whereType<GroupTournamentRunStage>()
         .where((stage) => stage.groups.contains(group))
         .firstOrNull;
-    if (runStage?.allowTieBreakDeciders ?? false) return standings;
-    standings.sort((a, b) {
-      final comparison = _compareTieBreakersOnly(
-        a,
-        b,
+    final cacheKey =
+        '${tieBreakers.join('\u001f')}|${runStage?.allowTieBreakDeciders ?? false}';
+    final cached = _standingsCache[group];
+    if (cached != null && cached.$1 == cacheKey) return cached.$2;
+    final standings = ResultEntryPerformanceTrace.measureSync(
+      'group_standings_calculate',
+      () => const GroupStandingsEngine().calculate(
+        group,
         tieBreakers,
-        group.matches,
-      );
-      if (comparison != 0) return comparison;
-      final aId = a.player.profileId ?? a.player.name;
-      final bId = b.player.profileId ?? b.player.name;
-      return _stableTieDrawKey(
-        '${widget.tournament.id}|${group.name}|$aId',
-      ).compareTo(
-        _stableTieDrawKey('${widget.tournament.id}|${group.name}|$bId'),
-      );
-    });
-    return standings;
+        tournament: widget.tournament,
+      ),
+    );
+    if (!(runStage?.allowTieBreakDeciders ?? false)) {
+      standings.sort((a, b) {
+        final comparison = _compareTieBreakersOnly(
+          a,
+          b,
+          tieBreakers,
+          group.matches,
+        );
+        if (comparison != 0) return comparison;
+        final aId = a.player.profileId ?? a.player.name;
+        final bId = b.player.profileId ?? b.player.name;
+        return _stableTieDrawKey(
+          '${widget.tournament.id}|${group.name}|$aId',
+        ).compareTo(
+          _stableTieDrawKey('${widget.tournament.id}|${group.name}|$bId'),
+        );
+      });
+    }
+    final cachedStandings = List<PlayerStanding>.unmodifiable(standings);
+    _standingsCache[group] = (cacheKey, cachedStandings);
+    return cachedStandings;
   }
 
   int _compareHeadToHead(
@@ -5709,7 +5800,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   @override
   Widget build(BuildContext context) {
-    return _buildAuthorized(context);
+    return ResultEntryPerformanceTrace.measureSync(
+      'tournament_run_build',
+      () => _buildAuthorized(context),
+    );
   }
 
   Widget _buildAuthorized(BuildContext context) {

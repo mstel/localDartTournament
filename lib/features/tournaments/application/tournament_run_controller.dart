@@ -1,6 +1,7 @@
 import '../data/tournament_storage.dart';
 import '../domain/tournament_models.dart';
 import 'tournament_timing.dart';
+import 'result_entry_performance_trace.dart';
 
 class TournamentRunController {
   const TournamentRunController({TournamentStorage? storage})
@@ -18,7 +19,13 @@ class TournamentRunController {
       ..clear()
       ..addAll(completedStageIndexes);
     final storage = _storage ?? TournamentStorage();
-    await TournamentTiming.prepare(tournament);
-    await storage.saveTournament(tournament);
+    await ResultEntryPerformanceTrace.measureAsync(
+      'run_timing_prepare',
+      () => TournamentTiming.prepare(tournament),
+    );
+    await ResultEntryPerformanceTrace.measureAsync(
+      'run_archive_save',
+      () => storage.saveTournament(tournament),
+    );
   }
 }
