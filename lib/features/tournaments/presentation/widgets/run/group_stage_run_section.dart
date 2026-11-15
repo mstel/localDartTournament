@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../application/order_of_play/order_of_play_controller.dart';
+import '../../../application/tournament_flow_priority.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../domain/tournament_models.dart';
 import 'best_of_comparison_table.dart';
 import 'group_run_section.dart';
@@ -23,6 +26,7 @@ class GroupStageRunSection extends StatefulWidget {
     required this.canEditResults,
     required this.miniKnockoutBracketBuilder,
     this.onEditPositions,
+    this.tournament,
   });
 
   final GroupTournamentRunStage stage;
@@ -35,6 +39,7 @@ class GroupStageRunSection extends StatefulWidget {
   final bool canEditResults;
   final MiniKnockoutBracketBuilder miniKnockoutBracketBuilder;
   final VoidCallback? onEditPositions;
+  final CreatedTournament? tournament;
 
   @override
   State<GroupStageRunSection> createState() => _GroupStageRunSectionState();
@@ -152,6 +157,9 @@ class _GroupStageRunSectionState extends State<GroupStageRunSection> {
                           qualificationPlan: stage.qualificationPlan,
                           tieBreakers: stage.tieBreakers,
                           standings: standingsByGroup[stage.groups[index]]!,
+                          orderedMatches: _orderedMatchesFor(
+                            stage.groups[index],
+                          ),
                           onEditResult: onEditResult,
                           canEditResults: canEditResults,
                         ),
@@ -190,6 +198,35 @@ class _GroupStageRunSectionState extends State<GroupStageRunSection> {
         );
       },
     );
+  }
+
+  List<GroupMatch> _orderedMatchesFor(TournamentGroup group) {
+    final tournament = widget.tournament;
+    final stageIndex = tournament?.runStages.indexOf(stage) ?? -1;
+    if (tournament == null || stageIndex < 0) return group.matches;
+    final priority = TournamentFlowPriority.forStage(
+      stage,
+      settings: TournamentFlowPrioritySettings(
+        playerMatchDeficitThreshold:
+            tournament.tournamentSettings.playerMatchDeficitThreshold,
+        groupMatchDeficitThreshold:
+            tournament.tournamentSettings.groupMatchDeficitThreshold,
+        usePercentageForGroups:
+            tournament.tournamentSettings.usePercentageForGroups,
+      ),
+    );
+    final orderedEntries = const OrderOfPlayController().orderedEntriesForStage(
+      tournament,
+      stageIndex,
+      prioritizedMatches: priority.prioritizedMatches,
+      deprioritizedMatches: priority.deprioritizedMatches,
+    );
+    final matches = group.matches.toSet();
+    return [
+      for (final entry in orderedEntries)
+        if (matches.remove(entry.match)) entry.match,
+      ...matches,
+    ];
   }
 
   int _requiredRankForMiniGroup(GroupTournamentRunStage stage, int groupIndex) {

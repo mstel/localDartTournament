@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../application/order_of_play/order_of_play_controller.dart';
+import '../../../application/tournament_flow_priority.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
 import '../../utils/match_display_label.dart';
@@ -49,6 +52,27 @@ class TournamentScheduleView extends StatelessWidget {
     final stageSettings = stageIndex < tournament.stages.length
         ? tournament.stages[stageIndex]
         : null;
+    final priority = TournamentFlowPriority.forStage(
+      stage,
+      settings: TournamentFlowPrioritySettings(
+        playerMatchDeficitThreshold:
+            tournament.tournamentSettings.playerMatchDeficitThreshold,
+        groupMatchDeficitThreshold:
+            tournament.tournamentSettings.groupMatchDeficitThreshold,
+        usePercentageForGroups:
+            tournament.tournamentSettings.usePercentageForGroups,
+      ),
+    );
+    final orderedEntries = const OrderOfPlayController().orderedEntriesForStage(
+      tournament,
+      stageIndex,
+      prioritizedMatches: priority.prioritizedMatches,
+      deprioritizedMatches: priority.deprioritizedMatches,
+    );
+    final scheduleOrder = {
+      for (var index = 0; index < orderedEntries.length; index++)
+        orderedEntries[index].match: index,
+    };
     final rows = <_ScheduleRow>[];
     if (stage is GroupTournamentRunStage) {
       for (final group in stage.groups) {
@@ -89,6 +113,11 @@ class TournamentScheduleView extends StatelessWidget {
         rows.add(_ScheduleRow(round: 'Platzierung', match: match));
       }
     }
+    rows.sort(
+      (a, b) => (scheduleOrder[a.match] ?? 1 << 30).compareTo(
+        scheduleOrder[b.match] ?? 1 << 30,
+      ),
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),

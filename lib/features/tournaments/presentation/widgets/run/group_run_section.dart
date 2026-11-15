@@ -15,6 +15,7 @@ class GroupRunSection extends StatefulWidget {
     required this.standings,
     required this.onEditResult,
     required this.canEditResults,
+    this.orderedMatches,
   });
 
   final TournamentGroup group;
@@ -24,6 +25,7 @@ class GroupRunSection extends StatefulWidget {
   final List<PlayerStanding> standings;
   final void Function(GroupMatch match) onEditResult;
   final bool canEditResults;
+  final List<GroupMatch>? orderedMatches;
 
   @override
   State<GroupRunSection> createState() => _GroupRunSectionState();
@@ -31,6 +33,8 @@ class GroupRunSection extends StatefulWidget {
 
 class _GroupRunSectionState extends State<GroupRunSection> {
   bool _showMatches = false;
+  List<GroupMatch> get _matches =>
+      widget.orderedMatches ?? widget.group.matches;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +48,7 @@ class _GroupRunSectionState extends State<GroupRunSection> {
             padding: const EdgeInsets.only(bottom: 18),
             child: MobileGroupMatches(
               group: widget.group,
+              matches: _matches,
               table: StandingsTable(
                 standings: widget.standings,
                 group: widget.group,
@@ -116,7 +121,7 @@ class _GroupRunSectionState extends State<GroupRunSection> {
                       ),
                       Chip(
                         label: Text(
-                          '${widget.group.playType == 'swiss' ? (widget.group.players.length ~/ 2) * widget.group.matches.map((m) => m.round).toSet().length : widget.group.matches.length}',
+                          '${widget.group.playType == 'swiss' ? (widget.group.players.length ~/ 2) * _matches.map((m) => m.round).toSet().length : _matches.length}',
                         ),
                       ),
                     ],
@@ -125,7 +130,7 @@ class _GroupRunSectionState extends State<GroupRunSection> {
               ),
               if (_showMatches) ...[
                 const SizedBox(height: 8),
-                for (final match in widget.group.matches)
+                for (final match in _matches)
                   MatchResultTile(
                     match: match,
                     onEditResult: widget.onEditResult,

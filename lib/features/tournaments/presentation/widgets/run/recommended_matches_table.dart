@@ -33,6 +33,7 @@ class RecommendedMatchesTable extends StatelessWidget {
     this.emptyMessage = 'Keine offenen Partien.',
     this.dense = false,
     this.playerInsights = const {},
+    this.prioritizeForDisplay = true,
   });
 
   final List<RecommendedMatchGroup> groups;
@@ -42,6 +43,7 @@ class RecommendedMatchesTable extends StatelessWidget {
   final String emptyMessage;
   final bool dense;
   final Map<String, List<PlayerInsight>> playerInsights;
+  final bool prioritizeForDisplay;
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +105,7 @@ class RecommendedMatchesTable extends StatelessWidget {
             group,
             prioritizedMatches,
             deprioritizedMatches,
+            prioritizeForDisplay,
           );
           final copies = columnCounts[groupIndex];
           for (var copyIndex = 0; copyIndex < copies; copyIndex++) {
@@ -143,19 +146,24 @@ List<GroupMatch> _orderedMatches(
   RecommendedMatchGroup group,
   Set<GroupMatch> prioritizedMatches,
   Set<GroupMatch> deprioritizedMatches,
+  bool prioritizeForDisplay,
 ) {
   final matches =
       [
         for (var index = 0; index < group.matches.length; index++)
           (match: group.matches[index], index: index),
       ]..sort((left, right) {
-        final leftPriority = prioritizedMatches.contains(left.match);
-        final rightPriority = prioritizedMatches.contains(right.match);
-        if (leftPriority != rightPriority) return leftPriority ? -1 : 1;
-        final leftDeprioritized = deprioritizedMatches.contains(left.match);
-        final rightDeprioritized = deprioritizedMatches.contains(right.match);
-        if (leftDeprioritized != rightDeprioritized) {
-          return leftDeprioritized ? 1 : -1;
+        if (prioritizeForDisplay) {
+          final leftPriority = prioritizedMatches.contains(left.match);
+          final rightPriority = prioritizedMatches.contains(right.match);
+          if (leftPriority != rightPriority) return leftPriority ? -1 : 1;
+        }
+        if (prioritizeForDisplay) {
+          final leftDeprioritized = deprioritizedMatches.contains(left.match);
+          final rightDeprioritized = deprioritizedMatches.contains(right.match);
+          if (leftDeprioritized != rightDeprioritized) {
+            return leftDeprioritized ? 1 : -1;
+          }
         }
         return left.index.compareTo(right.index);
       });

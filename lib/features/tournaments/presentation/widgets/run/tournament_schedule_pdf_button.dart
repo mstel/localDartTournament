@@ -4,6 +4,9 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../../../../settings/data/app_presentation_preferences.dart';
 
+import '../../../application/order_of_play/order_of_play_controller.dart';
+import '../../../application/tournament_flow_priority.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../../league/domain/league_match.dart';
 import '../../../domain/tournament_models.dart';
 import '../../utils/match_display_label.dart';
@@ -230,6 +233,30 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         ? tournament.runStages
         : [tournament.runStages[stageIndex]];
     for (final stage in stages) {
+      final stageIndex = tournament.runStages.indexOf(stage);
+      final priority = TournamentFlowPriority.forStage(
+        stage,
+        settings: TournamentFlowPrioritySettings(
+          playerMatchDeficitThreshold:
+              tournament.tournamentSettings.playerMatchDeficitThreshold,
+          groupMatchDeficitThreshold:
+              tournament.tournamentSettings.groupMatchDeficitThreshold,
+          usePercentageForGroups:
+              tournament.tournamentSettings.usePercentageForGroups,
+        ),
+      );
+      final orderedEntries = stageIndex < 0
+          ? const <PlayEntry>[]
+          : const OrderOfPlayController().orderedEntriesForStage(
+              tournament,
+              stageIndex,
+              prioritizedMatches: priority.prioritizedMatches,
+              deprioritizedMatches: priority.deprioritizedMatches,
+            );
+      final scheduleOrder = {
+        for (var index = 0; index < orderedEntries.length; index++)
+          orderedEntries[index].match: index,
+      };
       content.add(
         pw.Padding(
           padding: const pw.EdgeInsets.only(top: 14, bottom: 6),
@@ -240,28 +267,38 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         ),
       );
       if (stage is GroupTournamentRunStage) {
+        final roundLabels = <GroupMatch, String>{};
         for (final group in stage.groups) {
-          content
-            ..add(pw.Text(group.name, style: pw.TextStyle(fontSize: 13)))
-            ..add(
-              _table(
-                [
-                  ['Runde', 'Heim', 'Gast', 'Ergebnis'],
-                  for (final match in group.matches)
-                    _matchRow(match, match.round.toString()),
-                ],
-                [1, 4, 4, 2],
+          for (final match in group.matches) {
+            roundLabels[match] = 'Gruppe ${group.name} · Runde ${match.round}';
+          }
+        }
+        final matches = roundLabels.keys.toList()
+          ..sort(
+            (a, b) => (scheduleOrder[a] ?? 1 << 30).compareTo(
+              scheduleOrder[b] ?? 1 << 30,
+            ),
+          );
+        content.add(
+          _table(
+            [
+              ['Runde / Gruppe', 'Heim', 'Gast', 'Ergebnis'],
+              for (final match in matches)
+                _matchRow(match, roundLabels[match]!),
+            ],
+            [2, 4, 4, 2],
+          ),
+        );
+        for (final group in stage.groups) {
+          content.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 5, bottom: 8),
+              child: pw.Text(
+                '${group.name} · Tie-Breaker: ${stage.tieBreakers.map(tieBreakerLabel).join(' → ')}',
+                style: const pw.TextStyle(fontSize: 9),
               ),
-            )
-            ..add(
-              pw.Padding(
-                padding: const pw.EdgeInsets.only(top: 5, bottom: 8),
-                child: pw.Text(
-                  'Tie-Breaker: ${stage.tieBreakers.map(tieBreakerLabel).join(' → ')}',
-                  style: const pw.TextStyle(fontSize: 9),
-                ),
-              ),
-            );
+            ),
+          );
         }
       } else if (stage is KnockoutTournamentRunStage) {
         if (stage.eliminationLossLimit >= 3) {

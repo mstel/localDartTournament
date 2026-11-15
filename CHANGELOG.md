@@ -1,3 +1,30 @@
+# 3.0.1+101
+
+- Vereinheitlicht die Matchreihenfolge nach dem gewählten Spielplan: Dynamische
+  Empfehlungen und feste Reihenfolgen werden in Übersicht, Ergebnissen,
+  Spielleiteransicht, Zweitmonitor, Sprachausgabe und Spielplanexport konsistent
+  dargestellt.
+- Berücksichtigt Board-Zuweisung und Prioritätshinweise in derselben stabilen
+  Reihenfolge; ein fester Spielplan behält seine gespeicherte Reihenfolge.
+- Ermöglicht manuelle Simulationsstarts auf freien Boards auch während der
+  simulierten Board-Leerstandszeit; automatische Starts berücksichtigen die
+  konfigurierte Leerstandszeit weiterhin.
+- Aktualisiert die README auf den Funktionsstand 3.0.1+101.
+
+# 3.0.0+100
+
+- Simuliert zufällige Matchdauern sekundengenau innerhalb der eingestellten
+  Minutengrenzen und aktualisiert die Simulationsteuerung sowie das Log.
+- Ermöglicht nach jedem Simulationsschritt manuelle Starts auf freien Boards,
+  während automatische Starts und Board-Leerstandszeiten weiterhin simuliert
+  werden.
+
+# 2.7.9+99
+
+- Ergänzt manuelle Starts, automatische Startsteuerung, Ereignislog,
+  Zurücksetzen und Schritt-Undo für die isolierte Turniersimulation.
+- Richtet Turniernotizen linksbündig und über die volle Formularbreite aus.
+
 # 2.7.8+98
 
 - Ergänzt dauerhaft gespeicherte Turniernotizen, die auch nach Turnierabschluss
@@ -8,6 +35,13 @@
   Turnierergebnisse oder Spielerstatistiken.
 - Vereinheitlicht feste Reihenfolge und festen Spielplan zu einem vollständigen,
   bearbeitbaren Spielplanmodus mit reservierten Plätzen für zukünftige Partien.
+
+# 2.7.7+97
+
+- Ergänzt feste Spielreihenfolge und vollständigen Spielplan mit Neuplanung,
+  manueller Sortierung sowie Vorziehen und Zurückstellen von Begegnungen.
+- Ergänzt Teamvergleiche für Liga- und Freundschaftsspiele sowie konfigurierbare
+  PDF-Spielplanfelder und Ausrichtung.
 
 # 2.7.6+96
 

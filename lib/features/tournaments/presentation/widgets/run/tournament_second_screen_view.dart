@@ -3563,12 +3563,23 @@ class _TournamentSecondScreenViewState
       stage,
       settings: _prioritySettings,
     );
+    final orderedEntries = const OrderOfPlayController().orderedEntriesForStage(
+      t,
+      activeIndex,
+      prioritizedMatches: flowPriority.prioritizedMatches,
+      deprioritizedMatches: flowPriority.deprioritizedMatches,
+    );
     final recommendedGroups = stage is GroupTournamentRunStage
         ? [
             for (final group in stage.groups)
               RecommendedMatchGroup(
                 name: group.name,
-                matches: _matchesOfGroup(group),
+                matches: [
+                  for (final entry in orderedEntries)
+                    if (entry.groupKey ==
+                        tournamentGroupBoardKey(activeIndex, group.name))
+                      entry.match,
+                ],
                 isDelayed: flowPriority.delayedGroups.contains(group.name),
                 playedMatches: _matchesOfGroup(
                   group,
@@ -3582,7 +3593,7 @@ class _TournamentSecondScreenViewState
             if (stage != null)
               RecommendedMatchGroup(
                 name: stage.name,
-                matches: _matchesOf(stage),
+                matches: [for (final entry in orderedEntries) entry.match],
                 playedMatches: _matchesOf(
                   stage,
                 ).where((match) => match.hasResult).length,
@@ -3675,6 +3686,7 @@ class _TournamentSecondScreenViewState
                           prioritizedMatches: flowPriority.prioritizedMatches,
                           deprioritizedMatches:
                               flowPriority.deprioritizedMatches,
+                          prioritizeForDisplay: false,
                           emptyMessage:
                               'Keine offenen Partien in dieser Phase.',
                           dense: true,

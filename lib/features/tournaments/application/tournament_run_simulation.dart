@@ -230,11 +230,18 @@ class TournamentRunSimulation {
         stageIndex >= _tournament.runStages.length) {
       return const [];
     }
-    final schedule = _currentSchedule();
-    final entry = schedule.planned
-        .where((assignment) => identical(assignment.entry.match, match))
-        .map((assignment) => assignment.entry)
+    final entries = _orderOfPlay.entries(_tournament);
+    final entry = entries
+        .where(
+          (entry) =>
+              entry.stageIndex == stageIndex &&
+              identical(entry.match, match) &&
+              entry.match.hasPlayers &&
+              !entry.match.isResolved &&
+              !entry.match.isAnnulled,
+        )
         .firstOrNull;
+    final schedule = _currentSchedule();
     if (entry == null ||
         schedule.running.any(
           (running) => running.players.any(entry.players.contains),
@@ -247,8 +254,7 @@ class TournamentRunSimulation {
     final available = [
       for (var board = 1; board <= _tournament.boardCount; board++)
         if (!_tournament.blockedBoards.contains(board) &&
-            !runningBoards.contains(board) &&
-            (_boardAvailableAt[board] ?? 0) <= _elapsedSeconds)
+            !runningBoards.contains(board))
           board,
     ];
     final recommendedBoard = schedule.planned
@@ -278,6 +284,7 @@ class TournamentRunSimulation {
         _undoStack.removeLast();
         return false;
       }
+      _boardAvailableAt.remove(board);
       _durationByMatch[_keyForMatch(match)] = _matchDurationSeconds(
         stageIndex,
         match,

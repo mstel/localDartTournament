@@ -153,6 +153,36 @@ void main() {
     );
   });
 
+  test('manual starts can use a board during its scheduled idle time', () {
+    final parameters = TournamentPlanningParameters.fromValues({
+      PlanningParameter.minutes501DoubleOut: 1,
+      PlanningParameter.boardIdleMinutes: 2,
+    });
+    final run = simulation(
+      fixture(),
+      42,
+      planningParameters: parameters,
+      mode: TournamentSimulationMode.fixedStep,
+    )..setAutoStartMatches(false);
+    final match = (run.tournament.runStages.single as GroupTournamentRunStage)
+        .groups
+        .single
+        .matches
+        .first;
+
+    expect(run.startMatch(match, 1), isTrue);
+    expect(run.nextStep(), isTrue);
+
+    final nextMatch =
+        (run.tournament.runStages.single as GroupTournamentRunStage)
+            .groups
+            .single
+            .matches
+            .firstWhere((candidate) => !candidate.isResolved);
+    expect(run.availableBoardsFor(nextMatch), contains(match.boardNumber));
+    expect(run.startMatch(nextMatch, match.boardNumber!), isTrue);
+  });
+
   test('random durations include seeded seconds within minute bounds', () {
     final run = simulation(
       fixture(),

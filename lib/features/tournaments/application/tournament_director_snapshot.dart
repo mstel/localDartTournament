@@ -23,7 +23,7 @@ class TournamentDirectorSnapshot {
   final int stage;
   final BoardSchedule schedule;
   late final List<PlayEntry> entries, ready;
-  late final Set<GroupMatch> _prioritizedMatches =
+  late final TournamentFlowPriority _flowPriority =
       TournamentFlowPriority.forStage(
         tournament.runStages[stage],
         settings: TournamentFlowPrioritySettings(
@@ -34,24 +34,49 @@ class TournamentDirectorSnapshot {
           usePercentageForGroups:
               tournament.tournamentSettings.usePercentageForGroups,
         ),
-      ).prioritizedMatches;
+      );
+  late final Set<GroupMatch> _prioritizedMatches =
+      _flowPriority.prioritizedMatches;
+  late final Set<GroupMatch> _deprioritizedMatches =
+      _flowPriority.deprioritizedMatches;
 
-  List<BoardAssignment> upcomingForBoard(int board) => schedule.planned
-      .where(
-        (assignment) =>
-            assignment.entry.stageIndex == stage &&
-            assignment.board == board &&
-            assignment.entry.match.hasPlayers,
-      )
-      .take(4)
-      .toList();
+  List<BoardAssignment> upcomingForBoard(int board) {
+    final assignments = schedule.planned
+        .where(
+          (assignment) =>
+              assignment.entry.stageIndex == stage &&
+              assignment.board == board &&
+              assignment.entry.match.hasPlayers,
+        )
+        .toList();
+    if (tournament.directorPlayOrderMode == 'dynamic') {
+      final order = {
+        for (var index = 0; index < assignments.length; index++)
+          assignments[index]: index,
+      };
+      assignments.sort((a, b) {
+        final blockOrder = a.block.compareTo(b.block);
+        if (blockOrder != 0) return blockOrder;
+        final aPriority = _prioritizedMatches.contains(a.entry.match);
+        final bPriority = _prioritizedMatches.contains(b.entry.match);
+        if (aPriority != bPriority) return aPriority ? -1 : 1;
+        final aDeprioritized = _deprioritizedMatches.contains(a.entry.match);
+        final bDeprioritized = _deprioritizedMatches.contains(b.entry.match);
+        if (aDeprioritized != bDeprioritized) {
+          return aDeprioritized ? 1 : -1;
+        }
+        return order[a]!.compareTo(order[b]!);
+      });
+    }
+    return assignments.take(4).toList();
+  }
 
   List<BoardAssignment> selectableForBoard(int board) {
     if (!freeBoards.contains(board)) return [];
     final busyPlayers = {
       for (final running in schedule.running) ...running.players,
     };
-    return schedule.planned
+    final assignments = schedule.planned
         .where(
           (assignment) =>
               assignment.entry.stageIndex == stage &&
@@ -60,6 +85,26 @@ class TournamentDirectorSnapshot {
               !assignment.entry.players.any(busyPlayers.contains),
         )
         .toList();
+    if (tournament.directorPlayOrderMode == 'dynamic') {
+      final order = {
+        for (var index = 0; index < assignments.length; index++)
+          assignments[index]: index,
+      };
+      assignments.sort((a, b) {
+        final blockOrder = a.block.compareTo(b.block);
+        if (blockOrder != 0) return blockOrder;
+        final aPriority = _prioritizedMatches.contains(a.entry.match);
+        final bPriority = _prioritizedMatches.contains(b.entry.match);
+        if (aPriority != bPriority) return aPriority ? -1 : 1;
+        final aDeprioritized = _deprioritizedMatches.contains(a.entry.match);
+        final bDeprioritized = _deprioritizedMatches.contains(b.entry.match);
+        if (aDeprioritized != bDeprioritized) {
+          return aDeprioritized ? 1 : -1;
+        }
+        return order[a]!.compareTo(order[b]!);
+      });
+    }
+    return assignments;
   }
 
   TournamentDirectorBoardRecommendation? recommendationForBoard(int board) {
@@ -78,13 +123,19 @@ class TournamentDirectorSnapshot {
         candidates[index]: index,
     };
     candidates.sort((a, b) {
-      final aPriority = _prioritizedMatches.contains(a.entry.match);
-      final bPriority = _prioritizedMatches.contains(b.entry.match);
-      if (aPriority != bPriority) return aPriority ? -1 : 1;
       final blockOrder = a.block.compareTo(b.block);
-      return blockOrder != 0
-          ? blockOrder
-          : originalOrder[a]!.compareTo(originalOrder[b]!);
+      if (blockOrder != 0) return blockOrder;
+      if (tournament.directorPlayOrderMode == 'dynamic') {
+        final aPriority = _prioritizedMatches.contains(a.entry.match);
+        final bPriority = _prioritizedMatches.contains(b.entry.match);
+        if (aPriority != bPriority) return aPriority ? -1 : 1;
+        final aDeprioritized = _deprioritizedMatches.contains(a.entry.match);
+        final bDeprioritized = _deprioritizedMatches.contains(b.entry.match);
+        if (aDeprioritized != bDeprioritized) {
+          return aDeprioritized ? 1 : -1;
+        }
+      }
+      return originalOrder[a]!.compareTo(originalOrder[b]!);
     });
     final recommended = candidates.first;
     final next = BoardAssignment(recommended.entry, recommended.block, board);
@@ -117,14 +168,15 @@ class TournamentDirectorSnapshot {
     TournamentSettings settings = const TournamentSettings(),
     int limit = 6,
   }) {
-    final prioritized = TournamentFlowPriority.forStage(
+    final priority = TournamentFlowPriority.forStage(
       tournament.runStages[stage],
       settings: TournamentFlowPrioritySettings(
         playerMatchDeficitThreshold: settings.playerMatchDeficitThreshold,
         groupMatchDeficitThreshold: settings.groupMatchDeficitThreshold,
         usePercentageForGroups: settings.usePercentageForGroups,
       ),
-    ).prioritizedMatches;
+    );
+    final prioritized = priority.prioritizedMatches;
     final assignments = schedule.planned
         .where(
           (assignment) =>
@@ -137,16 +189,27 @@ class TournamentDirectorSnapshot {
         assignments[index]: index,
     };
     assignments.sort((a, b) {
-      final priority =
-          prioritized.contains(a.entry.match) ==
-              prioritized.contains(b.entry.match)
-          ? 0
-          : prioritized.contains(a.entry.match)
-          ? -1
-          : 1;
-      if (priority != 0) return priority;
       final blockOrder = a.block.compareTo(b.block);
       if (blockOrder != 0) return blockOrder;
+      if (tournament.directorPlayOrderMode == 'dynamic') {
+        final priorityOrder =
+            prioritized.contains(a.entry.match) ==
+                prioritized.contains(b.entry.match)
+            ? 0
+            : prioritized.contains(a.entry.match)
+            ? -1
+            : 1;
+        if (priorityOrder != 0) return priorityOrder;
+        final aDeprioritized = priority.deprioritizedMatches.contains(
+          a.entry.match,
+        );
+        final bDeprioritized = priority.deprioritizedMatches.contains(
+          b.entry.match,
+        );
+        if (aDeprioritized != bDeprioritized) {
+          return aDeprioritized ? 1 : -1;
+        }
+      }
       return originalOrder[a]!.compareTo(originalOrder[b]!);
     });
     return assignments.take(limit).toList(growable: false);
@@ -160,6 +223,16 @@ class TournamentDirectorSnapshot {
         (p.name.toLowerCase().contains(text) ||
             p.individuals.any((i) => i.name.toLowerCase().contains(text)));
     // Only known pairings from the current stage; no speculative next-stage seeds.
+    final ordered = const OrderOfPlayController().orderedEntriesForStage(
+      tournament,
+      stage,
+      prioritizedMatches: _prioritizedMatches,
+      deprioritizedMatches: _deprioritizedMatches,
+    );
+    final order = {
+      for (var index = 0; index < ordered.length; index++)
+        ordered[index].match: index,
+    };
     return entries
         .where(
           (e) =>
@@ -169,13 +242,14 @@ class TournamentDirectorSnapshot {
         )
         .toList()
       ..sort((a, b) {
-        int order(PlayEntry e) =>
-            schedule.running.any((r) => identical(r.match, e.match))
-            ? -1
-            : schedule.planned.indexWhere(
-                (p) => identical(p.entry.match, e.match),
-              );
-        return order(a).compareTo(order(b));
+        final aRunning = schedule.running.any(
+          (running) => identical(running.match, a.match),
+        );
+        final bRunning = schedule.running.any(
+          (running) => identical(running.match, b.match),
+        );
+        if (aRunning != bRunning) return aRunning ? -1 : 1;
+        return (order[a.match] ?? 1 << 30).compareTo(order[b.match] ?? 1 << 30);
       });
   }
 }

@@ -142,17 +142,32 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
     for (final assignment in schedule.planned) {
       blocks.putIfAbsent(assignment.block, () => []).add(assignment);
     }
-    for (final assignments in blocks.values) {
-      assignments.sort((a, b) {
-        final aIsPriority = flowPriority.prioritizedMatches.contains(
-          a.entry.match,
-        );
-        final bIsPriority = flowPriority.prioritizedMatches.contains(
-          b.entry.match,
-        );
-        if (aIsPriority == bIsPriority) return 0;
-        return aIsPriority ? -1 : 1;
-      });
+    if (tournament.directorPlayOrderMode == 'dynamic') {
+      for (final assignments in blocks.values) {
+        final originalOrder = {
+          for (var index = 0; index < assignments.length; index++)
+            assignments[index]: index,
+        };
+        assignments.sort((a, b) {
+          final aIsPriority = flowPriority.prioritizedMatches.contains(
+            a.entry.match,
+          );
+          final bIsPriority = flowPriority.prioritizedMatches.contains(
+            b.entry.match,
+          );
+          if (aIsPriority != bIsPriority) return aIsPriority ? -1 : 1;
+          final aIsDeprioritized = flowPriority.deprioritizedMatches.contains(
+            a.entry.match,
+          );
+          final bIsDeprioritized = flowPriority.deprioritizedMatches.contains(
+            b.entry.match,
+          );
+          if (aIsDeprioritized != bIsDeprioritized) {
+            return aIsDeprioritized ? 1 : -1;
+          }
+          return originalOrder[a]!.compareTo(originalOrder[b]!);
+        });
+      }
     }
     final orderedBlocks = blocks.keys.toList()..sort();
     return Center(

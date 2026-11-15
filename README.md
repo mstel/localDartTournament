@@ -1,6 +1,6 @@
 # 🎯 DartTournamentPro (Dart Turnierverwaltung)
 
-[![Version](https://img.shields.io/badge/version-2.7.8%2B98-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.0.1%2B101-blue.svg)](CHANGELOG.md)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
 [![Plattformen](https://img.shields.io/badge/Plattformen-Windows%20|%20Android%20|%20Linux%20|%20macOS-success.svg)]()
@@ -38,6 +38,9 @@ DartTournamentPro ist eine moderne, hochflexible Dartturnier- und Vereinsverwalt
 - **Vielseitige Spielsysteme:** Kombination von bis zu 3 Etappen (Gruppenphasen, Single KO, Double KO, Triple KO, Kratzer mit Bonusleben, Schweizer System, Ligaspiele und Freundschaftsspiele).
 - **KI-gestützter Turnierformfinder:** Berechnet anhand von Spieleranzahl, Scheiben und Zieldauer automatisch das optimale Turniermodell inklusive Leg-Distanzen.
 - **Turnierleiter-Dashboard:** Intelligente Scheibenzuweisung, automatisches Nachrücken freier Boards, Prioritätssteuerung bei Spielrückständen und Match-Empfehlungen.
+- **Einheitlicher Spielplan:** Dynamische Empfehlungen oder feste, bearbeitbare Reihenfolge mit gruppenbasierter oder turnierweit optimierter Board-Zuweisung.
+- **Turniersimulation:** Reproduzierbare Simulation mit Seed, Einzel- oder Zufallsschritten, manuellen Starts, automatischer Planung, Undo und Ereignislog – ohne Einfluss auf echte Spielerstatistiken.
+- **Turniernotizen:** Freitext-Notizen in der Übersicht, die gespeichert bleiben und auch nach Turnierabschluss verfügbar sind.
 - **Text-to-Speech & Soundeffekte:** Automatische Audio-Ausrufe für aufgerufene Begegnungen ("Spieler A gegen Spieler B an Board X") und Erinnerungen bei freien Boards.
 - **Player Insights:** Live-Statistikbadges an Spielpaarungen (Siegesserien, Angstgegner, Rivalen, Decider-Stärke, Formkurven).
 - **Zweitmonitor-Modus & Standalone-App:** Vollbild-Präsentationsmodus für Fernseher oder Beamer im Vereinsheim mit aktiven Partien, Scheibenbelegung und QR-Code für Zuschauer.
@@ -97,8 +100,18 @@ Während des Turniers stehen dem Turnierleiter spezialisierte Ansichten zur Verf
   - Schnelle Zuweisung und Überwachung aller Scheiben.
   - Automatisches Nachrücken freier Boards.
   - Prioritätssteuerung: Erkennt Gruppen mit Spielrückständen und empfiehlt Partien zur Vermeidung von Verzögerungen (absolut oder prozentual).
+  - **Dynamischer Spielplan:** Offene Partien werden nach jedem Ergebnis anhand der gewählten Board-Strategie neu priorisiert.
+  - **Fester Spielplan:** Speichert auch noch nicht entschiedene Paarungen in einer bearbeitbaren Reihenfolge. Partien können vorgezogen, zurückgestellt oder neu sortiert werden; ein eigener Knopf berechnet den Plan neu.
+  - **Board-Strategie:** Gruppenbasiert weist Gruppen bevorzugte Boards zu; turnierweit optimiert plant offene Partien gemeinsam. Reihenfolge und Empfehlungen werden in Übersicht, Ergebnissen, Leitung, Zweitmonitor und Sprachausgabe einheitlich dargestellt.
   - Zeitverschiebung: Bei nachträglichen Datumskorrekturen werden Match-Zeitstempel konsistent verschoben, ohne Uhrzeiten oder Reihenfolge zu beeinträchtigen.
   - Spieler-Rückzug (Player Withdrawal) mit konfigurierbarer Wertung (kampflos oder Streichung).
+- **Turniernotizen:** In der Übersicht Freitext festhalten und speichern. Die Notizen bleiben am Turnier gespeichert und auch nach dessen Abschluss lesbar.
+- **Isolierte Turniersimulation:**
+  - Feste Schrittsimulation mit den Turnierzeiten oder Zufallsschritte mit einstellbarer Dauer (standardmäßig 4 bis 15 Minuten, sekundengenau).
+  - Boards laufen unabhängig; automatische Starts lassen sich abschalten, Partien auf freien Boards jederzeit manuell starten.
+  - Simulation mit festem Zufalls-Seed wiederholen, Schritte rückgängig machen, Simulation zurücksetzen und Ereignisse im Simulations-Log nachvollziehen.
+  - Simulierte Ergebnisse verändern weder echte Turnierergebnisse noch Spielerstatistiken, Ranglisten, Elo oder Errungenschaften.
+- **Gruppen- und Ergebnissichten:** Bei drei, sechs, neun oder zwölf Gruppen werden drei Gruppen nebeneinander angeordnet. Tabellen und Zwischenstände können bei breiten Ansichten als eigener Reiter eingeblendet werden.
 
 ### Player Insights & Live-Statistiken
 

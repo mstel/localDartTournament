@@ -8,19 +8,22 @@ class MobileGroupMatches extends StatelessWidget {
   const MobileGroupMatches({
     super.key,
     required this.group,
+    this.matches,
     required this.table,
     required this.onEditResult,
     required this.canEditResults,
   });
   final TournamentGroup group;
+  final List<GroupMatch>? matches;
   final Widget table;
   final void Function(GroupMatch) onEditResult;
   final bool canEditResults;
 
   @override
   Widget build(BuildContext context) {
-    final pending = group.matches.where((match) => !match.isResolved).toList();
-    final finished = group.matches.where((match) => match.isResolved).toList();
+    final orderedMatches = matches ?? group.matches;
+    final pending = orderedMatches.where((match) => !match.isResolved).toList();
+    final finished = orderedMatches.where((match) => match.isResolved).toList();
     final swiss = group.playType == 'swiss';
     final playedCount = finished.where((m) => m.hasPlayers).length;
     final openCount = swiss
@@ -53,13 +56,13 @@ class MobileGroupMatches extends StatelessWidget {
             key: ValueKey(group),
             rounds: [
               for (final round
-                  in (group.matches.map((m) => m.round).toSet().toList()
+                  in (orderedMatches.map((m) => m.round).toSet().toList()
                     ..sort()))
-                group.matches.where((m) => m.round == round).toList(),
+                orderedMatches.where((m) => m.round == round).toList(),
             ],
             labels: [
               for (final round
-                  in (group.matches.map((m) => m.round).toSet().toList()
+                  in (orderedMatches.map((m) => m.round).toSet().toList()
                     ..sort()))
                 'Runde $round',
             ],

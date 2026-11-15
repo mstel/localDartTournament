@@ -3,6 +3,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../application/order_of_play/order_of_play_controller.dart';
+import '../../../application/tournament_flow_priority.dart';
+import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../application/result_entry_performance_trace.dart';
@@ -218,6 +221,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           totalCount: totalCount,
           standingsSection: standingsSection,
           showStandingsTab: showStandingsTab,
+          orderedMatchesByGroup: _orderedMatchesByGroup(stage),
         );
 
         if (showStandingsTab) return matchesSection;
@@ -248,6 +252,44 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     );
   }
 
+  Map<TournamentGroup, List<GroupMatch>> _orderedMatchesByGroup(
+    GroupTournamentRunStage stage,
+  ) {
+    final tournament = widget.tournament;
+    final stageIndex = tournament?.runStages.indexOf(stage) ?? -1;
+    if (tournament == null || stageIndex < 0) {
+      return {for (final group in stage.groups) group: group.matches};
+    }
+
+    final priority = TournamentFlowPriority.forStage(
+      stage,
+      settings: TournamentFlowPrioritySettings(
+        playerMatchDeficitThreshold:
+            tournament.tournamentSettings.playerMatchDeficitThreshold,
+        groupMatchDeficitThreshold:
+            tournament.tournamentSettings.groupMatchDeficitThreshold,
+        usePercentageForGroups:
+            tournament.tournamentSettings.usePercentageForGroups,
+      ),
+    );
+    final orderedEntries = const OrderOfPlayController().orderedEntriesForStage(
+      tournament,
+      stageIndex,
+      prioritizedMatches: priority.prioritizedMatches,
+      deprioritizedMatches: priority.deprioritizedMatches,
+    );
+    return {
+      for (final group in stage.groups)
+        group: [
+          for (final entry in orderedEntries)
+            if (group.matches.contains(entry.match)) entry.match,
+          for (final match in group.matches)
+            if (!orderedEntries.any((entry) => identical(entry.match, match)))
+              match,
+        ],
+    };
+  }
+
   Widget _buildGroupMatchesColumn({
     required BuildContext context,
     required GroupTournamentRunStage stage,
@@ -256,6 +298,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     required int totalCount,
     required Widget standingsSection,
     required bool showStandingsTab,
+    required Map<TournamentGroup, List<GroupMatch>> orderedMatchesByGroup,
   }) {
     final theme = Theme.of(context);
 
@@ -363,6 +406,8 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                         : _buildGroupMatchList(
                             context: context,
                             group: stage.groups[index],
+                            orderedMatches:
+                                orderedMatchesByGroup[stage.groups[index]]!,
                             showGroupHeader: true,
                             compact: columns > 1,
                           ),
@@ -374,7 +419,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
         const SizedBox(height: 20),
         _buildRecentResultsSection(
           context,
-          stage.groups.expand((group) => group.matches).toList(),
+          stage.groups
+              .expand((group) => orderedMatchesByGroup[group]!)
+              .toList(),
         ),
       ],
     );
@@ -430,12 +477,13 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   Widget _buildGroupMatchList({
     required BuildContext context,
     required TournamentGroup group,
+    required List<GroupMatch> orderedMatches,
     required bool showGroupHeader,
     required bool compact,
   }) {
     final theme = Theme.of(context);
 
-    final filteredMatches = group.matches.where((m) {
+    final filteredMatches = orderedMatches.where((m) {
       if (!m.hasPlayers) return false;
       if (!_matchesPlayerFilter(m)) return false;
       switch (_filter) {

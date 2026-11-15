@@ -157,6 +157,45 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('group results follow the selected fixed schedule', (
+    tester,
+  ) async {
+    final stage = _oneLargeGroup();
+    final group = stage.groups.single;
+    group.matches.removeRange(3, group.matches.length);
+    final matches = group.matches;
+    for (var index = 0; index < matches.length; index++) {
+      matches[index].fixedScheduleOrder = matches.length - index;
+    }
+    final tournament = _tournamentFor(stage)
+      ..directorPlayOrderMode = 'fixed_schedule';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: stage,
+              tournament: tournament,
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widgetList<MatchResultTile>(find.byType(MatchResultTile))
+          .map((tile) => tile.match),
+      orderedEquals(matches.reversed),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('eight groups use four result columns on wide desktop', (
     tester,
   ) async {

@@ -66,6 +66,35 @@ void main() {
       orders.reduce((a, b) => a! > b! ? a : b),
     );
   });
+  test('display ordering follows fixed schedules and dynamic board plans', () {
+    final tournament = fixture(boards: 3);
+    final entries = controller.entries(tournament);
+    for (var index = 0; index < entries.length; index++) {
+      entries[index].match.fixedScheduleOrder = entries.length - index;
+    }
+
+    tournament.directorPlayOrderMode = 'fixed_schedule';
+    expect(
+      controller
+          .orderedEntriesForStage(tournament, 0)
+          .map((entry) => entry.match),
+      orderedEquals(entries.reversed.map((entry) => entry.match)),
+    );
+
+    tournament
+      ..directorPlayOrderMode = 'dynamic'
+      ..directorModeEnabled = true
+      ..directorSchedulingStrategy = 'global';
+    final schedule = controller.plan(tournament, 0);
+    expect(
+      controller
+          .orderedEntriesForStage(tournament, 0)
+          .map((entry) => entry.match),
+      orderedEquals(
+        schedule.planned.map((assignment) => assignment.entry.match),
+      ),
+    );
+  });
   test(
     'legacy fixed order keeps known positions and appends missing slots',
     () {

@@ -50,6 +50,70 @@ class OrderOfPlayController {
     return result;
   }
 
+  List<PlayEntry> orderedEntriesForStage(
+    CreatedTournament tournament,
+    int stageIndex, {
+    Set<GroupMatch> prioritizedMatches = const {},
+    Set<GroupMatch> deprioritizedMatches = const {},
+  }) {
+    final stageEntries = entries(
+      tournament,
+    ).where((entry) => entry.stageIndex == stageIndex).toList();
+    if (tournament.directorPlayOrderMode != 'dynamic') {
+      final originalOrder = {
+        for (var index = 0; index < stageEntries.length; index++)
+          stageEntries[index]: index,
+      };
+      stageEntries.sort((a, b) {
+        final scheduleOrder = (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+          b.match.fixedScheduleOrder ?? 1 << 30,
+        );
+        return scheduleOrder != 0
+            ? scheduleOrder
+            : originalOrder[a]!.compareTo(originalOrder[b]!);
+      });
+      return stageEntries;
+    }
+
+    final schedule = plan(tournament, stageIndex);
+    final blockForMatch = <GroupMatch, int>{
+      for (final entry in schedule.running) entry.match: -1,
+      for (final assignment in schedule.planned)
+        assignment.entry.match: assignment.block,
+    };
+    final scheduledEntries = [
+      ...schedule.running,
+      ...schedule.planned.map((assignment) => assignment.entry),
+      ...schedule.finished.where((entry) => entry.stageIndex == stageIndex),
+      ...schedule.waiting.where((entry) => entry.stageIndex == stageIndex),
+    ];
+    final scheduleOrder = {
+      for (var index = 0; index < scheduledEntries.length; index++)
+        scheduledEntries[index].match: index,
+    };
+    final originalOrder = {
+      for (var index = 0; index < stageEntries.length; index++)
+        stageEntries[index].match: index,
+    };
+    stageEntries.sort((a, b) {
+      final aBlock = blockForMatch[a.match] ?? 1 << 30;
+      final bBlock = blockForMatch[b.match] ?? 1 << 30;
+      if (aBlock != bBlock) return aBlock.compareTo(bBlock);
+      final aPriority = prioritizedMatches.contains(a.match);
+      final bPriority = prioritizedMatches.contains(b.match);
+      if (aPriority != bPriority) return aPriority ? -1 : 1;
+      final aDeprioritized = deprioritizedMatches.contains(a.match);
+      final bDeprioritized = deprioritizedMatches.contains(b.match);
+      if (aDeprioritized != bDeprioritized) return aDeprioritized ? 1 : -1;
+      final aOrder = scheduleOrder[a.match] ?? 1 << 30;
+      final bOrder = scheduleOrder[b.match] ?? 1 << 30;
+      return aOrder != bOrder
+          ? aOrder.compareTo(bOrder)
+          : originalOrder[a.match]!.compareTo(originalOrder[b.match]!);
+    });
+    return stageEntries;
+  }
+
   BoardSchedule plan(
     CreatedTournament tournament,
     int activeStage, {

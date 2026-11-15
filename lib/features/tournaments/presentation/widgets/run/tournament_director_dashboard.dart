@@ -1235,19 +1235,40 @@ class _TournamentDirectorDashboardState
           ];
     final recommendedGroups = <RecommendedMatchGroup>[];
     final stage = t.runStages[widget.activeStage];
+    final orderedEntries = const OrderOfPlayController().orderedEntriesForStage(
+      t,
+      widget.activeStage,
+      prioritizedMatches: flowPriority.prioritizedMatches,
+      deprioritizedMatches: flowPriority.deprioritizedMatches,
+    );
     if (stage is GroupTournamentRunStage) {
       for (final group in stage.groups) {
         recommendedGroups.add(
           RecommendedMatchGroup(
             name: group.name,
-            matches: group.matches.where(pendingMatchSet.contains).toList(),
+            matches: [
+              for (final entry in orderedEntries)
+                if (entry.groupKey ==
+                        tournamentGroupBoardKey(
+                          widget.activeStage,
+                          group.name,
+                        ) &&
+                    pendingMatchSet.contains(entry.match))
+                  entry.match,
+            ],
             isDelayed: flowPriority.delayedGroups.contains(group.name),
           ),
         );
       }
     } else {
       recommendedGroups.add(
-        RecommendedMatchGroup(name: stage.name, matches: pendingMatches),
+        RecommendedMatchGroup(
+          name: stage.name,
+          matches: [
+            for (final entry in orderedEntries)
+              if (pendingMatchSet.contains(entry.match)) entry.match,
+          ],
+        ),
       );
     }
     final resultEntryOrder = {
@@ -1623,6 +1644,7 @@ class _TournamentDirectorDashboardState
               groups: recommendedGroups,
               prioritizedMatches: flowPriority.prioritizedMatches,
               deprioritizedMatches: flowPriority.deprioritizedMatches,
+              prioritizeForDisplay: false,
               emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
               dense: true,
             ),
