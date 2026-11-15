@@ -19,7 +19,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Tie Breaker Standardwerte'),
       300,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.tap(find.text('Tie Breaker Standardwerte'));
     await tester.pumpAndSettle();

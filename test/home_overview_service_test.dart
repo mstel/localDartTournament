@@ -6,6 +6,7 @@ import 'package:dart_tournament_manager/features/tournaments/domain/tournament_m
 import 'package:dart_tournament_manager/features/home/presentation/widgets/home_activity_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeHomeOverviewSource implements HomeOverviewDataSource {
   _FakeHomeOverviewSource({
@@ -42,6 +43,8 @@ class _FakeHomeOverviewSource implements HomeOverviewDataSource {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   final playerA = TournamentPlayer(
     profileId: 'player-a',
     name: 'Marvin',

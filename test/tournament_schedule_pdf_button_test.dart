@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:printing/src/interface.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 CreatedTournament _tournament(TournamentRunStage? stage) => CreatedTournament(
   name: 'Testturnier',
@@ -43,6 +44,8 @@ class _CapturingPrintingPlatform extends PrintingPlatform {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('Swiss and Kratzer schedule exports are disabled with a reason', (
     tester,
   ) async {

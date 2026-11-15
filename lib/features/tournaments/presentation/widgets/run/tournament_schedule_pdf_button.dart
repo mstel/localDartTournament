@@ -89,7 +89,10 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         stageIndex: selectedStage,
         preferences: preferences,
       );
-      final fileName = '${_safeFileName(tournament.name)}.pdf';
+      final stageSuffix = selectedStage == null
+          ? ''
+          : '_${_safeFileName(tournament.runStages[selectedStage].name)}';
+      final fileName = '${_safeFileName(tournament.name)}$stageSuffix.pdf';
       await Printing.layoutPdf(
         onLayout: (_) => document.save(),
         format: preferences.pdfLandscape
