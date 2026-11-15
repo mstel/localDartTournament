@@ -57,13 +57,15 @@ void main() {
     TournamentPlanningParameters planningParameters =
         const TournamentPlanningParameters(),
     TournamentSimulationMode mode = TournamentSimulationMode.randomStep,
+    int minimumMinutes = 1,
+    int maximumMinutes = 5,
   }) => TournamentRunSimulation(
     source: source,
     planningParameters: planningParameters,
     seed: seed,
     mode: mode,
-    minimumMinutes: 1,
-    maximumMinutes: 5,
+    minimumMinutes: minimumMinutes,
+    maximumMinutes: maximumMinutes,
     runtimeFactory: ProductionTournamentRuntime.new,
   );
 
@@ -148,6 +150,109 @@ void main() {
           (match) => !match.hasResult && match.startedAt == null,
         ),
       ),
+    );
+  });
+
+  test('random durations include seeded seconds within minute bounds', () {
+    final run = simulation(
+      fixture(),
+      42,
+      minimumMinutes: 4,
+      maximumMinutes: 15,
+    );
+    final match = (run.tournament.runStages.single as GroupTournamentRunStage)
+        .groups
+        .single
+        .matches
+        .first;
+
+    expect(run.startMatch(match, 1), isTrue);
+    expect(run.nextStep(), isTrue);
+
+    final completed =
+        (run.tournament.runStages.single as GroupTournamentRunStage)
+            .groups
+            .single
+            .matches
+            .singleWhere((match) => match.hasResult);
+    final duration = completed.finishedAt!.difference(completed.startedAt!);
+    expect(duration.inSeconds, inInclusiveRange(240, 900));
+    expect(duration.inSeconds % 60, isNot(0));
+  });
+
+  test('a free board can start another match while other boards stay busy', () {
+    final players = [
+      for (var index = 1; index <= 8; index++)
+        TournamentPlayer.generated(index),
+    ];
+    final matches = [
+      for (var home = 0; home < players.length; home++)
+        for (var away = home + 1; away < players.length; away++)
+          GroupMatch(
+            homePlayer: players[home],
+            awayPlayer: players[away],
+            round: 1,
+          ),
+    ];
+    final tournament = CreatedTournament(
+      id: 'simulation-availability-test',
+      name: 'Simulation Verfügbarkeit',
+      players: players,
+      boardCount: 4,
+      stages: const [
+        TournamentStage(
+          name: 'Gruppenphase',
+          type: 'groups',
+          groupCount: 1,
+          groupSizes: [8],
+          groupPlayType: 'round_robin',
+          qualifiedParticipantCount: 8,
+        ),
+      ],
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppenphase',
+          groupPlayType: 'round_robin',
+          qualificationPlan: null,
+          tieBreakers: const [],
+          groups: [
+            TournamentGroup(
+              name: 'Gruppe A',
+              playType: 'round_robin',
+              players: players,
+              matches: matches,
+            ),
+          ],
+        ),
+      ],
+    );
+    final run = simulation(tournament, 42)..setAutoStartMatches(false);
+    final simulatedMatches =
+        (run.tournament.runStages.single as GroupTournamentRunStage)
+            .groups
+            .single
+            .matches;
+
+    expect(run.startMatch(simulatedMatches.first, 1), isTrue);
+    expect(run.startMatch(simulatedMatches[13], 2), isTrue);
+    expect(run.nextStep(), isTrue);
+
+    final running = (run.tournament.runStages.single as GroupTournamentRunStage)
+        .groups
+        .single
+        .matches
+        .where((match) => match.startedAt != null && !match.isResolved);
+    expect(running, hasLength(1));
+    final availableBoards = run.availableBoardsFor(simulatedMatches[22]);
+    expect(availableBoards, isNotEmpty);
+    expect(run.startMatch(simulatedMatches[22], availableBoards.first), isTrue);
+    expect(
+      (run.tournament.runStages.single as GroupTournamentRunStage)
+          .groups
+          .single
+          .matches
+          .where((match) => match.startedAt != null && !match.isResolved),
+      hasLength(2),
     );
   });
 

@@ -75,6 +75,17 @@ void main() {
         );
         expect(find.text('Simulations-Log'), findsOneWidget);
         expect(find.text('Simulation zurücksetzen'), findsOneWidget);
+        final logContainer = tester.widget<Container>(
+          find.byKey(const ValueKey('tournament-simulation-log')),
+        );
+        expect(
+          (logContainer.decoration! as BoxDecoration).color,
+          Theme.of(
+            tester.element(
+              find.byKey(const ValueKey('tournament-simulation-log')),
+            ),
+          ).colorScheme.surface,
+        );
         expect(
           tester
               .widget<SwitchListTile>(

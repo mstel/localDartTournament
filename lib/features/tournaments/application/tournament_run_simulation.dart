@@ -425,9 +425,10 @@ class TournamentRunSimulation {
 
   int _matchDurationSeconds(int stageIndex, GroupMatch match) {
     if (_mode == TournamentSimulationMode.randomStep) {
-      return (_minimumMinutes +
-              _random.nextInt(_maximumMinutes - _minimumMinutes + 1)) *
-          60;
+      final minimumSeconds = _minimumMinutes * 60;
+      final maximumSeconds = _maximumMinutes * 60;
+      return minimumSeconds +
+          _random.nextInt(maximumSeconds - minimumSeconds + 1);
     }
     final format =
         _tournament.leagueMatch?.gameFormat ??

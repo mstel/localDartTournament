@@ -240,7 +240,7 @@ class TournamentSimulationControls extends StatelessWidget {
       key: const ValueKey('tournament-simulation-log'),
       height: 320,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
+        color: theme.colorScheme.surface,
         border: Border.all(color: theme.colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
