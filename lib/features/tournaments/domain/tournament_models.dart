@@ -74,7 +74,7 @@ String _directorSchedulingStrategyFromJson(Object? value) {
 }
 
 String _directorPlayOrderModeFromJson(Object? value) => switch (value) {
-  'fixed_order' => 'fixed_order',
+  'fixed_order' => 'fixed_schedule',
   'fixed_schedule' => 'fixed_schedule',
   _ => 'dynamic',
 };
@@ -727,6 +727,7 @@ class CreatedTournament {
     DateTime? createdAt,
     DateTime? updatedAt,
     required this.name,
+    this.tournamentNotes = '',
     required this.players,
     required this.stages,
     required this.runStages,
@@ -821,6 +822,7 @@ class CreatedTournament {
       tournamentDate: _dateTimeFromJson(json['tournamentDate']),
       updatedAt: _dateTimeFromJson(json['updatedAt']),
       name: json['name'] as String? ?? 'Neues Turnier',
+      tournamentNotes: json['tournamentNotes'] as String? ?? '',
       players: _mapListFromJson(json['players'], TournamentPlayer.fromJson),
       stages: _mapListFromJson(json['stages'], TournamentStage.fromJson),
       runStages: _runStageListFromJson(json['runStages']),
@@ -945,6 +947,7 @@ class CreatedTournament {
   bool get countsForRanking =>
       leagueMatch == null && !isKratzerTournament && _countsForRanking;
   set countsForRanking(bool value) => _countsForRanking = value;
+  String tournamentNotes;
   List<String> rankingIds;
   int activeStageIndex;
   int boardCount;
@@ -1001,6 +1004,7 @@ class CreatedTournament {
       if (withdrawals.isNotEmpty)
         'withdrawals': withdrawals.map((w) => w.toJson()).toList(),
       'name': name,
+      if (tournamentNotes.isNotEmpty) 'tournamentNotes': tournamentNotes,
       'createdAt': createdAt.toUtc().toIso8601String(),
       if (tournamentDate != null)
         'tournamentDate': DateTime(

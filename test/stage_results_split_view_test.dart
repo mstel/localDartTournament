@@ -194,6 +194,95 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('three groups share one row and standings replace group C', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final stage = _threeGroupStage();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: stage,
+              standingsFor: (group, _) => [
+                for (final player in group.players) PlayerStanding(player),
+              ],
+              onEditResult: (_) {},
+              canEditResults: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final groupHeaders = [
+      for (final name in ['Gruppe A', 'Gruppe B', 'Gruppe C'])
+        tester.getRect(find.text(name).first),
+    ];
+    expect(
+      groupHeaders.every(
+        (rect) => (rect.center.dy - groupHeaders.first.center.dy).abs() < 4,
+      ),
+      isTrue,
+    );
+    expect(groupHeaders[0].center.dx, lessThan(groupHeaders[1].center.dx));
+    expect(groupHeaders[1].center.dx, lessThan(groupHeaders[2].center.dx));
+
+    await tester.tap(find.text('Tabellen & Zwischenstände').first);
+    await tester.pumpAndSettle();
+    expect(find.byType(MatchResultTile), findsNWidgets(2));
+
+    await tester.tap(find.text('Spieler C1').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Begegnungen von Spieler C1'), findsOneWidget);
+    expect(find.byType(MatchResultTile), findsOneWidget);
+    expect(
+      tester
+          .widget<SegmentedButton<MatchCategoryFilter>>(
+            find.byType(SegmentedButton<MatchCategoryFilter>).first,
+          )
+          .selected,
+      contains(MatchCategoryFilter.open),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('three-group standings tabs support large text', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: _threeGroupStage(),
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tabellen & Zwischenstände'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('group results remain readable at mobile width', (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
@@ -534,5 +623,41 @@ GroupTournamentRunStage _oneLargeGroup() {
         ],
       ),
     ],
+  );
+}
+
+GroupTournamentRunStage _threeGroupStage() {
+  final groups = [
+    for (var groupIndex = 0; groupIndex < 3; groupIndex++)
+      TournamentGroup(
+        name: 'Gruppe ${String.fromCharCode(65 + groupIndex)}',
+        playType: 'round_robin',
+        players: [
+          TournamentPlayer.generated(
+            groupIndex * 2 + 1,
+          ).copyWith(name: 'Spieler ${String.fromCharCode(65 + groupIndex)}1'),
+          TournamentPlayer.generated(
+            groupIndex * 2 + 2,
+          ).copyWith(name: 'Spieler ${String.fromCharCode(65 + groupIndex)}2'),
+        ],
+        matches: [
+          GroupMatch(
+            homePlayer: TournamentPlayer.generated(groupIndex * 2 + 1).copyWith(
+              name: 'Spieler ${String.fromCharCode(65 + groupIndex)}1',
+            ),
+            awayPlayer: TournamentPlayer.generated(groupIndex * 2 + 2).copyWith(
+              name: 'Spieler ${String.fromCharCode(65 + groupIndex)}2',
+            ),
+            round: 1,
+          ),
+        ],
+      ),
+  ];
+  return GroupTournamentRunStage(
+    name: 'Gruppenphase',
+    groupPlayType: 'round_robin',
+    qualificationPlan: null,
+    tieBreakers: defaultGroupTieBreakers,
+    groups: groups,
   );
 }

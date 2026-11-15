@@ -53,6 +53,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
     this.canReopenPreviousStage = false,
     this.onResetCurrentStage,
     this.canResetCurrentStage = false,
+    this.simulationControls,
+    this.onRecomputeSchedule,
   });
   final CreatedTournament tournament;
   final int activeStage;
@@ -86,6 +88,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final bool canReopenPreviousStage;
   final VoidCallback? onResetCurrentStage;
   final bool canResetCurrentStage;
+  final Widget? simulationControls;
+  final VoidCallback? onRecomputeSchedule;
   @override
   State<TournamentDirectorDashboard> createState() =>
       _TournamentDirectorDashboardState();
@@ -109,6 +113,17 @@ class _TournamentDirectorDashboardState
 
   TournamentAudioAnnouncementService get _audio =>
       _alertAudio ??= TournamentAudioAnnouncementService();
+
+  bool get _canRecomputeSchedule =>
+      widget.tournament.directorPlayOrderMode == 'fixed_schedule' &&
+      widget.onRecomputeSchedule != null;
+
+  Widget _recomputeScheduleButton(String key) => OutlinedButton.icon(
+    key: ValueKey(key),
+    onPressed: widget.onRecomputeSchedule,
+    icon: const Icon(Icons.replay_outlined),
+    label: const Text('Spielplan neu berechnen'),
+  );
 
   TournamentFlowPrioritySettings get _prioritySettings {
     final settings = widget.tournament.tournamentSettings;
@@ -419,7 +434,17 @@ class _TournamentDirectorDashboardState
     Set<GroupMatch> prioritizedMatches = const {},
     Map<GroupMatch, int> plannedBoards = const {},
   }) => _box([
-    Text(title, style: Theme.of(context).textTheme.titleLarge),
+    Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 12,
+      runSpacing: 8,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        if (title == 'Spielplan' && _canRecomputeSchedule)
+          _recomputeScheduleButton('recompute-fixed-schedule-queue'),
+      ],
+    ),
     const SizedBox(height: 8),
     if (entries.isEmpty)
       Text(emptyMessage)
@@ -1484,6 +1509,19 @@ class _TournamentDirectorDashboardState
       children: [
         notices,
         const SizedBox(height: 12),
+        if (widget.directorModeEnabled && _canRecomputeSchedule) ...[
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: _recomputeScheduleButton(
+              'recompute-fixed-schedule-director',
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (widget.simulationControls != null) ...[
+          widget.simulationControls!,
+          const SizedBox(height: 12),
+        ],
         if (!widget.directorModeEnabled) ...[
           status,
           const SizedBox(height: 12),
@@ -1528,7 +1566,20 @@ class _TournamentDirectorDashboardState
           ),
           const SizedBox(height: 12),
           _box([
-            Text('Spielplan', style: Theme.of(context).textTheme.titleLarge),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                Text(
+                  'Spielplan',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                if (_canRecomputeSchedule)
+                  _recomputeScheduleButton('recompute-fixed-schedule-overview'),
+              ],
+            ),
             const SizedBox(height: 8),
             RecommendedMatchesTable(
               groups: recommendedGroups,

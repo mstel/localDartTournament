@@ -13,7 +13,7 @@ import 'recent_match_result_card.dart';
 import 'standings_table.dart';
 import '../../../../league/presentation/league_overview.dart';
 
-enum MatchCategoryFilter { open, finished, all }
+enum MatchCategoryFilter { open, finished, all, standings }
 
 class StageResultsSplitView extends StatefulWidget {
   const StageResultsSplitView({
@@ -110,7 +110,12 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   }
 
   void _selectPlayer(TournamentPlayer player) {
-    setState(() => _filteredPlayer = player);
+    setState(() {
+      _filteredPlayer = player;
+      if (_filter == MatchCategoryFilter.standings) {
+        _filter = MatchCategoryFilter.open;
+      }
+    });
   }
 
   Future<void> _editResult(GroupMatch match) async {
@@ -192,6 +197,16 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 900;
+        final showStandingsTab =
+            stage.groups.length >= 3 &&
+            stage.groups.length % 3 == 0 &&
+            constraints.maxWidth >= 1200;
+
+        final standingsSection = _buildGroupStandingsColumn(
+          context: context,
+          stage: stage,
+          standingsByGroup: standingsByGroup,
+        );
 
         final matchesSection = _buildGroupMatchesColumn(
           context: context,
@@ -199,13 +214,11 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           openCount: openCount,
           finishedCount: finishedCount,
           totalCount: totalCount,
+          standingsSection: standingsSection,
+          showStandingsTab: showStandingsTab,
         );
 
-        final standingsSection = _buildGroupStandingsColumn(
-          context: context,
-          stage: stage,
-          standingsByGroup: standingsByGroup,
-        );
+        if (showStandingsTab) return matchesSection;
 
         if (isWide) {
           return Row(
@@ -239,6 +252,8 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     required int openCount,
     required int finishedCount,
     required int totalCount,
+    required Widget standingsSection,
+    required bool showStandingsTab,
   }) {
     final theme = Theme.of(context);
 
@@ -265,8 +280,18 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                 label: Text('Alle Begegnungen ($totalCount)'),
                 icon: const Icon(Icons.list_alt, size: 18),
               ),
+              if (showStandingsTab)
+                const ButtonSegment<MatchCategoryFilter>(
+                  value: MatchCategoryFilter.standings,
+                  label: Text('Tabellen & Zwischenstände'),
+                  icon: Icon(Icons.table_chart_outlined, size: 18),
+                ),
             ],
-            selected: {_filter},
+            selected: {
+              _filter == MatchCategoryFilter.standings && !showStandingsTab
+                  ? MatchCategoryFilter.open
+                  : _filter,
+            },
             onSelectionChanged: (selected) {
               if (selected.isNotEmpty) {
                 setState(() => _filter = selected.first);
@@ -310,7 +335,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
         LayoutBuilder(
           builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 1200
+            final columns = showStandingsTab
+                ? 3
+                : constraints.maxWidth >= 1200
                 ? math.min(4, stage.groups.length)
                 : constraints.maxWidth >= 900 && stage.groups.length > 1
                 ? 2
@@ -323,15 +350,20 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                for (final group in stage.groups)
+                for (var index = 0; index < stage.groups.length; index++)
                   SizedBox(
                     width: groupWidth,
-                    child: _buildGroupMatchList(
-                      context: context,
-                      group: group,
-                      showGroupHeader: true,
-                      compact: columns > 1,
-                    ),
+                    child:
+                        showStandingsTab &&
+                            _filter == MatchCategoryFilter.standings &&
+                            index == 2
+                        ? standingsSection
+                        : _buildGroupMatchList(
+                            context: context,
+                            group: stage.groups[index],
+                            showGroupHeader: true,
+                            compact: columns > 1,
+                          ),
                   ),
               ],
             );
@@ -411,6 +443,8 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           return m.hasResult;
         case MatchCategoryFilter.all:
           return true;
+        case MatchCategoryFilter.standings:
+          return !m.hasResult;
       }
     }).toList();
     final focusedIndex = _focusedMatchIndex(filteredMatches);
@@ -880,6 +914,8 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             return m.hasResult;
           case MatchCategoryFilter.all:
             return true;
+          case MatchCategoryFilter.standings:
+            return false;
         }
       }).toList();
       if (matches.isNotEmpty) {
@@ -896,6 +932,8 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           return m.hasResult;
         case MatchCategoryFilter.all:
           return true;
+        case MatchCategoryFilter.standings:
+          return false;
       }
     }).toList();
 

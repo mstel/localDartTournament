@@ -271,6 +271,26 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               allowStartTimeEdit: true,
             ),
             const SizedBox(height: 16),
+            if (tournament.tournamentNotes.trim().isNotEmpty) ...[
+              Card(
+                key: const ValueKey('tournament-notes-results'),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Turniernotizen',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      SelectableText(tournament.tournamentNotes),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             SportMenuGroup(
               title: 'Ergebnisse ansehen',
               actions: [

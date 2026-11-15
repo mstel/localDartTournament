@@ -119,8 +119,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   GroupMatch? _requestedResultMatch;
 
   int _stageIndexForMatch(GroupMatch match) {
-    for (var index = 0; index < widget.tournament.runStages.length; index++) {
-      final stage = widget.tournament.runStages[index];
+    final tournament = _simulation?.tournament ?? widget.tournament;
+    for (var index = 0; index < tournament.runStages.length; index++) {
+      final stage = tournament.runStages[index];
       if (stage is GroupTournamentRunStage &&
           stage.groups.any(
             (group) =>
@@ -626,6 +627,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   bool get _canAdjustParticipants =>
       widget.tournament.finishedAt == null &&
+      _simulation == null &&
       !_hasRecordedTournamentResults() &&
       !_hasStartedMatches;
 
@@ -1011,6 +1013,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _toggleBoardBlock(int board) async {
+    if (_simulation != null) return;
     if (!mounted) return;
     if (board < 1 || board > widget.tournament.boardCount) {
       throw StateError('Board nicht mehr verfügbar.');
@@ -1057,6 +1060,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     int board, {
     GroupMatch? match,
   }) async {
+    if (_simulation != null) return;
     final targetMatch =
         match ??
         const OrderOfPlayController()
@@ -1090,6 +1094,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _resetRunningMatch(GroupMatch match) async {
+    if (_simulation != null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1264,6 +1269,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   TournamentRunController get _runController =>
       widget.runController ?? const TournamentRunController();
   final _tournamentNameController = TextEditingController();
+  final _tournamentNotesController = TextEditingController();
+  final _simulationSeedController = TextEditingController(text: '42');
+  final _simulationMinimumMinutesController = TextEditingController(text: '4');
+  final _simulationMaximumMinutesController = TextEditingController(text: '15');
+  TournamentRunSimulation? _simulation;
+  TournamentSimulationMode _simulationMode = TournamentSimulationMode.fixedStep;
+  bool _savingTournamentNotes = false;
   late final TournamentStorage _tournamentStorage =
       widget.tournamentStorage ?? TournamentStorage();
   late final Future<List<LocalRanking>> _localRankings = LocalAppDatabase()
@@ -1274,6 +1286,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tournamentNameController.dispose();
+    _tournamentNotesController.dispose();
+    _simulationSeedController.dispose();
+    _simulationMinimumMinutesController.dispose();
+    _simulationMaximumMinutesController.dispose();
     final audioAnnouncementService = _audioAnnouncementService;
     if (audioAnnouncementService != null) {
       unawaited(audioAnnouncementService.dispose());
@@ -1291,6 +1307,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         ? StageViewMode.director
         : StageViewMode.dashboard;
     _tournamentNameController.text = widget.tournament.name;
+    _tournamentNotesController.text = widget.tournament.tournamentNotes;
     WidgetsBinding.instance.addObserver(this);
     if (widget.tournament.leagueMatch != null) {
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
@@ -1307,6 +1324,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     _restoreCompletedGroupDrawForActiveStage();
     _advanceKnockoutWinners();
     _ensureGroupDeciders();
+    if (widget.tournament.directorPlayOrderMode == 'fixed_schedule') {
+      const OrderOfPlayController().initializeFixedSchedule(widget.tournament);
+    }
     _lastAchievementResultSignature = _achievementResultSignature();
     unawaited(_loadTieBreakEloRatings());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -1451,6 +1471,197 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     if (mounted) setState(() {});
   }
+
+  bool get _canStartSimulation =>
+      _simulation != null ||
+      (widget.tournament.importedArchive == null &&
+          !_hasRecordedTournamentResults());
+
+  Future<void> _setSimulationEnabled(bool enabled) async {
+    if (!enabled) {
+      _stopSimulation();
+      return;
+    }
+    if (!_canStartSimulation || _simulation != null) return;
+    final seed = int.tryParse(_simulationSeedController.text);
+    final minimum = int.tryParse(_simulationMinimumMinutesController.text);
+    final maximum = int.tryParse(_simulationMaximumMinutesController.text);
+    if (seed == null || minimum == null || maximum == null) {
+      _showSimulationError('Bitte Seed und Spieldauer gültig eingeben.');
+      return;
+    }
+    try {
+      final parameters = await PlanningSettingsStorage().load();
+      final simulation = TournamentRunSimulation(
+        source: widget.tournament,
+        planningParameters: parameters,
+        seed: seed,
+        mode: _simulationMode,
+        minimumMinutes: minimum,
+        maximumMinutes: maximum,
+        runtimeFactory: ProductionTournamentRuntime.new,
+      );
+      if (!mounted) return;
+      setState(() {
+        _simulation = simulation;
+        _viewStageIndex = simulation.tournament.activeStageIndex;
+        _requestedResultMatch = null;
+      });
+    } catch (error) {
+      _showSimulationError('Simulation konnte nicht gestartet werden: $error');
+    }
+  }
+
+  void _stopSimulation() {
+    if (_simulation == null) return;
+    setState(() {
+      _simulation = null;
+      _viewStageIndex = _activeStageIndex;
+      _requestedResultMatch = null;
+    });
+  }
+
+  void _updateSimulationOptions({TournamentSimulationMode? mode}) {
+    final simulation = _simulation;
+    if (simulation == null) return;
+    final seed = int.tryParse(_simulationSeedController.text);
+    final minimum = int.tryParse(_simulationMinimumMinutesController.text);
+    final maximum = int.tryParse(_simulationMaximumMinutesController.text);
+    if (seed == null || minimum == null || maximum == null) {
+      _showSimulationError('Bitte Seed und Spieldauer gültig eingeben.');
+      return;
+    }
+    try {
+      simulation.updateOptions(
+        seed: seed,
+        mode: mode ?? _simulationMode,
+        minimumMinutes: minimum,
+        maximumMinutes: maximum,
+      );
+      setState(() {
+        if (mode != null) _simulationMode = mode;
+      });
+    } catch (error) {
+      _showSimulationError('Simulationseinstellungen ungültig: $error');
+    }
+  }
+
+  void _stepSimulation() {
+    final simulation = _simulation;
+    if (simulation == null) return;
+    try {
+      if (!simulation.canUndo) _updateSimulationOptions();
+      if (!simulation.nextStep()) return;
+      setState(() {
+        _viewStageIndex = simulation.tournament.activeStageIndex;
+      });
+    } catch (error) {
+      _showSimulationError('Simulationsschritt fehlgeschlagen: $error');
+    }
+  }
+
+  void _undoSimulationStep() {
+    final simulation = _simulation;
+    if (simulation == null || !simulation.undoLastStep()) return;
+    setState(() {
+      _viewStageIndex = simulation.tournament.activeStageIndex;
+    });
+  }
+
+  void _showSimulationError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _simulationControls() {
+    final simulation = _simulation!;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: TournamentSimulationControls(
+          mode: _simulationMode,
+          onModeChanged: (mode) => _updateSimulationOptions(mode: mode),
+          seedController: _simulationSeedController,
+          minimumMinutesController: _simulationMinimumMinutesController,
+          maximumMinutesController: _simulationMaximumMinutesController,
+          optionsEnabled: simulation.stepCount == 0 && !simulation.canUndo,
+          completedSteps: simulation.stepCount,
+          totalSteps: simulation.totalSteps,
+          elapsed: simulation.elapsed,
+          canUndo: simulation.canUndo,
+          isComplete: simulation.isComplete,
+          onNextStep: _stepSimulation,
+          onUndo: _undoSimulationStep,
+          onStop: _stopSimulation,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveTournamentNotes() async {
+    if (_savingTournamentNotes) return;
+    final previous = widget.tournament.tournamentNotes;
+    final notes = _tournamentNotesController.text.trim();
+    if (notes == previous) return;
+    setState(() => _savingTournamentNotes = true);
+    widget.tournament.tournamentNotes = notes;
+    try {
+      await _saveTournamentProgress(propagateError: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Turniernotizen gespeichert.')),
+      );
+    } catch (error) {
+      widget.tournament.tournamentNotes = previous;
+      _tournamentNotesController.text = previous;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Notizen konnten nicht gespeichert werden: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _savingTournamentNotes = false);
+    }
+  }
+
+  Widget _tournamentNotesEditor() => Card(
+    key: const ValueKey('tournament-notes-editor'),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Turniernotizen',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _tournamentNotesController,
+            minLines: 3,
+            maxLines: 8,
+            maxLength: 4000,
+            decoration: const InputDecoration(
+              hintText:
+                  'Beobachtungen, Auffälligkeiten oder Verbesserungsideen festhalten',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FilledButton.icon(
+              onPressed: _savingTournamentNotes ? null : _saveTournamentNotes,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Notizen speichern'),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _achievementSettingsCard() => Card(
     child: SwitchListTile(
@@ -2581,10 +2792,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     };
     setState(() => widget.tournament.directorPlayOrderMode = mode);
     if (mode != 'dynamic') {
-      const OrderOfPlayController().initializeFixedSchedule(
-        widget.tournament,
-        includeUnknownPairings: mode == 'fixed_schedule',
-      );
+      const OrderOfPlayController().initializeFixedSchedule(widget.tournament);
     }
     try {
       await _saveTournamentProgress(propagateError: true);
@@ -2740,10 +2948,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     for (final entry in entries) {
       entry.match.fixedScheduleOrder = null;
     }
-    const OrderOfPlayController().initializeFixedSchedule(
-      widget.tournament,
-      includeUnknownPairings: true,
-    );
+    const OrderOfPlayController().initializeFixedSchedule(widget.tournament);
     setState(() {});
     try {
       await _saveTournamentProgress(propagateError: true);
@@ -3150,6 +3355,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     VoidCallback? onLocalUpdate,
     VoidCallback? onSaved,
   }) async {
+    if (_simulation != null) return;
     final correctingExistingResult = match.hasResult;
     if (match.withdrawalSignature != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3339,6 +3545,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   bool _canEditGroupPositions(GroupTournamentRunStage stage, int stageIndex) {
     return stageIndex == _activeStageIndex &&
+        _simulation == null &&
         !_isApplyingStartDraw &&
         !_hasRecordedTournamentResults() &&
         GroupPositionEditor.canEdit(stage);
@@ -5777,6 +5984,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         );
 
   Future<void> _completeCurrentStage() async {
+    if (_simulation != null) return;
     final nextStageIndex = _activeStageIndex + 1;
     final hasNextStage = nextStageIndex < widget.tournament.runStages.length;
     final completedStageIndex = _activeStageIndex;
@@ -5851,6 +6059,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   void _finishCurrentStageEarly() {
+    if (_simulation != null) return;
     setState(() {
       for (final match in _matchesForStage(
         widget.tournament.runStages[_activeStageIndex],
@@ -5879,6 +6088,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _reopenPreviousStage() async {
+    if (_simulation != null) return;
     if (!_canReopenPreviousStage) return;
     final previousStageIndex = _activeStageIndex - 1;
     setState(() {
@@ -5914,6 +6124,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _resetCurrentStageWithConfirmation() async {
+    if (_simulation != null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -5990,21 +6201,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Widget _buildAuthorized(BuildContext context) {
-    final activeStage = _stageForView(_viewStageIndex);
+    final displayedTournament = _simulation?.tournament ?? widget.tournament;
+    final displayedStageIndex =
+        _simulation?.tournament.activeStageIndex ?? _viewStageIndex;
+    final activeStage = _simulation == null
+        ? _stageForView(_viewStageIndex)
+        : displayedTournament.runStages[displayedStageIndex];
     final kratzerParticipants = activeStage is KnockoutTournamentRunStage
         ? activeStage.participants.isNotEmpty
               ? activeStage.participants
-              : widget.tournament.players
+              : displayedTournament.players
         : const <TournamentPlayer>[];
     final isViewingActiveStage =
+        _simulation != null ||
         _stageViewMode == StageViewMode.director ||
         _viewStageIndex == _activeStageIndex;
     final canCompleteStage =
+        _simulation == null &&
         isViewingActiveStage &&
         !_stageHasOpenMatches(widget.tournament.runStages[_activeStageIndex]);
-    final isLastStage =
-        _activeStageIndex == widget.tournament.runStages.length - 1;
-    final canEditResults = isViewingActiveStage;
+    final isLastStage = _simulation == null
+        ? _activeStageIndex == widget.tournament.runStages.length - 1
+        : displayedStageIndex == displayedTournament.runStages.length - 1;
+    final canEditResults = isViewingActiveStage && _simulation == null;
 
     return PopScope(
       canPop: _allowPop,
@@ -6039,20 +6258,33 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               slivers: [
                 SliverToBoxAdapter(
                   child: TournamentRunHeader(
-                    tournament: widget.tournament,
-                    stageIndex: _viewStageIndex,
-                    completedStages: _completedStageIndexes,
+                    tournament: displayedTournament,
+                    stageIndex: displayedStageIndex,
+                    completedStages: _simulation == null
+                        ? _completedStageIndexes
+                        : displayedTournament.completedStageIndexes,
                     mode: _stageViewMode,
                     canLead: true,
                     directorModeEnabled:
-                        widget.tournament.leagueMatch != null ||
-                        widget.tournament.directorModeEnabled,
-                    onStageChanged: (index) => setState(() {
-                      _viewStageIndex = index;
-                      _isBracketEditMode = false;
-                    }),
-                    onModeChanged: (mode) =>
-                        setState(() => _stageViewMode = mode),
+                        displayedTournament.leagueMatch != null ||
+                        displayedTournament.directorModeEnabled,
+                    onStageChanged: (index) {
+                      if (_simulation != null) return;
+                      setState(() {
+                        _viewStageIndex = index;
+                        _isBracketEditMode = false;
+                      });
+                    },
+                    onModeChanged: (mode) {
+                      if (_simulation != null &&
+                          (mode == StageViewMode.players ||
+                              mode == StageViewMode.playOrder ||
+                              mode == StageViewMode.orderOfPlay ||
+                              mode == StageViewMode.overview)) {
+                        return;
+                      }
+                      setState(() => _stageViewMode = mode);
+                    },
                   ),
                 ),
                 SliverPadding(
@@ -6072,10 +6304,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                       if (_stageViewMode == StageViewMode.dashboard ||
                           _stageViewMode == StageViewMode.director)
                         TournamentDirectorDashboard(
-                          tournament: widget.tournament,
-                          activeStage: _activeStageIndex,
+                          tournament: displayedTournament,
+                          activeStage: displayedStageIndex,
                           saveError: _directorSaveError,
                           canOperate:
+                              _simulation == null &&
                               !_isApplyingStartDraw &&
                               !_completedStageIndexes.contains(
                                 _activeStageIndex,
@@ -6084,6 +6317,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 widget.tournament.stages[_activeStageIndex],
                               ),
                           onResult: (match) {
+                            if (_simulation != null) {
+                              return Future<void>.value();
+                            }
                             final board = match.boardNumber;
                             final announce =
                                 _stageViewMode == StageViewMode.director &&
@@ -6097,43 +6333,88 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                   : null,
                             );
                           },
-                          onBlock: _toggleBoardBlock,
+                          onBlock: _simulation == null
+                              ? _toggleBoardBlock
+                              : (_) async {},
                           directorModeEnabled:
-                              (widget.tournament.leagueMatch != null ||
-                                  widget.tournament.directorModeEnabled) &&
+                              (displayedTournament.leagueMatch != null ||
+                                  displayedTournament.directorModeEnabled) &&
                               _stageViewMode == StageViewMode.director,
                           showBoardNumber:
-                              widget.tournament.leagueMatch != null ||
-                              widget.tournament.directorModeEnabled,
-                          onStartOnBoard: _startRecommendedMatchOnBoard,
-                          onResetMatch: _resetRunningMatch,
-                          onPromoteScheduleMatch: (match) =>
-                              _moveFixedScheduleMatch(match, first: true),
-                          onDeferScheduleMatch: (match) =>
-                              _moveFixedScheduleMatch(match, first: false),
-                          onChooseSchedulePosition:
-                              _chooseFixedSchedulePosition,
-                          onReorderScheduleMatch: _reorderFixedScheduleMatch,
+                              displayedTournament.leagueMatch != null ||
+                              displayedTournament.directorModeEnabled,
+                          onStartOnBoard: _simulation == null
+                              ? _startRecommendedMatchOnBoard
+                              : null,
+                          onResetMatch: _simulation == null
+                              ? _resetRunningMatch
+                              : null,
+                          onPromoteScheduleMatch: _simulation == null
+                              ? (match) =>
+                                    _moveFixedScheduleMatch(match, first: true)
+                              : null,
+                          onDeferScheduleMatch: _simulation == null
+                              ? (match) =>
+                                    _moveFixedScheduleMatch(match, first: false)
+                              : null,
+                          onChooseSchedulePosition: _simulation == null
+                              ? _chooseFixedSchedulePosition
+                              : null,
+                          onReorderScheduleMatch: _simulation == null
+                              ? _reorderFixedScheduleMatch
+                              : null,
                           onOpenMatch: _openPlayedMatch,
-                          onStartClock: _startTournamentClock,
-                          onPauseClock: _toggleClockPause,
-                          onEditTimes: _editTournamentTimes,
-                          onResetClock: _resetTournamentClock,
-                          onChangeTournamentDate: _saveTournamentDate,
-                          onShiftMatchDates: _shiftTournamentMatchDates,
+                          onStartClock: _simulation == null
+                              ? _startTournamentClock
+                              : null,
+                          onPauseClock: _simulation == null
+                              ? _toggleClockPause
+                              : null,
+                          onEditTimes: _simulation == null
+                              ? _editTournamentTimes
+                              : null,
+                          onResetClock: _simulation == null
+                              ? _resetTournamentClock
+                              : null,
+                          onChangeTournamentDate: _simulation == null
+                              ? _saveTournamentDate
+                              : null,
+                          onShiftMatchDates: _simulation == null
+                              ? _shiftTournamentMatchDates
+                              : null,
                           onChange: () async {
+                            if (_simulation != null) return;
                             setState(() {});
                             await _saveTournamentProgress(propagateError: true);
                           },
-                          onCompleteStage: _completeCurrentStage,
-                          onFinishEarly: _finishCurrentStageEarly,
-                          onReopenPreviousStage: _reopenPreviousStage,
-                          canReopenPreviousStage: _canReopenPreviousStage,
-                          onResetCurrentStage:
-                              _resetCurrentStageWithConfirmation,
-                          canResetCurrentStage: _canResetCurrentStage,
+                          onCompleteStage: _simulation == null
+                              ? _completeCurrentStage
+                              : null,
+                          onFinishEarly: _simulation == null
+                              ? _finishCurrentStageEarly
+                              : null,
+                          onReopenPreviousStage: _simulation == null
+                              ? _reopenPreviousStage
+                              : null,
+                          canReopenPreviousStage:
+                              _simulation == null && _canReopenPreviousStage,
+                          onResetCurrentStage: _simulation == null
+                              ? _resetCurrentStageWithConfirmation
+                              : null,
+                          canResetCurrentStage:
+                              _simulation == null && _canResetCurrentStage,
                           canCompleteStage: canCompleteStage,
                           isLastStage: isLastStage,
+                          simulationControls:
+                              _stageViewMode == StageViewMode.director &&
+                                  _simulation != null
+                              ? _simulationControls()
+                              : null,
+                          onRecomputeSchedule:
+                              _simulation == null &&
+                                  displayedTournament.directorModeEnabled
+                              ? _recomputeFixedSchedule
+                              : null,
                         )
                       else if (_stageViewMode == StageViewMode.settings)
                         Column(
@@ -6319,16 +6600,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                             labelText: 'Spielplanmodus',
                                             border: OutlineInputBorder(),
                                             helperText:
-                                                'Legt fest, ob die Vorschläge laufend oder einmalig geordnet werden.',
+                                                'Dynamisch ordnet offene Partien laufend neu; der feste Spielplan hält die Reihenfolge inklusive zukünftiger Begegnungen fest.',
                                           ),
                                           items: const [
                                             DropdownMenuItem(
                                               value: 'dynamic',
                                               child: Text('Dynamisch'),
-                                            ),
-                                            DropdownMenuItem(
-                                              value: 'fixed_order',
-                                              child: Text('Feste Reihenfolge'),
                                             ),
                                             DropdownMenuItem(
                                               value: 'fixed_schedule',
@@ -6888,6 +7165,26 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             _tournamentTimingSettingsCard(),
                             const SizedBox(height: 12),
                             Card(
+                              child: SwitchListTile(
+                                key: const ValueKey(
+                                  'tournament-simulation-toggle',
+                                ),
+                                title: const Text('Simulationsmodus starten'),
+                                subtitle: Text(
+                                  _simulation != null
+                                      ? 'Simulierte Ergebnisse bleiben von regulären Turnierdaten getrennt.'
+                                      : _canStartSimulation
+                                      ? 'Nur verfügbar, solange keine regulären Ergebnisse vorliegen.'
+                                      : 'Nicht verfügbar, da bereits reguläre Ergebnisse eingetragen sind.',
+                                ),
+                                value: _simulation != null,
+                                onChanged: _canStartSimulation
+                                    ? _setSimulationEnabled
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Card(
                               child: ExpansionTile(
                                 leading: const Icon(Icons.history),
                                 title: const Text('Turnierlog anzeigen'),
@@ -6950,89 +7247,112 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         )
                       else ...[
                         // Modus "Ergebnisse"
-                        StageResultsSplitView(
-                          key: ValueKey(
-                            'stage-results-${_requestedResultMatch?.hashCode ?? 'default'}',
-                          ),
-                          stage: activeStage,
-                          tournament: widget.tournament,
-                          focusMatch: _requestedResultMatch,
-                          initialFilter: _requestedResultMatch == null
-                              ? null
-                              : MatchCategoryFilter.finished,
-                          runningMatches: widget.tournament.directorModeEnabled
-                              ? const OrderOfPlayController()
-                                    .plan(widget.tournament, _activeStageIndex)
-                                    .running
-                                    .map((entry) => entry.match)
-                                    .toSet()
-                              : const <GroupMatch>{},
-                          onOpenMatch: _openPlayedMatch,
-                          onPreviewBracket:
-                              activeStage is KnockoutTournamentRunStage
-                              ? null
-                              : () => showDialog<void>(
-                                  context: context,
-                                  builder: (context) => Dialog.fullscreen(
-                                    child: TournamentSecondScreenView(
-                                      tournament: widget.tournament,
-                                      isStandaloneWindow: true,
-                                      showNextStagePreviewInitially: true,
-                                      onClose: () =>
-                                          Navigator.of(context).pop(),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (_simulation != null) _simulationControls(),
+                            StageResultsSplitView(
+                              key: ValueKey(
+                                'stage-results-${_requestedResultMatch?.hashCode ?? 'default'}',
+                              ),
+                              stage: activeStage,
+                              tournament: displayedTournament,
+                              focusMatch: _requestedResultMatch,
+                              initialFilter: _requestedResultMatch == null
+                                  ? null
+                                  : MatchCategoryFilter.finished,
+                              runningMatches:
+                                  displayedTournament.directorModeEnabled
+                                  ? const OrderOfPlayController()
+                                        .plan(
+                                          displayedTournament,
+                                          displayedStageIndex,
+                                        )
+                                        .running
+                                        .map((entry) => entry.match)
+                                        .toSet()
+                                  : const <GroupMatch>{},
+                              onOpenMatch: _openPlayedMatch,
+                              onPreviewBracket:
+                                  activeStage is KnockoutTournamentRunStage
+                                  ? null
+                                  : () => showDialog<void>(
+                                      context: context,
+                                      builder: (context) => Dialog.fullscreen(
+                                        child: TournamentSecondScreenView(
+                                          tournament: displayedTournament,
+                                          isStandaloneWindow: true,
+                                          showNextStagePreviewInitially: true,
+                                          onClose: () =>
+                                              Navigator.of(context).pop(),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                          standingsFor: _standingsFor,
-                          onEditResult: _editResult,
-                          onEditBracketResult: (match, onUpdated) =>
-                              _editResult(match, onLocalUpdate: onUpdated),
-                          canEditResults: canEditResults,
-                          qualifyingRank: _requiredRankForRunStage(
-                            _viewStageIndex,
-                          ),
-                          isBracketEditMode:
-                              _isBracketEditMode && canEditResults,
-                          canEditBracket:
-                              canEditResults &&
-                              (activeStage is KnockoutTournamentRunStage &&
-                                  _canEditKnockoutBracket(activeStage)),
-                          onSwapSlot: (fromSlotIndex, toSlotIndex) {
-                            if (activeStage is KnockoutTournamentRunStage) {
-                              _swapKnockoutRunSlots(
-                                activeStage,
-                                fromSlotIndex,
-                                toSlotIndex,
-                              );
-                            }
-                          },
-                          bracketBuilder:
-                              (
-                                stage,
-                                qualifyingRank,
-                                onEditResult,
-                                canEditResults,
-                                isEditMode,
-                                onSwapSlot,
-                              ) {
-                                return RepaintBoundary(
-                                  child: KnockoutBracketView(
-                                    stage: stage,
-                                    placementMatches: stage.placementMatches,
-                                    qualifyingRank: qualifyingRank,
-                                    onEditResult: onEditResult,
-                                    canEditResults: canEditResults,
-                                    isEditMode: isEditMode,
-                                    onSwapSlot: onSwapSlot,
-                                  ),
-                                );
+                              standingsFor: _standingsFor,
+                              onEditResult: _editResult,
+                              onEditBracketResult: (match, onUpdated) =>
+                                  _editResult(match, onLocalUpdate: onUpdated),
+                              canEditResults: canEditResults,
+                              qualifyingRank: _requiredRankForRunStage(
+                                displayedStageIndex,
+                              ),
+                              isBracketEditMode:
+                                  _isBracketEditMode && canEditResults,
+                              canEditBracket:
+                                  canEditResults &&
+                                  (activeStage is KnockoutTournamentRunStage &&
+                                      _canEditKnockoutBracket(activeStage)),
+                              onSwapSlot: (fromSlotIndex, toSlotIndex) {
+                                if (_simulation == null &&
+                                    activeStage is KnockoutTournamentRunStage) {
+                                  _swapKnockoutRunSlots(
+                                    activeStage,
+                                    fromSlotIndex,
+                                    toSlotIndex,
+                                  );
+                                }
                               },
+                              bracketBuilder:
+                                  (
+                                    stage,
+                                    qualifyingRank,
+                                    onEditResult,
+                                    canEditResults,
+                                    isEditMode,
+                                    onSwapSlot,
+                                  ) {
+                                    return RepaintBoundary(
+                                      child: KnockoutBracketView(
+                                        stage: stage,
+                                        placementMatches:
+                                            stage.placementMatches,
+                                        qualifyingRank: qualifyingRank,
+                                        onEditResult: onEditResult,
+                                        canEditResults: canEditResults,
+                                        isEditMode: isEditMode,
+                                        onSwapSlot: onSwapSlot,
+                                      ),
+                                    );
+                                  },
+                            ),
+                          ],
                         ),
                       ],
                     ],
                   ),
                 ),
                 if (_stageViewMode == StageViewMode.dashboard) ...[
+                  SliverToBoxAdapter(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1120),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: _tournamentNotesEditor(),
+                        ),
+                      ),
+                    ),
+                  ),
                   SliverToBoxAdapter(
                     child: StageFooter(
                       canCompleteStage: canCompleteStage,

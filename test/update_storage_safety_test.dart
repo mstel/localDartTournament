@@ -60,7 +60,7 @@ void main() {
   test(
     'unknown tournament version reports its version and remains untouched',
     () async {
-      const content = '{"schemaVersion":43,"tournaments":[]}';
+      const content = '{"schemaVersion":44,"tournaments":[]}';
       await file.writeAsString(content);
       final storage = TournamentStorage(file: file);
 
@@ -68,8 +68,8 @@ void main() {
         await storage.loadTournaments();
         fail('A future storage version must not be interpreted as supported.');
       } on FormatException catch (error) {
-        expect(error.message, contains('Version 43'));
-        expect(error.message, contains('1 bis 42'));
+        expect(error.message, contains('Version 44'));
+        expect(error.message, contains('1 bis 43'));
       }
 
       await expectLater(
@@ -115,7 +115,7 @@ void main() {
       );
 
       final saved = jsonDecode(await file.readAsString());
-      expect(saved['schemaVersion'], 42);
+      expect(saved['schemaVersion'], 43);
       expect(saved['playerStatistics'], {'total': 7});
       expect(saved['archiveGeneration'], isA<String>());
       expect(saved['tournaments'], isEmpty);
@@ -125,7 +125,10 @@ void main() {
       );
       expect(migratedSafety.countsForRanking, isFalse);
       expect(migratedSafety.rankingIds, ['ranking-1']);
-      expect(allAfterSave.map((item) => item.name), contains('New schema 24 record'));
+      expect(
+        allAfterSave.map((item) => item.name),
+        contains('New schema 24 record'),
+      );
       expect(await File('${file.path}.bak').readAsString(), current);
       expect(await File('${file.path}.v22.bak').readAsString(), backup);
     },

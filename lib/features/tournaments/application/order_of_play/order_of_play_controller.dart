@@ -50,7 +50,11 @@ class OrderOfPlayController {
     return result;
   }
 
-  BoardSchedule plan(CreatedTournament tournament, int activeStage) {
+  BoardSchedule plan(
+    CreatedTournament tournament,
+    int activeStage, {
+    Set<int> additionalBlockedBoards = const {},
+  }) {
     if (tournament.boardCount < 1 || tournament.boardCount > 64) {
       throw ArgumentError.value(tournament.boardCount, 'boardCount');
     }
@@ -109,9 +113,10 @@ class OrderOfPlayController {
       running: running,
       finished: finished,
       boardCount: tournament.boardCount,
-      blockedBoards: tournament.directorModeEnabled
-          ? tournament.blockedBoards
-          : const {},
+      blockedBoards: {
+        if (tournament.directorModeEnabled) ...tournament.blockedBoards,
+        ...additionalBlockedBoards,
+      },
       preferredBoardsByGroup: tournament.groupBoardAssignments,
       strategy: tournament.directorPlayOrderMode != 'dynamic'
           ? 'sequence'
@@ -129,21 +134,27 @@ class OrderOfPlayController {
     return BoardSchedule(planned, running, finished, waiting);
   }
 
-  /// Creates a persisted, complete queue once. Future pairing slots are added
-  /// after currently known pairings and retain their assigned positions.
-  void initializeFixedSchedule(
-    CreatedTournament tournament, {
-    bool includeUnknownPairings = true,
-  }) {
+  /// Creates a persisted, complete queue once, including future pairing slots.
+  void initializeFixedSchedule(CreatedTournament tournament) {
     final all = entries(tournament);
-    if (all.every((entry) => entry.match.fixedScheduleOrder != null) ||
-        (!includeUnknownPairings &&
-            all
-                .where((entry) => entry.match.hasPlayers)
-                .every((entry) => entry.match.fixedScheduleOrder != null))) {
+    final ordered = all
+        .where((entry) => entry.match.fixedScheduleOrder != null)
+        .toList();
+    if (ordered.length == all.length) return;
+    if (ordered.isNotEmpty) {
+      var nextOrder =
+          ordered
+              .map((entry) => entry.match.fixedScheduleOrder!)
+              .reduce((a, b) => a > b ? a : b) +
+          1;
+      for (final entry in all.where(
+        (entry) => entry.match.fixedScheduleOrder == null,
+      )) {
+        entry.match.fixedScheduleOrder = nextOrder++;
+      }
       return;
     }
-    final ordered = <PlayEntry>[];
+    final schedule = <PlayEntry>[];
     final stageIndexes = all.map((entry) => entry.stageIndex).toSet().toList()
       ..sort();
     for (final stageIndex in stageIndexes) {
@@ -160,18 +171,11 @@ class OrderOfPlayController {
         blockedBoards: tournament.blockedBoards,
         strategy: 'sequence',
       );
-      ordered.addAll(assignments.map((assignment) => assignment.entry));
-      if (includeUnknownPairings) {
-        ordered.addAll(stageEntries.where((entry) => !known.contains(entry)));
-      }
+      schedule.addAll(assignments.map((assignment) => assignment.entry));
+      schedule.addAll(stageEntries.where((entry) => !known.contains(entry)));
     }
-    for (var index = 0; index < ordered.length; index++) {
-      ordered[index].match.fixedScheduleOrder = index;
-    }
-    if (!includeUnknownPairings) {
-      for (final entry in all.where((entry) => !entry.match.hasPlayers)) {
-        entry.match.fixedScheduleOrder = null;
-      }
+    for (var index = 0; index < schedule.length; index++) {
+      schedule[index].match.fixedScheduleOrder = index;
     }
   }
 
@@ -286,8 +290,9 @@ class OrderOfPlayController {
     CreatedTournament tournament,
     int stage,
     GroupMatch match,
-    int board,
-  ) {
+    int board, {
+    DateTime? startedAt,
+  }) {
     final schedule = plan(tournament, stage);
     final candidates = schedule.planned.where(
       (a) => identical(a.entry.match, match),
@@ -307,7 +312,7 @@ class OrderOfPlayController {
       return false;
     }
     match.boardNumber = board;
-    match.startedAt = DateTime.now();
+    match.startedAt = startedAt ?? DateTime.now();
     match.startedPlayers = entry.playerSignature;
     match.finishedAt = null;
     return true;

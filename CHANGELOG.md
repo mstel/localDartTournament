@@ -1,3 +1,14 @@
+# 2.7.8+98
+
+- Ergänzt dauerhaft gespeicherte Turniernotizen, die auch nach Turnierabschluss
+  abrufbar bleiben.
+- Ergänzt eine reproduzierbare Turniersimulation mit fixer oder zufälliger
+  Spieldauer, unabhängigen Boards, Seed und vollständigem Schritt-Undo. Die
+  Simulation nutzt die bestehende Turnierlaufzeit und verändert keine regulären
+  Turnierergebnisse oder Spielerstatistiken.
+- Vereinheitlicht feste Reihenfolge und festen Spielplan zu einem vollständigen,
+  bearbeitbaren Spielplanmodus mit reservierten Plätzen für zukünftige Partien.
+
 # 2.7.6+96
 
 - Prüft Teilnahme- und Turnierergebnis-Achievements nur bei den passenden

@@ -93,6 +93,69 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('fixed schedules expose recompute actions in both views', (
+    tester,
+  ) async {
+    final tournament = fixture()..directorPlayOrderMode = 'fixed_schedule';
+    var recomputeCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              directorModeEnabled: true,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onRecomputeSchedule: () => recomputeCount++,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('recompute-fixed-schedule-director')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('recompute-fixed-schedule-queue')),
+      findsOneWidget,
+    );
+    final queueButton = find.byKey(
+      const ValueKey('recompute-fixed-schedule-queue'),
+    );
+    await tester.ensureVisible(queueButton);
+    await tester.tap(queueButton);
+    expect(recomputeCount, 1);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onRecomputeSchedule: () => recomputeCount++,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('recompute-fixed-schedule-overview')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('director-only controls stay hidden when the mode is disabled', (
     tester,
   ) async {
@@ -366,7 +429,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 42);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 43);
     },
   );
   test('director mode and strategy persist in tournament JSON', () {

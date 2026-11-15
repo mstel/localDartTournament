@@ -38,6 +38,54 @@ CreatedTournament fixture({int boards = 2}) {
 
 void main() {
   const controller = OrderOfPlayController();
+  test('legacy fixed order data loads as a fixed schedule', () {
+    final data = fixture().toJson()..['directorPlayOrderMode'] = 'fixed_order';
+
+    expect(
+      CreatedTournament.fromJson(data).directorPlayOrderMode,
+      'fixed_schedule',
+    );
+  });
+  test('fixed schedule assigns positions to unknown future pairings', () {
+    final tournament = fixture();
+    final group =
+        (tournament.runStages.single as GroupTournamentRunStage).groups.single;
+    final futureMatch = GroupMatch(round: 4);
+    group.matches.add(futureMatch);
+
+    controller.initializeFixedSchedule(tournament);
+
+    final entries = controller.entries(tournament);
+    final orders = entries
+        .map((entry) => entry.match.fixedScheduleOrder)
+        .toList();
+    expect(orders, everyElement(isNotNull));
+    expect(orders.toSet(), hasLength(entries.length));
+    expect(
+      futureMatch.fixedScheduleOrder,
+      orders.reduce((a, b) => a! > b! ? a : b),
+    );
+  });
+  test(
+    'legacy fixed order keeps known positions and appends missing slots',
+    () {
+      final tournament = fixture();
+      final entries = controller.entries(tournament);
+      entries[0].match.fixedScheduleOrder = 0;
+      entries[1].match.fixedScheduleOrder = 1;
+
+      controller.initializeFixedSchedule(tournament);
+
+      expect(entries[0].match.fixedScheduleOrder, 0);
+      expect(entries[1].match.fixedScheduleOrder, 1);
+      expect(
+        entries.skip(2).map((entry) => entry.match.fixedScheduleOrder),
+        orderedEquals(
+          List<int>.generate(entries.length - 2, (index) => index + 2),
+        ),
+      );
+    },
+  );
   test(
     'participant suggestion excludes busy opponents and occupied boards',
     () {
