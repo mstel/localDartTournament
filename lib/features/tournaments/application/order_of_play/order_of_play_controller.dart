@@ -55,6 +55,14 @@ class OrderOfPlayController {
       throw ArgumentError.value(tournament.boardCount, 'boardCount');
     }
     final all = entries(tournament);
+    if (tournament.directorPlayOrderMode != 'dynamic') {
+      all.sort((a, b) {
+        final order = (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+          b.match.fixedScheduleOrder ?? 1 << 30,
+        );
+        return order != 0 ? order : a.stageIndex.compareTo(b.stageIndex);
+      });
+    }
     final finished =
         all
             .where((e) => e.stageIndex <= activeStage && e.match.isResolved)
@@ -105,7 +113,9 @@ class OrderOfPlayController {
           ? tournament.blockedBoards
           : const {},
       preferredBoardsByGroup: tournament.groupBoardAssignments,
-      strategy: tournament.directorModeEnabled
+      strategy: tournament.directorPlayOrderMode != 'dynamic'
+          ? 'sequence'
+          : tournament.directorModeEnabled
           ? tournament.directorSchedulingStrategy
           : 'group',
       assignGroupsToBoards:
@@ -117,6 +127,102 @@ class OrderOfPlayController {
       },
     );
     return BoardSchedule(planned, running, finished, waiting);
+  }
+
+  /// Creates a persisted, complete queue once. Future pairing slots are added
+  /// after currently known pairings and retain their assigned positions.
+  void initializeFixedSchedule(
+    CreatedTournament tournament, {
+    bool includeUnknownPairings = true,
+  }) {
+    final all = entries(tournament);
+    if (all.every((entry) => entry.match.fixedScheduleOrder != null) ||
+        (!includeUnknownPairings &&
+            all
+                .where((entry) => entry.match.hasPlayers)
+                .every((entry) => entry.match.fixedScheduleOrder != null))) {
+      return;
+    }
+    final ordered = <PlayEntry>[];
+    final stageIndexes = all.map((entry) => entry.stageIndex).toSet().toList()
+      ..sort();
+    for (final stageIndex in stageIndexes) {
+      final stageEntries = all
+          .where((entry) => entry.stageIndex == stageIndex)
+          .toList();
+      final known = stageEntries
+          .where((entry) => entry.match.hasPlayers)
+          .toList();
+      final assignments = const BoardSchedulingEngine().schedule(
+        all: stageEntries,
+        ready: known,
+        boardCount: tournament.boardCount,
+        blockedBoards: tournament.blockedBoards,
+        strategy: 'sequence',
+      );
+      ordered.addAll(assignments.map((assignment) => assignment.entry));
+      if (includeUnknownPairings) {
+        ordered.addAll(stageEntries.where((entry) => !known.contains(entry)));
+      }
+    }
+    for (var index = 0; index < ordered.length; index++) {
+      ordered[index].match.fixedScheduleOrder = index;
+    }
+    if (!includeUnknownPairings) {
+      for (final entry in all.where((entry) => !entry.match.hasPlayers)) {
+        entry.match.fixedScheduleOrder = null;
+      }
+    }
+  }
+
+  bool moveFixedScheduleMatch(
+    CreatedTournament tournament,
+    GroupMatch match, {
+    required int targetIndex,
+  }) {
+    final all = entries(tournament)
+      ..sort(
+        (a, b) => (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+          b.match.fixedScheduleOrder ?? 1 << 30,
+        ),
+      );
+    final stageIndex = all
+        .where((entry) => identical(entry.match, match))
+        .firstOrNull
+        ?.stageIndex;
+    if (stageIndex == null || match.isResolved) return false;
+    final stageEntries = all
+        .where((entry) => entry.stageIndex == stageIndex)
+        .toList();
+    final index = stageEntries.indexWhere(
+      (entry) => identical(entry.match, match),
+    );
+    final entry = stageEntries.removeAt(index);
+    stageEntries.insert(targetIndex.clamp(0, stageEntries.length), entry);
+    final allIndex = all.indexWhere((item) => item.stageIndex == stageIndex);
+    all.removeWhere((item) => item.stageIndex == stageIndex);
+    all.insertAll(allIndex, stageEntries);
+    for (var position = 0; position < all.length; position++) {
+      all[position].match.fixedScheduleOrder = position;
+    }
+    return true;
+  }
+
+  bool deferFixedScheduleMatch(CreatedTournament tournament, GroupMatch match) {
+    final all = entries(tournament);
+    final stageIndex = all
+        .where((entry) => identical(entry.match, match))
+        .firstOrNull
+        ?.stageIndex;
+    if (stageIndex == null) return false;
+    final stageEntries = all
+        .where((entry) => entry.stageIndex == stageIndex)
+        .toList();
+    return moveFixedScheduleMatch(
+      tournament,
+      match,
+      targetIndex: stageEntries.length - 1,
+    );
   }
 
   /// Uses the existing fair queue, but checks availability now, not in a future block.

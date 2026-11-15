@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../../../settings/data/app_presentation_preferences.dart';
 
 import '../../../../league/domain/league_match.dart';
 import '../../../domain/tournament_models.dart';
@@ -83,16 +84,17 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         );
         if (selectedStage == null || !context.mounted) return;
       }
-      final document = _buildDocument(stageIndex: selectedStage);
-      final stageName =
-          tournament.leagueMatch != null || tournament.runStages.isEmpty
-          ? 'Spielplan'
-          : tournament.runStages[selectedStage ?? 0].name;
-      final fileName =
-          '${_safeFileName(tournament.name)}_${_safeFileName(stageName)}.pdf';
+      final preferences = await AppPresentationPreferences.load();
+      final document = _buildDocument(
+        stageIndex: selectedStage,
+        preferences: preferences,
+      );
+      final fileName = '${_safeFileName(tournament.name)}.pdf';
       await Printing.layoutPdf(
         onLayout: (_) => document.save(),
-        format: PdfPageFormat.a4.landscape,
+        format: preferences.pdfLandscape
+            ? PdfPageFormat.a4.landscape
+            : PdfPageFormat.a4,
         name: fileName,
       );
     } catch (error) {
@@ -103,11 +105,16 @@ class TournamentSchedulePdfButton extends StatelessWidget {
     }
   }
 
-  pw.Document _buildDocument({int? stageIndex}) {
+  pw.Document _buildDocument({
+    int? stageIndex,
+    required AppPresentationPreferences preferences,
+  }) {
     final document = pw.Document();
     document.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
+        pageFormat: preferences.pdfLandscape
+            ? PdfPageFormat.a4.landscape
+            : PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
         footer: (context) => pw.Align(
           alignment: pw.Alignment.centerRight,
@@ -122,19 +129,28 @@ class TournamentSchedulePdfButton extends StatelessWidget {
             style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 4),
-          pw.Text('Datum: __.__.____'),
+          if (preferences.pdfShowDate)
+            pw.Text(
+              'Datum: ${tournament.tournamentDate == null ? '__.__.____' : _formatDate(tournament.tournamentDate!)}',
+            ),
           pw.SizedBox(height: 18),
           if (tournament.leagueMatch != null)
-            ..._leagueContent(tournament.leagueMatch!)
+            ..._leagueContent(tournament.leagueMatch!, preferences)
           else
-            ..._tournamentContent(stageIndex: stageIndex),
+            ..._tournamentContent(
+              stageIndex: stageIndex,
+              preferences: preferences,
+            ),
         ],
       ),
     );
     return document;
   }
 
-  List<pw.Widget> _leagueContent(LeagueMatch league) {
+  List<pw.Widget> _leagueContent(
+    LeagueMatch league,
+    AppPresentationPreferences preferences,
+  ) {
     final rows = <List<String>>[
       ['Nr.', 'Begegnung', 'Spielstand'],
     ];
@@ -155,17 +171,57 @@ class TournamentSchedulePdfButton extends StatelessWidget {
       ),
       pw.SizedBox(height: 6),
       _table(rows, [1, 7, 2]),
-      pw.SizedBox(height: 18),
-      pw.Text('Spielbericht / Notizen'),
-      pw.SizedBox(height: 8),
-      pw.Container(
-        height: 75,
-        decoration: pw.BoxDecoration(border: pw.Border.all()),
-      ),
+      if (preferences.pdfShowNotes) ...[
+        pw.SizedBox(height: 18),
+        pw.Text('Spielbericht / Notizen'),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          height: 75,
+          decoration: pw.BoxDecoration(border: pw.Border.all()),
+        ),
+      ],
+      if (preferences.pdfShowSignatures) ...[
+        pw.SizedBox(height: 24),
+        pw.Row(
+          children: [
+            pw.Expanded(
+              child: pw.Column(
+                children: [
+                  pw.Text('Unterschrift ${league.homeTeam}'),
+                  pw.SizedBox(height: 36),
+                  pw.Divider(),
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 36),
+            pw.Expanded(
+              child: pw.Column(
+                children: [
+                  pw.Text('Unterschrift ${league.awayTeam}'),
+                  pw.SizedBox(height: 36),
+                  pw.Divider(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+      if (preferences.pdfShowBestPerformances) ...[
+        pw.SizedBox(height: 14),
+        pw.Text('Bestleistungen'),
+        pw.SizedBox(height: 6),
+        pw.Container(
+          height: 40,
+          decoration: pw.BoxDecoration(border: pw.Border.all()),
+        ),
+      ],
     ];
   }
 
-  List<pw.Widget> _tournamentContent({int? stageIndex}) {
+  List<pw.Widget> _tournamentContent({
+    int? stageIndex,
+    required AppPresentationPreferences preferences,
+  }) {
     final content = <pw.Widget>[];
     final stages = stageIndex == null
         ? tournament.runStages
@@ -241,8 +297,80 @@ class TournamentSchedulePdfButton extends StatelessWidget {
         }
       }
     }
+    if (preferences.pdfShowAdvancement) {
+      for (final stage in stages.whereType<GroupTournamentRunStage>()) {
+        final advancing = stage.qualificationPlan?.totalQualifiers;
+        if (advancing != null) {
+          content.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 8),
+              child: pw.Text(
+                '$advancing Teilnehmende werden in die nächste Etappe übertragen.',
+              ),
+            ),
+          );
+        }
+      }
+    }
+    if (preferences.pdfShowBestPerformances) {
+      final performances = <String>[];
+      for (final stage in stages) {
+        if (stage is GroupTournamentRunStage) {
+          for (final group in stage.groups) {
+            for (final match in [
+              ...group.matches,
+              ...group.knockoutRounds.expand((round) => round),
+            ]) {
+              performances.addAll(
+                match.bestPerformances.map(
+                  (item) =>
+                      '${item.playerName} · ${item.type}${item.value == null ? '' : ' · ${item.value}'}',
+                ),
+              );
+            }
+          }
+        } else if (stage is KnockoutTournamentRunStage) {
+          for (final match in stage.matches) {
+            performances.addAll(
+              match.bestPerformances.map(
+                (item) =>
+                    '${item.playerName} · ${item.type}${item.value == null ? '' : ' · ${item.value}'}',
+              ),
+            );
+          }
+        }
+      }
+      content.addAll([
+        pw.SizedBox(height: 12),
+        pw.Text(
+          'Bestleistungen',
+          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+        ),
+        if (performances.isEmpty)
+          pw.Container(
+            height: 40,
+            decoration: pw.BoxDecoration(border: pw.Border.all()),
+          )
+        else
+          ...performances.map(pw.Text.new),
+      ]);
+    }
+    if (preferences.pdfShowNotes) {
+      content.addAll([
+        pw.SizedBox(height: 12),
+        pw.Text('Notizen'),
+        pw.SizedBox(height: 6),
+        pw.Container(
+          height: 65,
+          decoration: pw.BoxDecoration(border: pw.Border.all()),
+        ),
+      ]);
+    }
     return content;
   }
+
+  String _formatDate(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
 
   List<pw.Widget> _tripleKoContent(KnockoutTournamentRunStage stage) {
     final matches = stage.rounds.expand((round) => round).toList();

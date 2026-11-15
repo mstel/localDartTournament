@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/home_overview_service.dart';
+import '../../../settings/data/app_presentation_preferences.dart';
 
 class HomeActivityPanel extends StatefulWidget {
   const HomeActivityPanel({
@@ -22,17 +23,41 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
   late Future<HomeOverviewSnapshot> _snapshot;
   Timer? _rotationTimer;
   int _cardIndex = 0;
+  bool _dashboardEnabled = true;
+  bool _preferencesLoaded = false;
+  int _intervalSeconds = 5;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final preferences = await AppPresentationPreferences.load();
+      if (!mounted) return;
+      setState(() {
+        _dashboardEnabled = preferences.dynamicDashboardEnabled;
+        _intervalSeconds = preferences.dashboardIntervalSeconds;
+        _preferencesLoaded = true;
+        _rotationTimer?.cancel();
+        _rotationTimer = null;
+        if (_dashboardEnabled) _load();
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _preferencesLoaded = true;
+        _load();
+      });
+    }
   }
 
   @override
   void didUpdateWidget(covariant HomeActivityPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.service != widget.service) _load();
+    if (oldWidget.service != widget.service && _dashboardEnabled) _load();
   }
 
   @override
@@ -52,78 +77,86 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<HomeOverviewSnapshot>(
-    future: _snapshot,
-    builder: (context, snapshot) {
-      if (snapshot.hasError) {
-        return _PanelCard(
-          child: Row(
-            children: [
-              const Icon(Icons.error_outline),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Die Startseiten-Übersicht konnte nicht geladen werden: '
-                  '${snapshot.error}',
+  Widget build(BuildContext context) {
+    if (!_preferencesLoaded || !_dashboardEnabled) {
+      return const SizedBox.shrink();
+    }
+    return FutureBuilder<HomeOverviewSnapshot>(
+      future: _snapshot,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _PanelCard(
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Die Startseiten-Übersicht konnte nicht geladen werden: '
+                    '${snapshot.error}',
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: _retry,
-                tooltip: 'Übersicht erneut laden',
-                icon: const Icon(Icons.refresh),
-              ),
+                IconButton(
+                  onPressed: _retry,
+                  tooltip: 'Übersicht erneut laden',
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const _PanelCard(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+        final overview = snapshot.data!;
+        final active = overview.activeTournament;
+        final latest = overview.latestTournament;
+        final carouselCards = overview.cards
+            .where((card) => card != latest)
+            .toList();
+        if (carouselCards.isEmpty && active == null && latest == null) {
+          return const SizedBox.shrink();
+        }
+        if (carouselCards.length > 1) {
+          _rotationTimer ??= Timer.periodic(
+            Duration(seconds: _intervalSeconds),
+            (_) {
+              if (!mounted) return;
+              setState(() => _cardIndex++);
+            },
+          );
+        } else {
+          _rotationTimer?.cancel();
+          _rotationTimer = null;
+        }
+        final carousel = carouselCards.isEmpty
+            ? null
+            : _rotatingCard(
+                context,
+                carouselCards[_cardIndex % carouselCards.length],
+                _cardIndex % carouselCards.length,
+                carouselCards.length,
+              );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (active != null) _activeCard(context, active),
+            if (active == null && latest != null)
+              _rotatingCard(context, latest, -1, 0),
+            if (carousel != null) ...[
+              if (active != null || latest != null) const SizedBox(height: 12),
+              carousel,
             ],
-          ),
-        );
-      }
-      if (!snapshot.hasData) {
-        return const _PanelCard(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-        );
-      }
-      final overview = snapshot.data!;
-      final active = overview.activeTournament;
-      final latest = overview.latestTournament;
-      final carouselCards = overview.cards
-          .where((card) => card != latest)
-          .toList();
-      if (carouselCards.isEmpty && active == null && latest == null) {
-        return const SizedBox.shrink();
-      }
-      if (carouselCards.length > 1) {
-        _rotationTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
-          if (!mounted) return;
-          setState(() => _cardIndex++);
-        });
-      } else {
-        _rotationTimer?.cancel();
-        _rotationTimer = null;
-      }
-      final carousel = carouselCards.isEmpty
-          ? null
-          : _rotatingCard(
-              context,
-              carouselCards[_cardIndex % carouselCards.length],
-              _cardIndex % carouselCards.length,
-              carouselCards.length,
-            );
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (active != null) _activeCard(context, active),
-          if (active == null && latest != null)
-            _rotatingCard(context, latest, -1, 0),
-          if (carousel != null) ...[
-            if (active != null || latest != null) const SizedBox(height: 12),
-            carousel,
           ],
-        ],
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 
   Widget _activeCard(
     BuildContext context,

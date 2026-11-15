@@ -12,6 +12,7 @@ import '../../domain/tournament_models.dart';
 import '../../data/app_database.dart';
 import '../../data/tournament_storage.dart';
 import '../../../league/domain/league_match.dart';
+import '../../../league/presentation/league_overview.dart';
 import '../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../rankings/domain/local_elo_calculator.dart';
 import '../../../statistics/domain/best_performance.dart';
@@ -295,6 +296,15 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
               ),
               const SizedBox(height: 12),
               _KratzerLifeSummary(tournament: tournament),
+            ] else if (tournament.leagueMatch != null) ...[
+              Text(
+                'Mannschaftsvergleich',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              LeagueOverview(league: tournament.leagueMatch!),
             ] else ...[
               Text(
                 'Podium',
@@ -472,6 +482,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     List<BestPerformance> performances,
   ) {
     final timing = TournamentTiming.durationSummary(tournament);
+    final league = tournament.leagueMatch;
     final expectedRange = _expectedDurationRange();
     final durationParts = [
       if (timing != null)
@@ -506,6 +517,9 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       rankingChanges: const [],
       bestPerformances: performances,
       tournamentDate: tournament.effectiveDate,
+      teamComparison: league == null
+          ? null
+          : '${league.homeTeam}  ${league.homePoints}:${league.awayPoints}  ${league.awayTeam} · ${league.outcome}',
     );
   }
 

@@ -2573,6 +2573,189 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<void> _saveDirectorPlayOrderMode(String mode) async {
+    final previous = widget.tournament.directorPlayOrderMode;
+    final entries = const OrderOfPlayController().entries(widget.tournament);
+    final previousOrders = {
+      for (final entry in entries) entry.match: entry.match.fixedScheduleOrder,
+    };
+    setState(() => widget.tournament.directorPlayOrderMode = mode);
+    if (mode != 'dynamic') {
+      const OrderOfPlayController().initializeFixedSchedule(
+        widget.tournament,
+        includeUnknownPairings: mode == 'fixed_schedule',
+      );
+    }
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        widget.tournament.directorPlayOrderMode = previous;
+        for (final entry in entries) {
+          entry.match.fixedScheduleOrder = previousOrders[entry.match];
+        }
+      });
+    }
+  }
+
+  Future<void> _moveFixedScheduleMatch(
+    GroupMatch match, {
+    required bool first,
+    int? targetIndex,
+  }) async {
+    final controller = const OrderOfPlayController();
+    final entries = controller.entries(widget.tournament);
+    final previous = {
+      for (final entry in entries) entry.match: entry.match.fixedScheduleOrder,
+    };
+    final stageIndex = entries
+        .where((entry) => identical(entry.match, match))
+        .firstOrNull
+        ?.stageIndex;
+    if (stageIndex == null) return;
+    final moved = targetIndex != null || first
+        ? controller.moveFixedScheduleMatch(
+            widget.tournament,
+            match,
+            targetIndex: targetIndex ?? 0,
+          )
+        : controller.deferFixedScheduleMatch(widget.tournament, match);
+    if (!moved) return;
+    setState(() {});
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (!mounted) return;
+      for (final entry in entries) {
+        entry.match.fixedScheduleOrder = previous[entry.match];
+      }
+      setState(() {});
+    }
+  }
+
+  Future<void> _chooseFixedSchedulePosition(GroupMatch match) async {
+    final entries = const OrderOfPlayController().entries(widget.tournament);
+    final stageIndex = entries
+        .where((entry) => identical(entry.match, match))
+        .firstOrNull
+        ?.stageIndex;
+    if (stageIndex == null) return;
+    final pending =
+        entries
+            .where(
+              (entry) =>
+                  entry.stageIndex == stageIndex && !entry.match.isResolved,
+            )
+            .toList()
+          ..sort(
+            (a, b) => (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+              b.match.fixedScheduleOrder ?? 1 << 30,
+            ),
+          );
+    final selectedPosition = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Neue Position auswählen'),
+        children: [
+          for (var index = 0; index < pending.length; index++)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, index),
+              child: Text('${index + 1} · ${pending[index].origin}'),
+            ),
+        ],
+      ),
+    );
+    if (selectedPosition == null || !mounted) return;
+    final targetMatch = pending[selectedPosition].match;
+    final stageSchedule =
+        entries.where((entry) => entry.stageIndex == stageIndex).toList()..sort(
+          (a, b) => (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+            b.match.fixedScheduleOrder ?? 1 << 30,
+          ),
+        );
+    final targetIndex = stageSchedule.indexWhere(
+      (entry) => identical(entry.match, targetMatch),
+    );
+    if (targetIndex < 0) return;
+    await _moveFixedScheduleMatch(
+      match,
+      first: false,
+      targetIndex: targetIndex,
+    );
+  }
+
+  Future<void> _reorderFixedScheduleMatch(
+    GroupMatch match,
+    GroupMatch target,
+  ) async {
+    final entries = const OrderOfPlayController().entries(widget.tournament);
+    final stageIndex = entries
+        .where((entry) => identical(entry.match, match))
+        .firstOrNull
+        ?.stageIndex;
+    if (stageIndex == null) return;
+    final stageSchedule =
+        entries.where((entry) => entry.stageIndex == stageIndex).toList()..sort(
+          (a, b) => (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+            b.match.fixedScheduleOrder ?? 1 << 30,
+          ),
+        );
+    final targetIndex = stageSchedule.indexWhere(
+      (entry) => identical(entry.match, target),
+    );
+    if (targetIndex < 0) return;
+    await _moveFixedScheduleMatch(
+      match,
+      first: false,
+      targetIndex: targetIndex,
+    );
+  }
+
+  Future<void> _recomputeFixedSchedule() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Spielplan neu berechnen?'),
+        content: const Text(
+          'Die aktuelle Reihenfolge wird ersetzt. Bereits gespielte Partien behalten ihre Ergebnisse.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Neu berechnen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final entries = const OrderOfPlayController().entries(widget.tournament);
+    final previous = {
+      for (final entry in entries) entry.match: entry.match.fixedScheduleOrder,
+    };
+    for (final entry in entries) {
+      entry.match.fixedScheduleOrder = null;
+    }
+    const OrderOfPlayController().initializeFixedSchedule(
+      widget.tournament,
+      includeUnknownPairings: true,
+    );
+    setState(() {});
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      if (!mounted) return;
+      for (final entry in entries) {
+        entry.match.fixedScheduleOrder = previous[entry.match];
+      }
+      setState(() {});
+    }
+  }
+
   Future<void> _saveRankingSelection({
     required bool countsForRanking,
     required List<String> rankingIds,
@@ -5924,6 +6107,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               widget.tournament.directorModeEnabled,
                           onStartOnBoard: _startRecommendedMatchOnBoard,
                           onResetMatch: _resetRunningMatch,
+                          onPromoteScheduleMatch: (match) =>
+                              _moveFixedScheduleMatch(match, first: true),
+                          onDeferScheduleMatch: (match) =>
+                              _moveFixedScheduleMatch(match, first: false),
+                          onChooseSchedulePosition:
+                              _chooseFixedSchedulePosition,
+                          onReorderScheduleMatch: _reorderFixedScheduleMatch,
                           onOpenMatch: _openPlayedMatch,
                           onStartClock: _startTournamentClock,
                           onPauseClock: _toggleClockPause,
@@ -6117,6 +6307,64 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               );
                                             },
                                     ),
+                                    if (widget.tournament.leagueMatch == null &&
+                                        widget.tournament.directorModeEnabled)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: DropdownButtonFormField<String>(
+                                          initialValue: widget
+                                              .tournament
+                                              .directorPlayOrderMode,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Spielplanmodus',
+                                            border: OutlineInputBorder(),
+                                            helperText:
+                                                'Legt fest, ob die Vorschläge laufend oder einmalig geordnet werden.',
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'dynamic',
+                                              child: Text('Dynamisch'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'fixed_order',
+                                              child: Text('Feste Reihenfolge'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'fixed_schedule',
+                                              child: Text('Fester Spielplan'),
+                                            ),
+                                          ],
+                                          onChanged: (mode) {
+                                            if (mode != null) {
+                                              unawaited(
+                                                _saveDirectorPlayOrderMode(
+                                                  mode,
+                                                ),
+                                              );
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    if (widget.tournament.leagueMatch == null &&
+                                        widget.tournament.directorModeEnabled &&
+                                        widget
+                                                .tournament
+                                                .directorPlayOrderMode ==
+                                            'fixed_schedule')
+                                      Align(
+                                        alignment:
+                                            AlignmentDirectional.centerStart,
+                                        child: OutlinedButton.icon(
+                                          onPressed: _recomputeFixedSchedule,
+                                          icon: const Icon(
+                                            Icons.replay_outlined,
+                                          ),
+                                          label: const Text(
+                                            'Spielplan neu berechnen',
+                                          ),
+                                        ),
+                                      ),
                                     if (widget.tournament.leagueMatch == null &&
                                         widget.tournament.directorModeEnabled)
                                       Padding(

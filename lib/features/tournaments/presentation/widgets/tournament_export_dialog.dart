@@ -52,6 +52,7 @@ class TournamentExportDialog {
       rankingChanges: changes,
       bestPerformances: completionImageData.bestPerformances,
       tournamentDate: completionImageData.tournamentDate,
+      teamComparison: completionImageData.teamComparison,
     );
     final html = TournamentExport.html(
       tournament,

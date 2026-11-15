@@ -11,6 +11,7 @@ import 'knockout_run_section.dart';
 import 'result_entry.dart';
 import 'recent_match_result_card.dart';
 import 'standings_table.dart';
+import '../../../../league/presentation/league_overview.dart';
 
 enum MatchCategoryFilter { open, finished, all }
 
@@ -72,6 +73,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   static const _initialVisibleMatchCount = 8;
   static const _matchPageSize = 8;
   bool _focusScheduled = false;
+  bool _showTeamComparison = false;
 
   @override
   void didUpdateWidget(covariant StageResultsSplitView oldWidget) {
@@ -572,8 +574,26 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
             ],
           ),
         ),
+        if (widget.tournament?.leagueMatch case final league?) ...[
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: false,
+                label: Text('Tabellen & Zwischenstände'),
+              ),
+              ButtonSegment(value: true, label: Text('Mannschaftsvergleich')),
+            ],
+            selected: {_showTeamComparison},
+            onSelectionChanged: (selected) =>
+                setState(() => _showTeamComparison = selected.single),
+          ),
+          const SizedBox(height: 10),
+          if (_showTeamComparison) LeagueOverview(league: league),
+        ],
         for (var index = 0; index < stage.groups.length; index++)
-          if (standingsByGroup.containsKey(stage.groups[index]))
+          if ((_showTeamComparison && widget.tournament?.leagueMatch == null) ||
+              !_showTeamComparison &&
+                  standingsByGroup.containsKey(stage.groups[index]))
             Card(
               clipBehavior: Clip.antiAlias,
               margin: const EdgeInsets.only(bottom: 12),
@@ -605,7 +625,8 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                 ],
               ),
             ),
-        if (stage.qualificationPlan != null &&
+        if (!_showTeamComparison &&
+            stage.qualificationPlan != null &&
             stage.qualificationPlan!.extraCount > 0 &&
             stage.groups.every(
               (group) => ['round_robin', 'swiss'].contains(group.playType),

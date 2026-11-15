@@ -12,6 +12,7 @@ import '../../govee/presentation/govee_hub_page.dart';
 import '../../random_draw/presentation/random_draw_tool_page.dart';
 import 'tie_breaker_defaults_panel.dart';
 import 'player_insight_defaults_panel.dart';
+import 'app_presentation_settings.dart';
 
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'appearance_panel.dart';
@@ -117,6 +118,7 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
       const PushSenderMenu(),
       const PushDeviceMenu(),
       const Card(child: PlayerInsightDefaultsPanel()),
+      const AppPresentationSettings(),
       Card(
         child: ListTile(
           leading: const Icon(Icons.lightbulb_outline),

@@ -86,7 +86,6 @@ class BoardSchedulingEngine {
     };
     final useGroupAssignments =
         assignGroupsToBoards &&
-        normalizedStrategy == 'group' &&
         ready.isNotEmpty &&
         ready.every((entry) => entry.groupKey != null);
     if (useGroupAssignments) {
@@ -163,6 +162,9 @@ class BoardSchedulingEngine {
             a,
             b,
           ) {
+            if (normalizedStrategy == 'sequence') {
+              return entryOrder[a]!.compareTo(entryOrder[b]!);
+            }
             if (normalizedStrategy == 'group') {
               final groupCompare = (a.groupKey ?? '').compareTo(
                 b.groupKey ?? '',

@@ -39,6 +39,7 @@ class TournamentCompletionImageData {
     required this.rankingChanges,
     required this.bestPerformances,
     this.tournamentDate,
+    this.teamComparison,
   });
 
   final String tournamentName;
@@ -52,6 +53,7 @@ class TournamentCompletionImageData {
   final List<TournamentRankingPlayerChange> rankingChanges;
   final List<BestPerformance> bestPerformances;
   final DateTime? tournamentDate;
+  final String? teamComparison;
 }
 
 class TournamentCompletionImageGenerator {
@@ -103,15 +105,16 @@ class TournamentCompletionImageGenerator {
         math.max(losses.take(3).length, positions.take(3).length),
       ),
     );
-    final rankingSummaryHeight = 112.0 + rankingRows * 48.0;
+    final rankingSummaryHeight = data.rankingChanges.isEmpty
+        ? 0.0
+        : 112.0 + rankingRows * 48.0;
     final summaryHeight = data.durationSummary.isEmpty ? 220.0 : 248.0;
     final height =
         padding * 2 +
         126 +
         summaryHeight +
         sectionGap +
-        92 +
-        data.podium.length * 58 +
+        (data.teamComparison == null ? 92 + data.podium.length * 58 : 150) +
         sectionGap +
         rankingSummaryHeight +
         (leagueMoves.isEmpty ? 0 : sectionGap + 92 + leagueMoves.length * 58) +
@@ -195,119 +198,144 @@ class TournamentCompletionImageGenerator {
     }
     y += summaryHeight + sectionGap;
 
-    _section(
-      canvas,
-      padding,
-      y,
-      contentWidth,
-      92 + data.podium.length * 58,
-      palette,
-    );
-    _sectionTitle(canvas, 'Podium', padding + 24, y + 20, palette);
-    for (var index = 0; index < data.podium.length; index++) {
-      final entry = data.podium[index];
+    if (data.teamComparison case final comparison?) {
+      _section(canvas, padding, y, contentWidth, 150, palette);
+      _sectionTitle(
+        canvas,
+        'Mannschaftsvergleich',
+        padding + 24,
+        y + 20,
+        palette,
+      );
       _text(
         canvas,
-        '${entry.place}. ${entry.playerName} · ${entry.wins} Siege · '
-        '${entry.losses} Niederlagen · ${entry.legsFor}:${entry.legsAgainst} Legs',
-        Offset(padding + 24, y + 66.0 + index * 58.0),
+        comparison,
+        Offset(padding + 24, y + 72),
         maxWidth: contentWidth - 48,
-        fontSize: 19,
+        fontSize: 25,
         color: palette.text,
-      );
-    }
-    y += 92 + data.podium.length * 58 + sectionGap;
-
-    _section(canvas, padding, y, contentWidth, rankingSummaryHeight, palette);
-    _sectionTitle(
-      canvas,
-      'Änderungen der Rangliste'
-      '${rankingNames.isEmpty ? '' : ' · $rankingNames'}',
-      padding + 24,
-      y + 20,
-      palette,
-    );
-    final cardGap = 12.0;
-    final cardWidth = (contentWidth - 48 - cardGap * 2) / 3;
-    final cardTop = y + 58;
-    final cardHeight = rankingSummaryHeight - 72;
-    final rankingCards = [
-      (
-        title: 'Größter Punktezuwachs',
-        changes: gains.take(3).toList(),
-        value: (TournamentRankingPlayerChange change) => '+${change.delta} Elo',
-      ),
-      (
-        title: 'Größter Punkteverlust',
-        changes: losses.take(3).toList(),
-        value: (TournamentRankingPlayerChange change) => '${change.delta} Elo',
-      ),
-      (
-        title: 'Ranglistenplätze',
-        changes: positions.take(3).toList(),
-        value: (TournamentRankingPlayerChange change) {
-          final before = change.rankingPositionBefore;
-          final after = change.rankingPositionAfter;
-          return before == null || after == null ? '–' : '$before → $after';
-        },
-      ),
-    ];
-    for (var cardIndex = 0; cardIndex < rankingCards.length; cardIndex++) {
-      final card = rankingCards[cardIndex];
-      final cardX = padding + 24 + cardIndex * (cardWidth + cardGap);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(cardX, cardTop, cardWidth, cardHeight),
-          const Radius.circular(12),
-        ),
-        Paint()..color = palette.card,
-      );
-      _text(
-        canvas,
-        card.title,
-        Offset(cardX + 12, cardTop + 12),
-        maxWidth: cardWidth - 24,
-        fontSize: 17,
-        color: palette.accent,
         bold: true,
       );
-      if (card.changes.isEmpty) {
+      y += 150 + sectionGap;
+    } else {
+      _section(
+        canvas,
+        padding,
+        y,
+        contentWidth,
+        92 + data.podium.length * 58,
+        palette,
+      );
+      _sectionTitle(canvas, 'Podium', padding + 24, y + 20, palette);
+      for (var index = 0; index < data.podium.length; index++) {
+        final entry = data.podium[index];
         _text(
           canvas,
-          cardIndex == 0
-              ? 'Keine Punktegewinne'
-              : cardIndex == 1
-              ? 'Keine Punkteverluste'
-              : 'Keine Platzierungsänderungen',
-          Offset(cardX + 12, cardTop + 48),
-          maxWidth: cardWidth - 24,
-          fontSize: 15,
-          color: palette.mutedText,
+          '${entry.place}. ${entry.playerName} · ${entry.wins} Siege · '
+          '${entry.losses} Niederlagen · ${entry.legsFor}:${entry.legsAgainst} Legs',
+          Offset(padding + 24, y + 66.0 + index * 58.0),
+          maxWidth: contentWidth - 48,
+          fontSize: 19,
+          color: palette.text,
         );
-      } else {
-        for (var index = 0; index < card.changes.length; index++) {
-          final change = card.changes[index];
-          final rowTop = cardTop + 44 + index * 48;
+      }
+      y += 92 + data.podium.length * 58 + sectionGap;
+    }
+
+    if (data.rankingChanges.isNotEmpty) {
+      _section(canvas, padding, y, contentWidth, rankingSummaryHeight, palette);
+      _sectionTitle(
+        canvas,
+        'Änderungen der Rangliste'
+        '${rankingNames.isEmpty ? '' : ' · $rankingNames'}',
+        padding + 24,
+        y + 20,
+        palette,
+      );
+      final cardGap = 12.0;
+      final cardWidth = (contentWidth - 48 - cardGap * 2) / 3;
+      final cardTop = y + 58;
+      final cardHeight = rankingSummaryHeight - 72;
+      final rankingCards = [
+        (
+          title: 'Größter Punktezuwachs',
+          changes: gains.take(3).toList(),
+          value: (TournamentRankingPlayerChange change) =>
+              '+${change.delta} Elo',
+        ),
+        (
+          title: 'Größter Punkteverlust',
+          changes: losses.take(3).toList(),
+          value: (TournamentRankingPlayerChange change) =>
+              '${change.delta} Elo',
+        ),
+        (
+          title: 'Ranglistenplätze',
+          changes: positions.take(3).toList(),
+          value: (TournamentRankingPlayerChange change) {
+            final before = change.rankingPositionBefore;
+            final after = change.rankingPositionAfter;
+            return before == null || after == null ? '–' : '$before → $after';
+          },
+        ),
+      ];
+      for (var cardIndex = 0; cardIndex < rankingCards.length; cardIndex++) {
+        final card = rankingCards[cardIndex];
+        final cardX = padding + 24 + cardIndex * (cardWidth + cardGap);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(cardX, cardTop, cardWidth, cardHeight),
+            const Radius.circular(12),
+          ),
+          Paint()..color = palette.card,
+        );
+        _text(
+          canvas,
+          card.title,
+          Offset(cardX + 12, cardTop + 12),
+          maxWidth: cardWidth - 24,
+          fontSize: 17,
+          color: palette.accent,
+          bold: true,
+        );
+        if (card.changes.isEmpty) {
           _text(
             canvas,
-            '${index + 1}. ${change.playerName}',
-            Offset(cardX + 12, rowTop),
+            cardIndex == 0
+                ? 'Keine Punktegewinne'
+                : cardIndex == 1
+                ? 'Keine Punkteverluste'
+                : 'Keine Platzierungsänderungen',
+            Offset(cardX + 12, cardTop + 48),
             maxWidth: cardWidth - 24,
             fontSize: 15,
-            color: palette.text,
-          );
-          _text(
-            canvas,
-            card.value(change),
-            Offset(cardX + 12, rowTop + 20),
-            maxWidth: cardWidth - 24,
-            fontSize: 14,
             color: palette.mutedText,
           );
+        } else {
+          for (var index = 0; index < card.changes.length; index++) {
+            final change = card.changes[index];
+            final rowTop = cardTop + 44 + index * 48;
+            _text(
+              canvas,
+              '${index + 1}. ${change.playerName}',
+              Offset(cardX + 12, rowTop),
+              maxWidth: cardWidth - 24,
+              fontSize: 15,
+              color: palette.text,
+            );
+            _text(
+              canvas,
+              card.value(change),
+              Offset(cardX + 12, rowTop + 20),
+              maxWidth: cardWidth - 24,
+              fontSize: 14,
+              color: palette.mutedText,
+            );
+          }
         }
       }
+      y += rankingSummaryHeight + sectionGap;
     }
-    y += rankingSummaryHeight + sectionGap;
 
     if (leagueMoves.isNotEmpty) {
       _section(

@@ -65,6 +65,11 @@ typedef _RankingStandings = ({
 
 const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
   SecondScreenWidgetPlacement(
+    widgetId: 'teamComparison',
+    widthUnits: 4,
+    startsNewRow: true,
+  ),
+  SecondScreenWidgetPlacement(
     widgetId: 'boards',
     widthUnits: 2,
     heightUnits: 2,
@@ -166,7 +171,22 @@ class _TournamentSecondScreenViewState
     final saved = activeName == null
         ? null
         : widget.tournament.secondScreenLayouts[activeName];
-    final placements = saved ?? _defaultMonitorLayout;
+    final isStandard =
+        activeName != null && _isStandardMonitorLayout(activeName);
+    final placements = saved == null
+        ? _defaultMonitorLayout
+        : isStandard &&
+              widget.tournament.leagueMatch != null &&
+              !saved.any((placement) => placement.widgetId == 'teamComparison')
+        ? [
+            ...saved,
+            const SecondScreenWidgetPlacement(
+              widgetId: 'teamComparison',
+              widthUnits: 4,
+              startsNewRow: true,
+            ),
+          ]
+        : saved;
     final normalized = <SecondScreenWidgetPlacement>[];
     for (final placement in placements) {
       if (placement.widgetId == 'liveBoard' ||
@@ -2142,8 +2162,23 @@ class _TournamentSecondScreenViewState
       ),
     );
     if (selected == null || !mounted) return;
-    final layout = widget.tournament.secondScreenLayouts[selected];
-    if (layout == null) return;
+    final storedLayout = widget.tournament.secondScreenLayouts[selected];
+    if (storedLayout == null) return;
+    final layout =
+        _isStandardMonitorLayout(selected) &&
+            widget.tournament.leagueMatch != null &&
+            !storedLayout.any(
+              (placement) => placement.widgetId == 'teamComparison',
+            )
+        ? [
+            ...storedLayout,
+            const SecondScreenWidgetPlacement(
+              widgetId: 'teamComparison',
+              widthUnits: 4,
+              startsNewRow: true,
+            ),
+          ]
+        : storedLayout;
     try {
       await _storage.saveSecondScreenLayout(
         tournament: widget.tournament,

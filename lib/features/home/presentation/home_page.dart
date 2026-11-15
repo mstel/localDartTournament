@@ -101,9 +101,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _openSettings() => Navigator.of(
-    context,
-  ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
+  Future<void> _openSettings() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
+    _refreshActivity();
+  }
+
   Widget _shell(Widget page, int selected) => SportAppShell(
     destinations: _destinations,
     selected: selected,

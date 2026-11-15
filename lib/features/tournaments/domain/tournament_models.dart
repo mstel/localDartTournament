@@ -73,6 +73,12 @@ String _directorSchedulingStrategyFromJson(Object? value) {
   return strategy == 'global' ? 'global' : 'group';
 }
 
+String _directorPlayOrderModeFromJson(Object? value) => switch (value) {
+  'fixed_order' => 'fixed_order',
+  'fixed_schedule' => 'fixed_schedule',
+  _ => 'dynamic',
+};
+
 List<String> _groupTieBreakersFromJson(Object? value) {
   final tieBreakers = _stringListFromJson(
     value,
@@ -734,6 +740,7 @@ class CreatedTournament {
     Map<int, String> directorBoardLiveUrls = const {},
     this.directorModeEnabled = false,
     this.directorSchedulingStrategy = 'group',
+    this.directorPlayOrderMode = 'dynamic',
     this.showAchievementNotifications = true,
     this.showPlayerInsights = false,
     bool? soundModeEnabled,
@@ -850,6 +857,9 @@ class CreatedTournament {
       directorSchedulingStrategy: _directorSchedulingStrategyFromJson(
         json['directorSchedulingStrategy'],
       ),
+      directorPlayOrderMode: _directorPlayOrderModeFromJson(
+        json['directorPlayOrderMode'],
+      ),
       showAchievementNotifications:
           json['showAchievementNotifications'] as bool? ?? true,
       showPlayerInsights: json['showPlayerInsights'] as bool? ?? false,
@@ -942,6 +952,7 @@ class CreatedTournament {
   final Map<int, String> directorBoardLiveUrls;
   bool directorModeEnabled;
   String directorSchedulingStrategy;
+  String directorPlayOrderMode;
   bool showAchievementNotifications;
   bool showPlayerInsights;
   TournamentSettings tournamentSettings;
@@ -1024,6 +1035,8 @@ class CreatedTournament {
       if (directorModeEnabled) 'directorModeEnabled': true,
       if (directorSchedulingStrategy != 'group')
         'directorSchedulingStrategy': directorSchedulingStrategy,
+      if (directorPlayOrderMode != 'dynamic')
+        'directorPlayOrderMode': directorPlayOrderMode,
       if (!showAchievementNotifications) 'showAchievementNotifications': false,
       if (showPlayerInsights) 'showPlayerInsights': true,
       'soundModeEnabled': soundModeEnabled,
@@ -1333,6 +1346,7 @@ class GroupMatch {
     this.bestPerformances = const [],
     List<TournamentAchievementNotice>? achievementNotifications,
     this.kratzerBonusLives = const [],
+    this.fixedScheduleOrder,
   }) : achievementNotifications = List<TournamentAchievementNotice>.of(
          achievementNotifications ?? const [],
        );
@@ -1388,6 +1402,7 @@ class GroupMatch {
         json['kratzerBonusLives'],
         KratzerBonusLife.fromJson,
       ),
+      fixedScheduleOrder: json['fixedScheduleOrder'] as int?,
     );
   }
 
@@ -1429,6 +1444,7 @@ class GroupMatch {
   List<BestPerformance> bestPerformances;
   List<TournamentAchievementNotice> achievementNotifications;
   List<KratzerBonusLife> kratzerBonusLives;
+  int? fixedScheduleOrder;
   bool get countsForStatistics => hasResult && !withdrawalIgnored;
 
   bool get hasPlayers => isKratzer
@@ -1522,6 +1538,7 @@ class GroupMatch {
         'kratzerBonusLives': kratzerBonusLives
             .map((bonus) => bonus.toJson())
             .toList(),
+      if (fixedScheduleOrder != null) 'fixedScheduleOrder': fixedScheduleOrder,
     };
   }
 }

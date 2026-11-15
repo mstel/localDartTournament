@@ -1591,8 +1591,15 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
     setState(() {
       _players.add(TournamentPlayer(name: playerName, isGenerated: false));
+      _syncParticipantCountToPlayers();
       _playerNameController.clear();
     });
+  }
+
+  void _syncParticipantCountToPlayers() {
+    if (_players.isNotEmpty) {
+      _playerCountController.text = '${_players.length}';
+    }
   }
 
   void _generatePlayers() {
@@ -1670,6 +1677,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       .any((m) => m.profileId == p.profileId),
                 ),
           );
+        _syncParticipantCountToPlayers();
       });
     } catch (_) {
       if (!mounted) {
@@ -1691,6 +1699,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   void _removePlayer(int index) {
     setState(() {
       _players.removeAt(index);
+      _syncParticipantCountToPlayers();
     });
   }
 
@@ -2174,6 +2183,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     final suggestion = await showDialog<TournamentFormatSuggestion>(
       context: context,
       builder: (_) => TournamentFormatPlannerDialog(
+        initialPlayerCount: _players.isNotEmpty
+            ? _players.length
+            : int.tryParse(_playerCountController.text),
         initialAllowEloSeeding: _hasSelectedEloRanking,
       ),
     );

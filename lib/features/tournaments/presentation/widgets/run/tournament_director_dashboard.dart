@@ -17,6 +17,7 @@ import 'tournament_timing_panel.dart';
 import 'tournament_second_screen_view.dart';
 import 'recommended_matches_table.dart';
 import 'recent_match_result_card.dart';
+import '../../../../league/presentation/league_overview.dart';
 
 /// Embedded tournament controls for match scheduling and result entry.
 class TournamentDirectorDashboard extends StatefulWidget {
@@ -31,6 +32,10 @@ class TournamentDirectorDashboard extends StatefulWidget {
     this.showBoardNumber,
     this.onStartOnBoard,
     this.onResetMatch,
+    this.onDeferScheduleMatch,
+    this.onPromoteScheduleMatch,
+    this.onChooseSchedulePosition,
+    this.onReorderScheduleMatch,
     this.onOpenMatch,
     this.onStartClock,
     this.onPauseClock,
@@ -58,6 +63,11 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final bool? showBoardNumber;
   final Future<void> Function(int board, {GroupMatch? match})? onStartOnBoard;
   final Future<void> Function(GroupMatch match)? onResetMatch;
+  final Future<void> Function(GroupMatch match)? onDeferScheduleMatch;
+  final Future<void> Function(GroupMatch match)? onPromoteScheduleMatch;
+  final Future<void> Function(GroupMatch match)? onChooseSchedulePosition;
+  final Future<void> Function(GroupMatch match, GroupMatch target)?
+  onReorderScheduleMatch;
   final ValueChanged<GroupMatch>? onOpenMatch;
   final Future<void> Function()? onStartClock;
   final Future<void> Function()? onPauseClock;
@@ -456,6 +466,39 @@ class _TournamentDirectorDashboardState
                     : 1
               : ((constraints.maxWidth + 8) / 228).floor().clamp(1, maxColumns);
           final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+          if (title == 'Spielplan' &&
+              widget.tournament.directorPlayOrderMode == 'fixed_schedule' &&
+              widget.onReorderScheduleMatch != null) {
+            return ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: true,
+              itemCount: entries.length,
+              onReorderItem: (oldIndex, newIndex) {
+                if (newIndex < 0 || newIndex >= entries.length) return;
+                unawaited(
+                  widget.onReorderScheduleMatch!(
+                    entries[oldIndex].match,
+                    entries[newIndex].match,
+                  ),
+                );
+              },
+              itemBuilder: (context, index) {
+                final entry = entries[index];
+                return Padding(
+                  key: ObjectKey(entry.match),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _queueTile(
+                    entry,
+                    width: constraints.maxWidth,
+                    showResult: showResult,
+                    isPriority: prioritizedMatches.contains(entry.match),
+                    plannedBoard: plannedBoards[entry.match],
+                  ),
+                );
+              },
+            );
+          }
           return Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -728,6 +771,36 @@ class _TournamentDirectorDashboardState
                     icon: const Icon(Icons.play_arrow_rounded),
                   ),
                 ),
+              if (widget.tournament.directorPlayOrderMode != 'dynamic' &&
+                  widget.onDeferScheduleMatch != null &&
+                  widget.onPromoteScheduleMatch != null &&
+                  widget.onChooseSchedulePosition != null)
+                PopupMenuButton<String>(
+                  tooltip: 'Spielplan anpassen',
+                  onSelected: (action) {
+                    if (action == 'promote') {
+                      unawaited(widget.onPromoteScheduleMatch!(match));
+                    } else if (action == 'position') {
+                      unawaited(widget.onChooseSchedulePosition!(match));
+                    } else {
+                      unawaited(widget.onDeferScheduleMatch!(match));
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'position',
+                      child: Text('Reihenfolge ändern …'),
+                    ),
+                    PopupMenuItem(
+                      value: 'promote',
+                      child: Text('Partie vorziehen'),
+                    ),
+                    PopupMenuItem(
+                      value: 'defer',
+                      child: Text('Vorübergehend überspringen'),
+                    ),
+                  ],
+                ),
             ],
           ),
         ],
@@ -772,7 +845,8 @@ class _TournamentDirectorDashboardState
     final pendingMatches = directorPlan.map((entry) => entry.match).toList();
     final pendingOrder = {
       for (var index = 0; index < activeStageEntries.length; index++)
-        activeStageEntries[index].match: index,
+        activeStageEntries[index].match:
+            activeStageEntries[index].match.fixedScheduleOrder ?? index,
     };
     final pendingMatchSet = pendingMatches.toSet();
     final flowPriority = TournamentFlowPriority.forStage(
@@ -780,6 +854,9 @@ class _TournamentDirectorDashboardState
       settings: _prioritySettings,
     );
     pendingMatches.sort((a, b) {
+      if (t.directorPlayOrderMode != 'dynamic') {
+        return pendingOrder[a]!.compareTo(pendingOrder[b]!);
+      }
       final aIsPriority = flowPriority.prioritizedMatches.contains(a);
       final bIsPriority = flowPriority.prioritizedMatches.contains(b);
       final priorityComparison = aIsPriority == bIsPriority
@@ -790,6 +867,11 @@ class _TournamentDirectorDashboardState
       if (priorityComparison != 0) return priorityComparison;
       return pendingOrder[a]!.compareTo(pendingOrder[b]!);
     });
+    if (t.directorPlayOrderMode != 'dynamic') {
+      directorPlan.sort(
+        (a, b) => pendingOrder[a.match]!.compareTo(pendingOrder[b.match]!),
+      );
+    }
     final nextSix = upcoming
         .take(6)
         .map((assignment) => assignment.entry)
@@ -1405,12 +1487,22 @@ class _TournamentDirectorDashboardState
         if (!widget.directorModeEnabled) ...[
           status,
           const SizedBox(height: 12),
+          if (t.leagueMatch case final league?) ...[
+            LeagueOverview(league: league),
+            const SizedBox(height: 12),
+          ],
           clock,
           const SizedBox(height: 12),
         ],
         if (widget.directorModeEnabled) ...[
           boardOverview,
           const SizedBox(height: 12),
+          if (t.leagueMatch case final league?) ...[
+            LeagueOverview(league: league),
+            const SizedBox(height: 12),
+            clock,
+            const SizedBox(height: 12),
+          ],
           _matchSearch(state),
           const SizedBox(height: 12),
           _matchQueue(
