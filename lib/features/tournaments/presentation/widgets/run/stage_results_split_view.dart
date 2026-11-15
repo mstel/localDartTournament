@@ -31,6 +31,7 @@ class StageResultsSplitView extends StatefulWidget {
     this.canEditBracket = false,
     this.onSwapSlot,
     this.onOpenMatch,
+    this.onStartSimulationMatch,
     this.focusMatch,
     this.runningMatches = const {},
     this.initialFilter,
@@ -54,6 +55,7 @@ class StageResultsSplitView extends StatefulWidget {
   final bool canEditBracket;
   final void Function(int fromSlotIndex, int toSlotIndex)? onSwapSlot;
   final ValueChanged<GroupMatch>? onOpenMatch;
+  final FutureOr<void> Function(GroupMatch match)? onStartSimulationMatch;
   final GroupMatch? focusMatch;
   final Set<GroupMatch> runningMatches;
   final MatchCategoryFilter? initialFilter;
@@ -550,6 +552,10 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                             onPlayerTap: _selectPlayer,
                             isRunning: widget.runningMatches.contains(match),
                             isFocused: identical(widget.focusMatch, match),
+                            onStartSimulation:
+                                widget.onStartSimulationMatch == null
+                                ? null
+                                : () => widget.onStartSimulationMatch!(match),
                           ),
                         ),
                     ],
@@ -999,6 +1005,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               leadingLabel: match.label,
               isRunning: widget.runningMatches.contains(match),
               isFocused: identical(widget.focusMatch, match),
+              onStartSimulation: widget.onStartSimulationMatch == null
+                  ? null
+                  : () => widget.onStartSimulationMatch!(match),
             ),
           if (entry.value.length >
               math.max(
@@ -1044,6 +1053,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
               onEditResult: widget.onEditResult,
               canEditResult: widget.canEditResults,
               leadingLabel: match.label,
+              onStartSimulation: widget.onStartSimulationMatch == null
+                  ? null
+                  : () => widget.onStartSimulationMatch!(match),
             ),
         ],
       ],

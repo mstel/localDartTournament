@@ -156,6 +156,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('simulation keeps manual match starts available', (tester) async {
+    final tournament = fixture()
+      ..directorModeEnabled = true
+      ..directorPlayOrderMode = 'fixed_schedule';
+    GroupMatch? startedMatch;
+    int? startedBoard;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              directorModeEnabled: true,
+              canOperate: false,
+              isSimulationMode: true,
+              canStartSimulationMatch: (_, board) => board == 1,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onStartOnBoard: (board, {match}) async {
+                startedBoard = board;
+                startedMatch = match;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final startButton = find.byTooltip('Partie auf Board 1 starten').first;
+    await tester.ensureVisible(startButton);
+    await tester.tap(startButton);
+    await tester.pumpAndSettle();
+
+    expect(startedBoard, 1);
+    expect(startedMatch, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('director-only controls stay hidden when the mode is disabled', (
     tester,
   ) async {

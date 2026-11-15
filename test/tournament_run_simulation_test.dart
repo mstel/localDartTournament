@@ -150,4 +150,61 @@ void main() {
       ),
     );
   });
+
+  test('manual starts work without automatic starts and are undoable', () {
+    final source = fixture(boards: 2);
+    final sourceJson = jsonEncode(source.toJson());
+    final run = simulation(source, 42)..setAutoStartMatches(false);
+    final matches = (run.tournament.runStages.single as GroupTournamentRunStage)
+        .groups
+        .single
+        .matches;
+
+    expect(run.autoStartMatches, isFalse);
+    expect(run.nextStep(), isFalse);
+    expect(
+      matches,
+      everyElement(predicate<GroupMatch>((m) => m.startedAt == null)),
+    );
+    expect(run.availableBoardsFor(matches[1]), contains(1));
+    expect(run.startMatch(matches[1], 1), isTrue);
+    expect(matches[1].startedAt, isNotNull);
+    expect(matches[0].startedAt, isNull);
+    expect(jsonEncode(source.toJson()), sourceJson);
+    expect(run.eventLog.last, contains('manuell gestartet'));
+
+    expect(run.undoLastStep(), isTrue);
+    final restoredMatches =
+        (run.tournament.runStages.single as GroupTournamentRunStage)
+            .groups
+            .single
+            .matches;
+    expect(restoredMatches[1].startedAt, isNull);
+    expect(run.eventLog.last, contains('rückgängig gemacht'));
+  });
+
+  test('reset restores the beginning while preserving simulation options', () {
+    final run = simulation(fixture(), 42)..setAutoStartMatches(false);
+    expect(run.nextStep(), isFalse);
+    final match = (run.tournament.runStages.single as GroupTournamentRunStage)
+        .groups
+        .single
+        .matches
+        .first;
+    expect(run.startMatch(match, 1), isTrue);
+    run.reset();
+
+    expect(run.elapsed, Duration.zero);
+    expect(run.stepCount, 0);
+    expect(run.autoStartMatches, isFalse);
+    expect(run.canUndo, isFalse);
+    expect(run.eventLog.last, contains('zurückgesetzt'));
+    expect(
+      (run.tournament.runStages.single as GroupTournamentRunStage)
+          .groups
+          .single
+          .matches,
+      everyElement(predicate<GroupMatch>((m) => m.startedAt == null)),
+    );
+  });
 }

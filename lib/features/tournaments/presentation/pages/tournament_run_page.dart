@@ -1512,6 +1512,63 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<void> _startSimulationMatchOnBoard(
+    int board, {
+    GroupMatch? match,
+  }) async {
+    final simulation = _simulation;
+    if (simulation == null || match == null) return;
+    if (!simulation.startMatch(match, board)) {
+      _showSimulationError('Diese Partie kann auf dem Board nicht starten.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _viewStageIndex = simulation.tournament.activeStageIndex;
+    });
+  }
+
+  Future<void> _startSimulationMatch(GroupMatch match) async {
+    final simulation = _simulation;
+    if (simulation == null) return;
+    final boards = simulation.availableBoardsFor(match);
+    if (boards.isEmpty) {
+      _showSimulationError(
+        'Für diese Partie ist aktuell kein Board verfügbar.',
+      );
+      return;
+    }
+    final board = boards.length == 1
+        ? boards.single
+        : await showDialog<int>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Board für die Simulation wählen'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final board in boards)
+                    ListTile(
+                      leading: const Icon(Icons.sports_score_outlined),
+                      title: Text(
+                        simulation.tournament.boardDisplayName(board),
+                      ),
+                      onTap: () => Navigator.of(context).pop(board),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Abbrechen'),
+                ),
+              ],
+            ),
+          );
+    if (board == null || !mounted) return;
+    await _startSimulationMatchOnBoard(board, match: match);
+  }
+
   void _stopSimulation() {
     if (_simulation == null) return;
     setState(() {
@@ -1551,10 +1608,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (simulation == null) return;
     try {
       if (!simulation.canUndo) _updateSimulationOptions();
-      if (!simulation.nextStep()) return;
+      final advanced = simulation.nextStep();
       setState(() {
         _viewStageIndex = simulation.tournament.activeStageIndex;
       });
+      if (!advanced && !simulation.isComplete) return;
     } catch (error) {
       _showSimulationError('Simulationsschritt fehlgeschlagen: $error');
     }
@@ -1565,6 +1623,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (simulation == null || !simulation.undoLastStep()) return;
     setState(() {
       _viewStageIndex = simulation.tournament.activeStageIndex;
+    });
+  }
+
+  void _resetSimulation() {
+    final simulation = _simulation;
+    if (simulation == null) return;
+    simulation.reset();
+    setState(() {
+      _viewStageIndex = simulation.tournament.activeStageIndex;
+      _requestedResultMatch = null;
     });
   }
 
@@ -1586,15 +1654,22 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           seedController: _simulationSeedController,
           minimumMinutesController: _simulationMinimumMinutesController,
           maximumMinutesController: _simulationMaximumMinutesController,
+          autoStartMatches: simulation.autoStartMatches,
+          onAutoStartMatchesChanged: (enabled) {
+            simulation.setAutoStartMatches(enabled);
+            setState(() {});
+          },
           optionsEnabled: simulation.stepCount == 0 && !simulation.canUndo,
           completedSteps: simulation.stepCount,
           totalSteps: simulation.totalSteps,
           elapsed: simulation.elapsed,
           canUndo: simulation.canUndo,
           isComplete: simulation.isComplete,
+          eventLog: simulation.eventLog,
           onNextStep: _stepSimulation,
           onUndo: _undoSimulationStep,
           onStop: _stopSimulation,
+          onReset: _resetSimulation,
         ),
       ),
     );
@@ -1651,7 +1726,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             ),
           ),
           Align(
-            alignment: AlignmentDirectional.centerEnd,
+            alignment: AlignmentDirectional.centerStart,
             child: FilledButton.icon(
               onPressed: _savingTournamentNotes ? null : _saveTournamentNotes,
               icon: const Icon(Icons.save_outlined),
@@ -6345,7 +6420,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               displayedTournament.directorModeEnabled,
                           onStartOnBoard: _simulation == null
                               ? _startRecommendedMatchOnBoard
-                              : null,
+                              : _startSimulationMatchOnBoard,
+                          isSimulationMode: _simulation != null,
+                          canStartSimulationMatch: (match, board) =>
+                              _simulation
+                                  ?.availableBoardsFor(match)
+                                  .contains(board) ==
+                              true,
                           onResetMatch: _simulation == null
                               ? _resetRunningMatch
                               : null,
@@ -7273,6 +7354,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         .toSet()
                                   : const <GroupMatch>{},
                               onOpenMatch: _openPlayedMatch,
+                              onStartSimulationMatch: _simulation == null
+                                  ? null
+                                  : _startSimulationMatch,
                               onPreviewBracket:
                                   activeStage is KnockoutTournamentRunStage
                                   ? null
@@ -7343,14 +7427,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                 ),
                 if (_stageViewMode == StageViewMode.dashboard) ...[
                   SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1120),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: _tournamentNotesEditor(),
-                        ),
-                      ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _tournamentNotesEditor(),
                     ),
                   ),
                   SliverToBoxAdapter(

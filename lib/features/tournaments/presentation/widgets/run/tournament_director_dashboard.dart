@@ -55,6 +55,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
     this.canResetCurrentStage = false,
     this.simulationControls,
     this.onRecomputeSchedule,
+    this.isSimulationMode = false,
+    this.canStartSimulationMatch,
   });
   final CreatedTournament tournament;
   final int activeStage;
@@ -90,6 +92,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final bool canResetCurrentStage;
   final Widget? simulationControls;
   final VoidCallback? onRecomputeSchedule;
+  final bool isSimulationMode;
+  final bool Function(GroupMatch match, int board)? canStartSimulationMatch;
   @override
   State<TournamentDirectorDashboard> createState() =>
       _TournamentDirectorDashboardState();
@@ -344,7 +348,7 @@ class _TournamentDirectorDashboardState
       widget.showBoardNumber ?? widget.directorModeEnabled;
 
   int? _quickStartBoard(PlayEntry entry) {
-    if (!widget.canOperate ||
+    if ((!widget.canOperate && !widget.isSimulationMode) ||
         widget.tournament.completedStageIndexes.contains(widget.activeStage)) {
       return null;
     }
@@ -365,6 +369,17 @@ class _TournamentDirectorDashboardState
     final assignment = snapshot.schedule.planned
         .where((assignment) => identical(assignment.entry.match, entry.match))
         .firstOrNull;
+    if (widget.isSimulationMode) {
+      final canStart = widget.canStartSimulationMatch;
+      if (canStart == null) return null;
+      if (assignment != null && canStart(entry.match, assignment.board)) {
+        return assignment.board;
+      }
+      for (final board in snapshot.freeBoards) {
+        if (canStart(entry.match, board)) return board;
+      }
+      return null;
+    }
     return assignment != null && snapshot.freeBoards.contains(assignment.board)
         ? assignment.board
         : null;
@@ -376,11 +391,22 @@ class _TournamentDirectorDashboardState
   ) async {
     final startOnBoard = widget.onStartOnBoard;
     if (startOnBoard == null ||
-        !widget.canOperate ||
+        (!widget.canOperate && !widget.isSimulationMode) ||
         widget.tournament.completedStageIndexes.contains(widget.activeStage)) {
       return;
     }
-    final choices = state.selectableForBoard(board);
+    final choices = state
+        .selectableForBoard(board)
+        .where(
+          (assignment) =>
+              !widget.isSimulationMode ||
+              widget.canStartSimulationMatch?.call(
+                    assignment.entry.match,
+                    board,
+                  ) ==
+                  true,
+        )
+        .toList();
     if (choices.isEmpty) return;
 
     final match = await showDialog<GroupMatch>(
@@ -1138,8 +1164,19 @@ class _TournamentDirectorDashboardState
                                           'Partie auf ${t.boardDisplayName(board)} starten',
                                       child: FilledButton.tonalIcon(
                                         onPressed:
-                                            widget.canOperate &&
-                                                state.canStart(assignment.entry)
+                                            (widget.isSimulationMode
+                                                ? widget.canStartSimulationMatch
+                                                          ?.call(
+                                                            assignment
+                                                                .entry
+                                                                .match,
+                                                            board,
+                                                          ) ==
+                                                      true
+                                                : widget.canOperate &&
+                                                      state.canStart(
+                                                        assignment.entry,
+                                                      ))
                                             ? () => _act(
                                                 () => widget.onStartOnBoard!(
                                                   board,
@@ -1167,7 +1204,8 @@ class _TournamentDirectorDashboardState
                                 if (!blocked &&
                                     suggestion != null &&
                                     widget.onStartOnBoard != null &&
-                                    widget.canOperate)
+                                    (widget.canOperate ||
+                                        widget.isSimulationMode))
                                   OutlinedButton.icon(
                                     onPressed: () =>
                                         _chooseMatchForBoard(board, state),

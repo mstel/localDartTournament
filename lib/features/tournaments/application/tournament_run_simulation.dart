@@ -21,12 +21,14 @@ class TournamentRunSimulation {
     required int minimumMinutes,
     required int maximumMinutes,
     required TournamentSimulationRuntimeFactory runtimeFactory,
+    bool autoStartMatches = true,
   }) : _tournament = CreatedTournament.fromJson(source.toJson()),
        _planningParameters = planningParameters,
        _seed = seed,
        _mode = mode,
        _minimumMinutes = minimumMinutes,
        _maximumMinutes = maximumMinutes,
+       _autoStartMatches = autoStartMatches,
        _runtimeFactory = runtimeFactory,
        _random = _SimulationRandom(seed) {
     if (minimumMinutes < 1 ||
@@ -68,6 +70,8 @@ class TournamentRunSimulation {
       }
     }
     _leagueRuntime?.writeTo(_tournament);
+    _appendLog('Simulation gestartet.');
+    _initialSnapshot = _takeSnapshot();
   }
 
   static final DateTime _origin = DateTime.utc(2000, 1, 1);
@@ -75,8 +79,10 @@ class TournamentRunSimulation {
   final TournamentSimulationRuntimeFactory _runtimeFactory;
   final OrderOfPlayController _orderOfPlay = const OrderOfPlayController();
   final List<_SimulationSnapshot> _undoStack = [];
+  final List<String> _eventLog = [];
   final Map<String, int> _durationByMatch = {};
   final Map<int, int> _boardAvailableAt = {};
+  late final _SimulationSnapshot _initialSnapshot;
   late CreatedTournament _tournament;
   late TournamentSimulationRuntime _runtime;
   LeagueBoardRuntime? _leagueRuntime;
@@ -86,6 +92,7 @@ class TournamentRunSimulation {
   int _minimumMinutes;
   int _maximumMinutes;
   int _elapsedSeconds = 0;
+  bool _autoStartMatches;
   bool _isComplete = false;
 
   CreatedTournament get tournament => _tournament;
@@ -95,10 +102,22 @@ class TournamentRunSimulation {
   int get maximumMinutes => _maximumMinutes;
   bool get isComplete => _isComplete;
   bool get canUndo => _undoStack.isNotEmpty;
+  bool get autoStartMatches => _autoStartMatches;
+  List<String> get eventLog => List.unmodifiable(_eventLog);
   Duration get elapsed => Duration(seconds: _elapsedSeconds);
   int get stepCount => _allMatches().where((match) => match.isResolved).length;
   int get totalSteps =>
       math.max(stepCount, _orderOfPlay.entries(_tournament).length);
+
+  void setAutoStartMatches(bool value) {
+    if (_autoStartMatches == value) return;
+    _autoStartMatches = value;
+    _appendLog(
+      value
+          ? 'Automatischer Start der Partien aktiviert.'
+          : 'Partien werden nur noch manuell gestartet.',
+    );
+  }
 
   void updateOptions({
     required int seed,
@@ -142,12 +161,24 @@ class TournamentRunSimulation {
             );
         if (nextBoardTime != null) {
           _elapsedSeconds = nextBoardTime;
-          _startAvailableMatches();
-          schedule = _currentSchedule();
+          _appendLog('Board-Leerstand beendet.');
+          if (_autoStartMatches) {
+            _startAvailableMatches();
+            schedule = _currentSchedule();
+          } else {
+            return true;
+          }
         }
       }
       if (schedule.running.isEmpty) {
         if (_isComplete) return true;
+        if (!_autoStartMatches) {
+          _undoStack.removeLast();
+          _appendLog(
+            'Keine laufende Partie. Bitte eine Partie manuell starten.',
+          );
+          return false;
+        }
         throw StateError('Die Simulation kann keine nächste Partie starten.');
       }
 
@@ -170,6 +201,10 @@ class TournamentRunSimulation {
         if (finishTimes[entry.match] != nextFinish) continue;
         _recordResult(entry.match, entry.stageIndex);
         entry.match.finishedAt = finishedAt;
+        _appendLog(
+          'Partie beendet: ${entry.match.participantShortLabel}'
+          '${entry.match.boardNumber == null ? '' : ' auf ${_tournament.boardDisplayName(entry.match.boardNumber!)}'}.',
+        );
         final board = entry.match.boardNumber;
         if (board != null) {
           _boardAvailableAt[board] =
@@ -179,6 +214,7 @@ class TournamentRunSimulation {
       _prepareCurrentStage();
       _leagueRuntime?.writeTo(_tournament);
       if (!_isComplete) _startAvailableMatches();
+      _appendLog('Simulationsschritt abgeschlossen.');
       return true;
     } catch (_) {
       _restoreSnapshot(snapshot);
@@ -187,9 +223,89 @@ class TournamentRunSimulation {
     }
   }
 
+  List<int> availableBoardsFor(GroupMatch match) {
+    final stageIndex = _tournament.activeStageIndex;
+    if (_isComplete ||
+        stageIndex < 0 ||
+        stageIndex >= _tournament.runStages.length) {
+      return const [];
+    }
+    final schedule = _currentSchedule();
+    final entry = schedule.planned
+        .where((assignment) => identical(assignment.entry.match, match))
+        .map((assignment) => assignment.entry)
+        .firstOrNull;
+    if (entry == null ||
+        schedule.running.any(
+          (running) => running.players.any(entry.players.contains),
+        )) {
+      return const [];
+    }
+    final runningBoards = {
+      for (final running in schedule.running) ?running.match.boardNumber,
+    };
+    final available = [
+      for (var board = 1; board <= _tournament.boardCount; board++)
+        if (!_tournament.blockedBoards.contains(board) &&
+            !runningBoards.contains(board) &&
+            (_boardAvailableAt[board] ?? 0) <= _elapsedSeconds)
+          board,
+    ];
+    final recommendedBoard = schedule.planned
+        .where((assignment) => identical(assignment.entry.match, match))
+        .map((assignment) => assignment.board)
+        .firstOrNull;
+    if (recommendedBoard != null && available.remove(recommendedBoard)) {
+      available.insert(0, recommendedBoard);
+    }
+    return available;
+  }
+
+  bool startMatch(GroupMatch match, int board) {
+    final availableBoards = availableBoardsFor(match);
+    if (!availableBoards.contains(board)) return false;
+    final stageIndex = _tournament.activeStageIndex;
+    final snapshot = _takeSnapshot();
+    _undoStack.add(snapshot);
+    try {
+      if (!_orderOfPlay.start(
+        _tournament,
+        stageIndex,
+        match,
+        board,
+        startedAt: _simulationTime,
+      )) {
+        _undoStack.removeLast();
+        return false;
+      }
+      _durationByMatch[_keyForMatch(match)] = _matchDurationSeconds(
+        stageIndex,
+        match,
+      );
+      _appendLog(
+        'Partie manuell gestartet: ${match.participantShortLabel} auf '
+        '${_tournament.boardDisplayName(board)}.',
+      );
+      return true;
+    } catch (_) {
+      _restoreSnapshot(snapshot);
+      _undoStack.removeLast();
+      rethrow;
+    }
+  }
+
+  void reset() {
+    final autoStartMatches = _autoStartMatches;
+    _undoStack.clear();
+    _restoreSnapshot(_initialSnapshot);
+    _autoStartMatches = autoStartMatches;
+    _appendLog('Simulation zurückgesetzt.');
+  }
+
   bool undoLastStep() {
     if (_undoStack.isEmpty) return false;
     _restoreSnapshot(_undoStack.removeLast());
+    _appendLog('Letzter Simulationsschritt rückgängig gemacht.');
     return true;
   }
 
@@ -237,6 +353,7 @@ class TournamentRunSimulation {
         _tournament.runStages.add(nextStage);
       }
       _tournament.activeStageIndex = nextIndex;
+      _appendLog('Phase gestartet: ${_tournament.stages[nextIndex].name}.');
       if (++transitions > _tournament.stages.length) {
         throw StateError('Die Phasenfolge ist in der Simulation blockiert.');
       }
@@ -244,6 +361,7 @@ class TournamentRunSimulation {
   }
 
   void _startAvailableMatches() {
+    if (!_autoStartMatches) return;
     var attempts = 0;
     while (!_isComplete && attempts++ <= _tournament.boardCount) {
       final stageIndex = _tournament.activeStageIndex;
@@ -274,6 +392,10 @@ class TournamentRunSimulation {
         _durationByMatch[_keyForMatch(match)] = _matchDurationSeconds(
           assignment.entry.stageIndex,
           match,
+        );
+        _appendLog(
+          'Partie automatisch gestartet: ${match.participantShortLabel} auf '
+          '${_tournament.boardDisplayName(assignment.board)}.',
         );
         startedCount++;
       }
@@ -410,8 +532,20 @@ class TournamentRunSimulation {
     randomState: _random.state,
     boardAvailableAt: Map<int, int>.from(_boardAvailableAt),
     durationByMatch: Map<String, int>.from(_durationByMatch),
+    eventLog: List<String>.from(_eventLog),
     isComplete: _isComplete,
   );
+
+  void _appendLog(String event) {
+    final minutes = _elapsedSeconds ~/ 60;
+    final hours = minutes ~/ 60;
+    final time = hours > 0
+        ? '${hours.toString().padLeft(2, '0')}:'
+              '${(minutes % 60).toString().padLeft(2, '0')}'
+        : '${minutes.toString().padLeft(2, '0')}:'
+              '${(_elapsedSeconds % 60).toString().padLeft(2, '0')}';
+    _eventLog.add('$time · $event');
+  }
 
   void _restoreSnapshot(_SimulationSnapshot snapshot) {
     _tournament = CreatedTournament.fromJson(snapshot.tournament);
@@ -423,6 +557,9 @@ class TournamentRunSimulation {
     _durationByMatch
       ..clear()
       ..addAll(snapshot.durationByMatch);
+    _eventLog
+      ..clear()
+      ..addAll(snapshot.eventLog);
     _isComplete = snapshot.isComplete;
     if (_tournament.leagueMatch == null) {
       _leagueRuntime = null;
@@ -441,6 +578,7 @@ class _SimulationSnapshot {
     required this.randomState,
     required this.boardAvailableAt,
     required this.durationByMatch,
+    required this.eventLog,
     required this.isComplete,
   });
 
@@ -449,6 +587,7 @@ class _SimulationSnapshot {
   final int randomState;
   final Map<int, int> boardAvailableAt;
   final Map<String, int> durationByMatch;
+  final List<String> eventLog;
   final bool isComplete;
 }
 

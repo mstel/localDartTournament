@@ -37,6 +37,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('simulation can start an open match from results', (
+    tester,
+  ) async {
+    final stage = _groupStage();
+    GroupMatch? startedMatch;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StageResultsSplitView(
+              stage: stage,
+              standingsFor: (_, _) => [],
+              onEditResult: (_) {},
+              canEditResults: false,
+              onStartSimulationMatch: (match) => startedMatch = match,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Simulation starten').first);
+    expect(startedMatch, same(stage.groups.first.matches.single));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('recent result rows open their match for correction', (
     tester,
   ) async {

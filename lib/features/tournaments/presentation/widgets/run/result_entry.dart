@@ -25,6 +25,7 @@ class MatchResultTile extends StatelessWidget {
     this.onPlayerTap,
     this.isRunning = false,
     this.isFocused = false,
+    this.onStartSimulation,
   });
 
   final GroupMatch match;
@@ -38,6 +39,7 @@ class MatchResultTile extends StatelessWidget {
   final ValueChanged<TournamentPlayer>? onPlayerTap;
   final bool isRunning;
   final bool isFocused;
+  final VoidCallback? onStartSimulation;
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +185,15 @@ class MatchResultTile extends StatelessWidget {
                         ],
                       ),
               ),
+              if (onStartSimulation != null && !match.isResolved)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    onPressed: onStartSimulation,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Simulation starten'),
+                  ),
+                ),
             ],
           ),
         ),
