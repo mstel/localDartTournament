@@ -1,3 +1,15 @@
+# 3.1.2+104
+
+- Komprimiert Board-Belegung und aktive Partien auf dem Zweitmonitor; lange
+  Spielernamen bleiben einzeilig, und belegte Boards werden einheitlich markiert.
+- Zeigt zusammengeführte Boards mit getrennten Statusanzeigen und zwei
+  Empfehlungsspalten. Nicht mehr benötigte Boards werden für andere Gruppen
+  freigegeben.
+- Verlegt Aktionen für feste Spielpläne in das Rechtsklick-Menü am Ziehgriff
+  und entfernt die doppelte Aufklapp-Ebene der Uhr-Einstellungen.
+- Ergänzt die Turnierabschluss-Übersicht auf dem Zweitmonitor um Dauer,
+  Podium, Ranglisten-Änderungen und Bestleistungen.
+
 # 3.1.1+103
 
 - Ergänzt „Zusammenführen“ als Mehrfach-Boardverhalten. Zugewiesene Boards

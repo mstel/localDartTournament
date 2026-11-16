@@ -18,6 +18,7 @@ class TournamentTimingPanel extends StatefulWidget {
     this.onShiftMatchDates,
     this.allowManualStart = true,
     this.allowStartTimeEdit = false,
+    this.showCollapsibleHeader = true,
   });
 
   final CreatedTournament tournament;
@@ -30,6 +31,7 @@ class TournamentTimingPanel extends StatefulWidget {
   final Future<int> Function(DateTime date)? onShiftMatchDates;
   final bool allowManualStart;
   final bool allowStartTimeEdit;
+  final bool showCollapsibleHeader;
 
   @override
   State<TournamentTimingPanel> createState() => _TournamentTimingPanelState();
@@ -368,6 +370,7 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
       ],
     );
     if (tournament.startedAt != null && tournament.finishedAt == null) {
+      if (!widget.showCollapsibleHeader) return details;
       return ExpansionTile(
         key: const ValueKey('running-tournament-timing-settings'),
         initiallyExpanded: false,
@@ -384,6 +387,8 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
         children: [Padding(padding: const EdgeInsets.all(16), child: details)],
       );
     }
+
+    if (!widget.showCollapsibleHeader) return details;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

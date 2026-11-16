@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -153,6 +154,143 @@ void main() {
       find.byKey(const ValueKey('recompute-fixed-schedule-overview')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('fixed schedule actions open from the drag handle context menu', (
+    tester,
+  ) async {
+    final tournament = fixture()..directorPlayOrderMode = 'fixed_schedule';
+    var promoted = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              directorModeEnabled: true,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+              onDeferScheduleMatch: (_) async {},
+              onPromoteScheduleMatch: (_) async {
+                promoted++;
+              },
+              onChooseSchedulePosition: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Spielplan anpassen'), findsNothing);
+    final dragHandle = find.byTooltip(
+      'Ziehen, um die Reihenfolge zu ändern; Rechtsklick für Aktionen',
+    );
+    expect(dragHandle, findsWidgets);
+    await tester.ensureVisible(dragHandle.first);
+    await tester.tap(dragHandle.first, buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Partie vorziehen'), findsOneWidget);
+    await tester.tap(find.text('Partie vorziehen'));
+    await tester.pumpAndSettle();
+    expect(promoted, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  test(
+    'merged assignment releases a board when that group has no match for it',
+    () {
+      final tournament = fixture(boards: 2)
+        ..directorModeEnabled = true
+        ..directorSchedulingStrategy = 'group'
+        ..directorPlayOrderMode = 'fixed_schedule'
+        ..directorMultiBoardAssignmentBehavior = 'merge';
+      final stage = tournament.runStages.single as GroupTournamentRunStage;
+      final groupA = stage.groups.single;
+      final groupBPlayers = [
+        TournamentPlayer.generated(7),
+        TournamentPlayer.generated(8),
+      ];
+      tournament.players.addAll(groupBPlayers);
+      stage.groups.add(
+        TournamentGroup(
+          name: 'B',
+          playType: 'round_robin',
+          players: groupBPlayers,
+          matches: [
+            GroupMatch(
+              homePlayer: groupBPlayers[0],
+              awayPlayer: groupBPlayers[1],
+              round: 1,
+            ),
+          ],
+        ),
+      );
+      tournament.directorGroupBoardAssignments.addAll({
+        '0:A': [1, 2],
+        '0:B': [2],
+      });
+      const OrderOfPlayController().initializeFixedSchedule(tournament);
+      for (final match in groupA.matches.take(groupA.matches.length - 1)) {
+        match
+          ..homeLegs = 3
+          ..awayLegs = 0;
+        const OrderOfPlayController().resultRecorded(match);
+      }
+
+      final snapshot = TournamentDirectorSnapshot(tournament, 0);
+
+      expect(snapshot.mergedGroupBoards(), isEmpty);
+      expect(
+        snapshot.schedule.planned.any(
+          (assignment) =>
+              assignment.board == 2 && assignment.entry.groupKey == '0:B',
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets('merged board cards cannot be manually blocked', (tester) async {
+    final tournament = fixture(boards: 2)
+      ..directorModeEnabled = true
+      ..directorSchedulingStrategy = 'group'
+      ..directorPlayOrderMode = 'fixed_schedule'
+      ..directorMultiBoardAssignmentBehavior = 'merge'
+      ..directorGroupBoardAssignments['0:A'] = [1, 2];
+    const OrderOfPlayController().initializeFixedSchedule(tournament);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              directorModeEnabled: true,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final board in [1, 2]) {
+      expect(
+        find.descendant(
+          of: find.byKey(ValueKey('director-board-$board')),
+          matching: find.text('Sperren'),
+        ),
+        findsNothing,
+      );
+    }
     expect(tester.takeException(), isNull);
   });
 

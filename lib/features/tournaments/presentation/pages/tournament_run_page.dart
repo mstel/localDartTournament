@@ -1018,6 +1018,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (board < 1 || board > widget.tournament.boardCount) {
       throw StateError('Board nicht mehr verfügbar.');
     }
+    final wasBlocked = widget.tournament.blockedBoards.contains(board);
+    if (!wasBlocked &&
+        TournamentDirectorSnapshot(
+          widget.tournament,
+          _activeStageIndex,
+        ).mergedGroupBoards().values.any((boards) => boards.contains(board))) {
+      throw StateError(
+        'Ein Board in einer zusammengeführten Board-Zuweisung kann nicht gesperrt werden.',
+      );
+    }
     final schedule = const OrderOfPlayController().plan(
       widget.tournament,
       _activeStageIndex,
@@ -1025,7 +1035,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (schedule.running.any((e) => e.match.boardNumber == board)) {
       throw StateError('Ein laufendes Board kann nicht gesperrt werden.');
     }
-    final wasBlocked = widget.tournament.blockedBoards.contains(board);
     setState(() {
       if (wasBlocked) {
         widget.tournament.blockedBoards.remove(board);
@@ -1845,6 +1854,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           onResetClock: _resetTournamentClock,
           onChangeTournamentDate: _saveTournamentDate,
           onShiftMatchDates: _shiftTournamentMatchDates,
+          showCollapsibleHeader: false,
         ),
       ],
     ),

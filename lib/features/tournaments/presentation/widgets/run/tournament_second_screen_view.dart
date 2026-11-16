@@ -56,6 +56,16 @@ enum _StandingsDisplayMode { standings, forecast }
 
 const String _standardMonitorLayoutName = 'Standard';
 
+class _CompletionPlayerStats {
+  _CompletionPlayerStats(this.player);
+
+  final TournamentPlayer player;
+  int wins = 0;
+  int losses = 0;
+  int legsFor = 0;
+  int legsAgainst = 0;
+}
+
 typedef _RankingStandings = ({
   String rankingName,
   List<LocalEloPlayer> entries,
@@ -768,53 +778,344 @@ class _TournamentSecondScreenViewState
     List<GroupMatch> playedMatches,
   ) {
     final theme = Theme.of(context);
+    final podium = _completionPodium(tournament, playedMatches);
+    final performances = [
+      for (final match in playedMatches) ...match.bestPerformances,
+    ];
+    final measuredDuration = TournamentTiming.durationSummary(tournament);
+    final duration =
+        measuredDuration?.totalDuration ??
+        tournament.finishedAt!.difference(
+          tournament.startedAt ?? tournament.createdAt,
+        );
+    final durationLabel =
+        '${duration.inHours} h ${duration.inMinutes % 60} min'
+        '${measuredDuration == null ? ' (geschätzt)' : ''}';
+    final sections = [
+      _completionSection(
+        'Podium',
+        podium.isEmpty
+            ? const Text('Keine Platzierungen verfügbar.')
+            : Column(
+                children: [
+                  for (var index = 0; index < podium.length; index++)
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: index == 0
+                            ? const Color(0xFFFFD54F)
+                            : index == 1
+                            ? const Color(0xFFB0BEC5)
+                            : const Color(0xFFB87333),
+                        child: Text('${index + 1}'),
+                      ),
+                      title: Text(
+                        podium[index].name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+      ),
+      _completionSection('Ranglistenänderungen', _completionRankingChanges()),
+      _completionSection(
+        'Bestleistungen',
+        performances.isEmpty
+            ? const Text('Keine Bestleistungen eingetragen.')
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final performance in performances.take(8))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        '${performance.playerName} · ${performance.label}'
+                        '${performance.value == null ? '' : ' · ${performance.value}'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  if (performances.length > 8)
+                    Text('Weitere ${performances.length - 8} …'),
+                ],
+              ),
+      ),
+    ];
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: Card(
-          color: TournamentDisplayPalette.card,
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.emoji_events_outlined,
-                  size: 64,
-                  color: TournamentDisplayPalette.accent,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Turnier abgeschlossen',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    color: TournamentDisplayPalette.text,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  tournament.name,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge?.copyWith(
+        constraints: const BoxConstraints(maxWidth: 1100),
+        child: SizedBox.expand(
+          child: Card(
+            color: TournamentDisplayPalette.card,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.emoji_events_outlined,
+                    size: 48,
                     color: TournamentDisplayPalette.accent,
                   ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  '${tournament.players.length} Teilnehmer · '
-                  '${playedMatches.length} Partien gespielt',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: TournamentDisplayPalette.text,
+                  const SizedBox(height: 8),
+                  Text(
+                    'Turnier abgeschlossen',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: TournamentDisplayPalette.text,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    tournament.name,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: TournamentDisplayPalette.accent,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$durationLabel · ${tournament.players.length} Teilnehmer · '
+                    '${playedMatches.length} Partien gespielt',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: TournamentDisplayPalette.text,
+                    ),
+                  ),
+                  const Divider(
+                    height: 24,
+                    color: TournamentDisplayPalette.border,
+                  ),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth >= 820) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (
+                                var index = 0;
+                                index < sections.length;
+                                index++
+                              )
+                                Expanded(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(
+                                      left: index == 0 ? 0 : 8,
+                                    ),
+                                    child: sections[index],
+                                  ),
+                                ),
+                            ],
+                          );
+                        }
+                        return SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              for (final section in sections) ...[
+                                SizedBox(height: 220, child: section),
+                                const SizedBox(height: 8),
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _completionSection(String title, Widget content) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      border: Border.all(color: TournamentDisplayPalette.border),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const Divider(height: 16, color: TournamentDisplayPalette.border),
+        Expanded(child: SingleChildScrollView(child: content)),
+      ],
+    ),
+  );
+
+  Widget _completionRankingChanges() => FutureBuilder<List<_RankingStandings>>(
+    future: _rankingStandings,
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return const Text('Ranglistenänderungen konnten nicht geladen werden.');
+      }
+      if (!snapshot.hasData) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      final rankings = snapshot.data!;
+      final changes =
+          [
+            for (final ranking in rankings)
+              for (var index = 0; index < ranking.entries.length; index++)
+                (
+                  ranking: ranking,
+                  entry: ranking.entries[index],
+                  position: index + 1,
+                  delta: ranking.deltas[ranking.entries[index].id] ?? 0,
+                  previous:
+                      ranking.previousPositions[ranking.entries[index].id],
+                ),
+          ].where(
+            (change) =>
+                change.delta != 0 ||
+                (change.previous != null && change.previous != change.position),
+          );
+      if (changes.isEmpty) {
+        return const Text('Keine Ranglistenänderungen erfasst.');
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final ranking in rankings) ...[
+            Text(
+              ranking.rankingName,
+              style: const TextStyle(
+                color: TournamentDisplayPalette.accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            for (final change
+                in changes.where((change) => change.ranking == ranking).take(5))
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  '${change.entry.name} · '
+                  '${change.delta > 0 ? '+' : ''}${change.delta} Elo'
+                  '${change.previous == null ? '' : ' · Platz ${change.previous} → ${change.position}'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: change.delta > 0
+                        ? const Color(0xFF70E0BA)
+                        : change.delta < 0
+                        ? Colors.redAccent
+                        : TournamentDisplayPalette.text,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      );
+    },
+  );
+
+  List<TournamentPlayer> _completionPodium(
+    CreatedTournament tournament,
+    List<GroupMatch> playedMatches,
+  ) {
+    if (tournament.runStages.isNotEmpty) {
+      final finalStage = tournament.runStages.last;
+      if (finalStage is GroupTournamentRunStage &&
+          finalStage.groups.length == 1) {
+        final standings = tournament.importedArchive?.usesNativeLogic == true
+            ? ProductionTournamentRuntime(
+                tournament,
+              ).standings(finalStage.groups.single, finalStage.tieBreakers)
+            : const GroupStandingsEngine().calculate(
+                finalStage.groups.single,
+                finalStage.tieBreakers,
+                tournament: tournament,
+              );
+        return standings.map((standing) => standing.player).take(3).toList();
+      }
+      if (finalStage is KnockoutTournamentRunStage) {
+        if (finalStage.isKratzer) {
+          final players = [...finalStage.participants]
+            ..sort((left, right) {
+              final lives = finalStage
+                  .livesRemainingFor(right)
+                  .compareTo(finalStage.livesRemainingFor(left));
+              return lives != 0 ? lives : left.name.compareTo(right.name);
+            });
+          return players.take(3).toList();
+        }
+        if (tournament.importedArchive?.usesNativeLogic == true) {
+          return ProductionTournamentRuntime(
+            tournament,
+          ).ranking(finalStage, const []).take(3).toList();
+        }
+        final finalMatch = finalStage.rounds.lastOrNull?.firstOrNull;
+        if (finalMatch?.hasResult == true) {
+          final thirdPlace = finalStage.placementMatches
+              .where((match) => match.label == 'Spiel um Platz 3')
+              .firstOrNull;
+          return [
+            if (finalMatch!.winner != null) finalMatch.winner!,
+            if (finalMatch.loser != null) finalMatch.loser!,
+            if (thirdPlace?.hasResult == true && thirdPlace!.winner != null)
+              thirdPlace.winner!,
+          ];
+        }
+      }
+    }
+
+    final stats = {
+      for (final player in tournament.players)
+        player.name: _CompletionPlayerStats(player),
+    };
+    for (final match in playedMatches.where((match) => !match.isKratzer)) {
+      final home = match.homePlayer;
+      final away = match.awayPlayer;
+      final homeLegs = match.homeLegs;
+      final awayLegs = match.awayLegs;
+      if (!match.hasResult ||
+          home == null ||
+          away == null ||
+          homeLegs == null ||
+          awayLegs == null) {
+        continue;
+      }
+      final homeStats = stats.putIfAbsent(
+        home.name,
+        () => _CompletionPlayerStats(home),
+      );
+      final awayStats = stats.putIfAbsent(
+        away.name,
+        () => _CompletionPlayerStats(away),
+      );
+      homeStats
+        ..legsFor += homeLegs
+        ..legsAgainst += awayLegs;
+      awayStats
+        ..legsFor += awayLegs
+        ..legsAgainst += homeLegs;
+      if (match.winner == home) {
+        homeStats.wins++;
+        awayStats.losses++;
+      } else if (match.winner == away) {
+        awayStats.wins++;
+        homeStats.losses++;
+      }
+    }
+    final ranking = stats.values.toList()
+      ..sort((left, right) {
+        final wins = right.wins.compareTo(left.wins);
+        if (wins != 0) return wins;
+        final difference = (right.legsFor - right.legsAgainst).compareTo(
+          left.legsFor - left.legsAgainst,
+        );
+        if (difference != 0) return difference;
+        final legs = right.legsFor.compareTo(left.legsFor);
+        return legs != 0 ? legs : left.player.name.compareTo(right.player.name);
+      });
+    return ranking.map((entry) => entry.player).take(3).toList();
   }
 
   Widget _buildOverview(
@@ -3932,20 +4233,6 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  String _displayGroupLabel(String? groupKey) {
-    if (groupKey == null || groupKey.trim().isEmpty) return '';
-    final cleaned = groupKey.trim();
-    final separatorIndex = cleaned.indexOf(':');
-    if (separatorIndex >= 0) {
-      final prefix = cleaned.substring(0, separatorIndex).trim();
-      if (prefix.isNotEmpty && int.tryParse(prefix) != null) {
-        final remainder = cleaned.substring(separatorIndex + 1).trim();
-        if (remainder.isNotEmpty) return remainder;
-      }
-    }
-    return cleaned;
-  }
-
   Widget _buildRunningMatchTile(
     BuildContext context,
     PlayEntry entry, {
@@ -3963,7 +4250,7 @@ class _TournamentSecondScreenViewState
         '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
         '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
       ),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: TournamentDisplayPalette.card,
         border: Border.all(color: TournamentDisplayPalette.accent, width: 2),
@@ -3987,7 +4274,18 @@ class _TournamentSecondScreenViewState
               const _PulsingLiveBadge(),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              'BESETZT',
+              style: TextStyle(
+                color: TournamentDisplayPalette.accent,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
           Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -4067,9 +4365,9 @@ class _TournamentSecondScreenViewState
       style: const TextStyle(
         color: TournamentDisplayPalette.text,
         fontWeight: FontWeight.bold,
-        fontSize: 16,
+        fontSize: 14,
       ),
-      maxLines: 2,
+      maxLines: 1,
       overflow: TextOverflow.ellipsis,
       textAlign: textAlign,
     );
@@ -4089,12 +4387,12 @@ class _TournamentSecondScreenViewState
   }) => Container(
     width: width,
     key: ValueKey('second-screen-free-board-$board'),
-    constraints: const BoxConstraints(minHeight: 120),
-    padding: const EdgeInsets.all(14),
+    constraints: const BoxConstraints(minHeight: 96),
+    padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
       color: TournamentDisplayPalette.card,
       border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4114,18 +4412,20 @@ class _TournamentSecondScreenViewState
             const _BoardStatusBadge(label: 'FREI', color: Color(0xFF4ED9A4)),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         const Center(
           child: Text(
             'Aktuell keine Partie',
             style: TextStyle(
               color: TournamentDisplayPalette.text,
-              fontSize: 18,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         const Center(child: _FreeBoardStatusLabel()),
       ],
     ),
@@ -4138,12 +4438,12 @@ class _TournamentSecondScreenViewState
   }) => Container(
     width: width,
     key: ValueKey('second-screen-blocked-board-$board'),
-    constraints: const BoxConstraints(minHeight: 120),
-    padding: const EdgeInsets.all(14),
+    constraints: const BoxConstraints(minHeight: 96),
+    padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
       color: TournamentDisplayPalette.card,
       border: Border.all(color: Colors.redAccent, width: 2),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4156,15 +4456,17 @@ class _TournamentSecondScreenViewState
             fontSize: 16,
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 8),
         const Center(
           child: Text(
             'BOARD GESPERRT',
             style: TextStyle(
               color: Colors.redAccent,
-              fontSize: 18,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -4192,14 +4494,7 @@ class _TournamentSecondScreenViewState
     ]..sort((a, b) => a.key.first.compareTo(b.key.first));
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxColumns = boardTiles.length < 2 ? boardTiles.length : 2;
-        final columns = (constraints.maxWidth / 280).floor().clamp(
-          1,
-          maxColumns,
-        );
         final spacing = 8.0;
-        final width =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
         return SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4213,207 +4508,324 @@ class _TournamentSecondScreenViewState
                     style: const TextStyle(color: Colors.amber),
                   ),
                 ),
-              Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  for (final boardTile in boardTiles)
-                    Builder(
-                      builder: (context) {
-                        final boards = boardTile.key;
-                        final mergedGroupKey = boardTile.value;
-                        final board = boards.first;
-                        final boardNames = boards
-                            .map(tournament.boardDisplayName)
-                            .toList();
-                        final displayName = boards.length == 1
-                            ? boardNames.first
-                            : boardNames.every(
-                                (name) => name.startsWith('Board '),
-                              )
-                            ? '${boardNames.first} & ${boardNames.skip(1).map((name) => name.substring('Board '.length)).join(' & ')}'
-                            : boardNames.join(' & ');
-                        final mergedBoardNumbers = boards
-                            .map(
-                              (board) => tournament
-                                  .boardDisplayName(board)
-                                  .replaceFirst(RegExp(r'^Board\s*'), ''),
-                            )
-                            .join(' & ');
-                        final recommendationBoardLabel = mergedGroupKey == null
-                            ? displayName.toUpperCase()
-                            : 'BOARDS $mergedBoardNumbers'.toUpperCase();
-                        final running = boards
-                            .map(snapshot.runningOn)
-                            .whereType<PlayEntry>()
-                            .firstOrNull;
-                        final blocked = boards.any(
-                          tournament.blockedBoards.contains,
-                        );
-                        final recommendations = mergedGroupKey == null
-                            ? snapshot.upcomingForBoard(board)
-                            : snapshot.upcomingForBoards(
-                                boards,
-                                groupKey: mergedGroupKey,
-                              );
-                        final upcoming = recommendations
-                            .where(
-                              (assignment) => !snapshot.schedule.running.any(
-                                (active) => identical(
-                                  active.match,
-                                  assignment.entry.match,
-                                ),
-                              ),
-                            )
-                            .take(mergedGroupKey == null ? 3 : 6)
-                            .toList();
-                        final busyPlayers = {
-                          for (final entry in snapshot.schedule.running)
-                            ...entry.players,
-                        };
-                        final hasAvailableMatches = snapshot.ready.any(
-                          (entry) => !entry.players.any(busyPlayers.contains),
-                        );
-                        final groupNames = <String>{
-                          for (final assignment in upcoming)
-                            _displayGroupLabel(assignment.entry.groupKey),
-                        }.where((value) => value.isNotEmpty).toList()..sort();
-                        final locked = blocked || !hasAvailableMatches;
-                        final status = running != null
-                            ? 'BESETZT'
-                            : locked
-                            ? 'BOARD GESPERRT'
-                            : 'FREI';
-                        final statusColor = running != null
-                            ? const Color(0xFF4ED9A4)
-                            : locked
-                            ? Colors.redAccent
-                            : const Color(0xFF4ED9A4);
-                        return Container(
-                          key: ValueKey(
-                            boards.length == 1
-                                ? 'second-screen-director-board-$board'
-                                : 'second-screen-director-boards-${boards.join('-')}',
-                          ),
-                          width: width,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: TournamentDisplayPalette.card,
-                            border: Border.all(
-                              color: running != null
-                                  ? const Color(0xFF4ED9A4)
-                                  : locked
-                                  ? Colors.redAccent
-                                  : const Color(0xFF4ED9A4),
-                              width: 2,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      displayName.toUpperCase(),
-                                      style: const TextStyle(
-                                        color: TournamentDisplayPalette.text,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withAlpha(28),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      status,
-                                      style: TextStyle(
-                                        color: statusColor,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  '${displayName.toUpperCase()} | '
-                                  'EMPFOHLENE NÄCHSTE BEGEGNUNGEN FÜR '
-                                  '$recommendationBoardLabel'
-                                  '${tournament.directorSchedulingStrategy == 'group' && groupNames.isNotEmpty
-                                      ? ' - ${groupNames.map((name) => name.toUpperCase()).join(' - ')}'
-                                      : mergedGroupKey != null
-                                      ? ' - ${_displayGroupLabel(mergedGroupKey).toUpperCase()}'
-                                      : ''}',
-                                  style: const TextStyle(
-                                    color: TournamentDisplayPalette.mutedText,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                              for (
-                                var index = 0;
-                                index < upcoming.length;
-                                index++
-                              )
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 22,
-                                        child: Text(
-                                          '${index + 1}.',
-                                          style: const TextStyle(
-                                            color:
-                                                TournamentDisplayPalette.accent,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: () {
+                  final rows = <List<MapEntry<List<int>, String?>>>[];
+                  var currentRow = <MapEntry<List<int>, String?>>[];
+                  var currentSpan = 0;
+                  final maxRowSpan = mergedGroupBoards.isEmpty ? 2 : 4;
+                  for (final tile in boardTiles) {
+                    final span = tile.key.length > 1 ? 2 : 1;
+                    if (currentRow.isNotEmpty && currentSpan + span > maxRowSpan) {
+                      rows.add(currentRow);
+                      currentRow = <MapEntry<List<int>, String?>>[];
+                      currentSpan = 0;
+                    }
+                    currentRow.add(tile);
+                    currentSpan += span;
+                  }
+                  if (currentRow.isNotEmpty) {
+                    rows.add(currentRow);
+                  }
+                  return [
+                    for (final rowTiles in rows)
+                      Builder(
+                        builder: (context) {
+                          final totalSpan = rowTiles.fold<int>(
+                            0,
+                            (sum, tile) =>
+                                sum + (tile.key.length > 1 ? 2 : 1),
+                          );
+                          final singleColumnWidth =
+                              (constraints.maxWidth - spacing * (totalSpan - 1)) /
+                                  totalSpan;
+                          final rowChildren = <Widget>[];
+                          for (var index = 0; index < rowTiles.length; index++) {
+                            if (index > 0) {
+                              rowChildren.add(SizedBox(width: spacing));
+                            }
+                            rowChildren.add(
+                              Builder(
+                                builder: (context) {
+                                  final boardTile = rowTiles[index];
+                                  final boards = boardTile.key;
+                                  final mergedGroupKey = boardTile.value;
+                                  final board = boards.first;
+                                  final boardNames = boards
+                                      .map(tournament.boardDisplayName)
+                                      .toList();
+                                  final displayName = boards.length == 1
+                                      ? boardNames.first
+                                      : boardNames.every(
+                                          (name) => name.startsWith('Board '),
+                                        )
+                                      ? '${boardNames.first} & ${boardNames.skip(1).map((name) => name.substring('Board '.length)).join(' & ')}'
+                                      : boardNames.join(' & ');
+                                  final recommendations = mergedGroupKey == null
+                                      ? snapshot.upcomingForBoard(board)
+                                      : snapshot.upcomingForBoards(
+                                          boards,
+                                          groupKey: mergedGroupKey,
+                                          limit: boards.length * 3,
+                                        );
+                                  final upcoming = recommendations
+                                      .where(
+                                        (assignment) => !snapshot.schedule.running.any(
+                                          (active) => identical(
+                                            active.match,
+                                            assignment.entry.match,
                                           ),
                                         ),
+                                      )
+                                      .take(
+                                        mergedGroupKey == null ? 3 : boards.length * 3,
+                                      )
+                                      .toList();
+                                  final statuses = [
+                                    for (final boardNumber in boards)
+                                      (
+                                        label: snapshot.runningOn(boardNumber) != null
+                                            ? 'Belegt'
+                                            : tournament.blockedBoards.contains(
+                                                    boardNumber,
+                                                  ) ||
+                                                  snapshot
+                                                      .selectableForBoard(boardNumber)
+                                                      .isEmpty
+                                            ? 'Board gesperrt'
+                                            : 'Frei',
+                                        color: snapshot.runningOn(boardNumber) != null
+                                            ? TournamentDisplayPalette.accent
+                                            : tournament.blockedBoards.contains(
+                                                    boardNumber,
+                                                  ) ||
+                                                  snapshot
+                                                      .selectableForBoard(boardNumber)
+                                                      .isEmpty
+                                            ? Colors.redAccent
+                                            : const Color(0xFF4ED9A4),
                                       ),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              upcoming[index]
-                                                  .entry
-                                                  .match
-                                                  .participantShortLabel,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: TournamentDisplayPalette
-                                                    .text,
-                                              ),
-                                            ),
-                                            if (playerInsights.isNotEmpty)
-                                              PlayerInsightBadgeRow(
-                                                insights: insightsForMatch(
-                                                  upcoming[index].entry.match,
-                                                  playerInsights,
+                                  ];
+                                  final allBlocked = statuses.every(
+                                    (status) => status.label == 'Board gesperrt',
+                                  );
+                                  final anyRunning = statuses.any(
+                                    (status) => status.label == 'Belegt',
+                                  );
+                                  final span = boards.length > 1 ? 2 : 1;
+                                  final tileWidth =
+                                      singleColumnWidth * span +
+                                      spacing * (span - 1);
+                                  return SizedBox(
+                                    width: tileWidth,
+                                    child: Container(
+                                      key: ValueKey(
+                                        boards.length == 1
+                                            ? 'second-screen-director-board-$board'
+                                            : 'second-screen-director-boards-${boards.join('-')}',
+                                      ),
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: TournamentDisplayPalette.card,
+                                        border: Border.all(
+                                          color: anyRunning
+                                              ? TournamentDisplayPalette.accent
+                                              : allBlocked
+                                              ? Colors.redAccent
+                                              : const Color(0xFF4ED9A4),
+                                          width: 2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  displayName.toUpperCase(),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color:
+                                                        TournamentDisplayPalette.text,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
                                                 ),
                                               ),
-                                          ],
-                                        ),
+                                              if (boards.length == 1)
+                                                _BoardStatusBadge(
+                                                  label: statuses.single.label
+                                                      .toUpperCase(),
+                                                  color: statuses.single.color,
+                                                )
+                                              else
+                                                Flexible(
+                                                  child: FittedBox(
+                                                    alignment: Alignment.centerRight,
+                                                    fit: BoxFit.scaleDown,
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        for (
+                                                          var statusIndex = 0;
+                                                          statusIndex <
+                                                              statuses.length;
+                                                          statusIndex++
+                                                        ) ...[
+                                                          if (statusIndex > 0)
+                                                            const Padding(
+                                                              padding: EdgeInsets.symmetric(
+                                                                horizontal: 4,
+                                                              ),
+                                                              child: Text(
+                                                                '/',
+                                                                style: TextStyle(
+                                                                  color:
+                                                                      TournamentDisplayPalette
+                                                                          .mutedText,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          Text(
+                                                            statuses[statusIndex].label,
+                                                            style: TextStyle(
+                                                              color: statuses[statusIndex].color,
+                                                              fontWeight: FontWeight.w700,
+                                                              fontSize: 12,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          const Padding(
+                                            padding: EdgeInsets.only(top: 4),
+                                            child: Text(
+                                              'Empfohlene nächste Begegnungen',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color:
+                                                    TournamentDisplayPalette.mutedText,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ),
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              for (
+                                                var boardIndex = 0;
+                                                boardIndex < boards.length;
+                                                boardIndex++
+                                              )
+                                                Expanded(
+                                                  child: Padding(
+                                                    padding: EdgeInsets.only(
+                                                      left: boardIndex == 0 ? 0 : 8,
+                                                    ),
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment.stretch,
+                                                      children: [
+                                                        for (
+                                                          var index = boardIndex * 3;
+                                                          index <
+                                                              min(
+                                                                upcoming.length,
+                                                                (boardIndex + 1) * 3,
+                                                              );
+                                                          index++
+                                                        )
+                                                          Padding(
+                                                            padding: const EdgeInsets.only(
+                                                              top: 8,
+                                                            ),
+                                                            child: Row(
+                                                              children: [
+                                                                SizedBox(
+                                                                  width: 20,
+                                                                  child: Text(
+                                                                    '${index + 1}.',
+                                                                    style: const TextStyle(
+                                                                      color:
+                                                                          TournamentDisplayPalette
+                                                                              .accent,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                                Expanded(
+                                                                  child: Column(
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment.start,
+                                                                    children: [
+                                                                      Text(
+                                                                        upcoming[index]
+                                                                            .entry
+                                                                            .match
+                                                                            .participantShortLabel,
+                                                                        maxLines: 1,
+                                                                        overflow:
+                                                                            TextOverflow
+                                                                                .ellipsis,
+                                                                        style: const TextStyle(
+                                                                          color:
+                                                                              TournamentDisplayPalette
+                                                                                  .text,
+                                                                          fontSize: 12,
+                                                                        ),
+                                                                      ),
+                                                                      if (playerInsights
+                                                                          .isNotEmpty)
+                                                                        PlayerInsightBadgeRow(
+                                                                          insights: insightsForMatch(
+                                                                            upcoming[index]
+                                                                                .entry
+                                                                                .match,
+                                                                            playerInsights,
+                                                                          ),
+                                                                        ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          }
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: spacing),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: rowChildren,
+                            ),
+                          );
+                        },
+                      ),
+                  ];
+                }(),
               ),
             ],
           ),
@@ -4873,6 +5285,7 @@ class _FreeBoardStatusLabelState extends State<_FreeBoardStatusLabel> {
                 ? const Color(0xFF4ED9A4)
                 : TournamentDisplayPalette.mutedText,
             fontWeight: FontWeight.w700,
+            fontSize: 11,
           ),
         ),
       ],

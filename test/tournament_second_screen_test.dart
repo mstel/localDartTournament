@@ -3,6 +3,7 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/tournament_director_snapshot.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_advancement_forecast_engine.dart';
@@ -12,6 +13,7 @@ import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.d
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
+import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -195,7 +197,7 @@ void main() {
   });
 
   testWidgets(
-    'merge mode combines assigned boards into one recommendation tile',
+    'merge mode releases a board with no remaining assigned matches',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
@@ -208,43 +210,150 @@ void main() {
         ..directorGroupBoardAssignments['0:Gruppe A'] = [1, 2]
         ..boardCount = 2;
       const OrderOfPlayController().initializeFixedSchedule(tournament);
+      final mergeSnapshot = TournamentDirectorSnapshot(tournament, 0);
+      expect(
+        mergeSnapshot.mergedGroupBoards(),
+        isEmpty,
+      );
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: TournamentSecondScreenView(tournament: tournament),
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+            ),
           ),
         ),
       );
       await tester.pump();
 
-      final mergedTile = find.byKey(
-        const ValueKey('second-screen-director-boards-1-2'),
-      );
-      expect(mergedTile, findsOneWidget);
       expect(
-        find.descendant(
-          of: mergedTile,
-          matching: find.textContaining(
-            'BOARD 1 & 2 | EMPFOHLENE NÄCHSTE BEGEGNUNGEN FÜR BOARDS 1 & 2',
-          ),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: mergedTile,
-          matching: find.text('AKTUELL NICHT BESETZT'),
-        ),
+        find.byKey(const ValueKey('second-screen-director-boards-1-2')),
         findsNothing,
       );
       expect(
         find.byKey(const ValueKey('second-screen-director-board-1')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('second-screen-director-board-2')),
-        findsNothing,
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'merged boards show independent status and recommendations in two columns',
+    (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final groups = [
+        for (var groupIndex = 0; groupIndex < 4; groupIndex++)
+          () {
+            final players = [
+              for (var playerIndex = 0; playerIndex < 4; playerIndex++)
+                TournamentPlayer.generated(
+                  groupIndex * 4 + playerIndex + 1,
+                ).copyWith(name: 'Spieler ${groupIndex * 4 + playerIndex + 1}'),
+            ];
+            return TournamentGroup(
+              name: 'Gruppe ${String.fromCharCode(65 + groupIndex)}',
+              playType: 'round_robin',
+              players: players,
+              matches: [
+                for (var home = 0; home < players.length; home++)
+                  for (var away = home + 1; away < players.length; away++)
+                    GroupMatch(
+                      homePlayer: players[home],
+                      awayPlayer: players[away],
+                      round: home + away + 1,
+                    ),
+              ],
+            );
+          }(),
+      ];
+      final tournament =
+          CreatedTournament(
+              name: 'Zusammengeführte Boards',
+              players: groups.expand((group) => group.players).toList(),
+              stages: const [
+                TournamentStage(
+                  name: 'Gruppenphase',
+                  type: 'groups',
+                  groupSizes: [4, 4, 4, 4],
+                ),
+              ],
+              boardCount: 4,
+              directorModeEnabled: true,
+              directorSchedulingStrategy: 'group',
+              directorPlayOrderMode: 'fixed_schedule',
+              directorMultiBoardAssignmentBehavior: 'merge',
+              runStages: [
+                GroupTournamentRunStage(
+                  name: 'Gruppenphase',
+                  groupPlayType: 'round_robin',
+                  groups: groups,
+                  qualificationPlan: null,
+                  tieBreakers: defaultGroupTieBreakers,
+                ),
+              ],
+            )
+            ..directorGroupBoardAssignments.addAll({
+              '0:Gruppe A': [1, 2],
+              '0:Gruppe B': [2],
+              '0:Gruppe C': [3],
+              '0:Gruppe D': [4],
+            });
+      const OrderOfPlayController().initializeFixedSchedule(tournament);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final merged = find.byKey(
+        const ValueKey('second-screen-director-boards-1-2'),
+      );
+      final boardThree = find.byKey(
+        const ValueKey('second-screen-director-board-3'),
+      );
+      final boardFour = find.byKey(
+        const ValueKey('second-screen-director-board-4'),
+      );
+      expect(merged, findsOneWidget);
+      expect(boardThree, findsOneWidget);
+      expect(boardFour, findsOneWidget);
+      final mergedRect = tester.getRect(merged);
+      final boardThreeRect = tester.getRect(boardThree);
+      final boardFourRect = tester.getRect(boardFour);
+      expect(mergedRect.width, closeTo(boardThreeRect.width * 2 + 8, 1));
+      expect(mergedRect.top, closeTo(boardThreeRect.top, 1));
+      expect(boardThreeRect.top, closeTo(boardFourRect.top, 1));
+      expect(boardThreeRect.left, greaterThan(mergedRect.left));
+      expect(boardFourRect.left, greaterThan(boardThreeRect.left));
+
+      final firstSuggestion = tester.getTopLeft(
+        find.descendant(of: merged, matching: find.text('1.')),
+      );
+      final fourthSuggestion = tester.getTopLeft(
+        find.descendant(of: merged, matching: find.text('4.')),
+      );
+      expect(firstSuggestion.dx, lessThan(fourthSuggestion.dx));
+      expect(
+        find.descendant(of: merged, matching: find.text('Frei')).evaluate(),
+        hasLength(2),
       );
       expect(tester.takeException(), isNull);
     },
@@ -256,8 +365,10 @@ void main() {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
+    final finished = DateTime.now();
     final tournament = _tournament()
-      ..finishedAt = DateTime.now()
+      ..startedAt = finished.subtract(const Duration(hours: 2, minutes: 15))
+      ..finishedAt = finished
       ..directorModeEnabled = true;
     var closeCount = 0;
 
@@ -275,6 +386,15 @@ void main() {
     await tester.pump();
 
     expect(find.text('Turnier abgeschlossen'), findsOneWidget);
+    expect(find.textContaining('2 h 15 min'), findsOneWidget);
+    expect(find.text('Podium'), findsOneWidget);
+    expect(find.text('Ranglistenänderungen'), findsOneWidget);
+    expect(find.text('Bestleistungen'), findsOneWidget);
+    expect(
+      find.textContaining('Keine Bestleistungen eingetragen.'),
+      findsNothing,
+    );
+    expect(find.textContaining('A · 171+'), findsOneWidget);
     expect(closeCount, 0);
     await tester.pump(const Duration(seconds: 60));
     expect(closeCount, 1);
@@ -284,18 +404,22 @@ void main() {
   testWidgets('running matches are clearly separated from suggestions', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.physicalSize = const Size(1920, 1080);
     tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final tournament = _tournament()
       ..directorModeEnabled = true
-      ..boardCount = 2;
+      ..boardCount = 4;
     final match = const OrderOfPlayController()
         .plan(tournament, 0)
         .planned
         .first
         .entry
         .match;
+    match
+      ..homePlayer = match.homePlayer!.copyWith(name: 'Alexanderson')
+      ..awayPlayer = match.awayPlayer!.copyWith(name: 'Robinson');
     expect(
       const OrderOfPlayController().start(tournament, 0, match, 1),
       isTrue,
@@ -316,21 +440,32 @@ void main() {
 
     expect(find.text('Board Belegung & aktive Partien'), findsOneWidget);
     expect(find.text('BESETZT'), findsOneWidget);
-    expect(
-      find.byKey(
-        ValueKey(
-          'second-screen-running-match-${match.round}-'
-          '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
-          '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
-        ),
+    final runningTile = find.byKey(
+      ValueKey(
+        'second-screen-running-match-${match.round}-'
+        '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
+        '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
       ),
-      findsOneWidget,
     );
+    expect(runningTile, findsOneWidget);
+    for (final name in ['Alexanderson', 'Robinson']) {
+      final nameText = tester.widget<Text>(
+        find.descendant(of: runningTile, matching: find.text(name)),
+      );
+      expect(nameText.maxLines, 1);
+      expect(nameText.style?.fontSize, 14);
+    }
     expect(find.text('Nächste Begegnungen'), findsOneWidget);
+    expect(find.text('Empfohlene nächste Begegnungen'), findsWidgets);
     expect(
       find.textContaining('EMPFOHLENE NÄCHSTE BEGEGNUNGEN FÜR BOARD 1'),
-      findsOneWidget,
+      findsNothing,
     );
+    final firstBoardQueue = tester.widget<Container>(
+      find.byKey(const ValueKey('second-screen-director-board-1')),
+    );
+    final queueDecoration = firstBoardQueue.decoration! as BoxDecoration;
+    expect(queueDecoration.border!.top.color, TournamentDisplayPalette.accent);
     expect(find.text('Aktuell: ${match.participantShortLabel}'), findsNothing);
     expect(tester.takeException(), isNull);
   });

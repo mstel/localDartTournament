@@ -47,7 +47,8 @@ class TournamentDirectorSnapshot {
           (assignment) =>
               assignment.entry.stageIndex == stage &&
               assignment.board == board &&
-              assignment.entry.match.hasPlayers,
+              assignment.entry.match.hasPlayers &&
+              !assignment.entry.match.isResolved,
         )
         .toList();
     if (tournament.directorPlayOrderMode == 'fixed_schedule' &&
@@ -107,31 +108,90 @@ class TournamentDirectorSnapshot {
       groupNames: groupNames,
       boardCount: tournament.boardCount,
     );
+    final activeBoardsByGroup = <String, Set<int>>{};
+    for (final assignment in schedule.planned) {
+      if (assignment.entry.stageIndex == stage &&
+          assignment.entry.groupKey != null &&
+          assignment.entry.match.hasPlayers &&
+          !assignment.entry.match.isResolved) {
+        activeBoardsByGroup
+            .putIfAbsent(assignment.entry.groupKey!, () => <int>{})
+            .add(assignment.board);
+      }
+    }
+    for (final entry in schedule.running) {
+      final board = entry.match.boardNumber;
+      if (entry.stageIndex == stage &&
+          entry.groupKey != null &&
+          board != null &&
+          !entry.match.isResolved) {
+        activeBoardsByGroup
+            .putIfAbsent(entry.groupKey!, () => <int>{})
+            .add(board);
+      }
+    }
+
+    final candidates = <String, List<int>>{};
+    for (final name in groupNames) {
+      final key = tournamentGroupBoardKey(stage, name);
+      final hasPendingMatch = schedule.planned.any(
+            (assignment) =>
+                assignment.entry.stageIndex == stage &&
+                assignment.entry.groupKey == key &&
+                assignment.entry.match.hasPlayers &&
+                !assignment.entry.match.isResolved,
+          ) ||
+          schedule.running.any(
+            (entry) =>
+                entry.stageIndex == stage &&
+                entry.groupKey == key &&
+                entry.match.hasPlayers &&
+                !entry.match.isResolved,
+          );
+      if (!hasPendingMatch) {
+        continue;
+      }
+      final configured = _activeAssignedBoards(
+        stage,
+        name,
+        defaults,
+        activeBoardsByGroup,
+      );
+      if (configured.length > 1) {
+        candidates[key] = configured;
+      }
+    }
     return {
-      for (final name in groupNames)
-        if ((tournament.directorGroupBoardAssignments[tournamentGroupBoardKey(
-                      stage,
-                      name,
-                    )] ??
-                    defaults[name]?.toList() ??
-                    const <int>[])
-                .toSet()
-                .where((board) => board >= 1 && board <= tournament.boardCount)
-                .length >
-            1)
-          tournamentGroupBoardKey(stage, name): List<int>.unmodifiable(
-            (tournament.directorGroupBoardAssignments[tournamentGroupBoardKey(
-                      stage,
-                      name,
-                    )] ??
-                    defaults[name]?.toList() ??
-                    const <int>[])
-                .toSet()
-                .where((board) => board >= 1 && board <= tournament.boardCount)
-                .toList()
-              ..sort(),
-          ),
+      for (final entry in candidates.entries)
+        entry.key: List<int>.unmodifiable(entry.value),
     };
+  }
+
+  List<int> _activeAssignedBoards(
+    int stage,
+    String groupName,
+    Map<String, Set<int>> defaults,
+    Map<String, Set<int>> activeBoardsByGroup,
+  ) {
+    final key = tournamentGroupBoardKey(stage, groupName);
+    final configured =
+        tournament.directorGroupBoardAssignments[key]?.toSet() ??
+        tournament.groupBoardAssignments[key]?.toSet() ??
+        defaults[groupName] ??
+        const <int>{};
+    final eligibleBoards = configured
+        .where(
+          (board) =>
+              board >= 1 &&
+              board <= tournament.boardCount &&
+              !tournament.blockedBoards.contains(board),
+        )
+        .toSet();
+    final activeBoards = (activeBoardsByGroup[key] ?? const <int>{})
+        .where((board) => eligibleBoards.contains(board))
+        .toSet();
+    final effectiveBoards = activeBoards.isNotEmpty ? activeBoards : eligibleBoards;
+    return effectiveBoards.toList()..sort();
   }
 
   List<BoardAssignment> upcomingForBoards(

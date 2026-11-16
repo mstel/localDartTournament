@@ -135,6 +135,13 @@ void main() {
     expect(timingSettings.initiallyExpanded, isFalse);
     expect(find.textContaining('Turnieruhr läuft · 0 h 3 min'), findsNothing);
     expect(find.text('Prognose nach erstem Ergebnis'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('tournament-timing-settings')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('running-tournament-timing-settings')),
+      findsNothing,
+    );
+    expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

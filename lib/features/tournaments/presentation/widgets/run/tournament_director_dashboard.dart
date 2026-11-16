@@ -312,6 +312,38 @@ class _TournamentDirectorDashboardState
     }
   }
 
+  Future<void> _showScheduleMatchMenu(
+    BuildContext context,
+    Offset globalPosition,
+    GroupMatch match,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) return;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(value: 'position', child: Text('Reihenfolge ändern …')),
+        PopupMenuItem(value: 'promote', child: Text('Partie vorziehen')),
+        PopupMenuItem(
+          value: 'defer',
+          child: Text('Vorübergehend überspringen'),
+        ),
+      ],
+    );
+    if (!context.mounted || action == null) return;
+    final callback = switch (action) {
+      'promote' => widget.onPromoteScheduleMatch,
+      'position' => widget.onChooseSchedulePosition,
+      'defer' => widget.onDeferScheduleMatch,
+      _ => null,
+    };
+    if (callback != null) unawaited(_act(() => callback(match)));
+  }
+
   bool _hasNextKnockoutStage(CreatedTournament tournament) {
     if (widget.activeStage < 0 ||
         widget.activeStage >= tournament.runStages.length ||
@@ -521,7 +553,10 @@ class _TournamentDirectorDashboardState
           final canReorder =
               title == 'Spielplan' &&
               widget.tournament.directorPlayOrderMode == 'fixed_schedule' &&
-              widget.onReorderScheduleMatch != null;
+              (widget.onReorderScheduleMatch != null ||
+                  widget.onDeferScheduleMatch != null ||
+                  widget.onPromoteScheduleMatch != null ||
+                  widget.onChooseSchedulePosition != null);
           return Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -817,37 +852,6 @@ class _TournamentDirectorDashboardState
                     icon: const Icon(Icons.play_arrow_rounded),
                   ),
                 ),
-              if (!isRunning &&
-                  widget.tournament.directorPlayOrderMode != 'dynamic' &&
-                  widget.onDeferScheduleMatch != null &&
-                  widget.onPromoteScheduleMatch != null &&
-                  widget.onChooseSchedulePosition != null)
-                PopupMenuButton<String>(
-                  tooltip: 'Spielplan anpassen',
-                  onSelected: (action) {
-                    if (action == 'promote') {
-                      unawaited(widget.onPromoteScheduleMatch!(match));
-                    } else if (action == 'position') {
-                      unawaited(widget.onChooseSchedulePosition!(match));
-                    } else {
-                      unawaited(widget.onDeferScheduleMatch!(match));
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'position',
-                      child: Text('Reihenfolge ändern …'),
-                    ),
-                    PopupMenuItem(
-                      value: 'promote',
-                      child: Text('Partie vorziehen'),
-                    ),
-                    PopupMenuItem(
-                      value: 'defer',
-                      child: Text('Vorübergehend überspringen'),
-                    ),
-                  ],
-                ),
               if (showDragHandle && !isRunning)
                 Draggable<GroupMatch>(
                   data: match,
@@ -861,16 +865,36 @@ class _TournamentDirectorDashboardState
                     ),
                   ),
                   childWhenDragging: const SizedBox(width: 48, height: 48),
-                  child: const MouseRegion(
+                  child: MouseRegion(
                     cursor: SystemMouseCursors.grab,
                     child: SizedBox(
                       width: 48,
                       height: 48,
-                      child: Tooltip(
-                        message: 'Ziehen, um die Reihenfolge zu ändern',
-                        child: Icon(
-                          Icons.drag_indicator,
-                          color: TournamentDisplayPalette.mutedText,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onSecondaryTapDown: (details) {
+                          if (widget.tournament.directorPlayOrderMode ==
+                                  'dynamic' ||
+                              widget.onDeferScheduleMatch == null ||
+                              widget.onPromoteScheduleMatch == null ||
+                              widget.onChooseSchedulePosition == null) {
+                            return;
+                          }
+                          unawaited(
+                            _showScheduleMatchMenu(
+                              context,
+                              details.globalPosition,
+                              match,
+                            ),
+                          );
+                        },
+                        child: Tooltip(
+                          message:
+                              'Ziehen, um die Reihenfolge zu ändern; Rechtsklick für Aktionen',
+                          child: const Icon(
+                            Icons.drag_indicator,
+                            color: TournamentDisplayPalette.mutedText,
+                          ),
                         ),
                       ),
                     ),
@@ -961,6 +985,11 @@ class _TournamentDirectorDashboardState
       for (var board = 1; board <= t.boardCount; board++)
         board: state.upcomingForBoard(board),
     };
+    final mergedBoards = state
+        .mergedGroupBoards()
+        .values
+        .expand((boards) => boards)
+        .toSet();
     final boardCards = !widget.directorModeEnabled
         ? <Widget>[]
         : [
@@ -1242,18 +1271,19 @@ class _TournamentDirectorDashboardState
                                     icon: const Icon(Icons.swap_horiz_rounded),
                                     label: const Text('Partie wählen'),
                                   ),
-                                OutlinedButton.icon(
-                                  onPressed: () =>
-                                      _act(() => widget.onBlock(board)),
-                                  icon: Icon(
-                                    blocked
-                                        ? Icons.lock_open_rounded
-                                        : Icons.lock_rounded,
+                                if (!mergedBoards.contains(board))
+                                  OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _act(() => widget.onBlock(board)),
+                                    icon: Icon(
+                                      blocked
+                                          ? Icons.lock_open_rounded
+                                          : Icons.lock_rounded,
+                                    ),
+                                    label: Text(
+                                      blocked ? 'Freigeben' : 'Sperren',
+                                    ),
                                   ),
-                                  label: Text(
-                                    blocked ? 'Freigeben' : 'Sperren',
-                                  ),
-                                ),
                               ],
                             ),
                           ),
