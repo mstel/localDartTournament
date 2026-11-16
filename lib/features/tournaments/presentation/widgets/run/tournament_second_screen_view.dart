@@ -4297,7 +4297,7 @@ class _TournamentSecondScreenViewState
         '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
         '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
       ),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: _monitorCardColor(TournamentDisplayPalette.card),
         border: Border.all(color: TournamentDisplayPalette.accent, width: 2),
@@ -4321,7 +4321,7 @@ class _TournamentSecondScreenViewState
               const _PulsingLiveBadge(),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           SizedBox(
             height: nameAreaHeight,
             child: LayoutBuilder(
@@ -4387,7 +4387,7 @@ class _TournamentSecondScreenViewState
               },
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Center(
             child: _RunningMatchElapsedLabel(
               boardNumber: match.boardNumber,
@@ -4446,7 +4446,7 @@ class _TournamentSecondScreenViewState
     width: width,
     key: ValueKey('second-screen-free-board-$board'),
     constraints: const BoxConstraints(minHeight: 96),
-    padding: const EdgeInsets.all(10),
+    padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
     decoration: BoxDecoration(
       color: _monitorCardColor(TournamentDisplayPalette.card),
       border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
@@ -4692,6 +4692,47 @@ class _TournamentSecondScreenViewState
                                   final tileWidth =
                                       singleColumnWidth * span +
                                       spacing * (span - 1);
+                                  final Widget statusIndicator =
+                                      boards.length == 1
+                                      ? _BoardStatusBadge(
+                                          label: statuses.single.label
+                                              .toUpperCase(),
+                                          color: statuses.single.color,
+                                        )
+                                      : Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            for (
+                                              var statusIndex = 0;
+                                              statusIndex < statuses.length;
+                                              statusIndex++
+                                            ) ...[
+                                              if (statusIndex > 0)
+                                                const Padding(
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                  ),
+                                                  child: Text(
+                                                    '/',
+                                                    style: TextStyle(
+                                                      color:
+                                                          TournamentDisplayPalette
+                                                              .mutedText,
+                                                    ),
+                                                  ),
+                                                ),
+                                              Text(
+                                                statuses[statusIndex].label,
+                                                style: TextStyle(
+                                                  color: statuses[statusIndex]
+                                                      .color,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        );
                                   return SizedBox(
                                     width: tileWidth,
                                     child: Container(
@@ -4719,90 +4760,41 @@ class _TournamentSecondScreenViewState
                                         crossAxisAlignment:
                                             CrossAxisAlignment.stretch,
                                         children: [
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.center,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  displayName.toUpperCase(),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    color:
-                                                        TournamentDisplayPalette
-                                                            .text,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                              if (boards.length == 1)
-                                                Flexible(
-                                                  child: FittedBox(
-                                                    alignment:
-                                                        Alignment.centerRight,
-                                                    fit: BoxFit.scaleDown,
-                                                    child: _BoardStatusBadge(
-                                                      label: statuses
-                                                          .single
-                                                          .label
-                                                          .toUpperCase(),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    displayName.toUpperCase(),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
                                                       color:
-                                                          statuses.single.color,
-                                                    ),
-                                                  ),
-                                                )
-                                              else
-                                                Flexible(
-                                                  child: FittedBox(
-                                                    alignment:
-                                                        Alignment.centerRight,
-                                                    fit: BoxFit.scaleDown,
-                                                    child: Row(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        for (
-                                                          var statusIndex = 0;
-                                                          statusIndex <
-                                                              statuses.length;
-                                                          statusIndex++
-                                                        ) ...[
-                                                          if (statusIndex > 0)
-                                                            const Padding(
-                                                              padding:
-                                                                  EdgeInsets.symmetric(
-                                                                    horizontal:
-                                                                        4,
-                                                                  ),
-                                                              child: Text(
-                                                                '/',
-                                                                style: TextStyle(
-                                                                  color: TournamentDisplayPalette
-                                                                      .mutedText,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          Text(
-                                                            statuses[statusIndex]
-                                                                .label,
-                                                            style: TextStyle(
-                                                              color:
-                                                                  statuses[statusIndex]
-                                                                      .color,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700,
-                                                              fontSize: 12,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ],
+                                                          TournamentDisplayPalette
+                                                              .text,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
                                                 ),
-                                            ],
+                                                Flexible(
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.topRight,
+                                                    child: FittedBox(
+                                                      alignment:
+                                                          Alignment.topRight,
+                                                      fit: BoxFit.scaleDown,
+                                                      child: statusIndicator,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           const Padding(
                                             padding: EdgeInsets.only(top: 4),

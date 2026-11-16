@@ -119,7 +119,7 @@ void main() {
         of: find.byType(ChristmasDecorations),
         matching: find.byType(Image),
       ),
-      findsNWidgets(2),
+      findsOneWidget,
     );
     final imageAssets = tester
         .widgetList<Image>(
@@ -130,10 +130,8 @@ void main() {
         )
         .map((image) => (image.image as AssetImage).assetName)
         .toSet();
-    expect(imageAssets, {
-      'assets/images/christmas_garland.jpg',
-      'assets/images/christmas_winter_forest.jpg',
-    });
+    expect(imageAssets, {'assets/images/christmas_winter_forest.jpg'});
+    expect(find.byKey(const ValueKey('christmas-snowfall')), findsOneWidget);
     expect(find.text('🎅'), findsNothing);
     expect(find.text('Inhalt'), findsOneWidget);
     expect(tester.takeException(), isNull);

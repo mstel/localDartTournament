@@ -1890,7 +1890,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                       '--second-screen',
                       widget.tournament.id,
                       '--parent-pid=$pid',
-                    ]);
+                    ], mode: ProcessStartMode.detached);
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(

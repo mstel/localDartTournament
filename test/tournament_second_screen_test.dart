@@ -456,6 +456,7 @@ void main() {
       ),
     );
     expect(runningTile, findsOneWidget);
+    expect(tester.getSize(runningTile).height, lessThan(120));
     for (final name in ['Alexanderson', 'Robinson']) {
       final nameText = tester.widget<Text>(
         find.descendant(of: runningTile, matching: find.text(name)),
@@ -472,6 +473,20 @@ void main() {
     final firstBoardQueue = tester.widget<Container>(
       find.byKey(const ValueKey('second-screen-director-board-1')),
     );
+    final firstBoardQueueRect = tester.getRect(
+      find.byKey(const ValueKey('second-screen-director-board-1')),
+    );
+    final occupiedStatusRect = tester.getRect(
+      find.descendant(
+        of: find.byKey(const ValueKey('second-screen-director-board-1')),
+        matching: find.text('BELEGT'),
+      ),
+    );
+    expect(
+      occupiedStatusRect.right,
+      greaterThan(firstBoardQueueRect.right - 30),
+    );
+    expect(occupiedStatusRect.top, lessThan(firstBoardQueueRect.top + 22));
     final queueDecoration = firstBoardQueue.decoration! as BoxDecoration;
     expect(queueDecoration.border!.top.color, TournamentDisplayPalette.accent);
     expect(find.text('Aktuell: ${match.participantShortLabel}'), findsNothing);
