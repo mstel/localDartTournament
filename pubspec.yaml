@@ -83,6 +83,8 @@ flutter:
   assets:
     - assets/linux/notification_worker.py
     - assets/images/app_brand_mark.png
+    - assets/images/christmas_garland.jpg
+    - assets/images/christmas_winter_forest.jpg
 
   # To add assets to your application, add an assets section, like this:
   # assets:

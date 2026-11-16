@@ -645,6 +645,14 @@ class _TournamentSecondScreenViewState
     return matches.where((match) => match.hasPlayers).length;
   }
 
+  Color _monitorCardColor(Color color) {
+    if (AppThemeController.instance.themeStyleNotifier.value !=
+        AppThemeStyle.christmas) {
+      return color;
+    }
+    return color.withValues(alpha: .84);
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = widget.tournament;
@@ -656,8 +664,8 @@ class _TournamentSecondScreenViewState
       background: christmas
           ? Colors.transparent
           : TournamentDisplayPalette.background,
-      card: TournamentDisplayPalette.card,
-      cardEmphasis: TournamentDisplayPalette.cardEmphasis,
+      card: _monitorCardColor(TournamentDisplayPalette.card),
+      cardEmphasis: _monitorCardColor(TournamentDisplayPalette.cardEmphasis),
       border: TournamentDisplayPalette.border,
       accent: theme.colorScheme.tertiary,
       text: TournamentDisplayPalette.text,
@@ -859,7 +867,7 @@ class _TournamentSecondScreenViewState
         constraints: const BoxConstraints(maxWidth: 1100),
         child: SizedBox.expand(
           child: Card(
-            color: TournamentDisplayPalette.card,
+            color: _monitorCardColor(TournamentDisplayPalette.card),
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -4022,7 +4030,9 @@ class _TournamentSecondScreenViewState
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: TournamentDisplayPalette.cardEmphasis,
+                      color: _monitorCardColor(
+                        TournamentDisplayPalette.cardEmphasis,
+                      ),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
                         color: TournamentDisplayPalette.border,
@@ -4262,7 +4272,7 @@ class _TournamentSecondScreenViewState
       ),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: TournamentDisplayPalette.card,
+        color: _monitorCardColor(TournamentDisplayPalette.card),
         border: Border.all(color: TournamentDisplayPalette.accent, width: 2),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -4400,7 +4410,7 @@ class _TournamentSecondScreenViewState
     constraints: const BoxConstraints(minHeight: 96),
     padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
-      color: TournamentDisplayPalette.card,
+      color: _monitorCardColor(TournamentDisplayPalette.card),
       border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
       borderRadius: BorderRadius.circular(10),
     ),
@@ -4451,7 +4461,7 @@ class _TournamentSecondScreenViewState
     constraints: const BoxConstraints(minHeight: 96),
     padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
-      color: TournamentDisplayPalette.card,
+      color: _monitorCardColor(TournamentDisplayPalette.card),
       border: Border.all(color: Colors.redAccent, width: 2),
       borderRadius: BorderRadius.circular(10),
     ),
@@ -4637,7 +4647,9 @@ class _TournamentSecondScreenViewState
                                       ),
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: TournamentDisplayPalette.card,
+                                        color: _monitorCardColor(
+                                          TournamentDisplayPalette.card,
+                                        ),
                                         border: Border.all(
                                           color: anyRunning
                                               ? TournamentDisplayPalette.accent

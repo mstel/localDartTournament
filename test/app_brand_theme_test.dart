@@ -117,10 +117,23 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(ChristmasDecorations),
-        matching: find.byType(CustomPaint),
+        matching: find.byType(Image),
       ),
-      findsOneWidget,
+      findsNWidgets(2),
     );
+    final imageAssets = tester
+        .widgetList<Image>(
+          find.descendant(
+            of: find.byType(ChristmasDecorations),
+            matching: find.byType(Image),
+          ),
+        )
+        .map((image) => (image.image as AssetImage).assetName)
+        .toSet();
+    expect(imageAssets, {
+      'assets/images/christmas_garland.jpg',
+      'assets/images/christmas_winter_forest.jpg',
+    });
     expect(find.text('🎅'), findsNothing);
     expect(find.text('Inhalt'), findsOneWidget);
     expect(tester.takeException(), isNull);
