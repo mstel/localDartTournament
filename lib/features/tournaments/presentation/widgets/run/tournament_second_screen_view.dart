@@ -13,6 +13,7 @@ import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
+import '../../../domain/engines/placement_engine.dart';
 import '../../utils/match_display_label.dart';
 import '../../../domain/player_insight.dart';
 import '../../../domain/second_screen_widget_placement.dart';
@@ -158,7 +159,6 @@ class _TournamentSecondScreenViewState
   bool _customLayoutBeforeEditing = false;
   DateTime? _completionObservedAt;
   Timer? _completionWatchTimer;
-  Timer? _completionCloseTimer;
   List<SecondScreenWidgetPlacement>? _placementsBeforeEditing;
   String? _dragTargetWidgetId;
   int? _dragTargetEdge;
@@ -579,7 +579,6 @@ class _TournamentSecondScreenViewState
   @override
   void dispose() {
     _completionWatchTimer?.cancel();
-    _completionCloseTimer?.cancel();
     _previewVerticalController.dispose();
     _previewHorizontalController.dispose();
     _recentResultsController.dispose();
@@ -595,9 +594,6 @@ class _TournamentSecondScreenViewState
     _completionObservedAt = DateTime.now();
     _completionWatchTimer?.cancel();
     if (mounted) setState(() {});
-    _completionCloseTimer = Timer(const Duration(seconds: 60), () {
-      if (mounted) unawaited(_closeStandaloneWindow());
-    });
   }
 
   Future<void> _closeStandaloneWindow() async {
@@ -796,7 +792,7 @@ class _TournamentSecondScreenViewState
     List<GroupMatch> playedMatches,
   ) {
     final theme = Theme.of(context);
-    final podium = _completionPodium(tournament, playedMatches);
+    final placements = _completionPlacements(tournament, playedMatches);
     final performances = [
       for (final match in playedMatches) ...match.bestPerformances,
     ];
@@ -811,12 +807,12 @@ class _TournamentSecondScreenViewState
         '${measuredDuration == null ? ' (geschätzt)' : ''}';
     final sections = [
       _completionSection(
-        'Podium',
-        podium.isEmpty
+        'Platzierungen',
+        placements.isEmpty
             ? const Text('Keine Platzierungen verfügbar.')
             : Column(
                 children: [
-                  for (var index = 0; index < podium.length; index++)
+                  for (var index = 0; index < placements.length; index++)
                     ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
@@ -826,14 +822,15 @@ class _TournamentSecondScreenViewState
                             ? const Color(0xFFFFD54F)
                             : index == 1
                             ? const Color(0xFFB0BEC5)
-                            : const Color(0xFFB87333),
-                        child: Text('${index + 1}'),
+                            : index == 2
+                            ? const Color(0xFFB87333)
+                            : const Color(0xFF546E7A),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('${index + 1}'),
+                        ),
                       ),
-                      title: Text(
-                        podium[index].name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      title: Text(placements[index].name),
                     ),
                 ],
               ),
@@ -1009,16 +1006,15 @@ class _TournamentSecondScreenViewState
                 fontWeight: FontWeight.w600,
               ),
             ),
-            for (final change
-                in changes.where((change) => change.ranking == ranking).take(5))
+            for (final change in changes.where(
+              (change) => change.ranking == ranking,
+            ))
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text(
                   '${change.entry.name} · '
                   '${change.delta > 0 ? '+' : ''}${change.delta} Elo'
-                  '${change.previous == null ? '' : ' · Platz ${change.previous} → ${change.position}'}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  '${change.previous == null || change.previous == change.position ? '' : ' · Platz ${change.previous} → ${change.position}'}',
                   style: TextStyle(
                     color: change.delta > 0
                         ? const Color(0xFF70E0BA)
@@ -1034,10 +1030,11 @@ class _TournamentSecondScreenViewState
     },
   );
 
-  List<TournamentPlayer> _completionPodium(
+  List<TournamentPlayer> _completionPlacements(
     CreatedTournament tournament,
     List<GroupMatch> playedMatches,
   ) {
+    List<TournamentPlayer>? stageRanking;
     if (tournament.runStages.isNotEmpty) {
       final finalStage = tournament.runStages.last;
       if (finalStage is GroupTournamentRunStage &&
@@ -1051,7 +1048,7 @@ class _TournamentSecondScreenViewState
                 finalStage.tieBreakers,
                 tournament: tournament,
               );
-        return standings.map((standing) => standing.player).take(3).toList();
+        stageRanking = standings.map((standing) => standing.player).toList();
       }
       if (finalStage is KnockoutTournamentRunStage) {
         if (finalStage.isKratzer) {
@@ -1062,24 +1059,15 @@ class _TournamentSecondScreenViewState
                   .compareTo(finalStage.livesRemainingFor(left));
               return lives != 0 ? lives : left.name.compareTo(right.name);
             });
-          return players.take(3).toList();
-        }
-        if (tournament.importedArchive?.usesNativeLogic == true) {
-          return ProductionTournamentRuntime(
+          stageRanking = players;
+        } else {
+          final ranking = ProductionTournamentRuntime(
             tournament,
-          ).ranking(finalStage, const []).take(3).toList();
-        }
-        final finalMatch = finalStage.rounds.lastOrNull?.firstOrNull;
-        if (finalMatch?.hasResult == true) {
-          final thirdPlace = finalStage.placementMatches
-              .where((match) => match.label == 'Spiel um Platz 3')
-              .firstOrNull;
-          return [
-            if (finalMatch!.winner != null) finalMatch.winner!,
-            if (finalMatch.loser != null) finalMatch.loser!,
-            if (thirdPlace?.hasResult == true && thirdPlace!.winner != null)
-              thirdPlace.winner!,
-          ];
+          ).ranking(finalStage, finalStage.participants);
+          stageRanking = PlacementEngine.applyRanking(
+            ranking,
+            finalStage.placementMatches,
+          );
         }
       }
     }
@@ -1133,7 +1121,20 @@ class _TournamentSecondScreenViewState
         final legs = right.legsFor.compareTo(left.legsFor);
         return legs != 0 ? legs : left.player.name.compareTo(right.player.name);
       });
-    return ranking.map((entry) => entry.player).take(3).toList();
+    final completeRanking = <TournamentPlayer>[];
+    void addUnique(TournamentPlayer player) {
+      if (!completeRanking.any((entry) => entry.name == player.name)) {
+        completeRanking.add(player);
+      }
+    }
+
+    for (final player in stageRanking ?? const <TournamentPlayer>[]) {
+      addUnique(player);
+    }
+    for (final entry in ranking) {
+      addUnique(entry.player);
+    }
+    return completeRanking;
   }
 
   Widget _buildOverview(
@@ -4105,7 +4106,9 @@ class _TournamentSecondScreenViewState
             ),
           );
 
-    return Column(
+    final scrollLargeTextPanel =
+        expand && MediaQuery.textScalerOf(context).scale(1) > 1.5;
+    final panel = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.tournament.directorModeEnabled ||
@@ -4118,14 +4121,16 @@ class _TournamentSecondScreenViewState
                 color: TournamentDisplayPalette.accent,
               ),
               const SizedBox(width: 8),
-              Text(
-                widget.tournament.directorModeEnabled
-                    ? 'Board Belegung & aktive Partien'
-                    : 'Aktuelle Partien (${runningMatches.length})',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: Colors.white,
+              Expanded(
+                child: Text(
+                  widget.tournament.directorModeEnabled
+                      ? 'Board Belegung & aktive Partien'
+                      : 'Aktuelle Partien (${runningMatches.length})',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
@@ -4137,11 +4142,7 @@ class _TournamentSecondScreenViewState
               builder: (context, insightSnapshot) => LayoutBuilder(
                 builder: (context, constraints) {
                   const spacing = 10.0;
-                  final columns = constraints.maxWidth >= 740
-                      ? 4
-                      : constraints.maxWidth >= 460
-                      ? 2
-                      : 1;
+                  final columns = constraints.maxWidth >= 460 ? 2 : 1;
                   final width =
                       (constraints.maxWidth - spacing * (columns - 1)) /
                       columns;
@@ -4237,7 +4238,9 @@ class _TournamentSecondScreenViewState
           ),
         ),
         const SizedBox(height: 8),
-        if (expand)
+        if (scrollLargeTextPanel)
+          recommendedContent
+        else if (expand)
           Expanded(child: recommendedContent)
         else
           SizedBox(height: 240, child: recommendedContent),
@@ -4251,6 +4254,7 @@ class _TournamentSecondScreenViewState
           ),
       ],
     );
+    return scrollLargeTextPanel ? SingleChildScrollView(child: panel) : panel;
   }
 
   Widget _buildRunningMatchTile(
@@ -4260,6 +4264,29 @@ class _TournamentSecondScreenViewState
     Map<String, List<PlayerInsight>> playerInsights = const {},
   }) {
     final match = entry.match;
+    const nameStyle = TextStyle(
+      color: TournamentDisplayPalette.text,
+      fontWeight: FontWeight.bold,
+      fontSize: 14,
+      height: 1.2,
+    );
+    const separatorStyle = TextStyle(
+      color: TournamentDisplayPalette.mutedText,
+      fontWeight: FontWeight.bold,
+      fontSize: 14,
+      height: 1.2,
+    );
+    final textScaler = MediaQuery.textScalerOf(context);
+    final textDirection = Directionality.of(context);
+    TextPainter measure(String text, TextStyle style) => TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: textDirection,
+      textScaler: textScaler,
+      maxLines: 1,
+    )..layout();
+    final homeName = match.homePlayer?.shortDisplayName ?? 'Offen';
+    final awayName = match.awayPlayer?.shortDisplayName ?? 'Offen';
+    final nameAreaHeight = measure('Ag', nameStyle).height * 2 + 6;
     final boardName = widget.tournament
         .boardDisplayName(match.boardNumber ?? 1)
         .toUpperCase();
@@ -4295,48 +4322,69 @@ class _TournamentSecondScreenViewState
             ],
           ),
           const SizedBox(height: 6),
-          Center(
-            child: Text(
-              'BESETZT',
-              style: TextStyle(
-                color: TournamentDisplayPalette.accent,
-                fontWeight: FontWeight.bold,
-                fontSize: 11,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(
-                  child: _runningPlayerName(
-                    match.homePlayer,
-                    match.awayPlayer,
-                    playerInsights,
-                    textAlign: TextAlign.end,
+          SizedBox(
+            height: nameAreaHeight,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final namesFitSideBySide =
+                    measure(homeName, nameStyle).width +
+                        measure(awayName, nameStyle).width +
+                        measure('–', separatorStyle).width +
+                        20 <=
+                    constraints.maxWidth;
+                if (!namesFitSideBySide) {
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _runningPlayerName(
+                        match.homePlayer,
+                        match.awayPlayer,
+                        playerInsights,
+                        textAlign: TextAlign.center,
+                        style: nameStyle,
+                      ),
+                      const SizedBox(height: 2),
+                      _runningPlayerName(
+                        match.awayPlayer,
+                        match.homePlayer,
+                        playerInsights,
+                        textAlign: TextAlign.center,
+                        style: nameStyle,
+                      ),
+                    ],
+                  );
+                }
+                return Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: _runningPlayerName(
+                          match.homePlayer,
+                          match.awayPlayer,
+                          playerInsights,
+                          textAlign: TextAlign.end,
+                          style: nameStyle,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text('–', style: separatorStyle),
+                      ),
+                      Flexible(
+                        child: _runningPlayerName(
+                          match.awayPlayer,
+                          match.homePlayer,
+                          playerInsights,
+                          textAlign: TextAlign.start,
+                          style: nameStyle,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: Text(
-                    '–',
-                    style: TextStyle(
-                      color: TournamentDisplayPalette.mutedText,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Flexible(
-                  child: _runningPlayerName(
-                    match.awayPlayer,
-                    match.homePlayer,
-                    playerInsights,
-                    textAlign: TextAlign.start,
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 8),
@@ -4356,16 +4404,10 @@ class _TournamentSecondScreenViewState
     TournamentPlayer? opponent,
     Map<String, List<PlayerInsight>> playerInsights, {
     required TextAlign textAlign,
+    required TextStyle style,
   }) {
     if (player == null) {
-      return const Text(
-        'Offen',
-        style: TextStyle(
-          color: TournamentDisplayPalette.text,
-          fontWeight: FontWeight.bold,
-          fontSize: 16,
-        ),
-      );
+      return Text('Offen', style: style);
     }
     final playerId =
         player.profileId ?? 'name:${player.name.trim().toLowerCase()}';
@@ -4382,11 +4424,7 @@ class _TournamentSecondScreenViewState
             .toList();
     final name = Text(
       player.shortDisplayName,
-      style: const TextStyle(
-        color: TournamentDisplayPalette.text,
-        fontWeight: FontWeight.bold,
-        fontSize: 14,
-      ),
+      style: style,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       textAlign: textAlign,
@@ -4534,10 +4572,11 @@ class _TournamentSecondScreenViewState
                   final rows = <List<MapEntry<List<int>, String?>>>[];
                   var currentRow = <MapEntry<List<int>, String?>>[];
                   var currentSpan = 0;
-                  final maxRowSpan = mergedGroupBoards.isEmpty ? 2 : 4;
+                  const maxRowSpan = 2;
                   for (final tile in boardTiles) {
                     final span = tile.key.length > 1 ? 2 : 1;
-                    if (currentRow.isNotEmpty && currentSpan + span > maxRowSpan) {
+                    if (currentRow.isNotEmpty &&
+                        currentSpan + span > maxRowSpan) {
                       rows.add(currentRow);
                       currentRow = <MapEntry<List<int>, String?>>[];
                       currentSpan = 0;
@@ -4554,14 +4593,18 @@ class _TournamentSecondScreenViewState
                         builder: (context) {
                           final totalSpan = rowTiles.fold<int>(
                             0,
-                            (sum, tile) =>
-                                sum + (tile.key.length > 1 ? 2 : 1),
+                            (sum, tile) => sum + (tile.key.length > 1 ? 2 : 1),
                           );
                           final singleColumnWidth =
-                              (constraints.maxWidth - spacing * (totalSpan - 1)) /
-                                  totalSpan;
+                              (constraints.maxWidth -
+                                  spacing * (totalSpan - 1)) /
+                              totalSpan;
                           final rowChildren = <Widget>[];
-                          for (var index = 0; index < rowTiles.length; index++) {
+                          for (
+                            var index = 0;
+                            index < rowTiles.length;
+                            index++
+                          ) {
                             if (index > 0) {
                               rowChildren.add(SizedBox(width: spacing));
                             }
@@ -4591,44 +4634,56 @@ class _TournamentSecondScreenViewState
                                         );
                                   final upcoming = recommendations
                                       .where(
-                                        (assignment) => !snapshot.schedule.running.any(
-                                          (active) => identical(
-                                            active.match,
-                                            assignment.entry.match,
-                                          ),
-                                        ),
+                                        (assignment) =>
+                                            !snapshot.schedule.running.any(
+                                              (active) => identical(
+                                                active.match,
+                                                assignment.entry.match,
+                                              ),
+                                            ),
                                       )
                                       .take(
-                                        mergedGroupKey == null ? 3 : boards.length * 3,
+                                        mergedGroupKey == null
+                                            ? 3
+                                            : boards.length * 3,
                                       )
                                       .toList();
                                   final statuses = [
                                     for (final boardNumber in boards)
                                       (
-                                        label: snapshot.runningOn(boardNumber) != null
+                                        label:
+                                            snapshot.runningOn(boardNumber) !=
+                                                null
                                             ? 'Belegt'
                                             : tournament.blockedBoards.contains(
                                                     boardNumber,
                                                   ) ||
                                                   snapshot
-                                                      .selectableForBoard(boardNumber)
+                                                      .selectableForBoard(
+                                                        boardNumber,
+                                                      )
                                                       .isEmpty
                                             ? 'Board gesperrt'
                                             : 'Frei',
-                                        color: snapshot.runningOn(boardNumber) != null
+                                        color:
+                                            snapshot.runningOn(boardNumber) !=
+                                                null
                                             ? TournamentDisplayPalette.accent
                                             : tournament.blockedBoards.contains(
                                                     boardNumber,
                                                   ) ||
                                                   snapshot
-                                                      .selectableForBoard(boardNumber)
+                                                      .selectableForBoard(
+                                                        boardNumber,
+                                                      )
                                                       .isEmpty
                                             ? Colors.redAccent
                                             : const Color(0xFF4ED9A4),
                                       ),
                                   ];
                                   final allBlocked = statuses.every(
-                                    (status) => status.label == 'Board gesperrt',
+                                    (status) =>
+                                        status.label == 'Board gesperrt',
                                   );
                                   final anyRunning = statuses.any(
                                     (status) => status.label == 'Belegt',
@@ -4672,27 +4727,41 @@ class _TournamentSecondScreenViewState
                                                 child: Text(
                                                   displayName.toUpperCase(),
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                     color:
-                                                        TournamentDisplayPalette.text,
+                                                        TournamentDisplayPalette
+                                                            .text,
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ),
                                               if (boards.length == 1)
-                                                _BoardStatusBadge(
-                                                  label: statuses.single.label
-                                                      .toUpperCase(),
-                                                  color: statuses.single.color,
+                                                Flexible(
+                                                  child: FittedBox(
+                                                    alignment:
+                                                        Alignment.centerRight,
+                                                    fit: BoxFit.scaleDown,
+                                                    child: _BoardStatusBadge(
+                                                      label: statuses
+                                                          .single
+                                                          .label
+                                                          .toUpperCase(),
+                                                      color:
+                                                          statuses.single.color,
+                                                    ),
+                                                  ),
                                                 )
                                               else
                                                 Flexible(
                                                   child: FittedBox(
-                                                    alignment: Alignment.centerRight,
+                                                    alignment:
+                                                        Alignment.centerRight,
                                                     fit: BoxFit.scaleDown,
                                                     child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
                                                       children: [
                                                         for (
                                                           var statusIndex = 0;
@@ -4702,23 +4771,29 @@ class _TournamentSecondScreenViewState
                                                         ) ...[
                                                           if (statusIndex > 0)
                                                             const Padding(
-                                                              padding: EdgeInsets.symmetric(
-                                                                horizontal: 4,
-                                                              ),
+                                                              padding:
+                                                                  EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        4,
+                                                                  ),
                                                               child: Text(
                                                                 '/',
                                                                 style: TextStyle(
-                                                                  color:
-                                                                      TournamentDisplayPalette
-                                                                          .mutedText,
+                                                                  color: TournamentDisplayPalette
+                                                                      .mutedText,
                                                                 ),
                                                               ),
                                                             ),
                                                           Text(
-                                                            statuses[statusIndex].label,
+                                                            statuses[statusIndex]
+                                                                .label,
                                                             style: TextStyle(
-                                                              color: statuses[statusIndex].color,
-                                                              fontWeight: FontWeight.w700,
+                                                              color:
+                                                                  statuses[statusIndex]
+                                                                      .color,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
                                                               fontSize: 12,
                                                             ),
                                                           ),
@@ -4736,8 +4811,8 @@ class _TournamentSecondScreenViewState
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
-                                                color:
-                                                    TournamentDisplayPalette.mutedText,
+                                                color: TournamentDisplayPalette
+                                                    .mutedText,
                                                 fontSize: 11,
                                               ),
                                             ),
@@ -4754,25 +4829,32 @@ class _TournamentSecondScreenViewState
                                                 Expanded(
                                                   child: Padding(
                                                     padding: EdgeInsets.only(
-                                                      left: boardIndex == 0 ? 0 : 8,
+                                                      left: boardIndex == 0
+                                                          ? 0
+                                                          : 8,
                                                     ),
                                                     child: Column(
                                                       crossAxisAlignment:
-                                                          CrossAxisAlignment.stretch,
+                                                          CrossAxisAlignment
+                                                              .stretch,
                                                       children: [
                                                         for (
-                                                          var index = boardIndex * 3;
+                                                          var index =
+                                                              boardIndex * 3;
                                                           index <
                                                               min(
                                                                 upcoming.length,
-                                                                (boardIndex + 1) * 3,
+                                                                (boardIndex +
+                                                                        1) *
+                                                                    3,
                                                               );
                                                           index++
                                                         )
                                                           Padding(
-                                                            padding: const EdgeInsets.only(
-                                                              top: 8,
-                                                            ),
+                                                            padding:
+                                                                const EdgeInsets.only(
+                                                                  top: 8,
+                                                                ),
                                                             child: Row(
                                                               children: [
                                                                 SizedBox(
@@ -4780,40 +4862,38 @@ class _TournamentSecondScreenViewState
                                                                   child: Text(
                                                                     '${index + 1}.',
                                                                     style: const TextStyle(
-                                                                      color:
-                                                                          TournamentDisplayPalette
-                                                                              .accent,
+                                                                      color: TournamentDisplayPalette
+                                                                          .accent,
                                                                     ),
                                                                   ),
                                                                 ),
                                                                 Expanded(
                                                                   child: Column(
                                                                     crossAxisAlignment:
-                                                                        CrossAxisAlignment.start,
+                                                                        CrossAxisAlignment
+                                                                            .start,
                                                                     children: [
                                                                       Text(
                                                                         upcoming[index]
                                                                             .entry
                                                                             .match
                                                                             .participantShortLabel,
-                                                                        maxLines: 1,
+                                                                        maxLines:
+                                                                            1,
                                                                         overflow:
-                                                                            TextOverflow
-                                                                                .ellipsis,
+                                                                            TextOverflow.ellipsis,
                                                                         style: const TextStyle(
                                                                           color:
-                                                                              TournamentDisplayPalette
-                                                                                  .text,
-                                                                          fontSize: 12,
+                                                                              TournamentDisplayPalette.text,
+                                                                          fontSize:
+                                                                              12,
                                                                         ),
                                                                       ),
                                                                       if (playerInsights
                                                                           .isNotEmpty)
                                                                         PlayerInsightBadgeRow(
                                                                           insights: insightsForMatch(
-                                                                            upcoming[index]
-                                                                                .entry
-                                                                                .match,
+                                                                            upcoming[index].entry.match,
                                                                             playerInsights,
                                                                           ),
                                                                         ),
@@ -5257,7 +5337,7 @@ class _RunningMatchElapsedLabelState extends State<_RunningMatchElapsedLabel> {
         ? null
         : DateTime.now().difference(startedAt);
     return Text(
-      'PARTIE LÄUFT BEREITS · ${elapsed?.inMinutes ?? 0} MIN.',
+      'Partie läuft ${elapsed?.inMinutes ?? 0} Min.',
       style: const TextStyle(
         color: TournamentDisplayPalette.accent,
         fontWeight: FontWeight.bold,

@@ -6,6 +6,9 @@
 - Entfernt den redundanten Besetzt-Text aus aktiven Board-Kacheln und kürzt
   die Laufzeitmeldung. Lange Spielernamen werden bei Bedarf zweizeilig
   dargestellt, ohne die Kachelhöhe zu verändern.
+- Zeigt nach Turnierabschluss alle Platzierungen und alle Ranglistenänderungen
+  samt Positionswechseln; lange Listen bleiben scrollbar. Der Zweitmonitor
+  schließt sich nach Abschluss nicht mehr automatisch.
 
 # 3.1.2+104
 

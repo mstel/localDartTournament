@@ -211,10 +211,7 @@ void main() {
         ..boardCount = 2;
       const OrderOfPlayController().initializeFixedSchedule(tournament);
       final mergeSnapshot = TournamentDirectorSnapshot(tournament, 0);
-      expect(
-        mergeSnapshot.mergedGroupBoards(),
-        isEmpty,
-      );
+      expect(mergeSnapshot.mergedGroupBoards(), isEmpty);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -245,7 +242,7 @@ void main() {
   );
 
   testWidgets(
-    'merged boards show independent status and recommendations in two columns',
+    'merged board pair fills the first row above two half-width boards',
     (tester) async {
       tester.view.physicalSize = const Size(1920, 1080);
       tester.view.devicePixelRatio = 1;
@@ -339,10 +336,11 @@ void main() {
       final boardThreeRect = tester.getRect(boardThree);
       final boardFourRect = tester.getRect(boardFour);
       expect(mergedRect.width, closeTo(boardThreeRect.width * 2 + 8, 1));
-      expect(mergedRect.top, closeTo(boardThreeRect.top, 1));
+      expect(boardThreeRect.top, greaterThan(mergedRect.bottom));
       expect(boardThreeRect.top, closeTo(boardFourRect.top, 1));
-      expect(boardThreeRect.left, greaterThan(mergedRect.left));
+      expect(boardThreeRect.left, closeTo(mergedRect.left, 1));
       expect(boardFourRect.left, greaterThan(boardThreeRect.left));
+      expect(boardThreeRect.width, closeTo(boardFourRect.width, 1));
 
       final firstSuggestion = tester.getTopLeft(
         find.descendant(of: merged, matching: find.text('1.')),
@@ -359,7 +357,7 @@ void main() {
     },
   );
 
-  testWidgets('completed tournament overview closes after sixty seconds', (
+  testWidgets('completed tournament overview stays open with all placements', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -387,7 +385,11 @@ void main() {
 
     expect(find.text('Turnier abgeschlossen'), findsOneWidget);
     expect(find.textContaining('2 h 15 min'), findsOneWidget);
-    expect(find.text('Podium'), findsOneWidget);
+    expect(find.text('Platzierungen'), findsOneWidget);
+    expect(find.text('Podium'), findsNothing);
+    for (final playerName in ['A', 'B', 'C', 'D']) {
+      expect(find.text(playerName), findsOneWidget);
+    }
     expect(find.text('Ranglistenänderungen'), findsOneWidget);
     expect(find.text('Bestleistungen'), findsOneWidget);
     expect(
@@ -396,7 +398,10 @@ void main() {
     );
     expect(find.textContaining('A · 171+'), findsOneWidget);
     expect(closeCount, 0);
-    await tester.pump(const Duration(seconds: 60));
+    await tester.pump(const Duration(seconds: 61));
+    expect(closeCount, 0);
+    await tester.tap(find.byTooltip('Schließen'));
+    await tester.pump();
     expect(closeCount, 1);
     expect(tester.takeException(), isNull);
   });
@@ -439,7 +444,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Board Belegung & aktive Partien'), findsOneWidget);
-    expect(find.text('BESETZT'), findsOneWidget);
+    expect(find.text('BESETZT'), findsNothing);
+    expect(find.text('LIVE'), findsOneWidget);
+    expect(find.textContaining('Partie läuft '), findsOneWidget);
+    expect(find.textContaining('Partie läuft bereits'), findsNothing);
     final runningTile = find.byKey(
       ValueKey(
         'second-screen-running-match-${match.round}-'
@@ -470,7 +478,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('four active matches fit on one row on a desktop monitor', (
+  testWidgets('four active matches use a two-column board layout', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -544,17 +552,130 @@ void main() {
           ),
     );
     expect(tiles, findsNWidgets(4));
-    final tileTops = [
+    final boardRects = [
       for (final tile in tester.widgetList(tiles))
-        tester.getTopLeft(find.byWidget(tile)).dy,
+        tester.getRect(find.byWidget(tile)),
     ];
-    expect(
-      tileTops.reduce((left, right) => left > right ? left : right) -
-          tileTops.reduce((left, right) => left < right ? left : right),
-      lessThan(1),
-    );
+    expect(boardRects[0].top, closeTo(boardRects[1].top, 1));
+    expect(boardRects[2].top, closeTo(boardRects[3].top, 1));
+    expect(boardRects[2].top, greaterThan(boardRects[0].bottom));
+    expect(boardRects[0].left, closeTo(boardRects[2].left, 1));
+    expect(boardRects[1].left, closeTo(boardRects[3].left, 1));
+    expect(boardRects[1].left, greaterThan(boardRects[0].left));
+    expect(boardRects[0].width, closeTo(boardRects[1].width, 1));
+    expect(boardRects[2].width, closeTo(boardRects[3].width, 1));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'long active player names stack without changing board tile height',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final players = [
+        TournamentPlayer.generated(
+          1,
+        ).copyWith(name: 'JohannesRothVeryLongName'),
+        TournamentPlayer.generated(
+          2,
+        ).copyWith(name: 'MichaelSchneiderVeryLongName'),
+        TournamentPlayer.generated(3).copyWith(name: 'Spieler 3'),
+        TournamentPlayer.generated(4).copyWith(name: 'Spieler 4'),
+      ];
+      final matches = [
+        for (var index = 0; index < 2; index++)
+          GroupMatch(
+            homePlayer: players[index * 2],
+            awayPlayer: players[index * 2 + 1],
+            round: 1,
+          ),
+      ];
+      final tournament = CreatedTournament(
+        name: 'Lange Namen',
+        players: players,
+        stages: const [],
+        boardCount: 4,
+        directorModeEnabled: true,
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppenphase',
+            groupPlayType: 'round_robin',
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: players,
+                matches: matches,
+              ),
+            ],
+            qualificationPlan: null,
+            tieBreakers: const [],
+          ),
+        ],
+      );
+      for (var index = 0; index < matches.length; index++) {
+        expect(
+          const OrderOfPlayController().start(
+            tournament,
+            0,
+            matches[index],
+            index + 1,
+          ),
+          isTrue,
+        );
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: Scaffold(
+                body: TournamentSecondScreenView(
+                  tournament: tournament,
+                  isStandaloneWindow: true,
+                  storage: _MemoryTournamentStorage([tournament]),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final firstTile = find.byKey(
+        const ValueKey(
+          'second-screen-running-match-1-JohannesRothVeryLongName-'
+          'MichaelSchneiderVeryLongName',
+        ),
+      );
+      final secondTile = find.byKey(
+        const ValueKey('second-screen-running-match-1-Spieler 3-Spieler 4'),
+      );
+      expect(firstTile, findsOneWidget);
+      expect(secondTile, findsOneWidget);
+      final firstName = find.descendant(
+        of: firstTile,
+        matching: find.text('JohannesRothVeryLongName'),
+      );
+      final secondName = find.descendant(
+        of: firstTile,
+        matching: find.text('MichaelSchneiderVeryLongName'),
+      );
+      expect(
+        tester.getTopLeft(firstName).dy,
+        lessThan(tester.getTopLeft(secondName).dy),
+      );
+      expect(
+        tester.getRect(firstTile).height,
+        closeTo(tester.getRect(secondTile).height, 1),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('player insights only appear on the enabled standalone monitor', (
     tester,
