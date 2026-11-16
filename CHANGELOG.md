@@ -1,3 +1,12 @@
+# 3.1.3+105
+
+- Ordnet vier Boards im Zweitmonitor in zwei Reihen an. Zusammengeführte
+  Boards 1 und 2 nutzen die volle Breite der ersten Reihe; Boards 3 und 4
+  stehen darunter nebeneinander.
+- Entfernt den redundanten Besetzt-Text aus aktiven Board-Kacheln und kürzt
+  die Laufzeitmeldung. Lange Spielernamen werden bei Bedarf zweizeilig
+  dargestellt, ohne die Kachelhöhe zu verändern.
+
 # 3.1.2+104
 
 - Komprimiert Board-Belegung und aktive Partien auf dem Zweitmonitor; lange
