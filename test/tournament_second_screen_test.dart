@@ -1,5 +1,6 @@
 import 'dart:ui' show PointerDeviceKind;
 
+import 'package:dart_tournament_manager/app/theme_controller.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
@@ -335,7 +336,7 @@ void main() {
       final mergedRect = tester.getRect(merged);
       final boardThreeRect = tester.getRect(boardThree);
       final boardFourRect = tester.getRect(boardFour);
-      expect(mergedRect.width, closeTo(boardThreeRect.width * 2 + 8, 1));
+      expect(mergedRect.width, closeTo(boardThreeRect.width * 2 + 6, 1));
       expect(boardThreeRect.top, greaterThan(mergedRect.bottom));
       expect(boardThreeRect.top, closeTo(boardFourRect.top, 1));
       expect(boardThreeRect.left, closeTo(mergedRect.left, 1));
@@ -356,6 +357,140 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('four boards show three suggestions without scrolling at 1080p', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final groups = [
+      for (var groupIndex = 0; groupIndex < 4; groupIndex++)
+        () {
+          final players = [
+            for (var playerIndex = 0; playerIndex < 4; playerIndex++)
+              TournamentPlayer.generated(
+                groupIndex * 4 + playerIndex + 1,
+              ).copyWith(name: 'Spieler ${groupIndex * 4 + playerIndex + 1}'),
+          ];
+          return TournamentGroup(
+            name: 'Gruppe ${String.fromCharCode(65 + groupIndex)}',
+            playType: 'round_robin',
+            players: players,
+            matches: [
+              for (var home = 0; home < players.length; home++)
+                for (var away = home + 1; away < players.length; away++)
+                  GroupMatch(
+                    homePlayer: players[home],
+                    awayPlayer: players[away],
+                    round: home + away + 1,
+                  ),
+            ],
+          );
+        }(),
+    ];
+    final tournament =
+        CreatedTournament(
+            name: 'Vier Boards mit Vorschlägen',
+            players: groups.expand((group) => group.players).toList(),
+            stages: const [
+              TournamentStage(
+                name: 'Gruppenphase',
+                type: 'groups',
+                groupSizes: [4, 4, 4, 4],
+              ),
+            ],
+            boardCount: 4,
+            directorModeEnabled: true,
+            directorSchedulingStrategy: 'group',
+            directorPlayOrderMode: 'fixed_schedule',
+            runStages: [
+              GroupTournamentRunStage(
+                name: 'Gruppenphase',
+                groupPlayType: 'round_robin',
+                groups: groups,
+                qualificationPlan: null,
+                tieBreakers: defaultGroupTieBreakers,
+              ),
+            ],
+          )
+          ..directorGroupBoardAssignments.addAll({
+            for (var groupIndex = 0; groupIndex < 4; groupIndex++)
+              '0:Gruppe ${String.fromCharCode(65 + groupIndex)}': [
+                groupIndex + 1,
+              ],
+          });
+    const OrderOfPlayController().initializeFixedSchedule(tournament);
+    final orderOfPlay = const OrderOfPlayController();
+    for (var board = 1; board <= 4; board++) {
+      final assignment = orderOfPlay
+          .plan(tournament, 0)
+          .planned
+          .firstWhere((assignment) => assignment.board == board);
+      expect(
+        orderOfPlay.start(tournament, 0, assignment.entry.match, board),
+        isTrue,
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('LIVE'), findsNWidgets(4));
+    for (final player in tournament.players) {
+      expect(find.text(player.shortDisplayName), findsAtLeastNWidgets(1));
+    }
+    for (var board = 1; board <= 4; board++) {
+      for (var suggestion = 0; suggestion < 3; suggestion++) {
+        expect(
+          find.byKey(
+            ValueKey(
+              'second-screen-director-recommendation-$board-$suggestion',
+            ),
+          ),
+          findsOneWidget,
+        );
+      }
+    }
+    final activeTiles = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'second-screen-running-match-',
+          ),
+    );
+    expect(activeTiles, findsNWidgets(4));
+    expect(
+      [
+        for (final tile in tester.widgetList(activeTiles))
+          tester.getRect(find.byWidget(tile)),
+      ].every((rect) => rect.bottom <= 1080),
+      isTrue,
+    );
+    final queueScroll = find.byKey(
+      const ValueKey('second-screen-director-queue-scroll'),
+    );
+    final scrollable = find.descendant(
+      of: queueScroll,
+      matching: find.byType(Scrollable),
+    );
+    expect(
+      tester.state<ScrollableState>(scrollable).position.maxScrollExtent,
+      0,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('completed tournament overview stays open with all placements', (
     tester,
@@ -456,7 +591,7 @@ void main() {
       ),
     );
     expect(runningTile, findsOneWidget);
-    expect(tester.getSize(runningTile).height, lessThan(120));
+    expect(tester.getSize(runningTile).height, lessThan(110));
     for (final name in ['Alexanderson', 'Robinson']) {
       final nameText = tester.widget<Text>(
         find.descendant(of: runningTile, matching: find.text(name)),
@@ -496,7 +631,7 @@ void main() {
   testWidgets('four active matches use a two-column board layout', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.physicalSize = const Size(1920, 1080);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final players = [
@@ -567,6 +702,10 @@ void main() {
           ),
     );
     expect(tiles, findsNWidgets(4));
+    expect(find.text('LIVE'), findsNWidgets(4));
+    for (final player in players) {
+      expect(find.text(player.shortDisplayName), findsAtLeastNWidgets(1));
+    }
     final boardRects = [
       for (final tile in tester.widgetList(tiles))
         tester.getRect(find.byWidget(tile)),
@@ -579,6 +718,7 @@ void main() {
     expect(boardRects[1].left, greaterThan(boardRects[0].left));
     expect(boardRects[0].width, closeTo(boardRects[1].width, 1));
     expect(boardRects[2].width, closeTo(boardRects[3].width, 1));
+    expect(boardRects.every((rect) => rect.bottom <= 1080), isTrue);
     expect(tester.takeException(), isNull);
   });
 
@@ -879,19 +1019,26 @@ void main() {
       expect(
         find.descendant(
           of: occupancyTile,
-          matching: find.text('AKTUELL NICHT BESETZT'),
+          matching: find.text('JETZT PARTIE ZUWEISEN'),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
-          of: boardTile,
+          of: occupancyTile,
+          matching: find.text('Aktuell keine Partie'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: occupancyTile,
           matching: find.text('AKTUELL NICHT BESETZT'),
         ),
         findsNothing,
       );
     }
-    await tester.pump(const Duration(seconds: 10));
+    await tester.pump(const Duration(seconds: 20));
     final boardTwoOccupancy = find.byKey(
       const ValueKey('second-screen-free-board-2'),
     );
@@ -902,13 +1049,45 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.pump(const Duration(seconds: 10));
-    expect(
-      find.descendant(
-        of: boardTwoOccupancy,
-        matching: find.text('AKTUELL NICHT BESETZT'),
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Christmas standings widgets use translucent cards', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final styleNotifier = AppThemeController.instance.themeStyleNotifier;
+    addTearDown(() => styleNotifier.value = AppThemeStyle.club);
+    styleNotifier.value = AppThemeStyle.christmas;
+
+    final tournament = _tournament()
+      ..secondScreenLayouts['Christmas'] = const [
+        SecondScreenWidgetPlacement(widgetId: 'standings', widthUnits: 2),
+      ]
+      ..secondScreenActiveLayout = 'Christmas';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
       ),
-      findsOneWidget,
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final standingsCard = tester.widget<Container>(
+      find.byKey(const ValueKey('second-screen-standings-group-1')),
+    );
+    expect(
+      (standingsCard.decoration! as BoxDecoration).color,
+      const Color(0xFF14202B).withValues(alpha: .84),
     );
     expect(tester.takeException(), isNull);
   });

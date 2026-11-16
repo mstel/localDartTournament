@@ -3568,7 +3568,7 @@ class _TournamentSecondScreenViewState
     }
 
     return Card(
-      color: const Color(0xFF16202A),
+      color: _monitorCardColor(const Color(0xFF16202A)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -3615,13 +3615,14 @@ class _TournamentSecondScreenViewState
         .length;
 
     return Container(
+      key: ValueKey('second-screen-standings-group-$groupNumber'),
       constraints: BoxConstraints(
         minWidth: full ? 280 : 220,
         maxWidth: full ? double.infinity : 340,
       ),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF14202B),
+        color: _monitorCardColor(const Color(0xFF14202B)),
         border: Border.all(color: const Color(0xFF263D52)),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -4286,7 +4287,7 @@ class _TournamentSecondScreenViewState
     )..layout();
     final homeName = match.homePlayer?.shortDisplayName ?? 'Offen';
     final awayName = match.awayPlayer?.shortDisplayName ?? 'Offen';
-    final nameAreaHeight = measure('Ag', nameStyle).height * 2 + 6;
+    final nameAreaHeight = measure('Ag', nameStyle).height * 2 + 2;
     final boardName = widget.tournament
         .boardDisplayName(match.boardNumber ?? 1)
         .toUpperCase();
@@ -4297,7 +4298,7 @@ class _TournamentSecondScreenViewState
         '${match.homePlayer?.profileId ?? match.homePlayer?.name}-'
         '${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: _monitorCardColor(TournamentDisplayPalette.card),
         border: Border.all(color: TournamentDisplayPalette.accent, width: 2),
@@ -4321,7 +4322,7 @@ class _TournamentSecondScreenViewState
               const _PulsingLiveBadge(),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           SizedBox(
             height: nameAreaHeight,
             child: LayoutBuilder(
@@ -4387,7 +4388,7 @@ class _TournamentSecondScreenViewState
               },
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Center(
             child: _RunningMatchElapsedLabel(
               boardNumber: match.boardNumber,
@@ -4484,7 +4485,16 @@ class _TournamentSecondScreenViewState
           ),
         ),
         const SizedBox(height: 2),
-        const Center(child: _FreeBoardStatusLabel()),
+        const Center(
+          child: Text(
+            'JETZT PARTIE ZUWEISEN',
+            style: TextStyle(
+              color: Color(0xFF4ED9A4),
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+        ),
       ],
     ),
   );
@@ -4552,8 +4562,9 @@ class _TournamentSecondScreenViewState
     ]..sort((a, b) => a.key.first.compareTo(b.key.first));
     return LayoutBuilder(
       builder: (context, constraints) {
-        final spacing = 8.0;
+        const spacing = 6.0;
         return SingleChildScrollView(
+          key: const ValueKey('second-screen-director-queue-scroll'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -4741,7 +4752,10 @@ class _TournamentSecondScreenViewState
                                             ? 'second-screen-director-board-$board'
                                             : 'second-screen-director-boards-${boards.join('-')}',
                                       ),
-                                      padding: const EdgeInsets.all(10),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: _monitorCardColor(
                                           TournamentDisplayPalette.card,
@@ -4797,7 +4811,7 @@ class _TournamentSecondScreenViewState
                                             ),
                                           ),
                                           const Padding(
-                                            padding: EdgeInsets.only(top: 4),
+                                            padding: EdgeInsets.only(top: 2),
                                             child: Text(
                                               'Empfohlene nächste Begegnungen',
                                               maxLines: 1,
@@ -4843,9 +4857,13 @@ class _TournamentSecondScreenViewState
                                                           index++
                                                         )
                                                           Padding(
+                                                            key: ValueKey(
+                                                              'second-screen-director-recommendation-'
+                                                              '${boards.join('-')}-$index',
+                                                            ),
                                                             padding:
                                                                 const EdgeInsets.only(
-                                                                  top: 8,
+                                                                  top: 4,
                                                                 ),
                                                             child: Row(
                                                               children: [
@@ -5339,54 +5357,6 @@ class _RunningMatchElapsedLabelState extends State<_RunningMatchElapsedLabel> {
   }
 }
 
-class _FreeBoardStatusLabel extends StatefulWidget {
-  const _FreeBoardStatusLabel();
-
-  @override
-  State<_FreeBoardStatusLabel> createState() => _FreeBoardStatusLabelState();
-}
-
-class _FreeBoardStatusLabelState extends State<_FreeBoardStatusLabel> {
-  Timer? _timer;
-  bool _showAssignPrompt = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (mounted) {
-        setState(() => _showAssignPrompt = !_showAssignPrompt);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          _showAssignPrompt ? 'JETZT PARTIE ZUWEISEN' : 'AKTUELL NICHT BESETZT',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: _showAssignPrompt
-                ? const Color(0xFF4ED9A4)
-                : TournamentDisplayPalette.mutedText,
-            fontWeight: FontWeight.w700,
-            fontSize: 11,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _BoardStatusBadge extends StatelessWidget {
   const _BoardStatusBadge({required this.label, required this.color});
 
@@ -5415,28 +5385,38 @@ class _PulsingLiveBadge extends StatefulWidget {
 }
 
 class _PulsingLiveBadgeState extends State<_PulsingLiveBadge> {
-  Timer? _timer;
-  bool _bright = true;
+  static final ValueNotifier<bool> _bright = ValueNotifier(true);
+  static Timer? _timer;
+  static int _activeBadges = 0;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 800), (_) {
-      if (mounted) setState(() => _bright = !_bright);
+    _activeBadges++;
+    _timer ??= Timer.periodic(const Duration(milliseconds: 800), (_) {
+      _bright.value = !_bright.value;
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _activeBadges--;
+    if (_activeBadges == 0) {
+      _timer?.cancel();
+      _timer = null;
+      _bright.value = true;
+    }
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedOpacity(
-    opacity: _bright ? 1 : 0.45,
-    duration: const Duration(milliseconds: 300),
-    child: const _BoardStatusBadge(label: 'LIVE', color: Colors.redAccent),
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: _bright,
+    builder: (context, bright, _) => AnimatedOpacity(
+      opacity: bright ? 1 : 0.45,
+      duration: const Duration(milliseconds: 300),
+      child: const _BoardStatusBadge(label: 'LIVE', color: Colors.redAccent),
+    ),
   );
 }
 
