@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../tournament_workspace.dart';
 import 'app_theme.dart';
-import 'christmas_decorations.dart';
 import 'theme_controller.dart';
 import '../features/backups/application/supabase_workspace_sync_service.dart';
 import '../shared/widgets/arrow_key_dropdown_navigation.dart';
@@ -42,7 +41,7 @@ class _DartTournamentAppState extends State<DartTournamentApp> {
             final app = ArrowKeyDropdownNavigation(
               child: child ?? const SizedBox.shrink(),
             );
-            return christmas ? ChristmasDecorations(child: app) : app;
+            return app;
           },
           home: const HomePage(),
         );

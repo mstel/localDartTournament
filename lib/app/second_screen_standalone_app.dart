@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_theme.dart';
-import 'christmas_decorations.dart';
 import 'theme_controller.dart';
 import '../features/tournaments/data/tournament_storage.dart';
 import '../features/tournaments/domain/tournament_models.dart';
@@ -68,7 +67,7 @@ class _SecondScreenStandaloneAppState extends State<SecondScreenStandaloneApp> {
             final app = ArrowKeyDropdownNavigation(
               child: child ?? const SizedBox.shrink(),
             );
-            return christmas ? ChristmasDecorations(child: app) : app;
+            return app;
           },
           home: _SecondScreenStandalonePage(tournamentId: widget.tournamentId),
         );

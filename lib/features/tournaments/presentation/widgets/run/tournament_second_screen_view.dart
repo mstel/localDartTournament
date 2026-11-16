@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show KnockoutBracketView, ProductionTournamentRuntime;
 
+import '../../../../../app/christmas_decorations.dart';
+import '../../../../../app/theme_controller.dart';
 import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/knockout_round_names.dart';
@@ -647,8 +649,13 @@ class _TournamentSecondScreenViewState
   Widget build(BuildContext context) {
     final t = widget.tournament;
     final theme = Theme.of(context);
+    final christmas =
+        AppThemeController.instance.themeStyleNotifier.value ==
+        AppThemeStyle.christmas;
     final displayColors = TournamentDisplayColors(
-      background: TournamentDisplayPalette.background,
+      background: christmas
+          ? Colors.transparent
+          : TournamentDisplayPalette.background,
       card: TournamentDisplayPalette.card,
       cardEmphasis: TournamentDisplayPalette.cardEmphasis,
       border: TournamentDisplayPalette.border,
@@ -767,9 +774,12 @@ class _TournamentSecondScreenViewState
     );
 
     if (!widget.isStandaloneWindow) {
-      return SizedBox(height: 520, child: viewWidget);
+      return SizedBox(
+        height: 520,
+        child: ChristmasSecondScreenBackground(child: viewWidget),
+      );
     }
-    return viewWidget;
+    return ChristmasSecondScreenBackground(child: viewWidget);
   }
 
   Widget _buildTournamentCompletionCard(

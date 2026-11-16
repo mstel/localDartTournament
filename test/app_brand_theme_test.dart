@@ -91,19 +91,37 @@ void main() {
     },
   );
 
-  testWidgets('Christmas decorations include festive ornaments and render', (
+  testWidgets('Christmas winter background is limited to the Christmas style', (
     tester,
   ) async {
+    final styleNotifier = AppThemeController.instance.themeStyleNotifier;
+    addTearDown(() => styleNotifier.value = AppThemeStyle.club);
+    styleNotifier.value = AppThemeStyle.club;
+
     await tester.pumpWidget(
       const MaterialApp(
-        home: ChristmasDecorations(child: Scaffold(body: Text('Inhalt'))),
+        home: Scaffold(
+          body: ChristmasSecondScreenBackground(child: Text('Inhalt')),
+        ),
       ),
     );
 
-    expect(find.text('🎅'), findsOneWidget);
-    expect(find.text('🎄 🎁'), findsOneWidget);
-    expect(find.text('🎁 🍪'), findsOneWidget);
-    expect(find.text('🌲 🍬'), findsOneWidget);
+    expect(find.byType(ChristmasDecorations), findsNothing);
+    expect(find.text('Inhalt'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    styleNotifier.value = AppThemeStyle.christmas;
+    await tester.pump();
+
+    expect(find.byType(ChristmasDecorations), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ChristmasDecorations),
+        matching: find.byType(CustomPaint),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('🎅'), findsNothing);
     expect(find.text('Inhalt'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

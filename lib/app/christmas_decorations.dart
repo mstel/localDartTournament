@@ -2,180 +2,196 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-class ChristmasDecorations extends StatefulWidget {
+import 'theme_controller.dart';
+
+class ChristmasSecondScreenBackground extends StatelessWidget {
+  const ChristmasSecondScreenBackground({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<AppThemeStyle>(
+    valueListenable: AppThemeController.instance.themeStyleNotifier,
+    builder: (context, style, _) => style == AppThemeStyle.christmas
+        ? ChristmasDecorations(child: child)
+        : child,
+  );
+}
+
+class ChristmasDecorations extends StatelessWidget {
   const ChristmasDecorations({super.key, required this.child});
 
   final Widget child;
 
   @override
-  State<ChristmasDecorations> createState() => _ChristmasDecorationsState();
-}
-
-class _ChristmasDecorationsState extends State<ChristmasDecorations>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _snow = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 24),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _snow.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) => Stack(
     fit: StackFit.expand,
     children: [
-      widget.child,
-      Positioned.fill(
-        child: IgnorePointer(
-          child: ExcludeSemantics(
-            child: AnimatedBuilder(
-              animation: _snow,
-              builder: (context, _) =>
-                  CustomPaint(painter: _SnowfallPainter(_snow.value)),
-            ),
-          ),
+      const Positioned.fill(
+        child: ExcludeSemantics(
+          child: CustomPaint(painter: _WinterBackgroundPainter()),
         ),
       ),
-      const Positioned(
-        top: 0,
-        left: 0,
-        right: 0,
-        height: 20,
-        child: IgnorePointer(
-          child: ExcludeSemantics(
-            child: CustomPaint(painter: _LightsPainter()),
-          ),
-        ),
-      ),
-      const Positioned(
-        top: 1,
-        right: 12,
-        child: IgnorePointer(
-          child: ExcludeSemantics(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xE6234D36),
-                border: Border.fromBorderSide(
-                  BorderSide(color: Color(0xCCFFD166)),
-                ),
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('🎅', style: TextStyle(fontSize: 18)),
-                    SizedBox(width: 4),
-                    Text('🎄 🎁', style: TextStyle(fontSize: 18)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      const Positioned(
-        left: 12,
-        bottom: 12,
-        child: IgnorePointer(
-          child: ExcludeSemantics(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xD9234D36),
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-                border: Border.fromBorderSide(
-                  BorderSide(color: Color(0xAAFFD166)),
-                ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                child: Text('🎁 🍪', style: TextStyle(fontSize: 18)),
-              ),
-            ),
-          ),
-        ),
-      ),
-      const Positioned(
-        right: 14,
-        bottom: 12,
-        child: IgnorePointer(
-          child: ExcludeSemantics(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xD9234D36),
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-                border: Border.fromBorderSide(
-                  BorderSide(color: Color(0xAAFFD166)),
-                ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                child: Text('🌲 🍬', style: TextStyle(fontSize: 18)),
-              ),
-            ),
-          ),
-        ),
-      ),
+      child,
     ],
   );
 }
 
-class _SnowfallPainter extends CustomPainter {
-  const _SnowfallPainter(this.progress);
-
-  final double progress;
+class _WinterBackgroundPainter extends CustomPainter {
+  const _WinterBackgroundPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    final paint = Paint()..color = const Color(0xA6FFFFFF);
-    for (var index = 0; index < 38; index++) {
-      final phase = (progress + index * 0.173) % 1;
-      final x =
-          (index * 79.0 + math.sin((phase + index * 0.07) * math.pi * 2) * 18) %
-          size.width;
-      final y = (phase * size.height + index * 13.0) % size.height;
-      canvas.drawCircle(Offset(x, y), 1 + (index % 3) * 0.55, paint);
+    final bounds = Offset.zero & size;
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF06131A), Color(0xFF0B2028), Color(0xFF142A31)],
+          stops: [0, .58, 1],
+        ).createShader(bounds),
+    );
+
+    final glow = Paint()
+      ..shader =
+          RadialGradient(
+            colors: [
+              const Color(0xFFB88A4A).withValues(alpha: .18),
+              const Color(0xFFB88A4A).withValues(alpha: 0),
+            ],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(size.width * .5, size.height * .84),
+              radius: size.width * .42,
+            ),
+          );
+    canvas.drawRect(bounds, glow);
+    _drawStars(canvas, size);
+    _drawForest(canvas, size);
+    _drawSnowLine(canvas, size);
+    _drawGarland(canvas, size);
+  }
+
+  void _drawStars(Canvas canvas, Size size) {
+    for (var index = 0; index < 115; index++) {
+      final x = (index * 97.31 + 19) % size.width;
+      final y = (index * 53.73 + 65) % (size.height * .82);
+      final radius = .45 + (index % 4) * .22;
+      final opacity = .22 + (index % 5) * .08;
+      canvas.drawCircle(
+        Offset(x, y),
+        radius,
+        Paint()..color = const Color(0xFFE6F0EE).withValues(alpha: opacity),
+      );
     }
   }
 
-  @override
-  bool shouldRepaint(_SnowfallPainter oldDelegate) =>
-      progress != oldDelegate.progress;
-}
+  void _drawForest(Canvas canvas, Size size) {
+    final treePaint = Paint()
+      ..color = const Color(0xFF07151A).withValues(alpha: .8);
+    final snowPaint = Paint()
+      ..color = const Color(0xFFB5C9C6).withValues(alpha: .28);
+    final scale = (size.width / 1200).clamp(.45, 1.4);
+    for (var index = 0; index < 12; index++) {
+      final side = index.isEven ? 0.0 : 1.0;
+      final localIndex = index ~/ 2;
+      final x = side == 0
+          ? 14 + localIndex * 25 * scale
+          : size.width - 14 - localIndex * 25 * scale;
+      final height = (size.height * (.13 + (localIndex % 4) * .028)).clamp(
+        34.0,
+        size.height * .28,
+      );
+      final top = size.height - height * .38;
+      final halfWidth = height * .32;
+      final path = Path()
+        ..moveTo(x, top - height * .62)
+        ..lineTo(x - halfWidth, top + height * .34)
+        ..lineTo(x - halfWidth * .4, top + height * .2)
+        ..lineTo(x - halfWidth * 1.2, top + height * .7)
+        ..lineTo(x + halfWidth * 1.2, top + height * .7)
+        ..lineTo(x + halfWidth * .4, top + height * .2)
+        ..lineTo(x + halfWidth, top + height * .34)
+        ..close();
+      canvas.drawPath(path, treePaint);
+      final snowPath = Path()
+        ..moveTo(x, top - height * .62)
+        ..lineTo(x - halfWidth * .24, top - height * .08)
+        ..lineTo(x - halfWidth * .06, top - height * .02)
+        ..lineTo(x + halfWidth * .1, top - height * .3)
+        ..lineTo(x + halfWidth * .3, top - height * .08)
+        ..close();
+      canvas.drawPath(snowPath, snowPaint);
+    }
+  }
 
-class _LightsPainter extends CustomPainter {
-  const _LightsPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final wire = Paint()
-      ..color = const Color(0xFF315D4A)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+  void _drawSnowLine(Canvas canvas, Size size) {
     final path = Path()
-      ..moveTo(0, 0)
-      ..quadraticBezierTo(size.width / 2, 12, size.width, 0);
-    canvas.drawPath(path, wire);
-    const colors = [
-      Color(0xFFFF5964),
-      Color(0xFFFFD166),
-      Color(0xFF65D58A),
-      Color(0xFF78D8F5),
-    ];
-    for (var index = 0; index * 34 < size.width; index++) {
-      final x = index * 34.0;
-      final y = 2 + math.sin(index * 0.7) * 4;
-      final bulb = Paint()..color = colors[index % colors.length];
-      canvas.drawCircle(Offset(x, y), 3, bulb);
+      ..moveTo(0, size.height * .93)
+      ..quadraticBezierTo(
+        size.width * .25,
+        size.height * .84,
+        size.width * .47,
+        size.height * .92,
+      )
+      ..quadraticBezierTo(
+        size.width * .72,
+        size.height * .99,
+        size.width,
+        size.height * .88,
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()..color = const Color(0xFFB6C5C2).withValues(alpha: .12),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0xFFE8F0EC).withValues(alpha: .24),
+    );
+  }
+
+  void _drawGarland(Canvas canvas, Size size) {
+    final wirePaint = Paint()
+      ..color = const Color(0xFF315444)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final garland = Path()..moveTo(0, 4);
+    for (var x = 0.0; x < size.width; x += size.width / 6) {
+      garland.quadraticBezierTo(x + size.width / 12, 33, x + size.width / 6, 4);
+    }
+    canvas.drawPath(garland, wirePaint);
+
+    for (var index = 0; index < 40; index++) {
+      final progress = index / 39;
+      final x = progress * size.width;
+      final y = 4 + math.sin(progress * math.pi * 12) * 13 + 13;
+      final color = switch (index % 3) {
+        0 => const Color(0xFFFFC96B),
+        1 => const Color(0xFFFFE6A3),
+        _ => const Color(0xFFF3AC53),
+      };
+      final halo = Paint()..color = color.withValues(alpha: .16);
+      canvas.drawCircle(Offset(x, y), 10, halo);
+      canvas.drawCircle(Offset(x, y), 2.2, Paint()..color = color);
+      canvas.drawLine(
+        Offset(x, y - 2),
+        Offset(x, y - 5),
+        Paint()
+          ..color = const Color(0xFF536F54)
+          ..strokeWidth = 1,
+      );
     }
   }
 
   @override
-  bool shouldRepaint(_LightsPainter oldDelegate) => false;
+  bool shouldRepaint(_WinterBackgroundPainter oldDelegate) => false;
 }
