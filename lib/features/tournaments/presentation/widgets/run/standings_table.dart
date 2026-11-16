@@ -34,6 +34,8 @@ class StandingsTable extends StatefulWidget {
 
 class _StandingsTableState extends State<StandingsTable> {
   final _horizontalController = ScrollController();
+  int? _sortColumnIndex;
+  bool _sortAscending = true;
 
   @override
   void dispose() {
@@ -51,6 +53,38 @@ class _StandingsTableState extends State<StandingsTable> {
         ? plan.fixedByGroup[widget.groupNumber - 1]
         : plan.fixedPerGroup;
     return place <= fixedForGroup;
+  }
+
+  void _sortBy(int columnIndex) {
+    setState(() {
+      if (_sortColumnIndex != columnIndex) {
+        _sortColumnIndex = columnIndex;
+        _sortAscending = columnIndex == 1;
+      } else if (_sortAscending == (columnIndex == 1)) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumnIndex = null;
+        _sortAscending = true;
+      }
+    });
+  }
+
+  List<PlayerStanding> _sortedStandings() {
+    final standings = [...widget.standings];
+    final column = _sortColumnIndex;
+    if (column == null) return standings;
+    int compare(PlayerStanding a, PlayerStanding b) => switch (column) {
+      1 => a.player.name.toLowerCase().compareTo(b.player.name.toLowerCase()),
+      2 => a.played.compareTo(b.played),
+      3 => a.wins.compareTo(b.wins),
+      4 when widget.showDraws => a.draws.compareTo(b.draws),
+      _ => 0,
+    };
+    standings.sort((a, b) {
+      final result = compare(a, b);
+      return result == 0 || _sortAscending ? result : -result;
+    });
+    return standings;
   }
 
   bool _isBestOfCandidatePlace(int place) {
@@ -121,6 +155,7 @@ class _StandingsTableState extends State<StandingsTable> {
               ? (constraints.maxWidth - minimumContentWidth) / (columnCount - 1)
               : baseSpacing,
         );
+        final standings = _sortedStandings();
         return Scrollbar(
           controller: _horizontalController,
           thumbVisibility: true,
@@ -128,6 +163,8 @@ class _StandingsTableState extends State<StandingsTable> {
             controller: _horizontalController,
             scrollDirection: Axis.horizontal,
             child: DataTable(
+              sortColumnIndex: _sortColumnIndex,
+              sortAscending: _sortAscending,
               columnSpacing: columnSpacing,
               horizontalMargin: widget.compact ? 6 : 12,
               headingRowHeight: widget.compact ? 32 : 36,
@@ -141,11 +178,26 @@ class _StandingsTableState extends State<StandingsTable> {
                   : null,
               columns: [
                 const DataColumn(numeric: true, label: Text('#')),
-                const DataColumn(label: Text('Teilnehmer')),
-                const DataColumn(numeric: true, label: Text('Sp')),
-                const DataColumn(numeric: true, label: Text('S')),
+                DataColumn(
+                  label: const Text('Teilnehmer'),
+                  onSort: (_, _) => _sortBy(1),
+                ),
+                DataColumn(
+                  numeric: true,
+                  label: const Text('Sp'),
+                  onSort: (_, _) => _sortBy(2),
+                ),
+                DataColumn(
+                  numeric: true,
+                  label: const Text('S'),
+                  onSort: (_, _) => _sortBy(3),
+                ),
                 if (widget.showDraws)
-                  const DataColumn(numeric: true, label: Text('U')),
+                  DataColumn(
+                    numeric: true,
+                    label: const Text('U'),
+                    onSort: (_, _) => _sortBy(4),
+                  ),
                 const DataColumn(numeric: true, label: Text('N')),
                 const DataColumn(numeric: true, label: Text('Legs')),
                 const DataColumn(numeric: true, label: Text('Diff')),
@@ -161,10 +213,11 @@ class _StandingsTableState extends State<StandingsTable> {
                   ),
               ],
               rows: [
-                for (var index = 0; index < widget.standings.length; index++)
+                for (var index = 0; index < standings.length; index++)
                   _buildRow(
                     context: context,
                     index: index,
+                    standings: standings,
                     isDarkMode: isDarkMode,
                     sureColor: sureColor,
                     possibleColor: possibleColor,
@@ -181,13 +234,14 @@ class _StandingsTableState extends State<StandingsTable> {
   DataRow _buildRow({
     required BuildContext context,
     required int index,
+    required List<PlayerStanding> standings,
     required bool isDarkMode,
     required Color sureColor,
     required Color possibleColor,
     required Color bestOfColor,
   }) {
     final place = index + 1;
-    final standing = widget.standings[index];
+    final standing = standings[index];
     final isFixed = _isFixedQualificationPlace(place);
     final isSure = isFixed && _isSureQualification(standing, place);
     final isPossible = isFixed && !isSure;

@@ -3,6 +3,7 @@ import '../domain/tournament_settings.dart';
 import 'tournament_flow_priority.dart';
 import '../domain/tournament_flow_priority_settings.dart';
 import 'order_of_play/order_of_play_controller.dart';
+import '../domain/engines/group_board_assignment.dart';
 
 /// A read-only view of the production queue. Does not predict future winners.
 class TournamentDirectorSnapshot {
@@ -90,6 +91,63 @@ class TournamentDirectorSnapshot {
     }
     return assignments.take(4).toList();
   }
+
+  Map<String, List<int>> mergedGroupBoards() {
+    if (tournament.directorMultiBoardAssignmentBehavior != 'merge' ||
+        !tournament.directorModeEnabled ||
+        tournament.directorSchedulingStrategy != 'group' ||
+        stage < 0 ||
+        stage >= tournament.runStages.length) {
+      return const {};
+    }
+    final activeStage = tournament.runStages[stage];
+    if (activeStage is! GroupTournamentRunStage) return const {};
+    final groupNames = activeStage.groups.map((group) => group.name).toList();
+    final defaults = GroupBoardAssignment.defaults(
+      groupNames: groupNames,
+      boardCount: tournament.boardCount,
+    );
+    return {
+      for (final name in groupNames)
+        if ((tournament.directorGroupBoardAssignments[tournamentGroupBoardKey(
+                      stage,
+                      name,
+                    )] ??
+                    defaults[name]?.toList() ??
+                    const <int>[])
+                .toSet()
+                .where((board) => board >= 1 && board <= tournament.boardCount)
+                .length >
+            1)
+          tournamentGroupBoardKey(stage, name): List<int>.unmodifiable(
+            (tournament.directorGroupBoardAssignments[tournamentGroupBoardKey(
+                      stage,
+                      name,
+                    )] ??
+                    defaults[name]?.toList() ??
+                    const <int>[])
+                .toSet()
+                .where((board) => board >= 1 && board <= tournament.boardCount)
+                .toList()
+              ..sort(),
+          ),
+    };
+  }
+
+  List<BoardAssignment> upcomingForBoards(
+    List<int> boards, {
+    required String groupKey,
+    int limit = 6,
+  }) => schedule.planned
+      .where(
+        (assignment) =>
+            assignment.entry.stageIndex == stage &&
+            assignment.entry.groupKey == groupKey &&
+            boards.contains(assignment.board) &&
+            assignment.entry.match.hasPlayers,
+      )
+      .take(limit)
+      .toList(growable: false);
 
   List<BoardAssignment> selectableForBoard(int board) {
     if (!freeBoards.contains(board)) return [];

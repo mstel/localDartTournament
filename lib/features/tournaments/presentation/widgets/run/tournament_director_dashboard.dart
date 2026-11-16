@@ -458,6 +458,7 @@ class _TournamentDirectorDashboardState
     bool showResult = false,
     int? maxColumns,
     Set<GroupMatch> prioritizedMatches = const {},
+    Set<GroupMatch> lockedMatches = const {},
     Map<GroupMatch, int> plannedBoards = const {},
   }) => _box([
     Wrap(
@@ -526,10 +527,11 @@ class _TournamentDirectorDashboardState
             runSpacing: 8,
             children: [
               for (final entry in entries)
-                if (canReorder)
+                if (canReorder && !lockedMatches.contains(entry.match))
                   DragTarget<GroupMatch>(
                     onWillAcceptWithDetails: (details) =>
-                        !identical(details.data, entry.match),
+                        !identical(details.data, entry.match) &&
+                        !lockedMatches.contains(details.data),
                     onAcceptWithDetails: (details) => unawaited(
                       widget.onReorderScheduleMatch!(details.data, entry.match),
                     ),
@@ -549,6 +551,7 @@ class _TournamentDirectorDashboardState
                     showResult: showResult,
                     isPriority: prioritizedMatches.contains(entry.match),
                     plannedBoard: plannedBoards[entry.match],
+                    isRunning: lockedMatches.contains(entry.match),
                   ),
             ],
           );
@@ -676,6 +679,7 @@ class _TournamentDirectorDashboardState
     required bool isPriority,
     int? plannedBoard,
     bool showDragHandle = false,
+    bool isRunning = false,
   }) {
     final match = entry.match;
     final startOnBoard = widget.onStartOnBoard;
@@ -729,10 +733,12 @@ class _TournamentDirectorDashboardState
             ? TournamentDisplayPalette.cardEmphasis
             : TournamentDisplayPalette.card,
         border: Border.all(
-          color: isPriority
+          color: isRunning
+              ? Colors.green.shade700
+              : isPriority
               ? TournamentDisplayPalette.accent.withAlpha(180)
               : TournamentDisplayPalette.border.withAlpha(150),
-          width: isPriority ? 1.5 : 1,
+          width: isRunning || isPriority ? 2 : 1,
         ),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -811,7 +817,8 @@ class _TournamentDirectorDashboardState
                     icon: const Icon(Icons.play_arrow_rounded),
                   ),
                 ),
-              if (widget.tournament.directorPlayOrderMode != 'dynamic' &&
+              if (!isRunning &&
+                  widget.tournament.directorPlayOrderMode != 'dynamic' &&
                   widget.onDeferScheduleMatch != null &&
                   widget.onPromoteScheduleMatch != null &&
                   widget.onChooseSchedulePosition != null)
@@ -841,7 +848,7 @@ class _TournamentDirectorDashboardState
                     ),
                   ],
                 ),
-              if (showDragHandle)
+              if (showDragHandle && !isRunning)
                 Draggable<GroupMatch>(
                   data: match,
                   feedback: Material(
@@ -910,6 +917,9 @@ class _TournamentDirectorDashboardState
     final directorPlan = activeStageEntries
         .where((entry) => entry.match.hasPlayers && !entry.match.isResolved)
         .toList();
+    final runningMatches = state.schedule.running
+        .map((entry) => entry.match)
+        .toSet();
     final pendingMatches = directorPlan.map((entry) => entry.match).toList();
     final pendingOrder = {
       for (var index = 0; index < activeStageEntries.length; index++)
@@ -936,9 +946,12 @@ class _TournamentDirectorDashboardState
       return pendingOrder[a]!.compareTo(pendingOrder[b]!);
     });
     if (t.directorPlayOrderMode != 'dynamic') {
-      directorPlan.sort(
-        (a, b) => pendingOrder[a.match]!.compareTo(pendingOrder[b.match]!),
-      );
+      directorPlan.sort((a, b) {
+        final aRunning = runningMatches.contains(a.match);
+        final bRunning = runningMatches.contains(b.match);
+        if (aRunning != bRunning) return aRunning ? -1 : 1;
+        return pendingOrder[a.match]!.compareTo(pendingOrder[b.match]!);
+      });
     }
     final nextSix = upcoming
         .take(6)
@@ -1645,6 +1658,7 @@ class _TournamentDirectorDashboardState
             directorPlan,
             emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
             prioritizedMatches: flowPriority.prioritizedMatches,
+            lockedMatches: runningMatches,
             plannedBoards: {
               for (final assignment in upcoming)
                 assignment.entry.match: assignment.board,

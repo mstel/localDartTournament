@@ -233,12 +233,16 @@ class TournamentSimulationControls extends StatelessWidget {
     ],
   );
 
-  Widget _simulationLog(BuildContext context, {double? height}) {
+  Widget _simulationLog(
+    BuildContext context, {
+    double? height,
+    bool fillAvailable = false,
+  }) {
     final theme = Theme.of(context);
     final visibleCount = eventLog.length.clamp(0, 100);
     return Container(
       key: const ValueKey('tournament-simulation-log'),
-      height: height ?? 320,
+      height: fillAvailable ? null : height ?? 320,
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border.all(color: theme.colorScheme.outlineVariant),
@@ -305,10 +309,8 @@ class TournamentSimulationControls extends StatelessWidget {
         builder: (context, constraints) {
           final controls = _controls(context);
           if (constraints.maxWidth >= 640) {
-            final panelHeight = (MediaQuery.sizeOf(context).height - 160).clamp(
-              480.0,
-              900.0,
-            );
+            final panelHeight = (MediaQuery.sizeOf(context).height * 0.72)
+                .clamp(360.0, 640.0);
             return SizedBox(
               height: panelHeight,
               child: Row(
@@ -316,7 +318,7 @@ class TournamentSimulationControls extends StatelessWidget {
                 children: [
                   Expanded(child: SingleChildScrollView(child: controls)),
                   const SizedBox(width: 16),
-                  Expanded(child: _simulationLog(context, height: panelHeight)),
+                  Expanded(child: _simulationLog(context, fillAvailable: true)),
                 ],
               ),
             );

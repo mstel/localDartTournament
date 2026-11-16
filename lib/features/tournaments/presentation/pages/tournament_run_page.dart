@@ -1831,17 +1831,22 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   );
 
   Widget _tournamentTimingSettingsCard() => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: TournamentTimingPanel(
-        tournament: widget.tournament,
-        onStart: _startTournamentClock,
-        onPauseToggle: _toggleClockPause,
-        onEditTimes: _editTournamentTimes,
-        onResetClock: _resetTournamentClock,
-        onChangeTournamentDate: _saveTournamentDate,
-        onShiftMatchDates: _shiftTournamentMatchDates,
-      ),
+    child: ExpansionTile(
+      key: const ValueKey('tournament-timing-settings'),
+      leading: const Icon(Icons.schedule),
+      title: const Text('Uhr & Zeiteinstellungen'),
+      childrenPadding: const EdgeInsets.all(16),
+      children: [
+        TournamentTimingPanel(
+          tournament: widget.tournament,
+          onStart: _startTournamentClock,
+          onPauseToggle: _toggleClockPause,
+          onEditTimes: _editTournamentTimes,
+          onResetClock: _resetTournamentClock,
+          onChangeTournamentDate: _saveTournamentDate,
+          onShiftMatchDates: _shiftTournamentMatchDates,
+        ),
+      ],
     ),
   );
 
@@ -1950,6 +1955,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           items: const [
             DropdownMenuItem(value: 'mirror', child: Text('Spiegeln')),
             DropdownMenuItem(value: 'expand', child: Text('Erweitern')),
+            DropdownMenuItem(value: 'merge', child: Text('Zusammenführen')),
           ],
           onChanged: (value) {
             if (value != null) {

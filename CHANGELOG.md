@@ -1,3 +1,18 @@
+# 3.1.1+103
+
+- Ergänzt „Zusammenführen“ als Mehrfach-Boardverhalten. Zugewiesene Boards
+  erscheinen im Zweitmonitor als gemeinsame Kachel mit bis zu sechs
+  gruppenspezifischen Empfehlungen; Statusmeldungen freier Boards bleiben auf
+  die Boardbelegung beschränkt.
+- Pinnt aktive Partien im festen Spielplan an den Anfang, markiert sie grün und
+  verhindert ihr Verschieben.
+- Ergänzt auf- und absteigende Sortierung für Teilnehmer, Spiele, Siege und
+  Unentschieden mit Rückkehr zur Standardreihenfolge.
+- Zeigt nach Turnierabschluss 60 Sekunden lang eine Übersicht auf dem
+  Zweitmonitor und schließt ihn danach automatisch.
+- Begrenzt die Höhe des Simulations-Logs auf die Steuerungskachel und hält
+  eingeklappte Uhr- und Zeiteinstellungen aus dem Weg.
+
 # 3.1.0+102
 
 - Ergänzt dynamische und feste Spielpläne für Liga- und Freundschaftsspiele.

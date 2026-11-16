@@ -102,45 +102,42 @@ void main() {
     },
   );
 
-  testWidgets(
-    'tournament settings show elapsed time and the fixed clock panel',
-    (tester) async {
-      tester.view.physicalSize = const Size(1440, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final tournament = fixture()
-        ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'))
-        ..startedAt = DateTime.now().subtract(
-          const Duration(minutes: 3, seconds: 12),
-        );
+  testWidgets('tournament timing settings start collapsed', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = fixture()
+      ..stages.add(const TournamentStage(name: 'Gruppen', type: 'groups'))
+      ..startedAt = DateTime.now().subtract(
+        const Duration(minutes: 3, seconds: 12),
+      );
 
-      await tester.pumpWidget(
-        MaterialApp(home: TournamentRunPage(tournament: tournament)),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.tap(find.text('Einstellungen'));
-      await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpWidget(
+      MaterialApp(home: TournamentRunPage(tournament: tournament)),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pump(const Duration(milliseconds: 500));
 
-      final nameField = find.byWidgetPredicate(
-        (widget) =>
-            widget is TextField &&
-            widget.decoration?.labelText == 'Turniername',
-      );
-      final saveButton = find.widgetWithText(FilledButton, 'Namen speichern');
-      expect(
-        tester.getRect(nameField).right,
-        lessThan(tester.getRect(saveButton).left),
-      );
-      expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
-      expect(
-        find.textContaining('Turnieruhr läuft · 0 h 3 min'),
-        findsOneWidget,
-      );
-      expect(find.text('Prognose nach erstem Ergebnis'), findsNothing);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+    final nameField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.labelText == 'Turniername',
+    );
+    final saveButton = find.widgetWithText(FilledButton, 'Namen speichern');
+    expect(
+      tester.getRect(nameField).right,
+      lessThan(tester.getRect(saveButton).left),
+    );
+    expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
+    final timingSettings = tester.widget<ExpansionTile>(
+      find.byKey(const ValueKey('tournament-timing-settings')),
+    );
+    expect(timingSettings.initiallyExpanded, isFalse);
+    expect(find.textContaining('Turnieruhr läuft · 0 h 3 min'), findsNothing);
+    expect(find.text('Prognose nach erstem Ergebnis'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('resetting a phase clears active match state', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);

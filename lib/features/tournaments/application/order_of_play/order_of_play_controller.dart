@@ -196,7 +196,7 @@ class OrderOfPlayController {
           entry.key: entry.value.toSet(),
       },
       allowGroupBoardExpansion:
-          tournament.directorMultiBoardAssignmentBehavior == 'expand',
+          tournament.directorMultiBoardAssignmentBehavior != 'mirror',
     );
     return BoardSchedule(planned, running, finished, waiting);
   }
@@ -265,7 +265,7 @@ class OrderOfPlayController {
             stageEntries.every((entry) => entry.groupKey != null),
         groupBoardAssignments: groupAssignments,
         allowGroupBoardExpansion:
-            tournament.directorMultiBoardAssignmentBehavior == 'expand',
+            tournament.directorMultiBoardAssignmentBehavior != 'mirror',
       );
       schedule.addAll(assignments.map((assignment) => assignment.entry));
       schedule.addAll(stageEntries.where((entry) => !known.contains(entry)));
@@ -291,17 +291,33 @@ class OrderOfPlayController {
         .firstOrNull
         ?.stageIndex;
     if (stageIndex == null || match.isResolved) return false;
+    if (match.startedAt != null && match.finishedAt == null) return false;
     final stageEntries = all
         .where((entry) => entry.stageIndex == stageIndex)
         .toList();
-    final index = stageEntries.indexWhere(
-      (entry) => identical(entry.match, match),
+    final running = stageEntries
+        .where(
+          (entry) =>
+              entry.match.startedAt != null &&
+              entry.match.finishedAt == null &&
+              !entry.match.isResolved,
+        )
+        .toList();
+    final pending = stageEntries
+        .where((entry) => !running.contains(entry))
+        .toList();
+    final index = pending.indexWhere((entry) => identical(entry.match, match));
+    if (index < 0) return false;
+    final entry = pending.removeAt(index);
+    final pendingTarget = (targetIndex - running.length).clamp(
+      0,
+      pending.length,
     );
-    final entry = stageEntries.removeAt(index);
-    stageEntries.insert(targetIndex.clamp(0, stageEntries.length), entry);
+    pending.insert(pendingTarget, entry);
+    final reorderedStage = [...running, ...pending];
     final allIndex = all.indexWhere((item) => item.stageIndex == stageIndex);
     all.removeWhere((item) => item.stageIndex == stageIndex);
-    all.insertAll(allIndex, stageEntries);
+    all.insertAll(allIndex, reorderedStage);
     for (var position = 0; position < all.length; position++) {
       all[position].match.fixedScheduleOrder = position;
     }

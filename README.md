@@ -1,6 +1,6 @@
 # 🎯 DartTournamentPro (Dart Turnierverwaltung)
 
-[![Version](https://img.shields.io/badge/version-3.1.0%2B102-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.1.1%2B103-blue.svg)](CHANGELOG.md)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
 [![Plattformen](https://img.shields.io/badge/Plattformen-Windows%20|%20Android%20|%20Linux%20|%20macOS-success.svg)]()
@@ -102,6 +102,8 @@ Während des Turniers stehen dem Turnierleiter spezialisierte Ansichten zur Verf
   - Prioritätssteuerung: Erkennt Gruppen mit Spielrückständen und empfiehlt Partien zur Vermeidung von Verzögerungen (absolut oder prozentual).
   - **Dynamischer Spielplan:** Offene Partien werden nach jedem Ergebnis anhand der gewählten Board-Strategie neu priorisiert.
   - **Fester Spielplan:** Speichert auch noch nicht entschiedene Paarungen in einer bearbeitbaren Reihenfolge. Partien können vorgezogen, zurückgestellt oder neu sortiert werden; ein eigener Knopf berechnet den Plan neu.
+  - **Mehrfach-Boardzuweisung:** Gruppen können ihre Vorschläge auf mehreren Boards spiegeln, aufteilen oder in einer gemeinsamen Zweitmonitor-Kachel mit bis zu sechs Begegnungen zusammenführen.
+  - Laufende Partien sind im festen Spielplan grün markiert und gegen Umordnen geschützt.
   - **Board-Strategie:** Gruppenbasiert weist Gruppen bevorzugte Boards zu; turnierweit optimiert plant offene Partien gemeinsam. Reihenfolge und Empfehlungen werden in Übersicht, Ergebnissen, Leitung, Zweitmonitor und Sprachausgabe einheitlich dargestellt.
   - Zeitverschiebung: Bei nachträglichen Datumskorrekturen werden Match-Zeitstempel konsistent verschoben, ohne Uhrzeiten oder Reihenfolge zu beeinträchtigen.
   - Spieler-Rückzug (Player Withdrawal) mit konfigurierbarer Wertung (kampflos oder Streichung).
@@ -111,7 +113,7 @@ Während des Turniers stehen dem Turnierleiter spezialisierte Ansichten zur Verf
   - Boards laufen unabhängig; automatische Starts lassen sich abschalten, Partien auf freien Boards jederzeit manuell starten.
   - Simulation mit festem Zufalls-Seed wiederholen, Schritte rückgängig machen, Simulation zurücksetzen und Ereignisse im Simulations-Log nachvollziehen.
   - Simulierte Ergebnisse verändern weder echte Turnierergebnisse noch Spielerstatistiken, Ranglisten, Elo oder Errungenschaften.
-- **Gruppen- und Ergebnissichten:** Bei drei, sechs, neun oder zwölf Gruppen werden drei Gruppen nebeneinander angeordnet. Tabellen und Zwischenstände können bei breiten Ansichten als eigener Reiter eingeblendet werden.
+- **Gruppen- und Ergebnissichten:** Bei drei, sechs, neun oder zwölf Gruppen werden drei Gruppen nebeneinander angeordnet. Tabellen und Zwischenstände können bei breiten Ansichten als eigener Reiter eingeblendet werden; Teilnehmernamen und Kennzahlen sind auf- und absteigend sortierbar, mit Rückkehr zur Standardreihenfolge.
 
 ### Player Insights & Live-Statistiken
 
@@ -134,6 +136,7 @@ Direkt an den Spielpaarungen werden situative Badges eingeblendet:
 - **Zweitmonitor-Modus (`TournamentSecondScreenView`):** Vollbildanzeige für Großbildschirme und Beamer.
 - **Standalone-App (`SecondScreenStandaloneApp`):** Kann unabhängig für reine Display-Terminals gestartet werden.
 - Zeigt bis zu **4 aktive Partien nebeneinander**, nächste Aufrufe und Brackets.
+- Zeigt bei Turnierabschluss 60 Sekunden lang die Turnierübersicht und schließt anschließend die Standalone-Anzeige.
 - Player Insights erscheinen dezent beim Hover über Spielernamen.
 - QR-Code zur Anzeige des mobilen Live-Tickers für Besucher.
 

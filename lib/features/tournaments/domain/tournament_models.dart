@@ -80,7 +80,11 @@ String _directorPlayOrderModeFromJson(Object? value) => switch (value) {
 };
 
 String _directorMultiBoardAssignmentBehaviorFromJson(Object? value) =>
-    value == 'expand' ? 'expand' : 'mirror';
+    value == 'expand'
+    ? 'expand'
+    : value == 'merge'
+    ? 'merge'
+    : 'mirror';
 
 List<String> _groupTieBreakersFromJson(Object? value) {
   final tieBreakers = _stringListFromJson(

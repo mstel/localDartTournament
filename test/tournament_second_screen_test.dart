@@ -194,6 +194,93 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'merge mode combines assigned boards into one recommendation tile',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final tournament = _tournament()
+        ..directorModeEnabled = true
+        ..directorSchedulingStrategy = 'group'
+        ..directorPlayOrderMode = 'fixed_schedule'
+        ..directorMultiBoardAssignmentBehavior = 'merge'
+        ..directorGroupBoardAssignments['0:Gruppe A'] = [1, 2]
+        ..boardCount = 2;
+      const OrderOfPlayController().initializeFixedSchedule(tournament);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(tournament: tournament),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final mergedTile = find.byKey(
+        const ValueKey('second-screen-director-boards-1-2'),
+      );
+      expect(mergedTile, findsOneWidget);
+      expect(
+        find.descendant(
+          of: mergedTile,
+          matching: find.textContaining(
+            'BOARD 1 & 2 | EMPFOHLENE NÄCHSTE BEGEGNUNGEN FÜR BOARDS 1 & 2',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: mergedTile,
+          matching: find.text('AKTUELL NICHT BESETZT'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('second-screen-director-board-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('second-screen-director-board-2')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('completed tournament overview closes after sixty seconds', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = _tournament()
+      ..finishedAt = DateTime.now()
+      ..directorModeEnabled = true;
+    var closeCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            onClose: () => closeCount++,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Turnier abgeschlossen'), findsOneWidget);
+    expect(closeCount, 0);
+    await tester.pump(const Duration(seconds: 60));
+    expect(closeCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('running matches are clearly separated from suggestions', (
     tester,
   ) async {
@@ -511,8 +598,18 @@ void main() {
       final boardTile = find.byKey(
         ValueKey('second-screen-director-board-$board'),
       );
+      final occupancyTile = find.byKey(
+        ValueKey('second-screen-free-board-$board'),
+      );
       expect(
         find.descendant(of: boardTile, matching: find.text('FREI')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: occupancyTile,
+          matching: find.text('AKTUELL NICHT BESETZT'),
+        ),
         findsOneWidget,
       );
       expect(
@@ -520,16 +617,16 @@ void main() {
           of: boardTile,
           matching: find.text('AKTUELL NICHT BESETZT'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
     }
     await tester.pump(const Duration(seconds: 10));
-    final boardTwo = find.byKey(
-      const ValueKey('second-screen-director-board-2'),
+    final boardTwoOccupancy = find.byKey(
+      const ValueKey('second-screen-free-board-2'),
     );
     expect(
       find.descendant(
-        of: boardTwo,
+        of: boardTwoOccupancy,
         matching: find.text('JETZT PARTIE ZUWEISEN'),
       ),
       findsOneWidget,
@@ -537,7 +634,7 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     expect(
       find.descendant(
-        of: boardTwo,
+        of: boardTwoOccupancy,
         matching: find.text('AKTUELL NICHT BESETZT'),
       ),
       findsOneWidget,

@@ -47,6 +47,10 @@ void main() {
       tournament.toJson()..['directorMultiBoardAssignmentBehavior'] = 'expand',
     );
     expect(expanded.directorMultiBoardAssignmentBehavior, 'expand');
+    final merged = CreatedTournament.fromJson(
+      tournament.toJson()..['directorMultiBoardAssignmentBehavior'] = 'merge',
+    );
+    expect(merged.directorMultiBoardAssignmentBehavior, 'merge');
     expect(
       CreatedTournament.fromJson(
         tournament.toJson()
@@ -209,6 +213,48 @@ void main() {
       );
     },
   );
+  test(
+    'merge behavior expands the schedule and combines recommendations across assigned boards',
+    () {
+      final tournament = fixture(boards: 2)
+        ..directorModeEnabled = true
+        ..directorSchedulingStrategy = 'group'
+        ..directorPlayOrderMode = 'fixed_schedule'
+        ..directorMultiBoardAssignmentBehavior = 'merge'
+        ..directorGroupBoardAssignments['0:A'] = [1, 2];
+
+      controller.initializeFixedSchedule(tournament);
+      final snapshot = TournamentDirectorSnapshot(tournament, 0);
+
+      expect(snapshot.mergedGroupBoards(), {
+        '0:A': [1, 2],
+      });
+      final recommendations = snapshot.upcomingForBoards([
+        1,
+        2,
+      ], groupKey: '0:A');
+      expect(recommendations, hasLength(6));
+      expect(
+        recommendations.map((assignment) => assignment.entry.match).toSet(),
+        hasLength(6),
+      );
+    },
+  );
+  test('running fixed-schedule matches cannot be moved', () {
+    final tournament = fixture()
+      ..directorModeEnabled = true
+      ..directorPlayOrderMode = 'fixed_schedule';
+    controller.initializeFixedSchedule(tournament);
+    final match = controller.plan(tournament, 0).planned.first.entry.match;
+    expect(controller.start(tournament, 0, match, 1), isTrue);
+    final orderBefore = match.fixedScheduleOrder;
+
+    expect(
+      controller.moveFixedScheduleMatch(tournament, match, targetIndex: 5),
+      isFalse,
+    );
+    expect(match.fixedScheduleOrder, orderBefore);
+  });
   test('expand behavior can use an idle board assigned to another group', () {
     final players = [
       for (var index = 1; index <= 6; index++)

@@ -1,10 +1,61 @@
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/result_entry.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/stage_results_split_view.dart';
+import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/standings_table.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'standings can sort ascending, descending and return to default',
+    (tester) async {
+      final group = _oneLargeGroup().groups.single;
+      final playerA = group.players[0].copyWith(name: 'Alpha');
+      final playerB = group.players[1].copyWith(name: 'Bravo');
+      final playerC = group.players[2].copyWith(name: 'Charlie');
+      final standings = [
+        PlayerStanding(playerB)..played = 1,
+        PlayerStanding(playerA)..played = 3,
+        PlayerStanding(playerC)..played = 2,
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: StandingsTable(
+                standings: standings,
+                group: group,
+                groupNumber: 1,
+                qualificationPlan: null,
+                tieBreakers: const [],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      double nameTop(String name) => tester.getTopLeft(find.text(name)).dy;
+
+      expect(nameTop('Bravo'), lessThan(nameTop('Alpha')));
+      await tester.tap(find.text('Sp'));
+      await tester.pumpAndSettle();
+      expect(nameTop('Alpha'), lessThan(nameTop('Charlie')));
+      expect(nameTop('Charlie'), lessThan(nameTop('Bravo')));
+
+      await tester.tap(find.text('Sp'));
+      await tester.pumpAndSettle();
+      expect(nameTop('Bravo'), lessThan(nameTop('Charlie')));
+      expect(nameTop('Charlie'), lessThan(nameTop('Alpha')));
+
+      await tester.tap(find.text('Sp'));
+      await tester.pumpAndSettle();
+      expect(nameTop('Bravo'), lessThan(nameTop('Alpha')));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('director mode marks running matches on the results screen', (
     tester,
   ) async {
