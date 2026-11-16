@@ -1,3 +1,19 @@
+# 3.1.0+102
+
+- Ergänzt dynamische und feste Spielpläne für Liga- und Freundschaftsspiele.
+  Feste Pläne bleiben kompakt als sortierbare Kacheln dargestellt.
+- Berechnet feste Pläne bei Änderungen von Board-Zuweisungen automatisch neu;
+  mehrfach zugewiesene Gruppen-Boards können Begegnungen spiegeln oder erweitern.
+- Ergänzt filterbare Gruppentabellen und eine dreispaltige Darstellung für drei,
+  sechs, neun oder zwölf Gruppen.
+- Verbessert die Leitung und den Zweitmonitor mit Statusanzeigen für belegte,
+  freie und gesperrte Boards; Phasen-Resets entfernen auch aktive Matchdaten.
+- Klappt Zeiteinstellungen ein, blendet Simulationen nach echten Ergebnissen aus
+  und vereinfacht den Exportdialog. Abgeschlossene Ranglisten sind nicht mehr
+  auswählbar; pro Turnier bleibt höchstens eine aktive Rangliste zugewiesen.
+- Stabilisiert die Simulation: Hinweise bleiben neben den Steuerelementen,
+  während das Ereignislog die verfügbare Kachelhöhe nutzt.
+
 # 3.0.1+101
 
 - Vereinheitlicht die Matchreihenfolge nach dem gewählten Spielplan: Dynamische

@@ -517,51 +517,39 @@ class _TournamentDirectorDashboardState
                     : 1
               : ((constraints.maxWidth + 8) / 228).floor().clamp(1, maxColumns);
           final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
-          if (title == 'Spielplan' &&
+          final canReorder =
+              title == 'Spielplan' &&
               widget.tournament.directorPlayOrderMode == 'fixed_schedule' &&
-              widget.onReorderScheduleMatch != null) {
-            return ReorderableListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              buildDefaultDragHandles: true,
-              itemCount: entries.length,
-              onReorderItem: (oldIndex, newIndex) {
-                if (newIndex < 0 || newIndex >= entries.length) return;
-                unawaited(
-                  widget.onReorderScheduleMatch!(
-                    entries[oldIndex].match,
-                    entries[newIndex].match,
-                  ),
-                );
-              },
-              itemBuilder: (context, index) {
-                final entry = entries[index];
-                return Padding(
-                  key: ObjectKey(entry.match),
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _queueTile(
-                    entry,
-                    width: constraints.maxWidth,
-                    showResult: showResult,
-                    isPriority: prioritizedMatches.contains(entry.match),
-                    plannedBoard: plannedBoards[entry.match],
-                  ),
-                );
-              },
-            );
-          }
+              widget.onReorderScheduleMatch != null;
           return Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               for (final entry in entries)
-                _queueTile(
-                  entry,
-                  width: width,
-                  showResult: showResult,
-                  isPriority: prioritizedMatches.contains(entry.match),
-                  plannedBoard: plannedBoards[entry.match],
-                ),
+                if (canReorder)
+                  DragTarget<GroupMatch>(
+                    onWillAcceptWithDetails: (details) =>
+                        !identical(details.data, entry.match),
+                    onAcceptWithDetails: (details) => unawaited(
+                      widget.onReorderScheduleMatch!(details.data, entry.match),
+                    ),
+                    builder: (context, candidates, rejected) => _queueTile(
+                      entry,
+                      width: width,
+                      showResult: showResult,
+                      isPriority: prioritizedMatches.contains(entry.match),
+                      plannedBoard: plannedBoards[entry.match],
+                      showDragHandle: true,
+                    ),
+                  )
+                else
+                  _queueTile(
+                    entry,
+                    width: width,
+                    showResult: showResult,
+                    isPriority: prioritizedMatches.contains(entry.match),
+                    plannedBoard: plannedBoards[entry.match],
+                  ),
             ],
           );
         },
@@ -687,6 +675,7 @@ class _TournamentDirectorDashboardState
     required bool showResult,
     required bool isPriority,
     int? plannedBoard,
+    bool showDragHandle = false,
   }) {
     final match = entry.match;
     final startOnBoard = widget.onStartOnBoard;
@@ -851,6 +840,34 @@ class _TournamentDirectorDashboardState
                       child: Text('Vorübergehend überspringen'),
                     ),
                   ],
+                ),
+              if (showDragHandle)
+                Draggable<GroupMatch>(
+                  data: match,
+                  feedback: Material(
+                    elevation: 6,
+                    child: Container(
+                      width: 240,
+                      padding: const EdgeInsets.all(12),
+                      color: TournamentDisplayPalette.card,
+                      child: Text(match.participantShortLabel),
+                    ),
+                  ),
+                  childWhenDragging: const SizedBox(width: 48, height: 48),
+                  child: const MouseRegion(
+                    cursor: SystemMouseCursors.grab,
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Tooltip(
+                        message: 'Ziehen, um die Reihenfolge zu ändern',
+                        child: Icon(
+                          Icons.drag_indicator,
+                          color: TournamentDisplayPalette.mutedText,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -1566,8 +1583,33 @@ class _TournamentDirectorDashboardState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        notices,
-        const SizedBox(height: 12),
+        if (widget.simulationControls != null)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= 1100) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 2, child: widget.simulationControls!),
+                    const SizedBox(width: 12),
+                    Expanded(child: notices),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  widget.simulationControls!,
+                  const SizedBox(height: 12),
+                  notices,
+                ],
+              );
+            },
+          )
+        else ...[
+          notices,
+          const SizedBox(height: 12),
+        ],
         if (widget.directorModeEnabled && _canRecomputeSchedule) ...[
           Align(
             alignment: AlignmentDirectional.centerStart,
@@ -1575,10 +1617,6 @@ class _TournamentDirectorDashboardState
               'recompute-fixed-schedule-director',
             ),
           ),
-          const SizedBox(height: 12),
-        ],
-        if (widget.simulationControls != null) ...[
-          widget.simulationControls!,
           const SizedBox(height: 12),
         ],
         if (!widget.directorModeEnabled) ...[

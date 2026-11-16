@@ -62,7 +62,7 @@ class _TournamentRankingAssignmentState
     final rankings = await _database.loadLocalRankings();
     final eligible = <String>{};
     for (final ranking in rankings.where(
-      (ranking) => candidateIds.contains(ranking.id),
+      (ranking) => candidateIds.contains(ranking.id) && !ranking.isCompleted,
     )) {
       final playerIds = await _database.loadRankingPlayerIds(ranking.id);
       if (playerIds.any(tournamentPlayerIds.contains)) {
@@ -81,16 +81,22 @@ class _TournamentRankingAssignmentState
     final previousRankingIds = List<String>.from(widget.tournament.rankingIds);
     try {
       final eligibleIds = await _eligibleRankingIds(previousRankingIds);
-      if (eligibleIds.length == previousRankingIds.length) return;
-      final rankingIds = eligibleIds.toList()..sort();
+      final normalizedIds = eligibleIds.isEmpty
+          ? <String>{}
+          : <String>{eligibleIds.first};
+      if (normalizedIds.length == previousRankingIds.length &&
+          previousRankingIds.toSet().containsAll(normalizedIds)) {
+        return;
+      }
+      final rankingIds = normalizedIds.toList()..sort();
       setState(() {
         _saving = true;
         _saveError = null;
         _selectedIds
           ..clear()
-          ..addAll(eligibleIds);
+          ..addAll(normalizedIds);
         widget.tournament
-          ..countsForRanking = eligibleIds.isNotEmpty
+          ..countsForRanking = normalizedIds.isNotEmpty
           ..rankingIds = rankingIds;
       });
       await _storage.saveTournament(widget.tournament);
@@ -146,7 +152,8 @@ class _TournamentRankingAssignmentState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Ranglisten ohne teilnehmende Teilnehmer wurden nicht zugewiesen.',
+              'Abgeschlossene Ranglisten oder Ranglisten ohne teilnehmende '
+              'Teilnehmer wurden nicht zugewiesen.',
             ),
           ),
         );
@@ -187,10 +194,13 @@ class _TournamentRankingAssignmentState
                 ],
               );
             }
-            final rankings = snapshot.data;
-            if (rankings == null) {
+            final loadedRankings = snapshot.data;
+            if (loadedRankings == null) {
               return const Center(child: CircularProgressIndicator());
             }
+            final rankings = loadedRankings
+                .where((ranking) => !ranking.isCompleted)
+                .toList();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -207,7 +217,7 @@ class _TournamentRankingAssignmentState
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text(
-                      'Es sind noch keine lokalen Ranglisten angelegt.',
+                      'Es sind keine aktiven lokalen Ranglisten verfügbar.',
                     ),
                   )
                 else
@@ -220,7 +230,9 @@ class _TournamentRankingAssignmentState
                           ? null
                           : (selected) => setState(() {
                               if (selected == true) {
-                                _selectedIds.add(ranking.id);
+                                _selectedIds
+                                  ..clear()
+                                  ..add(ranking.id);
                               } else {
                                 _selectedIds.remove(ranking.id);
                               }

@@ -3760,24 +3760,33 @@ class _TournamentSecondScreenViewState
                                   (entry) => entry.match.boardNumber == board,
                                 )
                                 .firstOrNull;
-                            return running == null
-                                ? _buildFreeBoardOccupancyTile(
-                                    context,
-                                    board: board,
-                                    since: _freeBoardSince(
-                                      snapshot,
-                                      widget.tournament,
-                                      board,
-                                    ),
-                                    width: width,
-                                  )
-                                : _buildRunningMatchTile(
-                                    context,
-                                    running,
-                                    width: width,
-                                    playerInsights:
-                                        insightSnapshot.data ?? const {},
-                                  );
+                            if (running != null) {
+                              return _buildRunningMatchTile(
+                                context,
+                                running,
+                                width: width,
+                                playerInsights:
+                                    insightSnapshot.data ?? const {},
+                              );
+                            }
+                            final hasUpcoming = snapshot
+                                .upcomingForBoard(board)
+                                .isNotEmpty;
+                            if (widget.tournament.blockedBoards.contains(
+                                  board,
+                                ) ||
+                                !hasUpcoming) {
+                              return _buildBlockedBoardOccupancyTile(
+                                context,
+                                board: board,
+                                width: width,
+                              );
+                            }
+                            return _buildFreeBoardOccupancyTile(
+                              context,
+                              board: board,
+                              width: width,
+                            );
                           },
                         ),
                     ],
@@ -3856,6 +3865,9 @@ class _TournamentSecondScreenViewState
     Map<String, List<PlayerInsight>> playerInsights = const {},
   }) {
     final match = entry.match;
+    final boardName = widget.tournament
+        .boardDisplayName(match.boardNumber ?? 1)
+        .toUpperCase();
     return Container(
       width: width,
       key: ValueKey(
@@ -3872,40 +3884,61 @@ class _TournamentSecondScreenViewState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _RunningMatchElapsedLabel(
-            boardNumber: match.boardNumber,
-            startedAt: match.startedAt,
-          ),
-          const SizedBox(height: 6),
           Row(
             children: [
               Expanded(
-                child: _runningPlayerName(
-                  match.homePlayer,
-                  match.awayPlayer,
-                  playerInsights,
-                  textAlign: TextAlign.start,
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
                 child: Text(
-                  '-',
-                  style: TextStyle(
-                    color: TournamentDisplayPalette.mutedText,
+                  boardName,
+                  style: const TextStyle(
+                    color: TournamentDisplayPalette.accent,
                     fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
               ),
-              Expanded(
-                child: _runningPlayerName(
-                  match.awayPlayer,
-                  match.homePlayer,
-                  playerInsights,
-                  textAlign: TextAlign.end,
-                ),
-              ),
+              const _PulsingLiveBadge(),
             ],
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: _runningPlayerName(
+                    match.homePlayer,
+                    match.awayPlayer,
+                    playerInsights,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    '–',
+                    style: TextStyle(
+                      color: TournamentDisplayPalette.mutedText,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: _runningPlayerName(
+                    match.awayPlayer,
+                    match.homePlayer,
+                    playerInsights,
+                    textAlign: TextAlign.start,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: _RunningMatchElapsedLabel(
+              boardNumber: match.boardNumber,
+              startedAt: match.startedAt,
+            ),
           ),
         ],
       ),
@@ -3964,21 +3997,89 @@ class _TournamentSecondScreenViewState
   Widget _buildFreeBoardOccupancyTile(
     BuildContext context, {
     required int board,
-    required DateTime since,
     required double width,
   }) => Container(
     width: width,
     key: ValueKey('second-screen-free-board-$board'),
-    constraints: const BoxConstraints(minHeight: 88),
+    constraints: const BoxConstraints(minHeight: 120),
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: TournamentDisplayPalette.card,
       border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(14),
     ),
-    child: _FreeBoardStatusLabel(
-      boardName: widget.tournament.boardDisplayName(board),
-      since: since,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                widget.tournament.boardDisplayName(board).toUpperCase(),
+                style: const TextStyle(
+                  color: Color(0xFF4ED9A4),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const _BoardStatusBadge(label: 'FREI', color: Color(0xFF4ED9A4)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const Center(
+          child: Text(
+            'Aktuell keine Partie',
+            style: TextStyle(
+              color: TournamentDisplayPalette.text,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Center(child: _FreeBoardStatusLabel()),
+      ],
+    ),
+  );
+
+  Widget _buildBlockedBoardOccupancyTile(
+    BuildContext context, {
+    required int board,
+    required double width,
+  }) => Container(
+    width: width,
+    key: ValueKey('second-screen-blocked-board-$board'),
+    constraints: const BoxConstraints(minHeight: 120),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: TournamentDisplayPalette.card,
+      border: Border.all(color: Colors.redAccent, width: 2),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.tournament.boardDisplayName(board).toUpperCase(),
+          style: const TextStyle(
+            color: Colors.redAccent,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 18),
+        const Center(
+          child: Text(
+            'BOARD GESPERRT',
+            style: TextStyle(
+              color: Colors.redAccent,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
     ),
   );
 
@@ -4039,24 +4140,28 @@ class _TournamentSecondScreenViewState
                             )
                             .take(3)
                             .toList();
+                        final busyPlayers = {
+                          for (final entry in snapshot.schedule.running)
+                            ...entry.players,
+                        };
+                        final hasAvailableMatches = snapshot.ready.any(
+                          (entry) => !entry.players.any(busyPlayers.contains),
+                        );
                         final groupNames = <String>{
                           for (final assignment in upcoming)
                             _displayGroupLabel(assignment.entry.groupKey),
                         }.where((value) => value.isNotEmpty).toList()..sort();
+                        final locked = blocked || !hasAvailableMatches;
                         final status = running != null
-                            ? 'Läuft'
-                            : blocked
-                            ? 'Gesperrt'
-                            : upcoming.isNotEmpty
-                            ? 'Frei'
-                            : 'Reserve';
+                            ? 'BESETZT'
+                            : locked
+                            ? 'BOARD GESPERRT'
+                            : 'FREI';
                         final statusColor = running != null
                             ? TournamentDisplayPalette.accent
-                            : blocked
+                            : locked
                             ? Colors.redAccent
-                            : upcoming.isNotEmpty
-                            ? const Color(0xFF4ED9A4)
-                            : TournamentDisplayPalette.mutedText;
+                            : const Color(0xFF4ED9A4);
                         return Container(
                           key: ValueKey('second-screen-director-board-$board'),
                           width: width,
@@ -4064,9 +4169,12 @@ class _TournamentSecondScreenViewState
                           decoration: BoxDecoration(
                             color: TournamentDisplayPalette.card,
                             border: Border.all(
-                              color: TournamentDisplayPalette.border.withAlpha(
-                                150,
-                              ),
+                              color: running != null
+                                  ? TournamentDisplayPalette.accent
+                                  : locked
+                                  ? Colors.redAccent
+                                  : const Color(0xFF4ED9A4),
+                              width: 2,
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -4075,26 +4183,32 @@ class _TournamentSecondScreenViewState
                             children: [
                               Row(
                                 children: [
-                                  const Icon(
-                                    Icons.dashboard_outlined,
-                                    size: 18,
-                                    color: TournamentDisplayPalette.accent,
-                                  ),
-                                  const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
-                                      tournament.boardDisplayName(board),
+                                      tournament
+                                          .boardDisplayName(board)
+                                          .toUpperCase(),
                                       style: const TextStyle(
                                         color: TournamentDisplayPalette.text,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
-                                  Text(
-                                    status,
-                                    style: TextStyle(
-                                      color: statusColor,
-                                      fontWeight: FontWeight.w600,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withAlpha(28),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      status,
+                                      style: TextStyle(
+                                        color: statusColor,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -4102,28 +4216,20 @@ class _TournamentSecondScreenViewState
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
-                                  'Empfohlene Partien für '
-                                  '${tournament.boardDisplayName(board)}'
-                                  '${tournament.directorSchedulingStrategy == 'group' && groupNames.isNotEmpty ? ' · ${groupNames.join(' · ')}' : ''}',
+                                  '${tournament.boardDisplayName(board).toUpperCase()} | '
+                                  'EMPFOHLENE NÄCHSTE BEGEGNUNGEN FÜR '
+                                  '${tournament.boardDisplayName(board).toUpperCase()}'
+                                  '${tournament.directorSchedulingStrategy == 'group' && groupNames.isNotEmpty ? ' - ${groupNames.map((name) => name.toUpperCase()).join(' - ')}' : ''}',
                                   style: const TextStyle(
                                     color: TournamentDisplayPalette.mutedText,
                                     fontSize: 11,
                                   ),
                                 ),
                               ),
-                              if (upcoming.isEmpty && running == null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: _FreeBoardStatusLabel(
-                                    boardName: tournament.boardDisplayName(
-                                      board,
-                                    ),
-                                    since: _freeBoardSince(
-                                      snapshot,
-                                      tournament,
-                                      board,
-                                    ),
-                                  ),
+                              if (running == null && !locked)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: _FreeBoardStatusLabel(),
                                 ),
                               for (
                                 var index = 0;
@@ -4588,9 +4694,8 @@ class _RunningMatchElapsedLabelState extends State<_RunningMatchElapsedLabel> {
     final elapsed = startedAt == null
         ? null
         : DateTime.now().difference(startedAt);
-    final elapsedLabel = elapsed == null ? '' : ' · ${elapsed.inMinutes} Min.';
     return Text(
-      'JETZT LIVE · BOARD ${widget.boardNumber}$elapsedLabel',
+      'PARTIE LÄUFT BEREITS · ${elapsed?.inMinutes ?? 0} MIN.',
       style: const TextStyle(
         color: TournamentDisplayPalette.accent,
         fontWeight: FontWeight.bold,
@@ -4600,34 +4705,8 @@ class _RunningMatchElapsedLabelState extends State<_RunningMatchElapsedLabel> {
   }
 }
 
-DateTime _freeBoardSince(
-  TournamentDirectorSnapshot snapshot,
-  CreatedTournament tournament,
-  int board,
-) {
-  DateTime? latestFinished;
-  for (final entry in snapshot.entries) {
-    final match = entry.match;
-    final finishedAt = match.finishedAt;
-    if (match.boardNumber == board &&
-        finishedAt != null &&
-        !match.isAnnulled &&
-        (latestFinished == null || finishedAt.isAfter(latestFinished))) {
-      latestFinished = finishedAt;
-    }
-  }
-  final tournamentStarted = tournament.startedAt ?? tournament.createdAt;
-  if (latestFinished != null && latestFinished.isAfter(tournamentStarted)) {
-    return latestFinished;
-  }
-  return tournamentStarted;
-}
-
 class _FreeBoardStatusLabel extends StatefulWidget {
-  const _FreeBoardStatusLabel({required this.boardName, required this.since});
-
-  final String boardName;
-  final DateTime since;
+  const _FreeBoardStatusLabel();
 
   @override
   State<_FreeBoardStatusLabel> createState() => _FreeBoardStatusLabelState();
@@ -4635,12 +4714,15 @@ class _FreeBoardStatusLabel extends StatefulWidget {
 
 class _FreeBoardStatusLabelState extends State<_FreeBoardStatusLabel> {
   Timer? _timer;
+  bool _showAssignPrompt = false;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        setState(() => _showAssignPrompt = !_showAssignPrompt);
+      }
     });
   }
 
@@ -4652,24 +4734,75 @@ class _FreeBoardStatusLabelState extends State<_FreeBoardStatusLabel> {
 
   @override
   Widget build(BuildContext context) {
-    final freeMinutes = DateTime.now().difference(widget.since).inMinutes;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          'Frei - ${widget.boardName} - ${freeMinutes < 0 ? 0 : freeMinutes}min.',
-          style: const TextStyle(
-            color: TournamentDisplayPalette.mutedText,
-            fontWeight: FontWeight.w600,
+          _showAssignPrompt ? 'JETZT PARTIE ZUWEISEN' : 'AKTUELL NICHT BESETZT',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _showAssignPrompt
+                ? const Color(0xFF4ED9A4)
+                : TournamentDisplayPalette.mutedText,
+            fontWeight: FontWeight.w700,
           ),
-        ),
-        const Text(
-          'Jetzt Partie zuweisen!',
-          style: TextStyle(color: TournamentDisplayPalette.mutedText),
         ),
       ],
     );
   }
+}
+
+class _BoardStatusBadge extends StatelessWidget {
+  const _BoardStatusBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: color.withAlpha(28),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(color: color, fontWeight: FontWeight.w700),
+    ),
+  );
+}
+
+class _PulsingLiveBadge extends StatefulWidget {
+  const _PulsingLiveBadge();
+
+  @override
+  State<_PulsingLiveBadge> createState() => _PulsingLiveBadgeState();
+}
+
+class _PulsingLiveBadgeState extends State<_PulsingLiveBadge> {
+  Timer? _timer;
+  bool _bright = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 800), (_) {
+      if (mounted) setState(() => _bright = !_bright);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedOpacity(
+    opacity: _bright ? 1 : 0.45,
+    duration: const Duration(milliseconds: 300),
+    child: const _BoardStatusBadge(label: 'LIVE', color: Colors.redAccent),
+  );
 }
 
 String _formatMonitorClockTime(DateTime value) {

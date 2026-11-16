@@ -51,6 +51,7 @@ class BoardSchedulingEngine {
     String strategy = 'group',
     bool assignGroupsToBoards = false,
     Map<String, Set<int>> groupBoardAssignments = const {},
+    bool allowGroupBoardExpansion = false,
   }) {
     if (boardCount < 1) throw ArgumentError.value(boardCount, 'boardCount');
     if (List.generate(boardCount, (i) => i + 1).every(blockedBoards.contains)) {
@@ -242,7 +243,9 @@ class BoardSchedulingEngine {
       for (final board in boards) {
         if (remaining.isEmpty) break;
         if (selectedBoards.contains(board) ||
-            (useGroupAssignments && reservedBoards.contains(board))) {
+            (useGroupAssignments &&
+                !allowGroupBoardExpansion &&
+                reservedBoards.contains(board))) {
           continue;
         }
         selected.add((entry: remaining.removeAt(0), board: board));

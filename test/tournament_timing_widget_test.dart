@@ -42,6 +42,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Uhr & Zeiteinstellungen'));
+    await tester.pumpAndSettle();
     expect(find.text('Startzeitpunkt neu festlegen'), findsOneWidget);
     await tester.tap(find.text('Startzeitpunkt neu festlegen'));
     await tester.pumpAndSettle();
@@ -104,6 +106,8 @@ void main() {
       await tester.tap(find.text('Turnieruhr starten'));
       await tester.pump();
       expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
+      await tester.tap(find.text('Uhr & Zeiteinstellungen'));
+      await tester.pumpAndSettle();
       expect(find.text('Läuft'), findsOneWidget);
       expect(find.text('Laufzeit 0 h 0 min'), findsOneWidget);
       expect(find.textContaining('Start: '), findsOneWidget);

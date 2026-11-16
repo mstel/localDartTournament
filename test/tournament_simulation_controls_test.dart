@@ -149,12 +149,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('simulation-auto-start-toggle')),
+    final autoStartToggle = find.byKey(
+      const ValueKey('simulation-auto-start-toggle'),
     );
+    await tester.ensureVisible(autoStartToggle);
+    await tester.tap(autoStartToggle);
     await tester.pumpAndSettle();
     expect(autoStart, isFalse);
-    await tester.tap(find.byKey(const ValueKey('simulation-reset-button')));
+    final resetButton = find.byKey(const ValueKey('simulation-reset-button'));
+    await tester.ensureVisible(resetButton);
+    await tester.tap(resetButton);
     expect(resets, 1);
     expect(tester.takeException(), isNull);
   });

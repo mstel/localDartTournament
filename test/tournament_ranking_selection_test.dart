@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_run_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_position_editor.dart';
@@ -130,13 +131,67 @@ void main() {
         tester.getRect(nameField).right,
         lessThan(tester.getRect(saveButton).left),
       );
-      expect(find.text('Laufzeit 0 h 3 min'), findsOneWidget);
       expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
+      expect(
+        find.textContaining('Turnieruhr läuft · 0 h 3 min'),
+        findsOneWidget,
+      );
       expect(find.text('Prognose nach erstem Ergebnis'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('resetting a phase clears active match state', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = fixture()
+      ..directorModeEnabled = true
+      ..completedStageIndexes.add(0);
+    tournament.stages.add(
+      const TournamentStage(name: 'Gruppen', type: 'groups'),
+    );
+    final stage = tournament.runStages.first as GroupTournamentRunStage;
+    final activeMatch = stage.groups.single.matches.first;
+    final resolvedMatch = stage.groups.single.matches[1]
+      ..homeLegs = 3
+      ..awayLegs = 1;
+    activeMatch
+      ..startedAt = DateTime.now().subtract(const Duration(minutes: 2))
+      ..boardNumber = 1
+      ..startedPlayers = const OrderOfPlayController()
+          .entries(tournament)
+          .firstWhere((entry) => identical(entry.match, activeMatch))
+          .playerSignature;
+    resolvedMatch.finishedAt = DateTime.now();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: tournament,
+          runController: TournamentRunController(
+            storage: _RecordingTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final resetButton = find.text('Phase zurücksetzen');
+    await tester.ensureVisible(resetButton);
+    await tester.tap(resetButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Zurücksetzen'));
+    await tester.pumpAndSettle();
+
+    expect(activeMatch.startedAt, isNull);
+    expect(activeMatch.startedPlayers, isNull);
+    expect(activeMatch.boardNumber, isNull);
+    expect(resolvedMatch.finishedAt, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('a saved tournament name can be copied into settings', (
     tester,

@@ -237,27 +237,9 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
     final stats = TournamentTiming.snapshot(tournament, DateTime.now());
     final date = DateUtils.dateOnly(tournament.effectiveDate.toLocal());
 
-    return Column(
+    final details = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            Icon(
-              Icons.timer_outlined,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            Text(
-              'Uhr & Zeiteinstellungen',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
         if (widget.onChangeTournamentDate != null)
           TournamentDatePickerField(
             value: date,
@@ -383,6 +365,48 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
           'Start- und Endzeit der Turnieruhr beschreiben den tatsächlichen '
           'Ablauf; das Enddatum wird beim Abschluss automatisch erfasst.',
         ),
+      ],
+    );
+    if (tournament.startedAt != null && tournament.finishedAt == null) {
+      return ExpansionTile(
+        key: const ValueKey('running-tournament-timing-settings'),
+        initiallyExpanded: false,
+        leading: Icon(
+          Icons.timer_outlined,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        title: const Text('Uhr & Zeiteinstellungen'),
+        subtitle: Text(
+          tournament.isClockPaused
+              ? 'Turnieruhr pausiert'
+              : 'Turnieruhr läuft · ${_duration(stats.elapsed.inSeconds)}',
+        ),
+        children: [Padding(padding: const EdgeInsets.all(16), child: details)],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            Icon(
+              Icons.timer_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            Text(
+              'Uhr & Zeiteinstellungen',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        details,
       ],
     );
   }

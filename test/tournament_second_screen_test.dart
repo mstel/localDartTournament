@@ -228,7 +228,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Board Belegung & aktive Partien'), findsOneWidget);
-    expect(find.textContaining('JETZT LIVE · BOARD 1'), findsOneWidget);
+    expect(find.text('BESETZT'), findsOneWidget);
     expect(
       find.byKey(
         ValueKey(
@@ -241,7 +241,7 @@ void main() {
     );
     expect(find.text('Nächste Begegnungen'), findsOneWidget);
     expect(
-      find.textContaining('Empfohlene Partien für Board 1'),
+      find.textContaining('EMPFOHLENE NÄCHSTE BEGEGNUNGEN FÜR BOARD 1'),
       findsOneWidget,
     );
     expect(find.text('Aktuell: ${match.participantShortLabel}'), findsNothing);
@@ -512,20 +512,36 @@ void main() {
         ValueKey('second-screen-director-board-$board'),
       );
       expect(
-        find.descendant(
-          of: boardTile,
-          matching: find.textContaining('Frei - Board $board -'),
-        ),
+        find.descendant(of: boardTile, matching: find.text('FREI')),
         findsOneWidget,
       );
       expect(
         find.descendant(
           of: boardTile,
-          matching: find.text('Jetzt Partie zuweisen!'),
+          matching: find.text('AKTUELL NICHT BESETZT'),
         ),
         findsOneWidget,
       );
     }
+    await tester.pump(const Duration(seconds: 10));
+    final boardTwo = find.byKey(
+      const ValueKey('second-screen-director-board-2'),
+    );
+    expect(
+      find.descendant(
+        of: boardTwo,
+        matching: find.text('JETZT PARTIE ZUWEISEN'),
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
+    expect(
+      find.descendant(
+        of: boardTwo,
+        matching: find.text('AKTUELL NICHT BESETZT'),
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

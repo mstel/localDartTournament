@@ -63,17 +63,7 @@ class TournamentExportDialog {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Turnierdaten exportieren'),
-        content: SizedBox(
-          width: 760,
-          child: SingleChildScrollView(
-            child: SelectableText(data, style: const TextStyle(fontSize: 12)),
-          ),
-        ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Schließen'),
-          ),
           FilledButton.icon(
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: data));
@@ -115,6 +105,10 @@ class TournamentExportDialog {
             },
             icon: const Icon(Icons.image_outlined),
             label: const Text('Hochformat-Grafik exportieren'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Schließen'),
           ),
         ],
       ),

@@ -79,6 +79,15 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
   static const _matchPageSize = 8;
   bool _focusScheduled = false;
   bool _showTeamComparison = false;
+  String _standingsGroupFilter = '';
+  final TextEditingController _standingsSearchController =
+      TextEditingController();
+
+  @override
+  void dispose() {
+    _standingsSearchController.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant StageResultsSplitView oldWidget) {
@@ -221,6 +230,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           totalCount: totalCount,
           standingsSection: standingsSection,
           showStandingsTab: showStandingsTab,
+          standingsByGroup: standingsByGroup,
           orderedMatchesByGroup: _orderedMatchesByGroup(stage),
         );
 
@@ -298,6 +308,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     required int totalCount,
     required Widget standingsSection,
     required bool showStandingsTab,
+    required Map<TournamentGroup, List<PlayerStanding>> standingsByGroup,
     required Map<TournamentGroup, List<GroupMatch>> orderedMatchesByGroup,
   }) {
     final theme = Theme.of(context);
@@ -306,43 +317,78 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Category Filter Segmented Button: "Offene Begegnungen" (default), "Bereits gespielt", "Alle Begegnungen"
-        SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<MatchCategoryFilter>(
-            segments: [
-              ButtonSegment<MatchCategoryFilter>(
-                value: MatchCategoryFilter.open,
-                label: Text('Offene Begegnungen ($openCount)'),
-                icon: const Icon(Icons.play_circle_outline, size: 18),
-              ),
-              ButtonSegment<MatchCategoryFilter>(
-                value: MatchCategoryFilter.finished,
-                label: Text('Bereits gespielt ($finishedCount)'),
-                icon: const Icon(Icons.check_circle_outline, size: 18),
-              ),
-              ButtonSegment<MatchCategoryFilter>(
-                value: MatchCategoryFilter.all,
-                label: Text('Alle Begegnungen ($totalCount)'),
-                icon: const Icon(Icons.list_alt, size: 18),
-              ),
-              if (showStandingsTab)
-                const ButtonSegment<MatchCategoryFilter>(
-                  value: MatchCategoryFilter.standings,
-                  label: Text('Tabellen & Zwischenstände'),
-                  icon: Icon(Icons.table_chart_outlined, size: 18),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final selectedFilter =
+                _filter == MatchCategoryFilter.standings && !showStandingsTab
+                ? MatchCategoryFilter.open
+                : _filter;
+            if (constraints.maxWidth < 600) {
+              return DropdownButtonFormField<MatchCategoryFilter>(
+                key: ValueKey('match-category-filter-$selectedFilter'),
+                initialValue: selectedFilter,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Begegnungen anzeigen',
+                  border: OutlineInputBorder(),
+                  isDense: true,
                 ),
-            ],
-            selected: {
-              _filter == MatchCategoryFilter.standings && !showStandingsTab
-                  ? MatchCategoryFilter.open
-                  : _filter,
-            },
-            onSelectionChanged: (selected) {
-              if (selected.isNotEmpty) {
-                setState(() => _filter = selected.first);
-              }
-            },
-          ),
+                items: [
+                  DropdownMenuItem(
+                    value: MatchCategoryFilter.open,
+                    child: Text('Offene Begegnungen ($openCount)'),
+                  ),
+                  DropdownMenuItem(
+                    value: MatchCategoryFilter.finished,
+                    child: Text('Bereits gespielt ($finishedCount)'),
+                  ),
+                  DropdownMenuItem(
+                    value: MatchCategoryFilter.all,
+                    child: Text('Alle Begegnungen ($totalCount)'),
+                  ),
+                ],
+                onChanged: (selected) {
+                  if (selected != null) {
+                    setState(() => _filter = selected);
+                  }
+                },
+              );
+            }
+            return SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<MatchCategoryFilter>(
+                segments: [
+                  ButtonSegment<MatchCategoryFilter>(
+                    value: MatchCategoryFilter.open,
+                    label: Text('Offene Begegnungen ($openCount)'),
+                    icon: const Icon(Icons.play_circle_outline, size: 18),
+                  ),
+                  ButtonSegment<MatchCategoryFilter>(
+                    value: MatchCategoryFilter.finished,
+                    label: Text('Bereits gespielt ($finishedCount)'),
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                  ),
+                  ButtonSegment<MatchCategoryFilter>(
+                    value: MatchCategoryFilter.all,
+                    label: Text('Alle Begegnungen ($totalCount)'),
+                    icon: const Icon(Icons.list_alt, size: 18),
+                  ),
+                  if (showStandingsTab)
+                    const ButtonSegment<MatchCategoryFilter>(
+                      value: MatchCategoryFilter.standings,
+                      label: Text('Tabellen & Zwischenstände'),
+                      icon: Icon(Icons.table_chart_outlined, size: 18),
+                    ),
+                ],
+                selected: {selectedFilter},
+                onSelectionChanged: (selected) {
+                  if (selected.isNotEmpty) {
+                    setState(() => _filter = selected.first);
+                  }
+                },
+              ),
+            );
+          },
         ),
         const SizedBox(height: 12),
 
@@ -641,25 +687,121 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     required Map<TournamentGroup, List<PlayerStanding>> standingsByGroup,
   }) {
     final theme = Theme.of(context);
+    final visibleGroups = stage.groups
+        .where(
+          (group) =>
+              standingsByGroup.containsKey(group) &&
+              (_standingsGroupFilter.isEmpty ||
+                  group.name == _standingsGroupFilter),
+        )
+        .toList();
+    final query = _standingsSearchController.text.trim().toLowerCase();
+    final hasStandingsFilter =
+        _standingsGroupFilter.isNotEmpty || query.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: [
-              const Icon(Icons.table_chart_outlined, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Tabellen & Zwischenstände',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final filterWidth = constraints.maxWidth >= 600
+                  ? null
+                  : constraints.maxWidth;
+              final compact = constraints.maxWidth < 900;
+              return Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Row(
+                    mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.table_chart_outlined, size: 20),
+                      const SizedBox(width: 8),
+                      if (compact)
+                        Expanded(
+                          child: Text(
+                            'Tabellen & Zwischenstände',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        )
+                      else
+                        Text(
+                          'Tabellen & Zwischenstände',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-              ),
-            ],
+                  if (standingsByGroup.length > 1)
+                    SizedBox(
+                      width: filterWidth ?? 180,
+                      child: DropdownButtonFormField<String>(
+                        key: ValueKey('standings-group-$_standingsGroupFilter'),
+                        initialValue: _standingsGroupFilter,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Gruppe',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: '',
+                            child: Text('Alle Gruppen'),
+                          ),
+                          for (final group in stage.groups)
+                            if (standingsByGroup.containsKey(group))
+                              DropdownMenuItem(
+                                value: group.name,
+                                child: Text(group.name),
+                              ),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => _standingsGroupFilter = value ?? ''),
+                      ),
+                    ),
+                  SizedBox(
+                    width: filterWidth ?? 220,
+                    child: TextField(
+                      key: const ValueKey('standings-player-filter'),
+                      controller: _standingsSearchController,
+                      decoration: InputDecoration(
+                        labelText: 'Teilnehmer filtern',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: query.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Filter aufheben',
+                                onPressed: () {
+                                  _standingsSearchController.clear();
+                                  setState(() {});
+                                },
+                                icon: const Icon(Icons.clear),
+                              ),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  if (hasStandingsFilter)
+                    TextButton.icon(
+                      onPressed: () {
+                        _standingsSearchController.clear();
+                        setState(() => _standingsGroupFilter = '');
+                      },
+                      icon: const Icon(Icons.filter_alt_off_outlined),
+                      label: const Text('Filter aufheben'),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         if (widget.tournament?.leagueMatch case final league?) ...[
@@ -681,7 +823,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
         for (var index = 0; index < stage.groups.length; index++)
           if ((_showTeamComparison && widget.tournament?.leagueMatch == null) ||
               !_showTeamComparison &&
-                  standingsByGroup.containsKey(stage.groups[index]))
+                  visibleGroups.contains(stage.groups[index]))
             Card(
               clipBehavior: Clip.antiAlias,
               margin: const EdgeInsets.only(bottom: 12),
@@ -701,15 +843,43 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                       ),
                     ),
                   ),
-                  StandingsTable(
-                    standings: standingsByGroup[stage.groups[index]]!,
-                    group: stage.groups[index],
-                    groupNumber: index + 1,
-                    qualificationPlan: stage.qualificationPlan,
-                    tieBreakers: stage.tieBreakers,
-                    showDraws: _showDrawsForStage(),
-                    onPlayerTap: _selectPlayer,
-                  ),
+                  if (query.isNotEmpty &&
+                      standingsByGroup[stage.groups[index]]!.where((standing) {
+                        final player = standing.player;
+                        return player.name.toLowerCase().contains(query) ||
+                            player.individuals.any(
+                              (person) =>
+                                  person.name.toLowerCase().contains(query),
+                            );
+                      }).isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Keine passenden Teilnehmer gefunden.'),
+                    )
+                  else
+                    StandingsTable(
+                      standings: query.isEmpty
+                          ? standingsByGroup[stage.groups[index]]!
+                          : standingsByGroup[stage.groups[index]]!.where((
+                              standing,
+                            ) {
+                              final player = standing.player;
+                              return player.name.toLowerCase().contains(
+                                    query,
+                                  ) ||
+                                  player.individuals.any(
+                                    (person) => person.name
+                                        .toLowerCase()
+                                        .contains(query),
+                                  );
+                            }).toList(),
+                      group: stage.groups[index],
+                      groupNumber: index + 1,
+                      qualificationPlan: stage.qualificationPlan,
+                      tieBreakers: stage.tieBreakers,
+                      showDraws: _showDrawsForStage(),
+                      onPlayerTap: _selectPlayer,
+                    ),
                 ],
               ),
             ),

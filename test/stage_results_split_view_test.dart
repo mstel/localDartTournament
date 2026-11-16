@@ -372,7 +372,8 @@ void main() {
 
     expect(find.text('Gruppe A'), findsAtLeastNWidgets(1));
     expect(find.text('Gruppe B'), findsAtLeastNWidgets(1));
-    expect(tester.takeException(), isNull);
+    final layoutError = tester.takeException();
+    expect(layoutError, isNull);
   });
 
   testWidgets('group results stay responsive with larger text', (tester) async {
@@ -408,7 +409,8 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull, reason: '$size at $scale×');
+        final layoutError = tester.takeException();
+        expect(layoutError, isNull, reason: '$size at $scale×');
       }
     }
   });

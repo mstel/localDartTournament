@@ -223,6 +223,60 @@ void main() {
     },
   );
 
+  testWidgets('multiple active ranking assignments are reduced to one', (
+    tester,
+  ) async {
+    tournament
+      ..countsForRanking = true
+      ..rankingIds = ['ranking-2026', 'ranking-2025'];
+    final database = _RankingDatabase(
+      baseDirectory: Directory(
+        '${directory.path}${Platform.pathSeparator}multiple-rankings',
+      ),
+      rankings: const [
+        LocalRanking(id: 'ranking-2026', name: 'Rangliste 2026'),
+        LocalRanking(id: 'ranking-2025', name: 'Rangliste 2025'),
+      ],
+      playerIds: const ['profile-first', 'profile-second'],
+      profiles: [
+        for (final player in tournament.players)
+          PlayerProfile(
+            id: player.profileId!,
+            displayName: player.name,
+            country: '',
+            city: '',
+            dartsSetupJson: '',
+            createdAt: DateTime.utc(2020),
+            isActive: true,
+          ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentRankingAssignment(
+            tournament: tournament,
+            database: database,
+            storage: immediateStorage,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tournament.countsForRanking, isTrue);
+    expect(tournament.rankingIds, ['ranking-2026']);
+    expect(immediateStorage.lastSaved?.rankingIds, ['ranking-2026']);
+    expect(
+      tester
+          .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+          .where((tile) => tile.value == true),
+      hasLength(1),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test('explicit assignment roundtrips through tournament storage', () async {
     tournament
       ..countsForRanking = true

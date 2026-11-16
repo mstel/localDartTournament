@@ -49,6 +49,26 @@ class TournamentDirectorSnapshot {
               assignment.entry.match.hasPlayers,
         )
         .toList();
+    if (tournament.directorPlayOrderMode == 'fixed_schedule' &&
+        tournament.directorMultiBoardAssignmentBehavior == 'mirror' &&
+        assignments.isNotEmpty) {
+      final groupKey = assignments.first.entry.groupKey;
+      if (groupKey != null) {
+        return schedule.planned
+            .where(
+              (assignment) =>
+                  assignment.entry.stageIndex == stage &&
+                  assignment.entry.groupKey == groupKey &&
+                  assignment.entry.match.hasPlayers,
+            )
+            .take(4)
+            .map(
+              (assignment) =>
+                  BoardAssignment(assignment.entry, assignment.block, board),
+            )
+            .toList();
+      }
+    }
     if (tournament.directorPlayOrderMode == 'dynamic') {
       final order = {
         for (var index = 0; index < assignments.length; index++)

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dart_tournament_manager/features/tournaments/application/tournament_director_snapshot.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 
@@ -38,6 +39,22 @@ CreatedTournament fixture({int boards = 2}) {
 
 void main() {
   const controller = OrderOfPlayController();
+  test('multi-board assignment behavior defaults to mirror and persists', () {
+    final tournament = fixture();
+    expect(tournament.directorMultiBoardAssignmentBehavior, 'mirror');
+
+    final expanded = CreatedTournament.fromJson(
+      tournament.toJson()..['directorMultiBoardAssignmentBehavior'] = 'expand',
+    );
+    expect(expanded.directorMultiBoardAssignmentBehavior, 'expand');
+    expect(
+      CreatedTournament.fromJson(
+        tournament.toJson()
+          ..['directorMultiBoardAssignmentBehavior'] = 'unknown',
+      ).directorMultiBoardAssignmentBehavior,
+      'mirror',
+    );
+  });
   test('legacy fixed order data loads as a fixed schedule', () {
     final data = fixture().toJson()..['directorPlayOrderMode'] = 'fixed_order';
 
@@ -156,6 +173,106 @@ void main() {
     expect(firstBlock.length, greaterThan(1));
     expect(firstBlock.map((entry) => entry.board).toSet(), {1, 2, 3});
     expect(firstBlock.map((entry) => entry.entry.origin).toSet(), hasLength(1));
+  });
+  test(
+    'fixed schedule mirrors same-group recommendations across assigned boards',
+    () {
+      final tournament = fixture(boards: 2)
+        ..directorModeEnabled = true
+        ..directorSchedulingStrategy = 'group'
+        ..directorPlayOrderMode = 'fixed_schedule'
+        ..directorGroupBoardAssignments['0:A'] = [1, 2];
+
+      controller.initializeFixedSchedule(tournament);
+      final firstBlock = controller
+          .plan(tournament, 0)
+          .planned
+          .where((assignment) => assignment.block == 0)
+          .toList();
+      final snapshot = TournamentDirectorSnapshot(tournament, 0);
+
+      expect(firstBlock, hasLength(2));
+      expect(firstBlock.map((assignment) => assignment.board).toSet(), {1, 2});
+      expect(
+        firstBlock.expand((assignment) => assignment.entry.players).toSet(),
+        hasLength(4),
+      );
+      expect(
+        snapshot
+            .upcomingForBoard(1)
+            .map((assignment) => assignment.entry.match),
+        orderedEquals(
+          snapshot
+              .upcomingForBoard(2)
+              .map((assignment) => assignment.entry.match),
+        ),
+      );
+    },
+  );
+  test('expand behavior can use an idle board assigned to another group', () {
+    final players = [
+      for (var index = 1; index <= 6; index++)
+        TournamentPlayer.generated(index),
+    ];
+    final aMatch = GroupMatch(
+      homePlayer: players[0],
+      awayPlayer: players[1],
+      round: 1,
+    );
+    final bMatches = [
+      GroupMatch(homePlayer: players[2], awayPlayer: players[3], round: 1),
+      GroupMatch(homePlayer: players[4], awayPlayer: players[5], round: 1),
+    ];
+    final tournament = CreatedTournament(
+      name: 'Expand',
+      players: players,
+      stages: const [],
+      boardCount: 3,
+      directorModeEnabled: true,
+      directorSchedulingStrategy: 'group',
+      directorPlayOrderMode: 'fixed_schedule',
+      directorGroupBoardAssignments: const {
+        '0:A': [1, 2],
+        '0:B': [3],
+      },
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppen',
+          groupPlayType: 'round_robin',
+          qualificationPlan: null,
+          tieBreakers: defaultGroupTieBreakers,
+          groups: [
+            TournamentGroup(
+              name: 'A',
+              playType: 'round_robin',
+              players: players.take(2).toList(),
+              matches: [aMatch],
+            ),
+            TournamentGroup(
+              name: 'B',
+              playType: 'round_robin',
+              players: players.skip(2).toList(),
+              matches: bMatches,
+            ),
+          ],
+        ),
+      ],
+    );
+    tournament.directorMultiBoardAssignmentBehavior = 'expand';
+
+    controller.initializeFixedSchedule(tournament);
+    final firstBlock = controller
+        .plan(tournament, 0)
+        .planned
+        .where((assignment) => assignment.block == 0)
+        .toList();
+
+    expect(firstBlock, hasLength(3));
+    expect(firstBlock.map((assignment) => assignment.board).toSet(), {1, 2, 3});
+    expect(
+      firstBlock.expand((assignment) => assignment.entry.players).toSet(),
+      hasLength(6),
+    );
   });
   test(
     'group board preferences use assigned boards and release idle boards',

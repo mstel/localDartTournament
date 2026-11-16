@@ -1172,6 +1172,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       for (final entry in tournament.directorGroupBoardAssignments.entries)
         entry.key: List<int>.from(entry.value),
     };
+    final previousOrders = _fixedScheduleOrders();
     setState(() {
       tournament.boardCount = boardCount;
       tournament.blockedBoards.removeWhere((board) => board > boardCount);
@@ -1184,6 +1185,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       tournament.directorBoardLiveUrls.removeWhere(
         (board, _) => board > boardCount,
       );
+      _reinitializeFixedSchedule();
     });
     try {
       await _saveTournamentProgress(propagateError: true);
@@ -1201,6 +1203,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       tournament.directorBoardLiveUrls
         ..clear()
         ..addAll(previousUrls);
+      _restoreFixedScheduleOrders(previousOrders);
       if (mounted) setState(() {});
       rethrow;
     }
@@ -1217,6 +1220,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final previous = assignments.containsKey(key)
         ? List<int>.from(assignments[key]!)
         : null;
+    final previousOrders = _fixedScheduleOrders();
     final stage = widget.tournament.runStages[stageIndex];
     if (stage is! GroupTournamentRunStage) return;
     final defaults = GroupBoardAssignment.defaults(
@@ -1234,6 +1238,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     setState(() {
       assignments[key] = current.toList()..sort();
+      _reinitializeFixedSchedule();
     });
     try {
       await _saveTournamentProgress(propagateError: true);
@@ -1243,6 +1248,63 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       } else {
         assignments[key] = previous;
       }
+      _restoreFixedScheduleOrders(previousOrders);
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Map<GroupMatch, int?> _fixedScheduleOrders() => {
+    for (final entry in const OrderOfPlayController().entries(
+      widget.tournament,
+    ))
+      entry.match: entry.match.fixedScheduleOrder,
+  };
+
+  void _restoreFixedScheduleOrders(Map<GroupMatch, int?> orders) {
+    for (final entry in orders.entries) {
+      entry.key.fixedScheduleOrder = entry.value;
+    }
+  }
+
+  void _reinitializeFixedSchedule() {
+    if (widget.tournament.directorPlayOrderMode != 'fixed_schedule') return;
+    final controller = const OrderOfPlayController();
+    for (final entry in controller.entries(widget.tournament)) {
+      entry.match.fixedScheduleOrder = null;
+    }
+    controller.initializeFixedSchedule(widget.tournament);
+  }
+
+  Future<void> _setMultiBoardAssignmentBehavior(String behavior) async {
+    final previous = widget.tournament.directorMultiBoardAssignmentBehavior;
+    final previousOrders = _fixedScheduleOrders();
+    setState(() {
+      widget.tournament.directorMultiBoardAssignmentBehavior = behavior;
+      _reinitializeFixedSchedule();
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      widget.tournament.directorMultiBoardAssignmentBehavior = previous;
+      _restoreFixedScheduleOrders(previousOrders);
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Future<void> _setDirectorSchedulingStrategy(String strategy) async {
+    final previous = widget.tournament.directorSchedulingStrategy;
+    final previousOrders = _fixedScheduleOrders();
+    setState(() {
+      widget.tournament.directorSchedulingStrategy = strategy;
+      _reinitializeFixedSchedule();
+    });
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      widget.tournament.directorSchedulingStrategy = previous;
+      _restoreFixedScheduleOrders(previousOrders);
       if (mounted) setState(() {});
       rethrow;
     }
@@ -1875,6 +1937,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     title: const Text('Board Zuweisung'),
     subtitle: const Text('Boards für einzelne Gruppen festlegen'),
     children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: DropdownButtonFormField<String>(
+          key: ValueKey(widget.tournament.directorMultiBoardAssignmentBehavior),
+          initialValue: widget.tournament.directorMultiBoardAssignmentBehavior,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Verhalten bei Mehrfachzuweisung',
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'mirror', child: Text('Spiegeln')),
+            DropdownMenuItem(value: 'expand', child: Text('Erweitern')),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              _handleDirectorSettings(
+                () => _setMultiBoardAssignmentBehavior(value),
+              );
+            }
+          },
+        ),
+      ),
       for (
         var stageIndex = 0;
         stageIndex < widget.tournament.runStages.length;
@@ -2835,6 +2920,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final previousEnabled = widget.tournament.directorModeEnabled;
     final previousStrategy = widget.tournament.directorSchedulingStrategy;
     final previousViewMode = _stageViewMode;
+    final previousOrders = _fixedScheduleOrders();
     setState(() {
       widget.tournament.directorModeEnabled = enabled;
       widget.tournament.directorSchedulingStrategy = enabled
@@ -2846,16 +2932,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (enabled && _stageViewMode == StageViewMode.dashboard) {
         _stageViewMode = StageViewMode.director;
       }
+      _reinitializeFixedSchedule();
     });
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        widget.tournament.directorModeEnabled = previousEnabled;
-        widget.tournament.directorSchedulingStrategy = previousStrategy;
-        _stageViewMode = previousViewMode;
-      });
+      widget.tournament.directorModeEnabled = previousEnabled;
+      widget.tournament.directorSchedulingStrategy = previousStrategy;
+      _stageViewMode = previousViewMode;
+      _restoreFixedScheduleOrders(previousOrders);
+      if (mounted) setState(() {});
+      rethrow;
     }
   }
 
@@ -2872,13 +2959,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        widget.tournament.directorPlayOrderMode = previous;
-        for (final entry in entries) {
-          entry.match.fixedScheduleOrder = previousOrders[entry.match];
-        }
-      });
+      widget.tournament.directorPlayOrderMode = previous;
+      for (final entry in entries) {
+        entry.match.fixedScheduleOrder = previousOrders[entry.match];
+      }
+      if (mounted) setState(() {});
+      rethrow;
     }
   }
 
@@ -6236,6 +6322,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         match.homeSets = null;
         match.awaySets = null;
         match.isAnnulled = false;
+        match
+          ..startedAt = null
+          ..startedPlayers = null
+          ..boardNumber = null
+          ..finishedAt = null
+          ..bestPerformances = [];
       }
       if (currentStage is GroupTournamentRunStage) {
         for (final group in currentStage.groups) {
@@ -6659,18 +6751,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                       onChanged:
                                           widget.tournament.leagueMatch != null
                                           ? null
-                                          : (enabled) async {
-                                              final strategy = widget
-                                                  .tournament
-                                                  .directorSchedulingStrategy;
-                                              await _saveDirectorMode(
+                                          : (
+                                              enabled,
+                                            ) => _handleDirectorSettings(
+                                              () => _saveDirectorMode(
                                                 enabled: enabled,
-                                                strategy: strategy,
-                                              );
-                                            },
+                                                strategy: widget
+                                                    .tournament
+                                                    .directorSchedulingStrategy,
+                                              ),
+                                            ),
                                     ),
-                                    if (widget.tournament.leagueMatch == null &&
-                                        widget.tournament.directorModeEnabled)
+                                    if (widget.tournament.directorModeEnabled ||
+                                        widget.tournament.leagueMatch != null)
                                       Padding(
                                         padding: const EdgeInsets.only(top: 8),
                                         child: DropdownButtonFormField<String>(
@@ -6695,17 +6788,21 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           ],
                                           onChanged: (mode) {
                                             if (mode != null) {
-                                              unawaited(
-                                                _saveDirectorPlayOrderMode(
-                                                  mode,
-                                                ),
+                                              _handleDirectorSettings(
+                                                () =>
+                                                    _saveDirectorPlayOrderMode(
+                                                      mode,
+                                                    ),
                                               );
                                             }
                                           },
                                         ),
                                       ),
-                                    if (widget.tournament.leagueMatch == null &&
-                                        widget.tournament.directorModeEnabled &&
+                                    if ((widget
+                                                .tournament
+                                                .directorModeEnabled ||
+                                            widget.tournament.leagueMatch !=
+                                                null) &&
                                         widget
                                                 .tournament
                                                 .directorPlayOrderMode ==
@@ -6723,8 +6820,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           ),
                                         ),
                                       ),
-                                    if (widget.tournament.leagueMatch == null &&
-                                        widget.tournament.directorModeEnabled)
+                                    if (widget.tournament.directorModeEnabled &&
+                                        widget.tournament.leagueMatch == null)
                                       Padding(
                                         padding: const EdgeInsets.only(top: 8),
                                         child: DropdownButtonFormField<String>(
@@ -6757,42 +6854,26 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               ),
                                             ),
                                           ],
-                                          onChanged: (value) async {
-                                            if (value == null) return;
-                                            final previous = widget
-                                                .tournament
-                                                .directorSchedulingStrategy;
-                                            setState(() {
-                                              widget
-                                                      .tournament
-                                                      .directorSchedulingStrategy =
-                                                  value;
-                                            });
-                                            try {
-                                              await _saveTournamentProgress(
-                                                propagateError: true,
+                                          onChanged: (value) {
+                                            if (value != null) {
+                                              _handleDirectorSettings(
+                                                () =>
+                                                    _setDirectorSchedulingStrategy(
+                                                      value,
+                                                    ),
                                               );
-                                            } catch (_) {
-                                              if (!mounted) return;
-                                              setState(() {
-                                                widget
-                                                        .tournament
-                                                        .directorSchedulingStrategy =
-                                                    previous;
-                                              });
                                             }
                                           },
                                         ),
                                       ),
-                                    if (widget.tournament.leagueMatch == null &&
-                                        widget.tournament.directorModeEnabled &&
+                                    if (widget.tournament.directorModeEnabled &&
+                                        widget.tournament.leagueMatch == null &&
                                         widget
                                                 .tournament
                                                 .directorSchedulingStrategy ==
                                             'group')
                                       _groupBoardAssignmentsSettings(),
-                                    if (widget.tournament.leagueMatch == null &&
-                                        widget.tournament.directorModeEnabled)
+                                    if (widget.tournament.directorModeEnabled)
                                       TournamentRunSettingsPanel(
                                         tournament: widget.tournament,
                                         onChanged: _saveTournamentSettings,
@@ -7245,26 +7326,22 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             const SizedBox(height: 12),
                             _tournamentTimingSettingsCard(),
                             const SizedBox(height: 12),
-                            Card(
-                              child: SwitchListTile(
-                                key: const ValueKey(
-                                  'tournament-simulation-toggle',
+                            if (_canStartSimulation) ...[
+                              Card(
+                                child: SwitchListTile(
+                                  key: const ValueKey(
+                                    'tournament-simulation-toggle',
+                                  ),
+                                  title: const Text('Simulationsmodus starten'),
+                                  subtitle: const Text(
+                                    'Nur verfügbar, solange keine regulären Ergebnisse vorliegen.',
+                                  ),
+                                  value: _simulation != null,
+                                  onChanged: _setSimulationEnabled,
                                 ),
-                                title: const Text('Simulationsmodus starten'),
-                                subtitle: Text(
-                                  _simulation != null
-                                      ? 'Simulierte Ergebnisse bleiben von regulären Turnierdaten getrennt.'
-                                      : _canStartSimulation
-                                      ? 'Nur verfügbar, solange keine regulären Ergebnisse vorliegen.'
-                                      : 'Nicht verfügbar, da bereits reguläre Ergebnisse eingetragen sind.',
-                                ),
-                                value: _simulation != null,
-                                onChanged: _canStartSimulation
-                                    ? _setSimulationEnabled
-                                    : null,
                               ),
-                            ),
-                            const SizedBox(height: 12),
+                              const SizedBox(height: 12),
+                            ],
                             Card(
                               child: ExpansionTile(
                                 leading: const Icon(Icons.history),

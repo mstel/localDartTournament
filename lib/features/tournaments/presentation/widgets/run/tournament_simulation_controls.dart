@@ -233,12 +233,12 @@ class TournamentSimulationControls extends StatelessWidget {
     ],
   );
 
-  Widget _simulationLog(BuildContext context) {
+  Widget _simulationLog(BuildContext context, {double? height}) {
     final theme = Theme.of(context);
     final visibleCount = eventLog.length.clamp(0, 100);
     return Container(
       key: const ValueKey('tournament-simulation-log'),
-      height: 320,
+      height: height ?? 320,
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border.all(color: theme.colorScheme.outlineVariant),
@@ -304,17 +304,24 @@ class TournamentSimulationControls extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final controls = _controls(context);
-          final log = _simulationLog(context);
-          if (constraints.maxWidth >= 850) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: controls),
-                const SizedBox(width: 16),
-                Expanded(child: log),
-              ],
+          if (constraints.maxWidth >= 640) {
+            final panelHeight = (MediaQuery.sizeOf(context).height - 160).clamp(
+              480.0,
+              900.0,
+            );
+            return SizedBox(
+              height: panelHeight,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: SingleChildScrollView(child: controls)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _simulationLog(context, height: panelHeight)),
+                ],
+              ),
             );
           }
+          final log = _simulationLog(context);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [controls, const SizedBox(height: 12), log],

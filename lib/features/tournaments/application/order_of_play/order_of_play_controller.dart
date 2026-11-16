@@ -1,6 +1,7 @@
 import '../../domain/knockout_round_names.dart';
 import '../../domain/tournament_models.dart';
 import '../../domain/engines/board_scheduling_engine.dart';
+import '../../domain/engines/group_board_assignment.dart';
 export '../../domain/engines/board_scheduling_engine.dart';
 
 String tournamentGroupBoardKey(int stageIndex, String groupName) =>
@@ -194,6 +195,8 @@ class OrderOfPlayController {
         for (final entry in tournament.directorGroupBoardAssignments.entries)
           entry.key: entry.value.toSet(),
       },
+      allowGroupBoardExpansion:
+          tournament.directorMultiBoardAssignmentBehavior == 'expand',
     );
     return BoardSchedule(planned, running, finished, waiting);
   }
@@ -228,12 +231,41 @@ class OrderOfPlayController {
       final known = stageEntries
           .where((entry) => entry.match.hasPlayers)
           .toList();
+      final groupKeys = stageEntries
+          .map((entry) => entry.groupKey)
+          .whereType<String>()
+          .toSet()
+          .toList();
+      final defaultAssignments = GroupBoardAssignment.defaults(
+        groupNames: groupKeys,
+        boardCount: tournament.boardCount,
+      );
+      final groupAssignments = <String, Set<int>>{
+        for (final groupKey in groupKeys)
+          groupKey:
+              (tournament.directorGroupBoardAssignments[groupKey] ??
+                      defaultAssignments[groupKey] ??
+                      const <int>{})
+                  .toSet(),
+      };
       final assignments = const BoardSchedulingEngine().schedule(
         all: stageEntries,
         ready: known,
         boardCount: tournament.boardCount,
         blockedBoards: tournament.blockedBoards,
-        strategy: 'sequence',
+        preferredBoardsByGroup: tournament.groupBoardAssignments,
+        strategy:
+            tournament.directorModeEnabled &&
+                tournament.directorSchedulingStrategy == 'global'
+            ? 'global'
+            : 'sequence',
+        assignGroupsToBoards:
+            tournament.directorModeEnabled &&
+            tournament.directorSchedulingStrategy == 'group' &&
+            stageEntries.every((entry) => entry.groupKey != null),
+        groupBoardAssignments: groupAssignments,
+        allowGroupBoardExpansion:
+            tournament.directorMultiBoardAssignmentBehavior == 'expand',
       );
       schedule.addAll(assignments.map((assignment) => assignment.entry));
       schedule.addAll(stageEntries.where((entry) => !known.contains(entry)));

@@ -79,6 +79,9 @@ String _directorPlayOrderModeFromJson(Object? value) => switch (value) {
   _ => 'dynamic',
 };
 
+String _directorMultiBoardAssignmentBehaviorFromJson(Object? value) =>
+    value == 'expand' ? 'expand' : 'mirror';
+
 List<String> _groupTieBreakersFromJson(Object? value) {
   final tieBreakers = _stringListFromJson(
     value,
@@ -742,6 +745,7 @@ class CreatedTournament {
     this.directorModeEnabled = false,
     this.directorSchedulingStrategy = 'group',
     this.directorPlayOrderMode = 'dynamic',
+    this.directorMultiBoardAssignmentBehavior = 'mirror',
     this.showAchievementNotifications = true,
     this.showPlayerInsights = false,
     bool? soundModeEnabled,
@@ -862,6 +866,10 @@ class CreatedTournament {
       directorPlayOrderMode: _directorPlayOrderModeFromJson(
         json['directorPlayOrderMode'],
       ),
+      directorMultiBoardAssignmentBehavior:
+          _directorMultiBoardAssignmentBehaviorFromJson(
+            json['directorMultiBoardAssignmentBehavior'],
+          ),
       showAchievementNotifications:
           json['showAchievementNotifications'] as bool? ?? true,
       showPlayerInsights: json['showPlayerInsights'] as bool? ?? false,
@@ -956,6 +964,7 @@ class CreatedTournament {
   bool directorModeEnabled;
   String directorSchedulingStrategy;
   String directorPlayOrderMode;
+  String directorMultiBoardAssignmentBehavior;
   bool showAchievementNotifications;
   bool showPlayerInsights;
   TournamentSettings tournamentSettings;
@@ -1041,6 +1050,8 @@ class CreatedTournament {
         'directorSchedulingStrategy': directorSchedulingStrategy,
       if (directorPlayOrderMode != 'dynamic')
         'directorPlayOrderMode': directorPlayOrderMode,
+      'directorMultiBoardAssignmentBehavior':
+          directorMultiBoardAssignmentBehavior,
       if (!showAchievementNotifications) 'showAchievementNotifications': false,
       if (showPlayerInsights) 'showPlayerInsights': true,
       'soundModeEnabled': soundModeEnabled,
