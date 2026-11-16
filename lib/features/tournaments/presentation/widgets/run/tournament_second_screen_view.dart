@@ -4665,7 +4665,7 @@ class _TournamentSecondScreenViewState
                                         label:
                                             snapshot.runningOn(boardNumber) !=
                                                 null
-                                            ? 'Belegt'
+                                            ? 'Besetzt'
                                             : tournament.blockedBoards.contains(
                                                     boardNumber,
                                                   ) ||
@@ -4697,7 +4697,7 @@ class _TournamentSecondScreenViewState
                                         status.label == 'Board gesperrt',
                                   );
                                   final anyRunning = statuses.any(
-                                    (status) => status.label == 'Belegt',
+                                    (status) => status.label == 'Besetzt',
                                   );
                                   final span = boards.length > 1 ? 2 : 1;
                                   final tileWidth =
@@ -4810,17 +4810,14 @@ class _TournamentSecondScreenViewState
                                               ],
                                             ),
                                           ),
-                                          const Padding(
-                                            padding: EdgeInsets.only(top: 2),
-                                            child: Text(
-                                              'Empfohlene nächste Begegnungen',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: TournamentDisplayPalette
-                                                    .mutedText,
-                                                fontSize: 11,
-                                              ),
+                                          const Text(
+                                            'Empfohlene nächste Begegnungen',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: TournamentDisplayPalette
+                                                  .mutedText,
+                                              fontSize: 11,
                                             ),
                                           ),
                                           Row(
@@ -5347,7 +5344,7 @@ class _RunningMatchElapsedLabelState extends State<_RunningMatchElapsedLabel> {
         ? null
         : DateTime.now().difference(startedAt);
     return Text(
-      'Partie läuft ${elapsed?.inMinutes ?? 0} Min.',
+      'Partie läuft seit ${elapsed?.inMinutes ?? 0} min',
       style: const TextStyle(
         color: TournamentDisplayPalette.accent,
         fontWeight: FontWeight.bold,

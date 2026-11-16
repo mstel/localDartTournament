@@ -579,10 +579,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Board Belegung & aktive Partien'), findsOneWidget);
-    expect(find.text('BESETZT'), findsNothing);
+    expect(find.text('BESETZT'), findsOneWidget);
+    expect(find.text('BELEGT'), findsNothing);
     expect(find.text('LIVE'), findsOneWidget);
-    expect(find.textContaining('Partie läuft '), findsOneWidget);
-    expect(find.textContaining('Partie läuft bereits'), findsNothing);
+    expect(find.textContaining('Partie läuft seit '), findsOneWidget);
     final runningTile = find.byKey(
       ValueKey(
         'second-screen-running-match-${match.round}-'
@@ -614,7 +614,7 @@ void main() {
     final occupiedStatusRect = tester.getRect(
       find.descendant(
         of: find.byKey(const ValueKey('second-screen-director-board-1')),
-        matching: find.text('BELEGT'),
+        matching: find.text('BESETZT'),
       ),
     );
     expect(
