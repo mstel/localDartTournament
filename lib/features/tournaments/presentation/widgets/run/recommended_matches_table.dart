@@ -194,14 +194,17 @@ class _GroupTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = TournamentDisplayPalette.forColorScheme(
+      Theme.of(context).colorScheme,
+    );
     return Container(
       key: ValueKey(
         'recommended-group-${group.name}'
         '${copyIndex == 0 ? '' : '-$copyIndex'}',
       ),
       decoration: BoxDecoration(
-        color: TournamentDisplayPalette.card,
-        border: Border.all(color: TournamentDisplayPalette.border),
+        color: palette.card,
+        border: Border.all(color: palette.border),
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.all(8),
@@ -215,8 +218,8 @@ class _GroupTable extends StatelessWidget {
                 Expanded(
                   child: Text(
                     group.name,
-                    style: const TextStyle(
-                      color: TournamentDisplayPalette.accent,
+                    style: TextStyle(
+                      color: palette.accent,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -226,19 +229,19 @@ class _GroupTable extends StatelessWidget {
                     padding: const EdgeInsets.only(right: 4),
                     child: Text(
                       '${group.playedMatches}/${group.totalMatches}',
-                      style: const TextStyle(
-                        color: TournamentDisplayPalette.mutedText,
+                      style: TextStyle(
+                        color: palette.mutedText,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 if (group.isDelayed)
-                  const Tooltip(
+                  Tooltip(
                     message: 'Diese Gruppe liegt im Begegnungsplan zurück',
                     child: Icon(
                       Icons.priority_high,
-                      color: TournamentDisplayPalette.accent,
+                      color: palette.accent,
                       size: 20,
                     ),
                   ),
@@ -246,7 +249,7 @@ class _GroupTable extends StatelessWidget {
             ),
           ),
           for (final match in matches) ...[
-            const Divider(height: 1, color: TournamentDisplayPalette.border),
+            Divider(height: 1, color: palette.border),
             _MatchRow(
               match: match,
               isPrioritized: prioritizedMatches.contains(match),
@@ -278,8 +281,11 @@ class _MatchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = TournamentDisplayPalette.forColorScheme(
+      Theme.of(context).colorScheme,
+    );
     final playerStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: TournamentDisplayPalette.text,
+      color: palette.text,
       fontWeight: FontWeight.w600,
     );
     final matchIdentity = match.isKratzer
@@ -303,12 +309,12 @@ class _MatchRow extends StatelessWidget {
           SizedBox(
             width: dense ? 14 : 18,
             child: isPrioritized
-                ? const Tooltip(
+                ? Tooltip(
                     message: 'Priorisierte Partie',
                     child: Icon(
                       Icons.priority_high,
                       size: 18,
-                      color: TournamentDisplayPalette.accent,
+                      color: palette.accent,
                     ),
                   )
                 : null,
@@ -340,7 +346,7 @@ class _MatchRow extends StatelessWidget {
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.edit_outlined, size: 17),
-              color: TournamentDisplayPalette.accent,
+              color: palette.accent,
               onPressed: () => onEditResult!(match),
             ),
           if (!match.isKratzer && onEditResult == null)
@@ -349,7 +355,7 @@ class _MatchRow extends StatelessWidget {
               child: Text(
                 '-',
                 style: playerStyle?.copyWith(
-                  color: TournamentDisplayPalette.mutedText,
+                  color: palette.mutedText,
                 ),
               ),
             ),

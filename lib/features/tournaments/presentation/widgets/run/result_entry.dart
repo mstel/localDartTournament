@@ -89,6 +89,17 @@ class MatchResultTile extends StatelessWidget {
       );
     }
 
+    final isLight = colorScheme.brightness == Brightness.light;
+    final cardColor =
+        isLight ? colorScheme.surfaceContainer : TournamentDisplayPalette.card;
+    final borderColor = isRunning
+        ? const Color(0xFF4ED9A4)
+        : isFocused
+        ? colorScheme.primary
+        : isLight
+        ? colorScheme.outlineVariant
+        : colorScheme.outlineVariant.withAlpha(150);
+
     return MatchStatisticsTapTarget(
       match: match,
       tournament: tournament,
@@ -98,13 +109,9 @@ class MatchResultTile extends StatelessWidget {
           '${match.awayPlayer?.name}',
         ),
         decoration: BoxDecoration(
-          color: TournamentDisplayPalette.card,
+          color: cardColor,
           border: Border.all(
-            color: isRunning
-                ? const Color(0xFF4ED9A4)
-                : isFocused
-                ? colorScheme.primary
-                : colorScheme.outlineVariant.withAlpha(150),
+            color: borderColor,
             width: isRunning || isFocused ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(8),

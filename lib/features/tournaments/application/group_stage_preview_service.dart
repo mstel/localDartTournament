@@ -10,27 +10,13 @@ class GroupStagePreviewService {
     required List<TournamentPlayer> projectedPlayers,
     required CreatedTournament tournament,
   }) {
-    final matches = _matches(stage).toList();
-    final hasResults = matches.any((match) => match.countsForStatistics);
-    if (!hasResults) {
-      final targetCount = _placeholderCount(
-        stage,
-        tournament,
-        projectedPlayers,
-      );
-      final requiredCount = targetCount > 0
-          ? targetCount
-          : projectedPlayers.length;
-      return List.generate(
-        requiredCount,
-        (index) => TournamentPlayer(
-          name: 'Teilnehmer ${index + 1} (noch offen)',
-          isGenerated: true,
-        ),
-      );
-    }
+    final targetCount = _placeholderCount(
+      stage,
+      tournament,
+      projectedPlayers,
+    );
     final stageIsSet = isStageSet(stage);
-    return [
+    final presented = [
       for (final player in projectedPlayers)
         player.copyWith(
           name:
@@ -38,6 +24,18 @@ class GroupStagePreviewService {
               '${stageIsSet || _isCertainQualifier(stage, player, tournament) ? 'gesetzt' : 'vorläufig'}',
         ),
     ];
+    if (presented.length < targetCount) {
+      presented.addAll(
+        List.generate(
+          targetCount - presented.length,
+          (index) => TournamentPlayer(
+            name: 'Teilnehmer ${presented.length + index + 1} (noch offen)',
+            isGenerated: true,
+          ),
+        ),
+      );
+    }
+    return presented;
   }
 
   int _placeholderCount(

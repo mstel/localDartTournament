@@ -28,6 +28,9 @@ class RecentMatchResultLogEntry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = TournamentDisplayPalette.forColorScheme(
+      Theme.of(context).colorScheme,
+    );
     final homePlayer = match.homePlayer;
     final awayPlayer = match.awayPlayer;
     final homeIsWinner = homePlayer != null && match.winner == homePlayer;
@@ -36,12 +39,12 @@ class RecentMatchResultLogEntry extends StatelessWidget {
         ? const Color(0xFF4ED9A4)
         : homePlayer != null && match.loser == homePlayer
         ? const Color(0xFFFF7777)
-        : TournamentDisplayPalette.text;
+        : palette.text;
     final awayColor = awayIsWinner
         ? const Color(0xFF4ED9A4)
         : awayPlayer != null && match.loser == awayPlayer
         ? const Color(0xFFFF7777)
-        : TournamentDisplayPalette.text;
+        : palette.text;
     final homeStatus = homePlayer == null
         ? null
         : _recentPlayerStatus(tournament, match, homePlayer);
@@ -58,8 +61,8 @@ class RecentMatchResultLogEntry extends StatelessWidget {
         if (homeStatus != null)
           TextSpan(
             text: ' ($homeStatus)',
-            style: const TextStyle(
-              color: TournamentDisplayPalette.mutedText,
+            style: TextStyle(
+              color: palette.mutedText,
               fontSize: 10,
             ),
           ),
@@ -74,8 +77,8 @@ class RecentMatchResultLogEntry extends StatelessWidget {
         if (awayStatus != null)
           TextSpan(
             text: ' ($awayStatus)',
-            style: const TextStyle(
-              color: TournamentDisplayPalette.mutedText,
+            style: TextStyle(
+              color: palette.mutedText,
               fontSize: 10,
             ),
           ),
@@ -104,8 +107,8 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                       if (match.isKratzer)
                         TextSpan(
                           text: match.participantLabel,
-                          style: const TextStyle(
-                            color: TournamentDisplayPalette.text,
+                          style: TextStyle(
+                            color: palette.text,
                             fontWeight: FontWeight.w600,
                           ),
                         )
@@ -115,6 +118,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                           text: homeIsWinner || awayIsWinner
                               ? ' besiegte '
                               : ' spielte gegen ',
+                          style: TextStyle(color: palette.text),
                         ),
                         if (awayIsWinner) homeTextSpan else awayTextSpan,
                       ],
@@ -122,6 +126,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                         TextSpan(
                           text:
                               ' an ${tournament.boardDisplayName(match.boardNumber!)}',
+                          style: TextStyle(color: palette.mutedText),
                         ),
                     ],
                   ),
@@ -165,8 +170,8 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                 Text(
                   '${time.hour.toString().padLeft(2, '0')}:'
                   '${time.minute.toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                    color: TournamentDisplayPalette.mutedText,
+                  style: TextStyle(
+                    color: palette.mutedText,
                     fontSize: 11,
                   ),
                 ),
@@ -230,8 +235,8 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: TournamentDisplayPalette.mutedText,
+                        style: TextStyle(
+                          color: palette.mutedText,
                           fontSize: 10,
                         ),
                       ),
@@ -368,13 +373,16 @@ class _RecentPerformanceBadge extends StatelessWidget {
       if (performance.value != null) '${performance.value}',
       if (performance.details != null) performance.details!,
     ].where((part) => part.isNotEmpty).join(' · ');
+    final palette = TournamentDisplayPalette.forColorScheme(
+      Theme.of(context).colorScheme,
+    );
     return Tooltip(
       message: detail,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: TournamentDisplayPalette.cardEmphasis,
+          color: palette.cardEmphasis,
           borderRadius: BorderRadius.circular(5),
-          border: Border.all(color: TournamentDisplayPalette.border),
+          border: Border.all(color: palette.border),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

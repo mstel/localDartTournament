@@ -78,11 +78,28 @@ class GroupStandingsEngine {
         if (withdrawalOrder != 0) return withdrawalOrder;
       }
       final comparison = compare(a, b, tieBreakers, matches: group.matches);
-      return comparison != 0
-          ? comparison
-          : a.player.name.compareTo(b.player.name);
+      if (comparison != 0) return comparison;
+      if (tournament != null) {
+        final aId = a.player.profileId ?? a.player.name;
+        final bId = b.player.profileId ?? b.player.name;
+        final drawComparison = _stableTieDrawKey(
+          '${tournament.id}|${group.name}|$aId',
+        ).compareTo(
+          _stableTieDrawKey('${tournament.id}|${group.name}|$bId'),
+        );
+        if (drawComparison != 0) return drawComparison;
+      }
+      return a.player.name.compareTo(b.player.name);
     });
     return sorted;
+  }
+
+  static int _stableTieDrawKey(String value) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in value.codeUnits) {
+      hash = ((hash ^ codeUnit) * 0x01000193) & 0xffffffff;
+    }
+    return hash;
   }
 
   int compare(

@@ -5,7 +5,7 @@ import 'package:dart_tournament_manager/features/tournaments/domain/tournament_m
 void main() {
   const service = GroupStagePreviewService();
 
-  test('keeps projected qualifiers open before any group result', () {
+  test('labels projected qualifiers as provisional before any group result', () {
     final tournament = _tournament();
     final projected = service.presentProjectedPlayers(
       stage: tournament.runStages.single,
@@ -13,7 +13,7 @@ void main() {
       tournament: tournament,
     );
 
-    expect(projected.single.name, 'Teilnehmer 1 (noch offen)');
+    expect(projected.single.name, 'Teilnehmer 1 · vorläufig');
   });
 
   test('labels a projected but catchable leader as provisional', () {

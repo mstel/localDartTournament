@@ -351,8 +351,8 @@ void main() {
       );
       expect(firstSuggestion.dx, lessThan(fourthSuggestion.dx));
       expect(
-        find.descendant(of: merged, matching: find.text('Frei')).evaluate(),
-        hasLength(2),
+        find.descendant(of: merged, matching: find.textContaining('Empfohlene Partien')).evaluate(),
+        hasLength(1),
       );
       expect(tester.takeException(), isNull);
     },
@@ -579,7 +579,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Board Belegung & aktive Partien'), findsOneWidget);
-    expect(find.text('BESETZT'), findsOneWidget);
+    expect(find.text('BESETZT'), findsNothing);
+    expect(find.textContaining('Empfohlene Partien'), findsNWidgets(4));
     expect(find.text('BELEGT'), findsNothing);
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.textContaining('Partie läuft seit '), findsOneWidget);
@@ -600,28 +601,16 @@ void main() {
       expect(nameText.style?.fontSize, 14);
     }
     expect(find.text('Nächste Begegnungen'), findsOneWidget);
-    expect(find.text('Empfohlene nächste Begegnungen'), findsWidgets);
+    expect(find.textContaining('Empfohlene Partien'), findsWidgets);
     expect(
-      find.textContaining('EMPFOHLENE NÄCHSTE BEGEGNUNGEN FÜR BOARD 1'),
+      find.textContaining('EMPFOHLENE PARTIEN FÜR BOARD 1'),
       findsNothing,
     );
     final firstBoardQueue = tester.widget<Container>(
       find.byKey(const ValueKey('second-screen-director-board-1')),
     );
-    final firstBoardQueueRect = tester.getRect(
-      find.byKey(const ValueKey('second-screen-director-board-1')),
-    );
-    final occupiedStatusRect = tester.getRect(
-      find.descendant(
-        of: find.byKey(const ValueKey('second-screen-director-board-1')),
-        matching: find.text('BESETZT'),
-      ),
-    );
-    expect(
-      occupiedStatusRect.right,
-      greaterThan(firstBoardQueueRect.right - 30),
-    );
-    expect(occupiedStatusRect.top, lessThan(firstBoardQueueRect.top + 22));
+
+    // Board status text was removed; border color still reflects status (tested below).
     final queueDecoration = firstBoardQueue.decoration! as BoxDecoration;
     expect(queueDecoration.border!.top.color, TournamentDisplayPalette.accent);
     expect(find.text('Aktuell: ${match.participantShortLabel}'), findsNothing);
@@ -1013,7 +1002,7 @@ void main() {
         ValueKey('second-screen-free-board-$board'),
       );
       expect(
-        find.descendant(of: boardTile, matching: find.text('FREI')),
+        find.descendant(of: boardTile, matching: find.textContaining('Empfohlene Partien')),
         findsOneWidget,
       );
       expect(
@@ -2970,7 +2959,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.text('Teilnehmer offen').hitTestable(), findsNWidgets(16));
+    expect(find.textContaining(RegExp(r'· (vorläufig|gesetzt)')), findsNWidgets(16));
     expect(find.text('Halbfinale'), findsOneWidget);
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
     final verticalPreview = find.byKey(
@@ -3005,7 +2994,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Teilnehmer offen').hitTestable(), findsNWidgets(8));
+    expect(find.textContaining(RegExp(r'· (vorläufig|gesetzt)')), findsNWidgets(8));
     expect(find.text('Gewinner Begegnung 1'), findsNWidgets(2));
     expect(find.text('Gewinner Begegnung 2'), findsNWidgets(2));
     expect(tester.takeException(), isNull);

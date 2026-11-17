@@ -649,24 +649,42 @@ class _TournamentSecondScreenViewState
     return color.withValues(alpha: .84);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final t = widget.tournament;
+  TournamentDisplayColors _displayColors(BuildContext context) {
     final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
     final christmas =
         AppThemeController.instance.themeStyleNotifier.value ==
         AppThemeStyle.christmas;
-    final displayColors = TournamentDisplayColors(
+    if (isLight && !christmas) {
+      final base = TournamentDisplayPalette.forColorScheme(theme.colorScheme);
+      return TournamentDisplayColors(
+        background: base.background,
+        card: base.card,
+        cardEmphasis: base.cardEmphasis,
+        border: base.border,
+        accent: base.accent,
+        text: base.text,
+        mutedText: base.mutedText,
+      );
+    }
+    return TournamentDisplayColors(
       background: christmas
           ? Colors.transparent
           : TournamentDisplayPalette.background,
       card: _monitorCardColor(TournamentDisplayPalette.card),
       cardEmphasis: _monitorCardColor(TournamentDisplayPalette.cardEmphasis),
       border: TournamentDisplayPalette.border,
-      accent: theme.colorScheme.tertiary,
+      accent: TournamentDisplayPalette.accent,
       text: TournamentDisplayPalette.text,
       mutedText: TournamentDisplayPalette.mutedText,
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.tournament;
+    final theme = Theme.of(context);
+    final displayColors = _displayColors(context);
     final activeIndex = t.activeStageIndex.clamp(
       0,
       t.runStages.isEmpty ? 0 : t.runStages.length - 1,
@@ -792,6 +810,7 @@ class _TournamentSecondScreenViewState
     List<GroupMatch> playedMatches,
   ) {
     final theme = Theme.of(context);
+    final displayColors = _displayColors(context);
     final placements = _completionPlacements(tournament, playedMatches);
     final performances = [
       for (final match in playedMatches) ...match.bestPerformances,
@@ -830,16 +849,27 @@ class _TournamentSecondScreenViewState
                           child: Text('${index + 1}'),
                         ),
                       ),
-                      title: Text(placements[index].name),
+                      title: Text(
+                        placements[index].name,
+                        style: TextStyle(color: displayColors.text),
+                      ),
                     ),
                 ],
               ),
+        colors: displayColors,
       ),
-      _completionSection('Ranglistenänderungen', _completionRankingChanges()),
+      _completionSection(
+        'Ranglistenänderungen',
+        _completionRankingChanges(colors: displayColors),
+        colors: displayColors,
+      ),
       _completionSection(
         'Bestleistungen',
         performances.isEmpty
-            ? const Text('Keine Bestleistungen eingetragen.')
+            ? Text(
+                'Keine Bestleistungen eingetragen.',
+                style: TextStyle(color: displayColors.mutedText),
+              )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -851,12 +881,17 @@ class _TournamentSecondScreenViewState
                         '${performance.value == null ? '' : ' · ${performance.value}'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: displayColors.text),
                       ),
                     ),
                   if (performances.length > 8)
-                    Text('Weitere ${performances.length - 8} …'),
+                    Text(
+                      'Weitere ${performances.length - 8} …',
+                      style: TextStyle(color: displayColors.mutedText),
+                    ),
                 ],
               ),
+        colors: displayColors,
       ),
     ];
     return Center(
@@ -864,22 +899,22 @@ class _TournamentSecondScreenViewState
         constraints: const BoxConstraints(maxWidth: 1100),
         child: SizedBox.expand(
           child: Card(
-            color: _monitorCardColor(TournamentDisplayPalette.card),
+            color: displayColors.card,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.emoji_events_outlined,
                     size: 48,
-                    color: TournamentDisplayPalette.accent,
+                    color: displayColors.accent,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Turnier abgeschlossen',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineMedium?.copyWith(
-                      color: TournamentDisplayPalette.text,
+                      color: displayColors.text,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -888,7 +923,7 @@ class _TournamentSecondScreenViewState
                     tournament.name,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: TournamentDisplayPalette.accent,
+                      color: displayColors.accent,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -897,12 +932,12 @@ class _TournamentSecondScreenViewState
                     '${playedMatches.length} Partien gespielt',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      color: TournamentDisplayPalette.text,
+                      color: displayColors.text,
                     ),
                   ),
-                  const Divider(
+                  Divider(
                     height: 24,
-                    color: TournamentDisplayPalette.border,
+                    color: displayColors.border,
                   ),
                   Expanded(
                     child: LayoutBuilder(
@@ -949,34 +984,50 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  Widget _completionSection(String title, Widget content) => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      border: Border.all(color: TournamentDisplayPalette.border),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const Divider(height: 16, color: TournamentDisplayPalette.border),
-        Expanded(child: SingleChildScrollView(child: content)),
-      ],
-    ),
-  );
+  Widget _completionSection(
+    String title,
+    Widget content, {
+    required TournamentDisplayColors colors,
+  }) =>
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: colors.text,
+              ),
+            ),
+            Divider(height: 16, color: colors.border),
+            Expanded(child: SingleChildScrollView(child: content)),
+          ],
+        ),
+      );
 
-  Widget _completionRankingChanges() => FutureBuilder<List<_RankingStandings>>(
-    future: _rankingStandings,
-    builder: (context, snapshot) {
-      if (snapshot.hasError) {
-        return const Text('Ranglistenänderungen konnten nicht geladen werden.');
-      }
-      if (!snapshot.hasData) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      final rankings = snapshot.data!;
-      final changes =
-          [
+  Widget _completionRankingChanges({
+    required TournamentDisplayColors colors,
+  }) =>
+      FutureBuilder<List<_RankingStandings>>(
+        future: _rankingStandings,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text(
+              'Ranglistenänderungen konnten nicht geladen werden.',
+              style: TextStyle(color: colors.mutedText),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final rankings = snapshot.data!;
+          final changes = [
             for (final ranking in rankings)
               for (var index = 0; index < ranking.entries.length; index++)
                 (
@@ -990,45 +1041,49 @@ class _TournamentSecondScreenViewState
           ].where(
             (change) =>
                 change.delta != 0 ||
-                (change.previous != null && change.previous != change.position),
+                (change.previous != null &&
+                    change.previous != change.position),
           );
-      if (changes.isEmpty) {
-        return const Text('Keine Ranglistenänderungen erfasst.');
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final ranking in rankings) ...[
-            Text(
-              ranking.rankingName,
-              style: const TextStyle(
-                color: TournamentDisplayPalette.accent,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            for (final change in changes.where(
-              (change) => change.ranking == ranking,
-            ))
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  '${change.entry.name} · '
-                  '${change.delta > 0 ? '+' : ''}${change.delta} Elo'
-                  '${change.previous == null || change.previous == change.position ? '' : ' · Platz ${change.previous} → ${change.position}'}',
+          if (changes.isEmpty) {
+            return Text(
+              'Keine Ranglistenänderungen erfasst.',
+              style: TextStyle(color: colors.mutedText),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final ranking in rankings) ...[
+                Text(
+                  ranking.rankingName,
                   style: TextStyle(
-                    color: change.delta > 0
-                        ? const Color(0xFF70E0BA)
-                        : change.delta < 0
-                        ? Colors.redAccent
-                        : TournamentDisplayPalette.text,
+                    color: colors.accent,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
-          ],
-        ],
+                for (final change in changes.where(
+                  (change) => change.ranking == ranking,
+                ))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      '${change.entry.name} · '
+                      '${change.delta > 0 ? '+' : ''}${change.delta} Elo'
+                      '${change.previous == null || change.previous == change.position ? '' : ' · Platz ${change.previous} → ${change.position}'}',
+                      style: TextStyle(
+                        color: change.delta > 0
+                            ? const Color(0xFF70E0BA)
+                            : change.delta < 0
+                            ? Colors.redAccent
+                            : colors.text,
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          );
+        },
       );
-    },
-  );
 
   List<TournamentPlayer> _completionPlacements(
     CreatedTournament tournament,
@@ -1170,6 +1225,7 @@ class _TournamentSecondScreenViewState
                   canEditResults: false,
                 )
               : _buildBracketPreview(
+                  context,
                   t,
                   activeStage,
                   activeIndex,
@@ -1424,6 +1480,9 @@ class _TournamentSecondScreenViewState
     double unitHeight,
     double spacing,
   ) {
+    if (!_monitorPlacements.any((placement) => placement.widthUnits > 2)) {
+      _monitorPlacements = _withIndependentColumns(_monitorPlacements);
+    }
     if (columns >= 4 &&
         _monitorPlacements.any((placement) => placement.widthUnits > 1) &&
         _monitorPlacements.every(
@@ -2021,10 +2080,34 @@ class _TournamentSecondScreenViewState
           activeStage,
         );
       case 'knockoutBracket':
-        final stage = activeStage is KnockoutTournamentRunStage
+        var stage = activeStage is KnockoutTournamentRunStage
             ? activeStage
             : _nextKnockoutStage(tournament, activeIndex, activeStage);
         if (stage == null || stage.isKratzer) return const SizedBox.shrink();
+        if (activeStage is GroupTournamentRunStage) {
+          final nextIndex = _nextKnockoutStageIndex(
+            tournament,
+            activeIndex,
+            activeStage,
+          );
+          if (nextIndex != null && nextIndex < tournament.stages.length) {
+            final runtime = ProductionTournamentRuntime(tournament);
+            final projectedPlayers = runtime.qualifiers(activeStage);
+            final presentedPlayers = const GroupStagePreviewService()
+                .presentProjectedPlayers(
+                  stage: activeStage,
+                  projectedPlayers: projectedPlayers,
+                  tournament: tournament,
+                );
+            final rebuilt = runtime.build(
+              tournament.stages[nextIndex],
+              presentedPlayers,
+            );
+            if (rebuilt is KnockoutTournamentRunStage) {
+              stage = rebuilt;
+            }
+          }
+        }
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
@@ -2069,7 +2152,7 @@ class _TournamentSecondScreenViewState
         return const SizedBox.shrink();
       case 'kratzerLives':
         return SingleChildScrollView(
-          child: _buildKratzerLivesPanel(tournament, activeStage),
+          child: _buildKratzerLivesPanel(context, tournament, activeStage),
         );
       case 'kratzerHandicaps':
         return SingleChildScrollView(
@@ -2081,9 +2164,11 @@ class _TournamentSecondScreenViewState
   }
 
   Widget _buildKratzerLivesPanel(
+    BuildContext context,
     CreatedTournament tournament,
     TournamentRunStage? activeStage,
   ) {
+    final colors = _displayColors(context);
     final kratzerStages = tournament.runStages
         .whereType<KnockoutTournamentRunStage>()
         .where((stage) => stage.isKratzer)
@@ -2109,12 +2194,12 @@ class _TournamentSecondScreenViewState
             contentPadding: EdgeInsets.zero,
             title: Text(
               player.name,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: colors.text),
             ),
             trailing: Text(
               '${stage.livesRemainingFor(player)} Leben',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: colors.text,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -2123,8 +2208,8 @@ class _TournamentSecondScreenViewState
                   ? Icons.person_off_outlined
                   : Icons.favorite_outline,
               color: stage.livesRemainingFor(player) == 0
-                  ? Colors.white54
-                  : const Color(0xFF70E0BA),
+                  ? colors.mutedText
+                  : colors.accent,
             ),
           ),
       ],
@@ -2136,6 +2221,7 @@ class _TournamentSecondScreenViewState
     CreatedTournament tournament,
     TournamentRunStage? activeStage,
   ) {
+    final colors = _displayColors(context);
     final stages = tournament.runStages
         .whereType<KnockoutTournamentRunStage>()
         .where((stage) => stage.isKratzer && stage.kratzerHandicapsEnabled)
@@ -2176,7 +2262,7 @@ class _TournamentSecondScreenViewState
                     ),
                 ],
               ),
-              style: const TextStyle(color: TournamentDisplayPalette.text),
+              style: TextStyle(color: colors.text),
             ),
           ),
       ],
@@ -2331,6 +2417,9 @@ class _TournamentSecondScreenViewState
           );
         }
       }
+      if (!_monitorPlacements.any((placement) => placement.widthUnits > 2)) {
+        _monitorPlacements = _withIndependentColumns(_monitorPlacements);
+      }
     });
   }
 
@@ -2361,6 +2450,9 @@ class _TournamentSecondScreenViewState
       ),
     );
     if (selected == null || !mounted) return;
+    if (!_monitorPlacements.any((placement) => placement.widthUnits > 2)) {
+      _monitorPlacements = _withIndependentColumns(_monitorPlacements);
+    }
     final columnHeights = [0.0, 0.0];
     final hasIndependentColumns =
         _monitorPlacements.isNotEmpty &&
@@ -2439,6 +2531,9 @@ class _TournamentSecondScreenViewState
   }
 
   Future<void> _applyMonitorLayout() async {
+    if (!_monitorPlacements.any((placement) => placement.widthUnits > 2)) {
+      _monitorPlacements = _withIndependentColumns(_monitorPlacements);
+    }
     final unchanged = _placementsMatch(
       _monitorPlacements,
       _placementsBeforeEditing,
@@ -2483,6 +2578,9 @@ class _TournamentSecondScreenViewState
   }
 
   Future<bool> _persistMonitorLayout(String name) async {
+    if (!_monitorPlacements.any((placement) => placement.widthUnits > 2)) {
+      _monitorPlacements = _withIndependentColumns(_monitorPlacements);
+    }
     try {
       await _storage.saveSecondScreenLayout(
         tournament: widget.tournament,
@@ -2677,6 +2775,7 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     CreatedTournament tournament,
   ) {
+    final colors = _displayColors(context);
     final stages = tournament.runStages;
     final matches = TournamentTiming.matches(tournament);
     final allWithPlayers = stages.isEmpty
@@ -2696,22 +2795,29 @@ class _TournamentSecondScreenViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('$played von $allWithPlayers Partien abgeschlossen'),
+        Text(
+          '$played von $allWithPlayers Partien abgeschlossen',
+          style: TextStyle(color: colors.text),
+        ),
         const SizedBox(height: 8),
         LinearProgressIndicator(
           value: allWithPlayers == 0 ? 0 : played / allWithPlayers,
           color: const Color(0xFF70E0BA),
-          backgroundColor: Colors.white24,
+          backgroundColor: colors.border,
         ),
         const SizedBox(height: 12),
         for (var index = 0; index < stages.length; index++)
           ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            title: Text(stages[index].name),
+            title: Text(
+              stages[index].name,
+              style: TextStyle(color: colors.text),
+            ),
             subtitle: Text(
               '${_matchesOf(stages[index]).where((match) => match.hasResult).length} / '
               '${_countMatchesForProgress(stages[index])} Partien',
+              style: TextStyle(color: colors.mutedText),
             ),
             trailing: Icon(
               tournament.completedStageIndexes.contains(index)
@@ -2719,7 +2825,7 @@ class _TournamentSecondScreenViewState
                   : Icons.radio_button_unchecked,
               color: tournament.completedStageIndexes.contains(index)
                   ? const Color(0xFF70E0BA)
-                  : Colors.white54,
+                  : colors.mutedText,
             ),
           ),
       ],
@@ -2730,16 +2836,17 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     CreatedTournament tournament,
   ) {
+    final colors = _displayColors(context);
     final highlights = [
       for (final match in TournamentTiming.matches(tournament))
         for (final performance in match.bestPerformances)
           (match: match, performance: performance),
     ];
     if (highlights.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Noch keine Bestleistungen erfasst.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: colors.mutedText),
         ),
       );
     }
@@ -2751,8 +2858,14 @@ class _TournamentSecondScreenViewState
             dense: true,
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.stars_outlined, color: Color(0xFF70E0BA)),
-            title: Text(item.performance.label),
-            subtitle: Text(item.performance.playerName),
+            title: Text(
+              item.performance.label,
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              item.performance.playerName,
+              style: TextStyle(color: colors.mutedText),
+            ),
           ),
       ],
     );
@@ -2762,11 +2875,12 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     CreatedTournament tournament,
   ) {
+    final colors = _displayColors(context);
     if (!tournament.countsForRanking || tournament.rankingIds.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Für dieses Turnier ist keine Rangliste ausgewählt.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: colors.mutedText),
         ),
       );
     }
@@ -2774,10 +2888,10 @@ class _TournamentSecondScreenViewState
       future: _rankingStandings,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(
+          return Center(
             child: Text(
               'Die ELO-Rangliste konnte nicht geladen werden.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: colors.mutedText),
             ),
           );
         }
@@ -2787,10 +2901,10 @@ class _TournamentSecondScreenViewState
         final standings = snapshot.data!;
         if (standings.isEmpty ||
             standings.every((ranking) => ranking.entries.isEmpty)) {
-          return const Center(
+          return Center(
             child: Text(
               'Für dieses Turnier ist keine ELO-Rangliste ausgewählt.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: colors.mutedText),
             ),
           );
         }
@@ -2807,8 +2921,14 @@ class _TournamentSecondScreenViewState
               child: SwitchListTile.adaptive(
                 key: const ValueKey('ranking-participants-toggle'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Nur Teilnehmer anzeigen'),
-                subtitle: const Text('Ausgeschaltet: alle Mitglieder'),
+                title: Text(
+                  'Nur Teilnehmer anzeigen',
+                  style: TextStyle(color: colors.text),
+                ),
+                subtitle: Text(
+                  'Ausgeschaltet: alle Mitglieder',
+                  style: TextStyle(color: colors.mutedText),
+                ),
                 value: _showOnlyRankingParticipants,
                 onChanged: (value) =>
                     setState(() => _showOnlyRankingParticipants = value),
@@ -2827,18 +2947,19 @@ class _TournamentSecondScreenViewState
                     child: Text(
                       ranking.rankingName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
+                        color: colors.text,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ],
               ),
-              const Divider(height: 12, color: Colors.white24),
+              Divider(height: 12, color: colors.border),
               for (var index = 0; index < ranking.entries.length; index++)
                 if (!_showOnlyRankingParticipants ||
                     participantIds.contains(ranking.entries[index].id))
                   _buildRankingEntry(
+                    context,
                     ranking,
                     ranking.entries[index],
                     index + 1,
@@ -2851,10 +2972,12 @@ class _TournamentSecondScreenViewState
   }
 
   Widget _buildRankingEntry(
+    BuildContext context,
     _RankingStandings ranking,
     LocalEloPlayer entry,
     int currentPosition,
   ) {
+    final colors = _displayColors(context);
     final delta = ranking.deltas[entry.id] ?? 0;
     final previousPosition = ranking.previousPositions[entry.id];
     final positionChange = previousPosition == null
@@ -2869,7 +2992,7 @@ class _TournamentSecondScreenViewState
         children: [
           Text(
             '$currentPosition. ${entry.name} – ${entry.rating} Elo',
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: colors.text),
           ),
           if (delta != 0)
             Text(
@@ -3104,6 +3227,7 @@ class _TournamentSecondScreenViewState
       children: [
         Expanded(
           child: _buildBracketPreview(
+            context,
             t,
             stage,
             stageIndex,
@@ -3121,11 +3245,13 @@ class _TournamentSecondScreenViewState
   }
 
   Widget _buildBracketPreview(
+    BuildContext context,
     CreatedTournament t,
     KnockoutTournamentRunStage stage,
     int? stageIndex, {
     bool isActiveStage = false,
   }) {
+    final colors = _displayColors(context);
     final groupStage =
         !isActiveStage &&
             stageIndex != null &&
@@ -3158,12 +3284,6 @@ class _TournamentSecondScreenViewState
         groupStage != null &&
         const GroupStagePreviewService().isStageSet(groupStage);
 
-    final hasGroupStageResults =
-        groupStage != null &&
-        groupStage.groups.any(
-          (group) => group.matches.any((match) => match.countsForStatistics),
-        );
-
     String playerLabel(
       TournamentPlayer? player,
       int roundIndex,
@@ -3171,7 +3291,7 @@ class _TournamentSecondScreenViewState
       required bool home,
     }) {
       if (isActiveStage) {
-        if (player != null && !player.name.startsWith('Teilnehmer ')) {
+        if (player != null && !player.name.contains('(noch offen)')) {
           return player.shortDisplayName;
         }
         if (roundIndex == 0) return 'Offen';
@@ -3181,35 +3301,18 @@ class _TournamentSecondScreenViewState
           fallback: '',
         );
       }
-      if (!hasGroupStageResults) {
-        if (roundIndex == 0) {
-          return 'Teilnehmer offen';
-        }
-        if (roundIndex > 0) {
-          final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
-          if (player == null || player.name.startsWith('Teilnehmer ')) {
-            return matchDisplayLabel(
-              'Gewinner Spiel $sourceMatchNumber',
-              fallback: '',
-            );
-          }
+      if (roundIndex == 0) {
+        if (player != null && !player.name.contains('(noch offen)')) {
           return player.name;
         }
-        if (player == null || player.name.startsWith('Teilnehmer ')) {
-          return 'Teilnehmer offen';
-        }
-        return player.name;
-      }
-      if (roundIndex > 0) {
-        final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
-        return player?.name ??
-            matchDisplayLabel(
-              'Gewinner Spiel $sourceMatchNumber',
-              fallback: '',
-            );
-      }
-      if (player == null || player.name.startsWith('Teilnehmer ')) {
         return 'Teilnehmer offen';
+      }
+      final sourceMatchNumber = matchIndex * 2 + (home ? 1 : 2);
+      if (player == null || player.name.contains('(noch offen)')) {
+        return matchDisplayLabel(
+          'Gewinner Spiel $sourceMatchNumber',
+          fallback: '',
+        );
       }
       return player.name;
     }
@@ -3224,8 +3327,8 @@ class _TournamentSecondScreenViewState
                 isActiveStage
                     ? '${previewStage.name} · Turnierbaum'
                     : '${previewStage.name} · Turnierbaum-Vorschau',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: colors.text,
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
@@ -3284,7 +3387,7 @@ class _TournamentSecondScreenViewState
                     final scale =
                         MediaQuery.textScalerOf(context).scale(14) / 14;
                     final minimumBoardHeight =
-                        rounds.first.length * 88 * scale + roundHeaderHeight;
+                        rounds.first.length * 125 * scale + roundHeaderHeight;
                     final boardHeight = max(
                       constraints.maxHeight + 1,
                       minimumBoardHeight,
@@ -3387,6 +3490,7 @@ class _TournamentSecondScreenViewState
                                                         matchIndex++
                                                       )
                                                         _buildBracketMatchPreview(
+                                                          context,
                                                           rounds[roundIndex][matchIndex],
                                                           roundIndex:
                                                               roundIndex,
@@ -3433,6 +3537,7 @@ class _TournamentSecondScreenViewState
   }
 
   Widget _buildBracketMatchPreview(
+    BuildContext context,
     GroupMatch match, {
     required int roundIndex,
     required int matchIndex,
@@ -3440,6 +3545,7 @@ class _TournamentSecondScreenViewState
     required String awayLabel,
     required int matchNumber,
   }) {
+    final colors = _displayColors(context);
     final homeIsCertain =
         homeLabel.contains('vorläufig') || homeLabel.contains('gesetzt');
     final awayIsCertain =
@@ -3448,8 +3554,8 @@ class _TournamentSecondScreenViewState
       key: ValueKey('knockout-preview-match-$roundIndex-$matchIndex'),
       padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
-        color: const Color(0xFF14202B),
-        border: Border.all(color: const Color(0xFF263D52)),
+        color: colors.card,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -3457,25 +3563,35 @@ class _TournamentSecondScreenViewState
         children: [
           Text(
             matchDisplayLabel(match.label, fallback: 'Begegnung $matchNumber'),
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
+            style: TextStyle(color: colors.mutedText, fontSize: 11),
           ),
           const SizedBox(height: 3),
-          _buildBracketParticipant(homeLabel, isCertain: homeIsCertain),
-          const Divider(color: Color(0xFF263D52), height: 8),
-          _buildBracketParticipant(awayLabel, isCertain: awayIsCertain),
+          _buildBracketParticipant(context, homeLabel, isCertain: homeIsCertain),
+          Divider(color: colors.border, height: 8),
+          _buildBracketParticipant(context, awayLabel, isCertain: awayIsCertain),
         ],
       ),
     );
   }
 
-  Widget _buildBracketParticipant(String label, {required bool isCertain}) {
+  Widget _buildBracketParticipant(
+    BuildContext context,
+    String label, {
+    required bool isCertain,
+  }) {
+    final colors = _displayColors(context);
+    final isLight = Theme.of(context).brightness == Brightness.light;
     return Row(
       children: [
         Expanded(
           child: Text(
             label,
             style: TextStyle(
-              color: isCertain ? const Color(0xFF86EFAC) : Colors.white70,
+              color: isCertain
+                  ? (isLight
+                      ? const Color(0xFF2E7D32)
+                      : const Color(0xFF86EFAC))
+                  : colors.text,
               fontWeight: isCertain ? FontWeight.bold : FontWeight.normal,
             ),
           ),
@@ -3546,13 +3662,13 @@ class _TournamentSecondScreenViewState
             children: [
               const Icon(Icons.leaderboard, size: 20, color: Color(0xFF70E0BA)),
               const SizedBox(width: 8),
-              const Flexible(
+              Flexible(
                 child: Text(
                   'Tabellen & Zwischenstände',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Colors.white,
+                    color: _displayColors(context).text,
                   ),
                 ),
               ),
@@ -3567,24 +3683,25 @@ class _TournamentSecondScreenViewState
       );
     }
 
+    final colors = _displayColors(context);
     return Card(
-      color: _monitorCardColor(const Color(0xFF16202A)),
+      color: colors.card,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Text(
               'K.-o.-Runde: ${stage.name}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: colors.text,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Aktuelle Begegnungen und Paarungen siehe Spielansetzungen.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: colors.mutedText),
             ),
           ],
         ),
@@ -3601,6 +3718,8 @@ class _TournamentSecondScreenViewState
     bool full = false,
     bool showDraws = true,
   }) {
+    final colors = _displayColors(context);
+    final isLight = Theme.of(context).brightness == Brightness.light;
     final standings = _calculateGroupStandings(group, tieBreakers);
     final fixedPlaces = qualificationPlan == null
         ? 2
@@ -3622,8 +3741,8 @@ class _TournamentSecondScreenViewState
       ),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: _monitorCardColor(const Color(0xFF14202B)),
-        border: Border.all(color: const Color(0xFF263D52)),
+        color: colors.card,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -3637,27 +3756,31 @@ class _TournamentSecondScreenViewState
             children: [
               Text(
                 group.name,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
-                  color: Color(0xFF70E0BA),
+                  color: isLight
+                      ? Theme.of(context).colorScheme.primary
+                      : const Color(0xFF70E0BA),
                 ),
               ),
               Text(
                 '$playedMatches/$totalMatches',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: Color(0xFF70E0BA),
+                  color: isLight
+                      ? Theme.of(context).colorScheme.primary
+                      : const Color(0xFF70E0BA),
                   fontWeight: FontWeight.w600,
                 ),
               ),
               Text(
                 'Top $fixedPlaces weiter',
-                style: const TextStyle(fontSize: 11, color: Colors.white54),
+                style: TextStyle(fontSize: 11, color: colors.mutedText),
               ),
             ],
           ),
-          const Divider(color: Color(0xFF263D52), height: 12),
+          Divider(color: colors.border, height: 12),
           StandingsTable(
             standings: standings,
             group: group,
@@ -3708,11 +3831,12 @@ class _TournamentSecondScreenViewState
                   ),
                 ));
 
+    final colors = _displayColors(context);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF14202B),
-        border: Border.all(color: const Color(0xFF263D52)),
+        color: colors.card,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -3731,10 +3855,10 @@ class _TournamentSecondScreenViewState
                   hasPrognosis
                       ? 'KO-Prognose & Weiterkommen'
                       : 'Turnierbaum Vorschau',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Colors.white,
+                    color: colors.text,
                   ),
                 ),
               ),
@@ -3745,7 +3869,7 @@ class _TournamentSecondScreenViewState
             hasPrognosis
                 ? 'Vorschau der K.-o.-Paarungen basierend auf aktuellen Tabellenständen und Siegesraten:'
                 : 'Turnierbaum der finalen Phase:',
-            style: const TextStyle(fontSize: 12, color: Colors.white70),
+            style: TextStyle(fontSize: 12, color: colors.mutedText),
           ),
           const SizedBox(height: 12),
           if (expand)
@@ -3761,6 +3885,10 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     GroupTournamentRunStage groupStage,
   ) {
+    final colors = _displayColors(context);
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final certainColor =
+        isLight ? const Color(0xFF2E7D32) : const Color(0xFF86EFAC);
     return FutureBuilder<Map<String, AdvancementChance>>(
       future: _forecastFor(groupStage),
       builder: (context, snapshot) {
@@ -3771,10 +3899,14 @@ class _TournamentSecondScreenViewState
           );
         }
         if (!snapshot.hasData) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
-              child: CircularProgressIndicator(),
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(),
+              ),
             ),
           );
         }
@@ -3804,7 +3936,7 @@ class _TournamentSecondScreenViewState
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF101922),
+                      color: colors.cardEmphasis,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Column(
@@ -3812,9 +3944,11 @@ class _TournamentSecondScreenViewState
                       children: [
                         Text(
                           group.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF70E0BA),
+                            color: isLight
+                                ? Theme.of(context).colorScheme.primary
+                                : const Color(0xFF70E0BA),
                             fontSize: 13,
                           ),
                         ),
@@ -3853,8 +3987,8 @@ class _TournamentSecondScreenViewState
                                       style: TextStyle(
                                         fontSize: 12,
                                         color: isCertain
-                                            ? const Color(0xFF86EFAC)
-                                            : Colors.white70,
+                                            ? certainColor
+                                            : colors.mutedText,
                                       ),
                                     ),
                                     Expanded(
@@ -3864,7 +3998,7 @@ class _TournamentSecondScreenViewState
                                           fontWeight: isCertain
                                               ? FontWeight.bold
                                               : FontWeight.normal,
-                                          color: Colors.white,
+                                          color: colors.text,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -3881,8 +4015,8 @@ class _TournamentSecondScreenViewState
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: isCertain
-                                              ? const Color(0xFF86EFAC)
-                                              : Colors.white70,
+                                              ? certainColor
+                                              : colors.mutedText,
                                         ),
                                       ),
                                     ),
@@ -3906,15 +4040,16 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     KnockoutTournamentRunStage koStage,
   ) {
+    final colors = _displayColors(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < koStage.rounds.length; i++) ...[
           Text(
             knockoutRoundName(i, koStage.rounds.length),
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Color(0xFF70E0BA),
+              color: colors.accent,
             ),
           ),
           const SizedBox(height: 4),
@@ -3923,7 +4058,7 @@ class _TournamentSecondScreenViewState
               margin: const EdgeInsets.symmetric(vertical: 2),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF101922),
+                color: colors.cardEmphasis,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
@@ -3931,15 +4066,15 @@ class _TournamentSecondScreenViewState
                   Expanded(
                     child: Text(
                       '${m.homePlayer?.name ?? "Offen"} vs. ${m.awayPlayer?.name ?? "Offen"}',
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      style: TextStyle(color: colors.text, fontSize: 13),
                     ),
                   ),
                   if (m.hasResult)
                     Text(
                       '${m.homeScore} : ${m.awayScore}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF70E0BA),
+                        color: colors.accent,
                       ),
                     ),
                 ],
@@ -3961,6 +4096,7 @@ class _TournamentSecondScreenViewState
     TournamentRunStage? stage, {
     bool expand = true,
   }) {
+    final colors = _displayColors(context);
     final runningMatches = const OrderOfPlayController()
         .plan(t, activeIndex)
         .running;
@@ -4032,32 +4168,30 @@ class _TournamentSecondScreenViewState
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: _monitorCardColor(
-                        TournamentDisplayPalette.cardEmphasis,
-                      ),
+                      color: colors.cardEmphasis,
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color: TournamentDisplayPalette.border,
+                        color: colors.border,
                       ),
                     ),
                     child: Row(
                       children: [
-                        const Tooltip(
+                        Tooltip(
                           message:
                               'Prioritätshinweis: Diese Gruppe oder Teilnehmer '
                               'liegen im Spielplan zurück.',
                           child: Icon(
                             Icons.priority_high,
                             size: 18,
-                            color: TournamentDisplayPalette.accent,
+                            color: colors.accent,
                           ),
                         ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             notice,
-                            style: const TextStyle(
-                              color: TournamentDisplayPalette.text,
+                            style: TextStyle(
+                              color: colors.text,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -4116,10 +4250,10 @@ class _TournamentSecondScreenViewState
             runningMatches.isNotEmpty) ...[
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.play_circle_fill,
                 size: 22,
-                color: TournamentDisplayPalette.accent,
+                color: colors.accent,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -4127,10 +4261,10 @@ class _TournamentSecondScreenViewState
                   widget.tournament.directorModeEnabled
                       ? 'Board Belegung & aktive Partien'
                       : 'Aktuelle Partien (${runningMatches.length})',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
-                    color: Colors.white,
+                    color: colors.text,
                   ),
                 ),
               ),
@@ -4232,10 +4366,10 @@ class _TournamentSecondScreenViewState
           widget.tournament.directorModeEnabled
               ? 'Nächste Begegnungen'
               : 'Nächste Partien · Vorschläge',
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,
-            color: Colors.white,
+            color: colors.text,
           ),
         ),
         const SizedBox(height: 8),
@@ -4246,11 +4380,11 @@ class _TournamentSecondScreenViewState
         else
           SizedBox(height: 240, child: recommendedContent),
         if (!hasOpenMatches && expand)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
             child: Text(
               'Keine offenen Partien in dieser Phase.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: colors.mutedText),
             ),
           ),
       ],
@@ -4265,14 +4399,15 @@ class _TournamentSecondScreenViewState
     Map<String, List<PlayerInsight>> playerInsights = const {},
   }) {
     final match = entry.match;
-    const nameStyle = TextStyle(
-      color: TournamentDisplayPalette.text,
+    final colors = _displayColors(context);
+    final nameStyle = TextStyle(
+      color: colors.text,
       fontWeight: FontWeight.bold,
       fontSize: 14,
       height: 1.2,
     );
-    const separatorStyle = TextStyle(
-      color: TournamentDisplayPalette.mutedText,
+    final separatorStyle = TextStyle(
+      color: colors.mutedText,
       fontWeight: FontWeight.bold,
       fontSize: 14,
       height: 1.2,
@@ -4287,7 +4422,6 @@ class _TournamentSecondScreenViewState
     )..layout();
     final homeName = match.homePlayer?.shortDisplayName ?? 'Offen';
     final awayName = match.awayPlayer?.shortDisplayName ?? 'Offen';
-    final nameAreaHeight = measure('Ag', nameStyle).height * 2 + 2;
     final boardName = widget.tournament
         .boardDisplayName(match.boardNumber ?? 1)
         .toUpperCase();
@@ -4300,8 +4434,8 @@ class _TournamentSecondScreenViewState
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _monitorCardColor(TournamentDisplayPalette.card),
-        border: Border.all(color: TournamentDisplayPalette.accent, width: 2),
+        color: colors.card,
+        border: Border.all(color: colors.accent, width: 2),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -4312,8 +4446,8 @@ class _TournamentSecondScreenViewState
               Expanded(
                 child: Text(
                   boardName,
-                  style: const TextStyle(
-                    color: TournamentDisplayPalette.accent,
+                  style: TextStyle(
+                    color: colors.accent,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -4323,9 +4457,7 @@ class _TournamentSecondScreenViewState
             ],
           ),
           const SizedBox(height: 2),
-          SizedBox(
-            height: nameAreaHeight,
-            child: LayoutBuilder(
+          LayoutBuilder(
               builder: (context, constraints) {
                 final namesFitSideBySide =
                     measure(homeName, nameStyle).width +
@@ -4386,7 +4518,6 @@ class _TournamentSecondScreenViewState
                   ),
                 );
               },
-            ),
           ),
           const SizedBox(height: 2),
           Center(
@@ -4443,40 +4574,42 @@ class _TournamentSecondScreenViewState
     BuildContext context, {
     required int board,
     required double width,
-  }) => Container(
-    width: width,
-    key: ValueKey('second-screen-free-board-$board'),
-    constraints: const BoxConstraints(minHeight: 96),
-    padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
-    decoration: BoxDecoration(
-      color: _monitorCardColor(TournamentDisplayPalette.card),
-      border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                widget.tournament.boardDisplayName(board).toUpperCase(),
-                style: const TextStyle(
-                  color: Color(0xFF4ED9A4),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+  }) {
+    final colors = _displayColors(context);
+    return Container(
+      width: width,
+      key: ValueKey('second-screen-free-board-$board'),
+      constraints: const BoxConstraints(minHeight: 74),
+      padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.tournament.boardDisplayName(board).toUpperCase(),
+                  style: const TextStyle(
+                    color: Color(0xFF4ED9A4),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
               ),
-            ),
             const _BoardStatusBadge(label: 'FREI', color: Color(0xFF4ED9A4)),
           ],
         ),
         const SizedBox(height: 4),
-        const Center(
+        Center(
           child: Text(
             'Aktuell keine Partie',
             style: TextStyle(
-              color: TournamentDisplayPalette.text,
+              color: colors.text,
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
@@ -4498,48 +4631,52 @@ class _TournamentSecondScreenViewState
       ],
     ),
   );
+}
 
   Widget _buildBlockedBoardOccupancyTile(
     BuildContext context, {
     required int board,
     required double width,
-  }) => Container(
-    width: width,
-    key: ValueKey('second-screen-blocked-board-$board'),
-    constraints: const BoxConstraints(minHeight: 96),
-    padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: _monitorCardColor(TournamentDisplayPalette.card),
-      border: Border.all(color: Colors.redAccent, width: 2),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          widget.tournament.boardDisplayName(board).toUpperCase(),
-          style: const TextStyle(
-            color: Colors.redAccent,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Center(
-          child: Text(
-            'BOARD GESPERRT',
-            style: TextStyle(
+  }) {
+    final colors = _displayColors(context);
+    return Container(
+      width: width,
+      key: ValueKey('second-screen-blocked-board-$board'),
+      constraints: const BoxConstraints(minHeight: 74),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border.all(color: Colors.redAccent, width: 2),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.tournament.boardDisplayName(board).toUpperCase(),
+            style: const TextStyle(
               color: Colors.redAccent,
-              fontSize: 14,
               fontWeight: FontWeight.bold,
+              fontSize: 16,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(height: 8),
+          const Center(
+            child: Text(
+              'BOARD GESPERRT',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildDirectorBoardQueue(
     BuildContext context,
@@ -4548,6 +4685,7 @@ class _TournamentSecondScreenViewState
     Map<String, List<PlayerInsight>> playerInsights = const {},
     Object? playerInsightsError,
   }) {
+    final colors = _displayColors(context);
     final snapshot = TournamentDirectorSnapshot(tournament, activeIndex);
     final mergedGroupBoards = snapshot.mergedGroupBoards();
     final boardToMergedGroup = <int, String>{
@@ -4679,7 +4817,7 @@ class _TournamentSecondScreenViewState
                                         color:
                                             snapshot.runningOn(boardNumber) !=
                                                 null
-                                            ? TournamentDisplayPalette.accent
+                                            ? colors.accent
                                             : tournament.blockedBoards.contains(
                                                     boardNumber,
                                                   ) ||
@@ -4703,47 +4841,6 @@ class _TournamentSecondScreenViewState
                                   final tileWidth =
                                       singleColumnWidth * span +
                                       spacing * (span - 1);
-                                  final Widget statusIndicator =
-                                      boards.length == 1
-                                      ? _BoardStatusBadge(
-                                          label: statuses.single.label
-                                              .toUpperCase(),
-                                          color: statuses.single.color,
-                                        )
-                                      : Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            for (
-                                              var statusIndex = 0;
-                                              statusIndex < statuses.length;
-                                              statusIndex++
-                                            ) ...[
-                                              if (statusIndex > 0)
-                                                const Padding(
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                  ),
-                                                  child: Text(
-                                                    '/',
-                                                    style: TextStyle(
-                                                      color:
-                                                          TournamentDisplayPalette
-                                                              .mutedText,
-                                                    ),
-                                                  ),
-                                                ),
-                                              Text(
-                                                statuses[statusIndex].label,
-                                                style: TextStyle(
-                                                  color: statuses[statusIndex]
-                                                      .color,
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        );
                                   return SizedBox(
                                     width: tileWidth,
                                     child: Container(
@@ -4757,9 +4854,7 @@ class _TournamentSecondScreenViewState
                                         vertical: 8,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: _monitorCardColor(
-                                          TournamentDisplayPalette.card,
-                                        ),
+                                        color: colors.card,
                                         border: Border.all(
                                           color: anyRunning
                                               ? TournamentDisplayPalette.accent
@@ -4774,51 +4869,32 @@ class _TournamentSecondScreenViewState
                                         crossAxisAlignment:
                                             CrossAxisAlignment.stretch,
                                         children: [
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                          Text.rich(
+                                            TextSpan(
                                               children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    displayName.toUpperCase(),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      color:
-                                                          TournamentDisplayPalette
-                                                              .text,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
+                                                TextSpan(
+                                                  text: displayName
+                                                      .toUpperCase(),
+                                                  style: TextStyle(
+                                                    color: colors.text,
+                                                    fontWeight:
+                                                        FontWeight.bold,
                                                   ),
                                                 ),
-                                                Flexible(
-                                                  child: Align(
-                                                    alignment:
-                                                        Alignment.topRight,
-                                                    child: FittedBox(
-                                                      alignment:
-                                                          Alignment.topRight,
-                                                      fit: BoxFit.scaleDown,
-                                                      child: statusIndicator,
-                                                    ),
+                                                TextSpan(
+                                                  text:
+                                                      ' | Empfohlene Partien',
+                                                  style: TextStyle(
+                                                    color: colors.mutedText,
+                                                    fontWeight:
+                                                        FontWeight.normal,
+                                                    fontSize: 12,
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                          ),
-                                          const Text(
-                                            'Empfohlene nächste Begegnungen',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: TournamentDisplayPalette
-                                                  .mutedText,
-                                              fontSize: 11,
-                                            ),
                                           ),
                                           Row(
                                             crossAxisAlignment:
@@ -4868,9 +4944,8 @@ class _TournamentSecondScreenViewState
                                                                   width: 20,
                                                                   child: Text(
                                                                     '${index + 1}.',
-                                                                    style: const TextStyle(
-                                                                      color: TournamentDisplayPalette
-                                                                          .accent,
+                                                                    style: TextStyle(
+                                                                      color: colors.accent,
                                                                     ),
                                                                   ),
                                                                 ),
@@ -4889,9 +4964,8 @@ class _TournamentSecondScreenViewState
                                                                             1,
                                                                         overflow:
                                                                             TextOverflow.ellipsis,
-                                                                        style: const TextStyle(
-                                                                          color:
-                                                                              TournamentDisplayPalette.text,
+                                                                        style: TextStyle(
+                                                                          color: colors.text,
                                                                           fontSize:
                                                                               12,
                                                                         ),
@@ -4952,6 +5026,7 @@ class _TournamentSecondScreenViewState
     List<GroupMatch> playedMatches, {
     bool expand = true,
   }) {
+    final colors = _displayColors(context);
     final enteredOrder = {
       for (var index = 0; index < playedMatches.length; index++)
         playedMatches[index]: index,
@@ -4975,7 +5050,7 @@ class _TournamentSecondScreenViewState
       children: [
         Row(
           children: [
-            const Icon(Icons.history, size: 20, color: Color(0xFF70E0BA)),
+            Icon(Icons.history, size: 20, color: colors.accent),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
@@ -4985,7 +5060,7 @@ class _TournamentSecondScreenViewState
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: Colors.white,
+                  color: colors.text,
                 ),
               ),
             ),
@@ -5002,17 +5077,17 @@ class _TournamentSecondScreenViewState
                     final itemExtent =
                         66 * MediaQuery.textScalerOf(context).scale(1);
                     final recentContent = snapshot.hasError
-                        ? const Center(
+                        ? Center(
                             child: Text(
                               'Ranglistenänderungen konnten nicht geladen werden.',
                               style: TextStyle(color: Colors.amber),
                             ),
                           )
                         : recent.isEmpty
-                        ? const Center(
+                        ? Center(
                             child: Text(
                               'Noch keine beendeten Partien vorhanden.',
-                              style: TextStyle(color: Colors.white70),
+                              style: TextStyle(color: colors.mutedText),
                             ),
                           )
                         : Scrollbar(
@@ -5023,9 +5098,9 @@ class _TournamentSecondScreenViewState
                               padding: EdgeInsets.zero,
                               itemCount: recent.length,
                               separatorBuilder: (context, index) =>
-                                  const Divider(
+                                  Divider(
                                     height: 1,
-                                    color: TournamentDisplayPalette.border,
+                                    color: colors.border,
                                   ),
                               itemBuilder: (context, index) => ConstrainedBox(
                                 constraints: BoxConstraints(
@@ -5052,13 +5127,13 @@ class _TournamentSecondScreenViewState
                           ),
                           dense: true,
                           visualDensity: VisualDensity.compact,
-                          leading: const Icon(
+                          leading: Icon(
                             Icons.swap_horiz,
-                            color: Color(0xFF70E0BA),
+                            color: colors.accent,
                           ),
                           title: Text(
                             entry.message,
-                            style: const TextStyle(color: Colors.white),
+                            style: TextStyle(color: colors.text),
                           ),
                         ),
                     ];
@@ -5262,6 +5337,9 @@ class _MonitorTournamentClockState extends State<_MonitorTournamentClock> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = TournamentDisplayPalette.forColorScheme(
+      Theme.of(context).colorScheme,
+    );
     final timing = TournamentTiming.snapshot(widget.tournament, DateTime.now());
     final elapsed = timing.elapsed;
     final hours = elapsed.inHours;
@@ -5271,20 +5349,20 @@ class _MonitorTournamentClockState extends State<_MonitorTournamentClock> {
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 8,
       children: [
-        const Icon(Icons.timer, size: 20, color: Color(0xFF70E0BA)),
+        Icon(Icons.timer, size: 20, color: colors.accent),
         Text(
           hours > 0
               ? 'Turnieruhr: $hours Std. $minutes Min. ${seconds}s'
               : 'Turnieruhr: $minutes Min. ${seconds}s',
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: colors.text,
           ),
         ),
         if (timing.forecast != null)
           Text(
             'Ende ca. ${_formatMonitorClockTime(timing.forecast!)}',
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: colors.text),
           ),
       ],
     );

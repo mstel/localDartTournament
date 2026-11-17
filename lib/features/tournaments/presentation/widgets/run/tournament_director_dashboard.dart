@@ -118,6 +118,9 @@ class _TournamentDirectorDashboardState
   TournamentAudioAnnouncementService get _audio =>
       _alertAudio ??= TournamentAudioAnnouncementService();
 
+  TournamentDisplayColors get _palette =>
+      TournamentDisplayPalette.forColorScheme(Theme.of(context).colorScheme);
+
   bool get _canRecomputeSchedule =>
       widget.tournament.directorPlayOrderMode == 'fixed_schedule' &&
       widget.onRecomputeSchedule != null;
@@ -523,9 +526,9 @@ class _TournamentDirectorDashboardState
                     controller: _recentResultsController,
                     padding: EdgeInsets.zero,
                     itemCount: entries.length,
-                    separatorBuilder: (context, index) => const Divider(
+                    separatorBuilder: (context, index) => Divider(
                       height: 1,
-                      color: TournamentDisplayPalette.border,
+                      color: _palette.border,
                     ),
                     itemBuilder: (context, index) => ConstrainedBox(
                       constraints: const BoxConstraints(minHeight: 66),
@@ -765,14 +768,14 @@ class _TournamentDirectorDashboardState
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: isPriority
-            ? TournamentDisplayPalette.cardEmphasis
-            : TournamentDisplayPalette.card,
+            ? _palette.cardEmphasis
+            : _palette.card,
         border: Border.all(
           color: isRunning
               ? Colors.green.shade700
               : isPriority
-              ? TournamentDisplayPalette.accent.withAlpha(180)
-              : TournamentDisplayPalette.border.withAlpha(150),
+              ? _palette.accent.withAlpha(180)
+              : _palette.border.withAlpha(150),
           width: isRunning || isPriority ? 2 : 1,
         ),
         borderRadius: BorderRadius.circular(10),
@@ -785,7 +788,7 @@ class _TournamentDirectorDashboardState
               Icon(
                 showResult ? Icons.check_circle_outline : Icons.sports_score,
                 size: 18,
-                color: TournamentDisplayPalette.mutedText,
+                color: _palette.mutedText,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -802,7 +805,7 @@ class _TournamentDirectorDashboardState
                             : 'Wartet'
                       : 'Nächste Partie',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: TournamentDisplayPalette.mutedText,
+                    color: _palette.mutedText,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -814,7 +817,7 @@ class _TournamentDirectorDashboardState
                   child: Text(
                     '!',
                     style: theme.textTheme.titleMedium?.copyWith(
-                      color: TournamentDisplayPalette.accent,
+                      color: _palette.accent,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -829,7 +832,7 @@ class _TournamentDirectorDashboardState
                   match.participantShortLabel,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: TournamentDisplayPalette.text,
+                    color: _palette.text,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -860,8 +863,11 @@ class _TournamentDirectorDashboardState
                     child: Container(
                       width: 240,
                       padding: const EdgeInsets.all(12),
-                      color: TournamentDisplayPalette.card,
-                      child: Text(match.participantShortLabel),
+                      color: _palette.card,
+                      child: Text(
+                        match.participantShortLabel,
+                        style: TextStyle(color: _palette.text),
+                      ),
                     ),
                   ),
                   childWhenDragging: const SizedBox(width: 48, height: 48),
@@ -891,9 +897,9 @@ class _TournamentDirectorDashboardState
                         child: Tooltip(
                           message:
                               'Ziehen, um die Reihenfolge zu ändern; Rechtsklick für Aktionen',
-                          child: const Icon(
+                          child: Icon(
                             Icons.drag_indicator,
-                            color: TournamentDisplayPalette.mutedText,
+                            color: _palette.mutedText,
                           ),
                         ),
                       ),
@@ -1030,12 +1036,12 @@ class _TournamentDirectorDashboardState
                       ? 'Frei'
                       : 'Reserve';
                   final accent = running != null
-                      ? TournamentDisplayPalette.accent
+                      ? _palette.accent
                       : blocked
                       ? Theme.of(context).colorScheme.error
                       : suggestion != null
                       ? Colors.green.shade700
-                      : TournamentDisplayPalette.mutedText;
+                      : _palette.mutedText;
                   final assignedGroups =
                       <String>{
                             ?running?.groupKey,
@@ -1050,11 +1056,11 @@ class _TournamentDirectorDashboardState
                     key: ValueKey('director-board-$board'),
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: TournamentDisplayPalette.card,
+                      color: _palette.card,
                       border: Border.all(
                         color: blocked
                             ? Theme.of(context).colorScheme.error.withAlpha(180)
-                            : TournamentDisplayPalette.border,
+                            : _palette.border,
                       ),
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -1099,7 +1105,7 @@ class _TournamentDirectorDashboardState
                               assignedGroups.join(' · '),
                               style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
-                                    color: TournamentDisplayPalette.mutedText,
+                                    color: _palette.mutedText,
                                   ),
                             ),
                           ),
@@ -1572,16 +1578,16 @@ class _TournamentDirectorDashboardState
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: TournamentDisplayPalette.card,
+            color: _palette.card,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: TournamentDisplayPalette.border),
+            border: Border.all(color: _palette.border),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
                 Icons.priority_high,
-                color: TournamentDisplayPalette.accent,
+                color: _palette.accent,
                 size: 20,
               ),
               const SizedBox(width: 8),
@@ -1589,7 +1595,7 @@ class _TournamentDirectorDashboardState
                 child: Text(
                   notice,
                   style: TextStyle(
-                    color: TournamentDisplayPalette.text,
+                    color: _palette.text,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
