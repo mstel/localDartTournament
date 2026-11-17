@@ -816,7 +816,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('recommended match table uses the second-screen navy palette', (
+  testWidgets('recommended match table uses theme-adaptive display palette', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -834,10 +834,13 @@ void main() {
     expect(tiles, findsWidgets);
     final decoration =
         tester.widget<Container>(tiles.first).decoration! as BoxDecoration;
-    expect(decoration.color, TournamentDisplayPalette.card);
+    final expectedPalette = TournamentDisplayPalette.forColorScheme(
+      ThemeData.light().colorScheme,
+    );
+    expect(decoration.color, expectedPalette.card);
     expect(
       (decoration.border! as Border).top.color,
-      TournamentDisplayPalette.border,
+      expectedPalette.border,
     );
     expect(tester.takeException(), isNull);
   });
