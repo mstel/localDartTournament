@@ -3346,16 +3346,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         onPressed: _addPlayer,
                         icon: const Icon(Icons.add),
                         tooltip: 'Teilnehmer hinzufügen',
-                        style: IconButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).brightness == Brightness.light
-                              ? Theme.of(context).colorScheme.surface
-                              : null,
-                          foregroundColor:
-                              Theme.of(context).brightness == Brightness.light
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                        ),
+                        style: filledIconButtonStyle(context),
                       ),
                       OutlinedButton.icon(
                         onPressed: _isOpeningPlayerPicker
@@ -3451,16 +3442,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     tooltip: _editingStageIndex == null
                         ? 'Phase hinzufügen'
                         : 'Phase speichern',
-                    style: IconButton.styleFrom(
-                      backgroundColor:
-                          Theme.of(context).brightness == Brightness.light
-                          ? Theme.of(context).colorScheme.surface
-                          : null,
-                      foregroundColor:
-                          Theme.of(context).brightness == Brightness.light
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                    ),
+                    style: filledIconButtonStyle(context),
                   ),
                 ),
                 const SizedBox(height: 12),

@@ -79,6 +79,110 @@ void main() {
     expect(dark.filledButtonTheme.style!.foregroundColor, isNull);
   });
 
+  test('Christmas filled buttons use fir green with white labels', () {
+    for (final theme in [
+      buildDartTournamentTheme(christmas: true),
+      buildDartTournamentDarkTheme(christmas: true),
+    ]) {
+      final style = theme.filledButtonTheme.style!;
+      final background = style.backgroundColor!.resolve(const <WidgetState>{});
+      final foreground = style.foregroundColor!.resolve(const <WidgetState>{});
+
+      expect(background, theme.colorScheme.primary);
+      expect(foreground, theme.colorScheme.onPrimary);
+      expect(
+        _contrastRatio(foreground!, background!),
+        greaterThanOrEqualTo(4.5),
+      );
+    }
+  });
+
+  testWidgets('Christmas filled icon buttons use fir green with white icons', (
+    tester,
+  ) async {
+    for (final theme in [
+      buildDartTournamentTheme(christmas: true),
+      buildDartTournamentDarkTheme(christmas: true),
+    ]) {
+      ButtonStyle? style;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Theme(
+              data: theme,
+              child: Builder(
+                builder: (context) {
+                  style = filledIconButtonStyle(context);
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(style, isNotNull);
+      final background = style!.backgroundColor!.resolve(const <WidgetState>{});
+      final foreground = style!.foregroundColor!.resolve(const <WidgetState>{});
+      expect(background, theme.colorScheme.primary);
+      expect(foreground, theme.colorScheme.onPrimary);
+      expect(
+        _contrastRatio(foreground!, background!),
+        greaterThanOrEqualTo(4.5),
+      );
+    }
+  });
+
+  testWidgets('club filled icon buttons keep their existing appearance', (
+    tester,
+  ) async {
+    final light = buildDartTournamentTheme();
+    final dark = buildDartTournamentDarkTheme();
+
+    ButtonStyle? lightStyle;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Theme(
+            data: light,
+            child: Builder(
+              builder: (context) {
+                lightStyle = filledIconButtonStyle(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(
+      lightStyle!.backgroundColor!.resolve(const <WidgetState>{}),
+      light.colorScheme.surface,
+    );
+    expect(
+      lightStyle!.foregroundColor!.resolve(const <WidgetState>{}),
+      light.colorScheme.primary,
+    );
+
+    ButtonStyle? darkStyle;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Theme(
+            data: dark,
+            child: Builder(
+              builder: (context) {
+                darkStyle = filledIconButtonStyle(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(darkStyle, isNull);
+  });
+
   testWidgets('Christmas second screen uses dark text in light app design', (
     tester,
   ) async {

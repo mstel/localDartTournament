@@ -1,5 +1,33 @@
 import 'package:flutter/material.dart';
 
+const Color _christmasPrimary = Color(0xFF183D32);
+
+/// Style for `IconButton.filled` and `IconButton.filledTonal` action buttons.
+///
+/// Christmas uses a solid fir-green fill with white icons in both brightnesses.
+/// The club light design keeps its white surface with primary-colored icons;
+/// club dark keeps the Material default.
+ButtonStyle? filledIconButtonStyle(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  if (scheme.primary == _christmasPrimary) {
+    return IconButton.styleFrom(
+      backgroundColor: scheme.primary,
+      foregroundColor: scheme.onPrimary,
+      disabledBackgroundColor: scheme.onSurface.withValues(alpha: .12),
+      disabledForegroundColor: scheme.onSurface.withValues(alpha: .38),
+    );
+  }
+  if (scheme.brightness == Brightness.light) {
+    return IconButton.styleFrom(
+      backgroundColor: scheme.surface,
+      foregroundColor: scheme.primary,
+      disabledBackgroundColor: scheme.surfaceContainerHighest,
+      disabledForegroundColor: scheme.onSurface.withValues(alpha: .38),
+    );
+  }
+  return null;
+}
+
 /// Club-inspired color palette for DC Unzenberg/Heinzenbach.
 ThemeData buildDartTournamentTheme({bool christmas = false}) =>
     _buildTheme(isDark: false, christmas: christmas);
@@ -10,7 +38,7 @@ ThemeData buildDartTournamentDarkTheme({bool christmas = false}) =>
 ThemeData _buildTheme({required bool isDark, required bool christmas}) {
   final ink = isDark ? const Color(0xFFF5F3ED) : const Color(0xFF191B20);
   final primary = christmas
-      ? const Color(0xFF183D32)
+      ? _christmasPrimary
       : (isDark ? const Color(0xFFD49B44) : const Color(0xFFB5811E));
   final bg = isDark ? const Color(0xFF121316) : const Color(0xFFF7F5F0);
   final surface = isDark ? const Color(0xFF1B1D24) : const Color(0xFFFFFFFF);
@@ -80,9 +108,24 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
       fontWeight: FontWeight.w700,
     ),
   );
-  // Light design: primary actions use a white surface with the club gold
-  // (or Christmas green) label, instead of a gold fill with dark text.
-  final actionButtonStyle = isDark
+  // Christmas keeps one high-contrast action style in both brightnesses:
+  // solid fir green with white labels, including tonal FilledButton variants.
+  // Club light keeps white surfaces with gold labels; club dark keeps the
+  // regular Material filled-button appearance.
+  final actionButtonStyle = christmas
+      ? filledButtonStyle.copyWith(
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.disabled)
+                ? scheme.onSurface.withValues(alpha: .12)
+                : scheme.primary;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.disabled)
+                ? scheme.onSurface.withValues(alpha: .38)
+                : scheme.onPrimary;
+          }),
+        )
+      : isDark
       ? filledButtonStyle
       : filledButtonStyle.copyWith(
           backgroundColor: WidgetStateProperty.resolveWith((states) {

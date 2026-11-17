@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../../../../app/app_theme.dart';
 import '../../../../../shared/theme/tournament_display_palette.dart';
 import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
@@ -672,14 +673,6 @@ class _TournamentDirectorDashboardState
                               match: entry.match,
                             ),
                           ),
-                          style: Theme.of(context).brightness == Brightness.light
-                              ? FilledButton.styleFrom(
-                                  backgroundColor:
-                                      Theme.of(context).colorScheme.surface,
-                                  foregroundColor:
-                                      Theme.of(context).colorScheme.primary,
-                                )
-                              : null,
                           child: Text(
                             '${widget.tournament.boardDisplayName(assignment.board)} starten',
                           ),
@@ -861,16 +854,7 @@ class _TournamentDirectorDashboardState
                       () => startOnBoard!(quickStartBoard, match: match),
                     ),
                     icon: const Icon(Icons.play_arrow_rounded),
-                    style: IconButton.styleFrom(
-                      backgroundColor:
-                          Theme.of(context).brightness == Brightness.light
-                          ? Theme.of(context).colorScheme.surface
-                          : null,
-                      foregroundColor:
-                          Theme.of(context).brightness == Brightness.light
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                    ),
+                    style: filledIconButtonStyle(context),
                   ),
                 ),
               if (showDragHandle && !isRunning)

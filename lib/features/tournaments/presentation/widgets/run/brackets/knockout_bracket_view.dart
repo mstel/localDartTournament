@@ -2114,6 +2114,7 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
                       : null,
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   tooltip: 'Ergebnis',
+                  style: filledIconButtonStyle(context),
                 ),
               ],
             ),
