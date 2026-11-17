@@ -34,6 +34,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final _playerCountController = TextEditingController(text: '8');
   final _groupCountController = TextEditingController(text: '2');
   final _groupQualifierCountController = TextEditingController(text: '8');
+  bool _groupQualifierCountEdited = false;
   final _bestOfQualifierCountController = TextEditingController(text: '0');
   final _database = LocalAppDatabase();
   late final Future<List<LocalRanking>> _localRankings = _database
@@ -52,6 +53,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   bool _groupTieBreakersTouched = false;
   final List<int> _groupRoundRobinRepeats = [];
   final List<int?> _groupMaxGamesPerPlayer = [];
+  final List<String> _groupMatchmakingStrategies = [];
+  Map<String, int> _groupMatchmakingRatings = const {};
 
   List<int?> _gameLimitsForGroupSizes(List<int> sizes) => [
     for (var i = 0; i < sizes.length; i++)
@@ -65,6 +68,20 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       _groupMaxGamesPerPlayer.add(null);
     }
     _groupMaxGamesPerPlayer[index] = limit;
+  });
+
+  List<String> _matchmakingStrategiesForGroupSizes(List<int> sizes) => [
+    for (var i = 0; i < sizes.length; i++)
+      _playTypesForGroupSizes(sizes)[i] == 'round_robin' &&
+              i < _groupMatchmakingStrategies.length
+          ? _groupMatchmakingStrategies[i]
+          : 'elo',
+  ];
+  void _setGroupMatchmakingStrategy(int index, String strategy) => setState(() {
+    while (_groupMatchmakingStrategies.length <= index) {
+      _groupMatchmakingStrategies.add('elo');
+    }
+    _groupMatchmakingStrategies[index] = strategy;
   });
   final List<int> _fixedQualifiersByGroup = [];
   int? _manualExtraRank;
@@ -1602,6 +1619,19 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
   }
 
+  void _applyDefaultGroupQualifierCount() {
+    if (widget.existingTournament != null || _groupQualifierCountEdited) {
+      return;
+    }
+    final participantCount =
+        _players.isNotEmpty
+            ? _players.length
+            : int.tryParse(_playerCountController.text);
+    if (participantCount == null || participantCount < 1) return;
+    final defaultCount = (participantCount / 2).round().clamp(1, participantCount);
+    _groupQualifierCountController.text = '$defaultCount';
+  }
+
   void _generatePlayers() {
     final requestedCount = int.tryParse(_playerCountController.text);
     if (requestedCount == null || requestedCount < 1) {
@@ -1969,6 +1999,12 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       groupMaxGamesPerPlayer: _isGroupStageForm
           ? _gameLimitsForGroupSizes(_calculateGroupSizes())
           : const [],
+      groupMatchmakingStrategies: _isGroupStageForm
+          ? _matchmakingStrategiesForGroupSizes(_calculateGroupSizes())
+          : const [],
+      groupMatchmakingRatings: _isGroupStageForm
+          ? Map.unmodifiable(_groupMatchmakingRatings)
+          : const {},
       groupDrawOnStart: _selectedStageType == 'groups'
           ? _groupDrawOnStart
           : false,
@@ -2047,6 +2083,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _kratzerHandicapsEnabled = false;
     _groupRoundRobinRepeats.clear();
     _groupMaxGamesPerPlayer.clear();
+    _groupMatchmakingStrategies.clear();
+    _groupMatchmakingRatings = const {};
     _fixedQualifiersByGroup.clear();
     _manualExtraRank = null;
     _manualExtraCount = null;
@@ -2096,6 +2134,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       _tieBreakGameFormat = stage.tieBreakGameFormat;
 
       if (stage.isGroupStage) {
+        _groupQualifierCountEdited = true;
         _groupCountController.text = '${stage.groupSizes.length}';
         _groupQualifierCountController.text =
             '${stage.qualifiedParticipantCount ?? stage.groupSizes.fold<int>(0, (sum, size) => sum + size)}';
@@ -2108,6 +2147,12 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _groupMaxGamesPerPlayer
           ..clear()
           ..addAll(stage.groupMaxGamesPerPlayer);
+        _groupMatchmakingStrategies
+          ..clear()
+          ..addAll(stage.groupMatchmakingStrategies);
+        _groupMatchmakingRatings = Map.unmodifiable(
+          stage.groupMatchmakingRatings,
+        );
         _groupTieBreakers
           ..clear()
           ..addAll(stage.groupTieBreakers);
@@ -2139,6 +2184,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _selectedExtraGroups.clear();
         _groupRoundRobinRepeats.clear();
         _groupMaxGamesPerPlayer.clear();
+        _groupMatchmakingStrategies.clear();
+        _groupMatchmakingRatings = const {};
         _fixedQualifiersByGroup.clear();
         _manualExtraRank = null;
         _manualExtraCount = null;
@@ -2424,13 +2471,29 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ? 'Neues Turnier'
           : _tournamentNameController.text.trim();
       final existing = widget.existingTournament;
-      final stages = List<TournamentStage>.unmodifiable(
-        _preserveExistingGroupAssignment(existing, _stages),
+      final preparedStages = _preserveExistingGroupAssignment(existing, _stages);
+      final needsMatchmakingRatings = preparedStages.any(
+        (stage) => stage.groupSizes.asMap().entries.any(
+          (entry) =>
+              stage.maxGamesForGroup(entry.key) != null &&
+              stage.matchmakingStrategyForGroup(entry.key) != 'random',
+        ),
       );
-      final groupRatings =
-          _groupAllocationMode == GroupPlayerAllocationMode.random
-          ? const <String, int>{}
-          : await _loadGroupRatings();
+      final loadedGroupRatings =
+          needsMatchmakingRatings || _groupMatchmakingRatings.isNotEmpty
+          ? await _loadGroupRatings()
+          : const <String, int>{};
+      final stages = List<TournamentStage>.unmodifiable([
+        for (final stage in preparedStages)
+          stage.isGroupStage
+              ? stage.copyWith(
+                  groupMatchmakingRatings: loadedGroupRatings.isEmpty
+                      ? stage.groupMatchmakingRatings
+                      : loadedGroupRatings,
+                )
+              : stage,
+      ]);
+      final groupRatings = loadedGroupRatings;
       final settingsChanged =
           existing != null &&
           (jsonEncode(
@@ -2583,13 +2646,22 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ratingsByPlayer.putIfAbsent(entry.id, () => []).add(entry.rating);
       }
     }
-    return {
+    final ratings = <String, int>{
       for (final entry in ratingsByPlayer.entries)
         entry.key:
             (entry.value.reduce((sum, rating) => sum + rating) /
                     entry.value.length)
                 .round(),
     };
+    for (final player in _players) {
+      final profileId = player.profileId;
+      if (profileId == null) continue;
+      final rating = ratings[profileId];
+      if (rating == null) continue;
+      ratings[player.name.trim().toLowerCase()] = rating;
+      ratings[player.name] = rating;
+    }
+    return ratings;
   }
 
   List<TournamentStage> _preserveExistingGroupAssignment(
@@ -3407,6 +3479,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 if (expanded) {
                   _nameParticipantSectionController.collapse();
                   _summarySectionController.collapse();
+                  _applyDefaultGroupQualifierCount();
                 }
               },
               children: [
@@ -3827,6 +3900,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           repeats: _roundRobinRepeatsForGroupSizes(groupSizes),
                           limits: _gameLimitsForGroupSizes(groupSizes),
                           onChanged: _setGroupGameLimit,
+                          strategies: _matchmakingStrategiesForGroupSizes(
+                            groupSizes,
+                          ),
+                          onStrategyChanged: _setGroupMatchmakingStrategy,
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -3852,7 +3929,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         border: OutlineInputBorder(),
                         labelText: 'Weiterkommende',
                       ),
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (_) {
+                        _groupQualifierCountEdited = true;
+                        setState(() {});
+                      },
                     ),
                     trailing: ExpertSetupSection(
                       title: 'Weiterkommen im Detail',

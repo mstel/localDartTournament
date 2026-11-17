@@ -11,6 +11,7 @@ import 'features/tournaments/presentation/widgets/run/tournament_director_dashbo
 import 'features/tournaments/presentation/widgets/run/tournament_timing_panel.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_run_settings_panel.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_schedule_pdf_button.dart';
+import 'features/tournaments/presentation/widgets/run/fixed_schedule_editor.dart';
 import 'features/tournaments/presentation/utils/match_display_label.dart';
 import 'features/tournaments/presentation/widgets/creation/expert_setup_section.dart';
 import 'features/tournaments/presentation/widgets/creation/triple_ko_preview_sections.dart';

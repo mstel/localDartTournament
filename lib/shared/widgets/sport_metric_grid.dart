@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/app_theme.dart';
 import 'adaptive_content.dart';
 
 class SportMetric {
@@ -28,7 +29,7 @@ class SportMetricGrid extends StatelessWidget {
               Icon(
                 metric.icon,
                 size: 20,
-                color: Theme.of(context).colorScheme.primary,
+                color: appAccentColor(context),
               ),
               const SizedBox(height: 8),
               Text(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
+
 /// Optional settings with a stable disclosure state and isolated scroll storage.
 class SportSettingsSection extends StatefulWidget {
   const SportSettingsSection({
@@ -51,7 +53,7 @@ class SportSettingsSectionState extends State<SportSettingsSection>
         onExpansionChanged: widget.onExpansionChanged,
         leading: Icon(
           widget.icon,
-          color: Theme.of(context).colorScheme.primary,
+          color: appAccentColor(context),
         ),
         title: Text(widget.title),
         subtitle: Text(widget.summary),

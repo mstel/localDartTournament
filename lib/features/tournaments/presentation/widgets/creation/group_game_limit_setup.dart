@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../domain/engines/limited_round_robin_engine.dart';
 import '../../../domain/tournament_models.dart';
 
 class GroupGameLimitSetup extends StatelessWidget {
@@ -9,11 +10,15 @@ class GroupGameLimitSetup extends StatelessWidget {
     required this.repeats,
     required this.limits,
     required this.onChanged,
+    this.strategies,
+    this.onStrategyChanged,
   });
   final List<int> groupSizes, repeats;
   final List<String> playTypes;
   final List<int?> limits;
+  final List<String>? strategies;
   final void Function(int group, int? limit) onChanged;
+  final void Function(int group, String strategy)? onStrategyChanged;
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -53,6 +58,27 @@ class GroupGameLimitSetup extends StatelessWidget {
                   ),
               ],
               onChanged: (value) => onChanged(i, value),
+            ),
+          if (limits[i] != null &&
+              strategies != null &&
+              onStrategyChanged != null)
+            DropdownButtonFormField<String>(
+              key: ValueKey('group-matchmaking-strategy-${i + 1}'),
+              initialValue: i < strategies!.length ? strategies![i] : 'elo',
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Gegnerauswahl',
+              ),
+              items: [
+                for (final strategy in limitedRoundRobinMatchmakingStrategies)
+                  DropdownMenuItem(
+                    value: strategy,
+                    child: Text(limitedRoundRobinMatchmakingLabel(strategy)),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) onStrategyChanged!(i, value);
+              },
             ),
           const SizedBox(height: 12),
         ],

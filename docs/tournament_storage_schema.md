@@ -1,8 +1,8 @@
 # Turnierspeicher: Schema und Migrationen
 
-Stand: 2026-10-20. Die führende Versionskonstante ist
-`TournamentStorage._schemaVersion` in
-`lib/features/tournaments/data/tournament_storage.dart` (aktuell **25**).
+Stand: 2026-11-17. Die führende Versionskonstante ist
+`TournamentStorage.schemaVersion` in
+`lib/features/tournaments/data/tournament_storage.dart` (aktuell **45**).
 Änderungen an gespeicherten Turnierdaten müssen die Version dort, diese
 Chronik und die Migrations-/Backup-Tests gemeinsam aktualisieren. Ältere
 Speicherstände werden beim nächsten Schreiben auf die aktuelle Version
@@ -35,6 +35,8 @@ versionsgebundene Sicherung an. Höhere unbekannte Versionen werden abgelehnt.
 | 23 | Kein eigenständiger JSON-Schemawechsel in der Release-Historie belegt | Bekannte Felder bleiben erhalten |
 | 24 | In `v1.0.3+3` als Versionsstand verwendet; die Serialisierung enthält zusätzlich explizit `countsForRanking` | Nur mit exakt übereinstimmender v22-Sicherung als belegter Recovery-Fall lesbar |
 | 25 | Strukturell unveränderte Serialisierung; neue Leser-Grenze verhindert ungeprüftes Schreiben in v24-Dateien | Normales Lesen und Schreiben |
+| 26–44 | Weitere featurebezogene Feld- und Migrationsschritte; im Quelltext nicht einzeln dokumentiert | Bestehende Felder bleiben über Model-Defaults lesbar |
+| 45 | Strategie und Einschätzungen für begrenztes Round-Robin je Gruppe | Alte Turniere nutzen `elo` und leere Bewertungen |
 
 Der veröffentlichte Tag `v1.0.3+3` setzte die Versionskonstante auf 24;
 `v1.0.4+4` senkte sie ohne eine entsprechende JSON-Migration auf 23 zurück.

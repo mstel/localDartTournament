@@ -60,6 +60,10 @@ const Map<String, String> _monitorWidgetTitles = {
 
 enum _StandingsDisplayMode { standings, forecast }
 
+String _combinedMonitorWidgetTitle(bool isTeamMode) => isTeamMode
+    ? 'Tabellen & Zwischenstände / Mannschaftsvergleich'
+    : 'Tabellen/Siegprognose mit Umschalter';
+
 const String _standardMonitorLayoutName = 'Standard';
 
 class _CompletionPlayerStats {
@@ -2064,7 +2068,9 @@ class _TournamentSecondScreenViewState
     required List<GroupMatch> playedMatches,
     required bool isEditing,
   }) {
-    final title = _monitorWidgetTitles[placement.widgetId];
+    final title = placement.widgetId == 'combined'
+        ? _combinedMonitorWidgetTitle(tournament.leagueMatch != null)
+        : _monitorWidgetTitles[placement.widgetId];
     if (title == null) return const SizedBox.shrink();
     final widgetContent = _buildMonitorWidgetContent(
       context,
@@ -3293,6 +3299,10 @@ class _TournamentSecondScreenViewState
   }
 
   Widget _buildStandingsDisplaySelector(BuildContext context, double width) {
+    final isTeamMode = widget.tournament.leagueMatch != null;
+    final comparisonLabel = isTeamMode
+        ? 'Mannschaftsvergleich'
+        : 'Siegprognose & Weiterkommen';
     if (width < 560) {
       return DropdownButton<_StandingsDisplayMode>(
         value: _standingsDisplayMode,
@@ -3302,9 +3312,9 @@ class _TournamentSecondScreenViewState
             value: _StandingsDisplayMode.standings,
             child: Text('Tabellen & Zwischenstände'),
           ),
-          const DropdownMenuItem(
+          DropdownMenuItem(
             value: _StandingsDisplayMode.forecast,
-            child: Text('Siegprognose & Weiterkommen'),
+            child: Text(comparisonLabel),
           ),
         ],
         onChanged: (mode) {
@@ -3315,15 +3325,15 @@ class _TournamentSecondScreenViewState
       );
     }
     return SegmentedButton<_StandingsDisplayMode>(
-      segments: const [
-        ButtonSegment(
+      segments: [
+        const ButtonSegment(
           value: _StandingsDisplayMode.standings,
           label: Text('Tabellen & Zwischenstände'),
           icon: Icon(Icons.table_chart_outlined),
         ),
         ButtonSegment(
           value: _StandingsDisplayMode.forecast,
-          label: Text('Siegprognose & Weiterkommen'),
+          label: Text(comparisonLabel),
           icon: Icon(Icons.account_tree_outlined),
         ),
       ],
@@ -4079,7 +4089,9 @@ class _TournamentSecondScreenViewState
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  hasPrognosis
+                  t.leagueMatch != null
+                      ? 'Mannschaftsvergleich'
+                      : hasPrognosis
                       ? 'Siegprognose & Weiterkommen'
                       : 'Turnierbaum Vorschau',
                   style: TextStyle(
@@ -4093,7 +4105,9 @@ class _TournamentSecondScreenViewState
           ),
           const SizedBox(height: 8),
           Text(
-            hasPrognosis
+            t.leagueMatch != null
+                ? 'Direkter Vergleich der Mannschaften und aktuelle Zwischenstände:'
+                : hasPrognosis
                 ? 'Sieg- und Weiterkommen-Wahrscheinlichkeiten basierend auf aktuellen Tabellenständen:'
                 : 'Turnierbaum der finalen Phase:',
             style: TextStyle(fontSize: 12, color: colors.mutedText),
@@ -4200,6 +4214,13 @@ class _TournamentSecondScreenViewState
       );
     }
 
+    String percentText(double value) {
+      final formatted = value.toStringAsFixed(1);
+      return formatted.endsWith('.0')
+          ? '${formatted.substring(0, formatted.length - 2)}%'
+          : '$formatted%';
+    }
+
     return Container(
       key: ValueKey('second-screen-forecast-group-$groupNumber'),
       constraints: const BoxConstraints(minWidth: 300),
@@ -4236,20 +4257,18 @@ class _TournamentSecondScreenViewState
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 320),
+              constraints: const BoxConstraints(minWidth: 260),
               child: Table(
                 columnWidths: const {
-                  0: FixedColumnWidth(28),
-                  2: FixedColumnWidth(92),
-                  3: FixedColumnWidth(92),
+                  1: FixedColumnWidth(64),
+                  2: FixedColumnWidth(64),
                 },
                 children: [
                   TableRow(
                     children: [
-                      headerCell('#', align: TextAlign.center),
                       headerCell('Teilnehmer'),
                       headerCell('% Sieg', align: TextAlign.end),
-                      headerCell('% weiter', align: TextAlign.end),
+                      headerCell('% Weiter', align: TextAlign.end),
                     ],
                   ),
                   for (var rank = 0; rank < standings.length; rank++)
@@ -4262,6 +4281,7 @@ class _TournamentSecondScreenViewState
                               const AdvancementChance(
                                 groupWinProbability: 0,
                                 advancementProbability: 0,
+                                tournamentWinProbability: 0,
                               );
                           final isCertain = const QualificationCertainty()
                               .isCertain(
@@ -4276,20 +4296,9 @@ class _TournamentSecondScreenViewState
                               ? certainColor
                               : colors.mutedText;
                           final tooltip =
-                              'Siegchance: ${chance.groupWinProbability.toStringAsFixed(1)} %\n'
+                              'Turniersieg: ${chance.tournamentWinProbability.toStringAsFixed(1)} %\n'
                               'Weiterkommen: ${chance.advancementProbability.toStringAsFixed(1)} %';
                           return [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Text(
-                                '${rank + 1}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: valueColor,
-                                ),
-                              ),
-                            ),
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 4,
@@ -4312,7 +4321,7 @@ class _TournamentSecondScreenViewState
                               child: Tooltip(
                                 message: tooltip,
                                 child: Text(
-                                  '${chance.groupWinProbability.toStringAsFixed(1)} % Sieg',
+                                  percentText(chance.tournamentWinProbability),
                                   textAlign: TextAlign.end,
                                   style: TextStyle(
                                     fontSize: 11,
@@ -4327,7 +4336,7 @@ class _TournamentSecondScreenViewState
                               child: Tooltip(
                                 message: tooltip,
                                 child: Text(
-                                  '${chance.advancementProbability.toStringAsFixed(1)} % weiter',
+                                  percentText(chance.advancementProbability),
                                   textAlign: TextAlign.end,
                                   style: TextStyle(
                                     fontSize: 11,
@@ -5103,6 +5112,27 @@ class _TournamentSecondScreenViewState
                                             : boards.length * 3,
                                       )
                                       .toList();
+                                  final assignedGroupLabels =
+                                      tournament.directorSchedulingStrategy ==
+                                              'group'
+                                          ? upcoming
+                                              .map(
+                                                (assignment) =>
+                                                    assignment.entry.groupKey,
+                                              )
+                                              .whereType<String>()
+                                              .toSet()
+                                              .map((key) {
+                                                final prefix = '$activeIndex:';
+                                                return key.startsWith(prefix)
+                                                    ? key.substring(
+                                                      prefix.length,
+                                                    )
+                                                    : key;
+                                              })
+                                              .where((name) => name.isNotEmpty)
+                                              .toList()
+                                          : const <String>[];
                                   final statuses = [
                                     for (final boardNumber in boards)
                                       (
@@ -5143,8 +5173,6 @@ class _TournamentSecondScreenViewState
                                   final anyRunning = statuses.any(
                                     (status) => status.label == 'Besetzt',
                                   );
-                                  final canAssignNow =
-                                      !anyRunning && !allBlocked;
                                   final span = boards.length > 1 ? 2 : 1;
                                   final tileWidth =
                                       singleColumnWidth * span +
@@ -5199,13 +5227,13 @@ class _TournamentSecondScreenViewState
                                                     fontSize: 12,
                                                   ),
                                                 ),
-                                                if (canAssignNow)
-                                                  const TextSpan(
-                                                    text: ' · JETZT ZUWEISEN',
+                                                if (assignedGroupLabels
+                                                    .isNotEmpty)
+                                                  TextSpan(
+                                                    text:
+                                                        ' · ${assignedGroupLabels.join(' & ')}',
                                                     style: TextStyle(
-                                                      color: Color(
-                                                        0xFF4ED9A4,
-                                                      ),
+                                                      color: colors.accent,
                                                       fontWeight:
                                                           FontWeight.w700,
                                                       fontSize: 12,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../../app/app_theme.dart';
 import '../../application/home_overview_service.dart';
 import '../../../settings/data/app_presentation_preferences.dart';
 
@@ -165,7 +166,7 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
     final theme = Theme.of(context);
     return _PanelCard(
       onTap: () => widget.onOpenTournament(tournament.id),
-      borderColor: theme.colorScheme.primary,
+      borderColor: appAccentColor(context),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 560;
@@ -180,12 +181,12 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
                   Text(
                     'AKTUELLES TURNIER',
                     style: theme.textTheme.labelLarge?.copyWith(
-                      color: theme.colorScheme.primary,
+                      color: appAccentColor(context),
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.1,
                     ),
                   ),
-                  _StatusChip(label: 'Läuft', color: theme.colorScheme.primary),
+                  _StatusChip(label: 'Läuft', color: appAccentColor(context)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -231,7 +232,7 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
               Text(
                 'Turnier öffnen',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.primary,
+                  color: appAccentColor(context),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -261,13 +262,13 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
               children: [
                 Icon(
                   _iconFor(card.icon),
-                  color: theme.colorScheme.primary,
+                  color: appAccentColor(context),
                   size: 22,
                 ),
                 Text(
                   card.title.toUpperCase(),
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.primary,
+                    color: appAccentColor(context),
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1,
                   ),
@@ -304,7 +305,7 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
                         ? Icons.circle
                         : Icons.circle_outlined,
                     size: 10,
-                    color: theme.colorScheme.primary,
+                    color: appAccentColor(context),
                   ),
               ],
             ),

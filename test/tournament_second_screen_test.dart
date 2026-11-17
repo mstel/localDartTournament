@@ -591,6 +591,42 @@ void main() {
     });
   }
 
+  testWidgets('league substitutions appear in the monitor activity panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const message =
+        'Heimmannschaft hat Lena gegen Jonas ausgewechselt. '
+        'Übrige Auswechselungen: 1';
+    final tournament = _completedLeagueTournament()
+      ..finishedAt = null
+      ..addActivity(
+        'substitution',
+        message,
+        timestamp: DateTime(2026, 11, 17, 11, 30),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Aktuelles'), findsOneWidget);
+    expect(find.text(message), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('running matches are clearly separated from suggestions', (
     tester,
   ) async {
@@ -669,7 +705,11 @@ void main() {
       find.textContaining('EMPFOHLENE PARTIEN FÜR BOARD 1'),
       findsNothing,
     );
-    expect(find.textContaining('JETZT ZUWEISEN'), findsNWidgets(3));
+    expect(find.textContaining('JETZT ZUWEISEN'), findsNothing);
+    expect(
+      find.textContaining('Empfohlene Partien · Gruppe A'),
+      findsWidgets,
+    );
     final firstBoardQueueFinder = find.byKey(
       const ValueKey('second-screen-director-board-1'),
     );
@@ -1090,7 +1130,7 @@ void main() {
           of: boardTile,
           matching: find.textContaining('JETZT ZUWEISEN'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.descendant(
@@ -1123,7 +1163,7 @@ void main() {
         of: find.byKey(const ValueKey('second-screen-director-board-2')),
         matching: find.textContaining('JETZT ZUWEISEN'),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });
@@ -1572,8 +1612,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Siegprognose & Weiterkommen'), findsNWidgets(2));
-    expect(find.textContaining('73.0 % Sieg'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('88.0 % weiter'), findsAtLeastNWidgets(1));
+    expect(find.text('73%'), findsAtLeastNWidgets(1));
+    expect(find.text('88%'), findsAtLeastNWidgets(1));
     expect(forecastService.calls, 1);
     await tester.tap(find.text('Tabellen & Zwischenstände'));
     await tester.pumpAndSettle();
@@ -1621,7 +1661,7 @@ void main() {
       lessThan(tester.getCenter(groupB).dx),
     );
     expect(find.text('% Sieg'), findsNWidgets(2));
-    expect(find.text('% weiter'), findsNWidgets(2));
+    expect(find.text('% Weiter'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
@@ -3710,6 +3750,7 @@ class _FixedForecastService extends GroupAdvancementForecastService {
         player.profileId ?? player.name: const AdvancementChance(
           groupWinProbability: 73,
           advancementProbability: 88,
+          tournamentWinProbability: 73,
         ),
     };
   }

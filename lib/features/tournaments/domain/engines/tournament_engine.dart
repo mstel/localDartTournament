@@ -45,12 +45,18 @@ class TournamentEngine {
     List<TournamentPlayer> players, {
     int repeatCount = 1,
     int? maxGamesPerPlayer,
+    String matchmakingStrategy = 'elo',
+    Map<String, int> ratings = const {},
+    int? seed,
   }) {
     if (maxGamesPerPlayer != null) {
       return LimitedRoundRobinEngine.build(
         players,
         maxGamesPerPlayer: maxGamesPerPlayer,
         repeatCount: repeatCount,
+        matchmakingStrategy: matchmakingStrategy,
+        ratings: ratings,
+        seed: seed,
       );
     }
     final matches = <GroupMatch>[];

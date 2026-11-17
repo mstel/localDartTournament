@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../app/app_theme.dart';
 import '../application/supabase_workspace_sync_service.dart';
 import '../../accounts/data/supabase_account_config.dart';
 import '../../accounts/data/supabase_auth_diagnostics.dart';
@@ -518,7 +519,7 @@ class _OperatorSignInDialogState extends State<OperatorSignInDialog> {
                   child: Text(
                     _infoMessage!,
                     style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
+                      color: appAccentColor(context),
                       fontSize: 13,
                     ),
                   ),

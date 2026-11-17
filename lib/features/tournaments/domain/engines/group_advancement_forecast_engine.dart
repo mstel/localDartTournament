@@ -17,10 +17,17 @@ class AdvancementChance {
   const AdvancementChance({
     required this.groupWinProbability,
     required this.advancementProbability,
+    required this.tournamentWinProbability,
   });
 
+  /// Chance to finish the group in first place.
   final double groupWinProbability;
+
+  /// Chance to reach the next stage.
   final double advancementProbability;
+
+  /// Chance to win the whole tournament, including the following K.O. stage.
+  final double tournamentWinProbability;
 }
 
 class GroupAdvancementForecastEngine {
@@ -31,6 +38,7 @@ class GroupAdvancementForecastEngine {
     Map<String, GroupAdvancementPlayerData> players = const {},
     int simulations = 3000,
     int seed = 19,
+    KnockoutTournamentRunStage? knockoutStage,
   }) {
     if (simulations < 1) throw ArgumentError.value(simulations, 'simulations');
     final plan = stage.qualificationPlan;
@@ -38,7 +46,10 @@ class GroupAdvancementForecastEngine {
     final random = Random(seed);
     final outcomes = <String, _ChanceTotals>{};
     final simulatedStandings = <List<List<_SimulatedStanding>>>[];
-
+    final advancingBySimulation = List<List<String>>.generate(
+      simulations,
+      (_) => <String>[],
+    );
     for (var groupIndex = 0; groupIndex < stage.groups.length; groupIndex++) {
       final group = stage.groups[groupIndex];
       final base = _baseStandings(group);
@@ -66,21 +77,7 @@ class GroupAdvancementForecastEngine {
           final homeStanding = standings[_playerKey(home)];
           final awayStanding = standings[_playerKey(away)];
           if (homeStanding == null || awayStanding == null) continue;
-          final homeData =
-              players[_playerKey(home)] ?? const GroupAdvancementPlayerData();
-          final awayData =
-              players[_playerKey(away)] ?? const GroupAdvancementPlayerData();
-          final eloChance = eloExpectedScore(homeData.rating, awayData.rating);
-          final historyChance =
-              (0.5 +
-                      (homeData.historicalWinRate -
-                              awayData.historicalWinRate) /
-                          2)
-                  .clamp(0.05, 0.95);
-          final homeChance = (eloChance * 0.7 + historyChance * 0.3).clamp(
-            0.05,
-            0.95,
-          );
+          final homeChance = _winProbability(_playerKey(home), _playerKey(away), players);
           final homeWins = random.nextDouble() < homeChance;
           final winnerLegs = 2;
           final loserLegs = random.nextDouble() < 0.35 ? 1 : 0;
@@ -99,11 +96,14 @@ class GroupAdvancementForecastEngine {
       final fixedPlaces = groupIndex < plan.fixedByGroup.length
           ? plan.fixedByGroup[groupIndex]
           : plan.fixedPerGroup;
-      for (final ranked in groupSimulations) {
+      for (var simulation = 0; simulation < simulations; simulation++) {
+        final ranked = groupSimulations[simulation];
         if (ranked.isEmpty) continue;
         outcomes[ranked.first.key]!.groupWins++;
         for (var place = 0; place < min(fixedPlaces, ranked.length); place++) {
-          outcomes[ranked[place].key]!.advances++;
+          final key = ranked[place].key;
+          outcomes[key]!.advances++;
+          advancingBySimulation[simulation].add(key);
         }
       }
     }
@@ -134,8 +134,27 @@ class GroupAdvancementForecastEngine {
               : a.groupIndex.compareTo(b.groupIndex);
         });
         for (final candidate in candidates.take(plan.extraCount)) {
-          outcomes[candidate.standing.key]!.advances++;
+          final key = candidate.standing.key;
+          outcomes[key]!.advances++;
+          if (!advancingBySimulation[simulation].contains(key)) {
+            advancingBySimulation[simulation].add(key);
+          }
         }
+      }
+    }
+
+    if (knockoutStage != null && knockoutStage.rounds.isNotEmpty) {
+      for (var simulation = 0; simulation < simulations; simulation++) {
+        final field = _orderedKnockoutField(
+          advancingBySimulation[simulation],
+          knockoutStage,
+        );
+        final champion = _simulateKnockoutChampion(
+          field,
+          players,
+          random,
+        );
+        if (champion != null) outcomes[champion]!.tournamentWins++;
       }
     }
 
@@ -144,8 +163,70 @@ class GroupAdvancementForecastEngine {
         entry.key: AdvancementChance(
           groupWinProbability: entry.value.groupWins * 100 / simulations,
           advancementProbability: entry.value.advances * 100 / simulations,
+          tournamentWinProbability:
+              entry.value.tournamentWins * 100 / simulations,
         ),
     };
+  }
+
+  double _winProbability(
+    String homeKey,
+    String awayKey,
+    Map<String, GroupAdvancementPlayerData> players,
+  ) {
+    final homeData =
+        players[homeKey] ?? const GroupAdvancementPlayerData();
+    final awayData =
+        players[awayKey] ?? const GroupAdvancementPlayerData();
+    final eloChance = eloExpectedScore(homeData.rating, awayData.rating);
+    final historyChance =
+        (0.5 + (homeData.historicalWinRate - awayData.historicalWinRate) / 2)
+            .clamp(0.05, 0.95);
+    return (eloChance * 0.7 + historyChance * 0.3).clamp(0.05, 0.95);
+  }
+
+  /// Keep the real bracket order where possible; unknown qualifiers are added
+  /// afterwards so every simulation still has a complete field.
+  List<String> _orderedKnockoutField(
+    List<String> advancing,
+    KnockoutTournamentRunStage knockoutStage,
+  ) {
+    final advancingSet = advancing.toSet();
+    final ordered = <String>[];
+    for (final player in knockoutStage.participants) {
+      final key = _playerKey(player);
+      if (advancingSet.contains(key) && !ordered.contains(key)) {
+        ordered.add(key);
+      }
+    }
+    for (final key in advancing) {
+      if (!ordered.contains(key)) ordered.add(key);
+    }
+    return ordered;
+  }
+
+  String? _simulateKnockoutChampion(
+    List<String> field,
+    Map<String, GroupAdvancementPlayerData> players,
+    Random random,
+  ) {
+    var round = List<String>.from(field);
+    if (round.length < 2) return round.isEmpty ? null : round.first;
+    while (round.length > 1) {
+      final next = <String>[];
+      for (var index = 0; index + 1 < round.length; index += 2) {
+        final home = round[index];
+        final away = round[index + 1];
+        next.add(
+          random.nextDouble() < _winProbability(home, away, players)
+              ? home
+              : away,
+        );
+      }
+      if (round.length.isOdd) next.add(round.last);
+      round = next;
+    }
+    return round.first;
   }
 
   Map<String, _SimulatedStanding> _baseStandings(TournamentGroup group) {
@@ -310,4 +391,5 @@ class _HeadToHeadRecord {
 class _ChanceTotals {
   int groupWins = 0;
   int advances = 0;
+  int tournamentWins = 0;
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../app/app_theme.dart';
 import '../../../league/domain/league_match.dart';
 import '../../domain/tournament_models.dart';
 import '../../domain/tournament_winner.dart';
@@ -141,7 +142,7 @@ class TournamentSummaryCard extends StatelessWidget {
               Text(
                 typeLabel,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.primary,
+                  color: appAccentColor(context),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -239,12 +240,12 @@ class TournamentSummaryCard extends StatelessWidget {
                     child: Text(
                       '$status · ${complete ? 'Ergebnisse ansehen' : 'Turnier öffnen'}',
                       style: TextStyle(
-                        color: scheme.primary,
+                        color: appAccentColor(context),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                  Icon(Icons.arrow_forward, color: scheme.primary),
+                  Icon(Icons.arrow_forward, color: appAccentColor(context)),
                 ],
               ),
             ],

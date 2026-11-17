@@ -146,7 +146,7 @@ void main() {
 
       final upgradedDocument =
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      expect(upgradedDocument['schemaVersion'], 44);
+      expect(upgradedDocument['schemaVersion'], 45);
       final upgradedTournament =
           (upgradedDocument['tournaments'] as List).single
               as Map<String, dynamic>;

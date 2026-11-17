@@ -80,7 +80,28 @@ class GroupAdvancementForecastService {
       players: playerData,
       simulations: simulations,
       seed: _seed(tournament.id, stage.name),
+      knockoutStage: _nextKnockoutStage(tournament, stage),
     );
+  }
+
+  KnockoutTournamentRunStage? _nextKnockoutStage(
+    CreatedTournament tournament,
+    GroupTournamentRunStage stage,
+  ) {
+    var start = tournament.runStages.indexWhere(
+      (candidate) => identical(candidate, stage),
+    );
+    if (start < 0) {
+      start = tournament.runStages.indexWhere(
+        (candidate) => candidate.name == stage.name,
+      );
+    }
+    if (start < 0) return null;
+    for (var index = start + 1; index < tournament.runStages.length; index++) {
+      final candidate = tournament.runStages[index];
+      if (candidate is KnockoutTournamentRunStage) return candidate;
+    }
+    return null;
   }
 
   int _seed(String tournamentId, String stageName) {

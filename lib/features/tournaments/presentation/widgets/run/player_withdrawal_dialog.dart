@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../../app/app_theme.dart';
 import '../../../domain/player_withdrawal.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../application/player_withdrawal_service.dart';
@@ -90,7 +91,7 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
                         child: Icon(
                           Icons.help_outline,
                           size: 20,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: appAccentColor(context),
                         ),
                       ),
                     ],

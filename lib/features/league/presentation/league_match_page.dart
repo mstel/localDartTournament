@@ -859,10 +859,13 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       final roster = homeSide
           ? next.leagueMatch!.homePlayers
           : next.leagueMatch!.awayPlayers;
+      final remainingAfter = next.leagueMatch!.substitutionsRemaining(
+        teamSide,
+      );
       next.addActivity(
         'substitution',
-        '$teamName hat ${roster[choice.$1]} ausgewechselt und '
-            '${roster[choice.$2]} eingewechselt',
+        '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
+        'ausgewechselt. Übrige Auswechselungen: $remainingAfter',
       );
       await _save(next, rethrowError: true);
     } catch (error) {

@@ -133,6 +133,37 @@ void main() {
     }
   });
 
+  test('Christmas dark secondary controls use a readable green foreground', () {
+    final theme = buildDartTournamentDarkTheme(christmas: true);
+    const accent = Color(0xFF72D58D);
+    final styles = [
+      theme.textButtonTheme.style!,
+      theme.outlinedButtonTheme.style!,
+    ];
+    for (final style in styles) {
+      final foreground = style.foregroundColor!.resolve(const <WidgetState>{})!;
+      expect(foreground, accent);
+      expect(
+        _contrastRatio(foreground, theme.scaffoldBackgroundColor),
+        greaterThanOrEqualTo(4.5),
+      );
+    }
+    expect(theme.listTileTheme.iconColor, accent);
+    expect(theme.expansionTileTheme.iconColor, accent);
+    expect(theme.tabBarTheme.labelColor, accent);
+  });
+
+  test('non-target themes keep their original button foregrounds', () {
+    for (final theme in [
+      buildDartTournamentTheme(),
+      buildDartTournamentDarkTheme(),
+      buildDartTournamentTheme(christmas: true),
+    ]) {
+      expect(theme.textButtonTheme.style!.foregroundColor, isNull);
+      expect(theme.outlinedButtonTheme.style!.foregroundColor, isNull);
+    }
+  });
+
   testWidgets('club filled icon buttons keep their existing appearance', (
     tester,
   ) async {

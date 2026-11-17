@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/app_theme.dart';
+
 /// Board identity and pairing stay readable; actions have their own touch row.
 class BoardMatchCard extends StatelessWidget {
   const BoardMatchCard({
@@ -30,7 +32,7 @@ class BoardMatchCard extends StatelessWidget {
                 Icon(
                   running ? Icons.play_circle_outline : Icons.sports_score,
                   size: 20,
-                  color: scheme.primary,
+                  color: appAccentColor(context),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -38,7 +40,9 @@ class BoardMatchCard extends StatelessWidget {
                     status,
                     style: Theme.of(
                       context,
-                    ).textTheme.labelLarge?.copyWith(color: scheme.primary),
+                    ).textTheme.labelLarge?.copyWith(
+                      color: appAccentColor(context),
+                    ),
                   ),
                 ),
               ],

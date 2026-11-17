@@ -150,6 +150,67 @@ void main() {
     );
   });
 
+  testWidgets('quick leg buttons fill both sides up to Bo5', (tester) async {
+    tester.view.physicalSize = const Size(800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    Future<void> openDialog(TournamentGameFormat format) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => ResultDialog(
+                    match: GroupMatch(
+                      round: 1,
+                      homePlayer: TournamentPlayer.generated(1),
+                      awayPlayer: TournamentPlayer.generated(2),
+                    ),
+                    format: format,
+                  ),
+                ),
+                child: const Text('Öffnen'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Öffnen'));
+      await tester.pumpAndSettle();
+    }
+
+    await openDialog(const TournamentGameFormat(bestOfLegs: 5));
+    for (final side in ['home', 'away']) {
+      for (var value = 0; value <= 5; value++) {
+        expect(find.byKey(ValueKey('leg-quick-$side-$value')), findsOneWidget);
+      }
+    }
+    await tester.tap(find.byKey(const ValueKey('leg-quick-home-3')));
+    await tester.tap(find.byKey(const ValueKey('leg-quick-away-2')));
+    expect(
+      tester.widget<TextField>(find.byKey(const ValueKey('home-legs-field')))
+          .controller!
+          .text,
+      '3',
+    );
+    expect(
+      tester.widget<TextField>(find.byKey(const ValueKey('away-legs-field')))
+          .controller!
+          .text,
+      '2',
+    );
+    await tester.tap(find.text('Abbrechen'));
+    await tester.pumpAndSettle();
+
+    await openDialog(const TournamentGameFormat(bestOfLegs: 7));
+    expect(find.byKey(const ValueKey('leg-quick-home-0')), findsNothing);
+    expect(find.byKey(const ValueKey('leg-quick-away-0')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Bo4 accepts 2:2 but rejects unfinished 1:1', (tester) async {
     MatchResult? result;
     await tester.pumpWidget(

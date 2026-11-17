@@ -100,6 +100,8 @@ List<TournamentGroup> _buildTournamentGroupsForPlayers(
             groupPlayers,
             repeatCount: _roundRobinRepeatForStage(stage, groupIndex),
             maxGamesPerPlayer: stage.maxGamesForGroup(groupIndex),
+            matchmakingStrategy: stage.matchmakingStrategyForGroup(groupIndex),
+            ratings: stage.groupMatchmakingRatings,
           ),
         ),
       );
@@ -150,11 +152,15 @@ List<GroupMatch> _buildRoundRobinMatches(
   List<TournamentPlayer> players, {
   int repeatCount = 1,
   int? maxGamesPerPlayer,
+  String matchmakingStrategy = 'elo',
+  Map<String, int> ratings = const {},
 }) {
   return tournamentEngine.buildRoundRobinMatches(
     players,
     repeatCount: repeatCount,
     maxGamesPerPlayer: maxGamesPerPlayer,
+    matchmakingStrategy: matchmakingStrategy,
+    ratings: ratings,
   );
 }
 

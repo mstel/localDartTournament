@@ -135,6 +135,14 @@ Map<int, String> _intStringMapFromJson(Object? value) {
   return result;
 }
 
+Map<String, int> _stringIntMapFromJson(Object? value) {
+  if (value is! Map) return const {};
+  return {
+    for (final entry in value.entries)
+      if (entry.value is int) entry.key.toString(): entry.value as int,
+  };
+}
+
 List<T> _mapListFromJson<T>(
   Object? value,
   T Function(Map<String, dynamic> json) fromJson,
@@ -392,6 +400,8 @@ class TournamentStage {
     this.groupPlayTypes = const [],
     this.groupRoundRobinRepeats = const [],
     this.groupMaxGamesPerPlayer = const [],
+    this.groupMatchmakingStrategies = const [],
+    this.groupMatchmakingRatings = const {},
     this.groupTieBreakers = defaultGroupTieBreakers,
     this.allowGroupTieBreakDeciders = false,
     this.tieBreakGameFormat = const TournamentGameFormat(bestOfLegs: 1),
@@ -458,6 +468,12 @@ class TournamentStage {
       groupRoundRobinRepeats: _intListFromJson(json['groupRoundRobinRepeats']),
       groupMaxGamesPerPlayer: _nullableIntListFromJson(
         json['groupMaxGamesPerPlayer'],
+      ),
+      groupMatchmakingStrategies: _stringListFromJson(
+        json['groupMatchmakingStrategies'],
+      ),
+      groupMatchmakingRatings: _stringIntMapFromJson(
+        json['groupMatchmakingRatings'],
       ),
       groupTieBreakers: _groupTieBreakersFromJson(json['groupTieBreakers']),
       allowGroupTieBreakDeciders:
@@ -528,6 +544,12 @@ class TournamentStage {
       index >= 0 && index < groupMaxGamesPerPlayer.length
       ? groupMaxGamesPerPlayer[index]
       : null;
+  final List<String> groupMatchmakingStrategies;
+  final Map<String, int> groupMatchmakingRatings;
+  String matchmakingStrategyForGroup(int index) =>
+      index >= 0 && index < groupMatchmakingStrategies.length
+      ? groupMatchmakingStrategies[index]
+      : 'elo';
   final List<String> groupTieBreakers;
   final bool allowGroupTieBreakDeciders;
   final TournamentGameFormat tieBreakGameFormat;
@@ -578,6 +600,8 @@ class TournamentStage {
       'groupPlayTypes': groupPlayTypes,
       'groupRoundRobinRepeats': groupRoundRobinRepeats,
       'groupMaxGamesPerPlayer': groupMaxGamesPerPlayer,
+      'groupMatchmakingStrategies': groupMatchmakingStrategies,
+      'groupMatchmakingRatings': groupMatchmakingRatings,
       'groupTieBreakers': groupTieBreakers,
       'allowGroupTieBreakDeciders': allowGroupTieBreakDeciders,
       'tieBreakGameFormat': tieBreakGameFormat.toJson(),
@@ -610,6 +634,8 @@ class TournamentStage {
     bool? groupDrawOnStart,
     List<int?>? groupSlotOrder,
     bool? groupDrawCompleted,
+    List<String>? groupMatchmakingStrategies,
+    Map<String, int>? groupMatchmakingRatings,
     List<int?>? knockoutSlotOrder,
     bool? knockoutDrawOnStart,
     String? qualificationAdvancementPolicy,
@@ -638,6 +664,10 @@ class TournamentStage {
     groupPlayTypes: groupPlayTypes,
     groupRoundRobinRepeats: groupRoundRobinRepeats,
     groupMaxGamesPerPlayer: groupMaxGamesPerPlayer,
+    groupMatchmakingStrategies:
+        groupMatchmakingStrategies ?? this.groupMatchmakingStrategies,
+    groupMatchmakingRatings:
+        groupMatchmakingRatings ?? this.groupMatchmakingRatings,
     groupTieBreakers: groupTieBreakers ?? this.groupTieBreakers,
     allowGroupTieBreakDeciders:
         allowGroupTieBreakDeciders ?? this.allowGroupTieBreakDeciders,

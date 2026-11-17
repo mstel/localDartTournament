@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_theme.dart';
 import '../application/ranking_year_review_image_generator.dart';
 import '../application/ranking_standings_image_generator.dart';
 
@@ -848,14 +849,14 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                   Icon(
                     Icons.emoji_events,
                     size: 16,
-                    color: theme.colorScheme.primary,
+                    color: appAccentColor(context),
                   ),
                   const SizedBox(width: 4),
                   Text(
                     '${ranked.first.key} '
                     '(${_formattedMetric(widget.metric(ranked.first.value)!)})',
                     style: TextStyle(
-                      color: theme.colorScheme.primary,
+                      color: appAccentColor(context),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -873,7 +874,7 @@ class _ReviewLeadersState extends State<_ReviewLeaders> {
                     leading: CircleAvatar(
                       radius: 14,
                       backgroundColor: i == 0
-                          ? theme.colorScheme.primaryContainer
+                          ? appAccentColor(context)
                           : theme.colorScheme.surfaceContainerHigh,
                       child: Text(
                         '${i + 1}',
@@ -2929,7 +2930,7 @@ class PlayerEloHistoryPage extends StatelessWidget {
                     children: [
                       EloTrajectoryChart(
                         points: trajectory,
-                        color: colorScheme.primary,
+                        color: appAccentColor(context),
                         gridColor: colorScheme.outlineVariant,
                       ),
                       const SizedBox(height: 8),
@@ -3267,7 +3268,7 @@ class _StatChip extends StatelessWidget {
                 Icon(
                   icon,
                   size: 16,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: appAccentColor(context),
                 ),
                 const SizedBox(width: 6),
                 Expanded(

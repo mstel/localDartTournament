@@ -611,6 +611,38 @@ class _ResultDialogState extends State<ResultDialog> {
     );
   }
 
+  Widget _quickLegButtons(
+    TextEditingController controller, {
+    required String side,
+  }) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (var value = 0; value <= 5; value++)
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: OutlinedButton(
+              key: ValueKey('leg-quick-$side-$value'),
+              onPressed: () {
+                controller.text = '$value';
+                controller.selection = TextSelection.collapsed(
+                  offset: controller.text.length,
+                );
+                if (_error != null) setState(() => _error = null);
+              },
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                padding: EdgeInsets.zero,
+              ),
+              child: Text('$value'),
+            ),
+          ),
+      ],
+    );
+  }
+
   void _annul() {
     Navigator.of(context).pop(const MatchResult.annulled());
   }
@@ -652,48 +684,80 @@ class _ResultDialogState extends State<ResultDialog> {
                 return Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        key: const ValueKey('home-legs-field'),
-                        controller: _homeLegsController,
-                        focusNode: _homeFocusNode,
-                        autofocus: true,
-                        onTap: () => _selectInitialZero(_homeLegsController),
-                        keyboardType: TextInputType.number,
-                        textInputAction: TextInputAction.next,
-                        inputFormatters: [_ScoreLimitInputFormatter(maxLegs)],
-                        onSubmitted: (_) {
-                          _awayFocusNode.requestFocus();
-                          _selectInitialZero(_awayLegsController);
-                        },
-                        decoration: InputDecoration(
-                          border: const OutlineInputBorder(),
-                          labelText: widget.match.homePlayer?.name ?? 'offen',
-                          suffixIcon: _stepperSuffix(
-                            _homeLegsController,
-                            maxLegs,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            key: const ValueKey('home-legs-field'),
+                            controller: _homeLegsController,
+                            focusNode: _homeFocusNode,
+                            autofocus: true,
+                            onTap: () => _selectInitialZero(_homeLegsController),
+                            keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.next,
+                            inputFormatters: [
+                              _ScoreLimitInputFormatter(maxLegs),
+                            ],
+                            onSubmitted: (_) {
+                              _awayFocusNode.requestFocus();
+                              _selectInitialZero(_awayLegsController);
+                            },
+                            decoration: InputDecoration(
+                              border: const OutlineInputBorder(),
+                              labelText:
+                                  widget.match.homePlayer?.name ?? 'offen',
+                              suffixIcon: _stepperSuffix(
+                                _homeLegsController,
+                                maxLegs,
+                              ),
+                            ),
                           ),
-                        ),
+                          if (widget.format.bestOfLegs <= 5)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _quickLegButtons(
+                                _homeLegsController,
+                                side: 'home',
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: TextField(
-                        key: const ValueKey('away-legs-field'),
-                        controller: _awayLegsController,
-                        focusNode: _awayFocusNode,
-                        onTap: () => _selectInitialZero(_awayLegsController),
-                        keyboardType: TextInputType.number,
-                        textInputAction: TextInputAction.done,
-                        inputFormatters: [_ScoreLimitInputFormatter(maxLegs)],
-                        onSubmitted: (_) => _save(),
-                        decoration: InputDecoration(
-                          border: const OutlineInputBorder(),
-                          labelText: widget.match.awayPlayer?.name ?? 'offen',
-                          suffixIcon: _stepperSuffix(
-                            _awayLegsController,
-                            maxLegs,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            key: const ValueKey('away-legs-field'),
+                            controller: _awayLegsController,
+                            focusNode: _awayFocusNode,
+                            onTap: () => _selectInitialZero(_awayLegsController),
+                            keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.done,
+                            inputFormatters: [
+                              _ScoreLimitInputFormatter(maxLegs),
+                            ],
+                            onSubmitted: (_) => _save(),
+                            decoration: InputDecoration(
+                              border: const OutlineInputBorder(),
+                              labelText:
+                                  widget.match.awayPlayer?.name ?? 'offen',
+                              suffixIcon: _stepperSuffix(
+                                _awayLegsController,
+                                maxLegs,
+                              ),
+                            ),
                           ),
-                        ),
+                          if (widget.format.bestOfLegs <= 5)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _quickLegButtons(
+                                _awayLegsController,
+                                side: 'away',
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],

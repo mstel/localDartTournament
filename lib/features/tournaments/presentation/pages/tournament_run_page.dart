@@ -2325,6 +2325,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return;
     }
     final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
+    final roster = teamSide == 0 ? league.homePlayers : league.awayPlayers;
     final choice = await showDialog<(int, int)>(
       context: context,
       builder: (context) => LeagueSubstitutionDialog(
@@ -2341,6 +2342,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         teamSide: teamSide,
         outPlayerIndex: choice.$1,
         inPlayerIndex: choice.$2,
+      );
+      final remainingAfter = league.substitutionsRemaining(teamSide);
+      widget.tournament.addActivity(
+        'substitution',
+        '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
+        'ausgewechselt. Übrige Auswechselungen: $remainingAfter',
       );
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
         ..installOn(widget.tournament);
@@ -3134,6 +3141,29 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       for (final entry in entries) {
         entry.match.fixedScheduleOrder = previous[entry.match];
       }
+      setState(() {});
+    }
+  }
+
+  Future<void> _openFixedScheduleEditor(FixedScheduleEditorScope scope) async {
+    if (widget.tournament.directorPlayOrderMode != 'fixed_schedule') return;
+    final previousOrders = _fixedScheduleOrders();
+    final applied = await showDialog<bool>(
+      context: context,
+      builder: (context) => FixedScheduleEditorDialog(
+        tournament: widget.tournament,
+        stageIndex: _activeStageIndex.clamp(
+          0,
+          widget.tournament.runStages.isEmpty
+              ? 0
+              : widget.tournament.runStages.length - 1,
+        ),
+        scope: scope,
+        onApply: () => _saveTournamentProgress(propagateError: true),
+      ),
+    );
+    if (applied != true && mounted) {
+      _restoreFixedScheduleOrders(previousOrders);
       setState(() {});
     }
   }
@@ -6814,26 +6844,58 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           },
                                         ),
                                       ),
-                                    if ((widget
-                                                .tournament
-                                                .directorModeEnabled ||
-                                            widget.tournament.leagueMatch !=
-                                                null) &&
-                                        widget
-                                                .tournament
-                                                .directorPlayOrderMode ==
-                                            'fixed_schedule')
-                                      Align(
-                                        alignment:
-                                            AlignmentDirectional.centerStart,
-                                        child: OutlinedButton.icon(
-                                          onPressed: _recomputeFixedSchedule,
-                                          icon: const Icon(
-                                            Icons.replay_outlined,
-                                          ),
-                                          label: const Text(
-                                            'Spielplan neu berechnen',
-                                          ),
+                                    if (widget
+                                            .tournament
+                                            .directorPlayOrderMode ==
+                                        'fixed_schedule')
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            OutlinedButton.icon(
+                                              onPressed: _recomputeFixedSchedule,
+                                              icon: const Icon(
+                                                Icons.replay_outlined,
+                                              ),
+                                              label: const Text(
+                                                'Spielplan neu berechnen',
+                                              ),
+                                            ),
+                                            OutlinedButton.icon(
+                                              key: const ValueKey(
+                                                'edit-fixed-schedule-per-board',
+                                              ),
+                                              onPressed: () =>
+                                                  _openFixedScheduleEditor(
+                                                    FixedScheduleEditorScope
+                                                        .perBoard,
+                                                  ),
+                                              icon: const Icon(
+                                                Icons.grid_view_outlined,
+                                              ),
+                                              label: const Text(
+                                                'Spielplan je Board bearbeiten',
+                                              ),
+                                            ),
+                                            OutlinedButton.icon(
+                                              key: const ValueKey(
+                                                'edit-fixed-schedule-overall',
+                                              ),
+                                              onPressed: () =>
+                                                  _openFixedScheduleEditor(
+                                                    FixedScheduleEditorScope
+                                                        .overall,
+                                                  ),
+                                              icon: const Icon(
+                                                Icons.list_alt,
+                                              ),
+                                              label: const Text(
+                                                'Spielplan gesamt bearbeiten',
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     if (widget.tournament.directorModeEnabled &&

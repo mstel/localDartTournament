@@ -2092,7 +2092,7 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
                 Icon(
                   Icons.account_tree_outlined,
                   size: 14,
-                  color: colorScheme.primary,
+                  color: appAccentColor(context),
                 ),
                 const SizedBox(width: 4),
                 Expanded(

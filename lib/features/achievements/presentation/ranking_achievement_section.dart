@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_theme.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../domain/achievement_definition.dart';
 import '../domain/achievement_engine.dart';
@@ -132,7 +133,7 @@ class _AchievementSummaryTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Theme.of(context).colorScheme.primary),
+          Icon(icon, color: appAccentColor(context)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

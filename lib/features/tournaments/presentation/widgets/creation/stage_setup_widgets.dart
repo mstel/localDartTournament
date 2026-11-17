@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../../app/app_theme.dart';
 import '../../../modes/swiss/swiss_engine.dart';
 
 import '../../../domain/tournament_models.dart';
@@ -199,7 +200,7 @@ class StageMatchCountPreview extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.sports_score_outlined, color: colorScheme.primary),
+          Icon(Icons.sports_score_outlined, color: appAccentColor(context)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

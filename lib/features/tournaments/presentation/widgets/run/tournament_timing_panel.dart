@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../../app/app_theme.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../domain/tournament_models.dart';
 import '../tournament_date_picker_field.dart';
@@ -376,7 +377,7 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
         initiallyExpanded: false,
         leading: Icon(
           Icons.timer_outlined,
-          color: Theme.of(context).colorScheme.primary,
+          color: appAccentColor(context),
         ),
         title: const Text('Uhr & Zeiteinstellungen'),
         subtitle: Text(
@@ -400,7 +401,7 @@ class _TournamentTimingPanelState extends State<TournamentTimingPanel> {
           children: [
             Icon(
               Icons.timer_outlined,
-              color: Theme.of(context).colorScheme.primary,
+              color: appAccentColor(context),
             ),
             Text(
               'Uhr & Zeiteinstellungen',

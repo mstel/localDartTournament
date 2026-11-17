@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../app/theme_controller.dart';
 
 class AppBrandMark extends StatelessWidget {
@@ -26,7 +27,7 @@ class AppBrandMark extends StatelessWidget {
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => Icon(
             icon,
-            color: Theme.of(context).colorScheme.primary,
+            color: appAccentColor(context),
             size: size,
           ),
         );
@@ -40,7 +41,7 @@ class AppBrandMark extends StatelessWidget {
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => Icon(
             icon,
-            color: Theme.of(context).colorScheme.primary,
+            color: appAccentColor(context),
             size: size,
           ),
         ),

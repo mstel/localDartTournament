@@ -346,6 +346,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('group stage defaults qualifiers to half of the participants', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const DartTournamentApp());
+
+    await openTournamentCreation(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '10',
+    );
+    await revealPlayerGenerator(tester);
+    await tester.tap(find.text('Teilnehmer erzeugen'));
+    await tester.pumpAndSettle();
+    await openTournamentStructure(tester);
+
+    final qualifierField = find.byKey(
+      const ValueKey('group-qualifier-count-field'),
+      skipOffstage: false,
+    );
+    await tester.scrollUntilVisible(
+      qualifierField,
+      400,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(qualifierField).controller!.text,
+      '5',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('offers double and triple knockout formats', (tester) async {
     await tester.pumpWidget(const DartTournamentApp());
 

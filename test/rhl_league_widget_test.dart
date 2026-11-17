@@ -347,7 +347,7 @@ void main() {
     expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 1);
     expect(
       storage.saved!.activityLog.last.message,
-      'Heim hat H1 ausgewechselt und H5 eingewechselt',
+      'Heim hat H1 gegen H5 ausgewechselt. Übrige Auswechselungen: 1',
     );
     expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
     expect(tester.takeException(), isNull);

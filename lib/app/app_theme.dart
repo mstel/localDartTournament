@@ -1,6 +1,20 @@
 import 'package:flutter/material.dart';
 
 const Color _christmasPrimary = Color(0xFF183D32);
+const Color _christmasDarkAccent = Color(0xFF72D58D);
+
+/// Foreground/accent color that stays readable in Christmas + dark mode.
+///
+/// All other themes keep the regular `colorScheme.primary`, so this is a
+/// drop-in replacement for foreground usages of `primary`.
+Color appAccentColor(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  if (scheme.brightness == Brightness.dark &&
+      scheme.primary == _christmasPrimary) {
+    return _christmasDarkAccent;
+  }
+  return scheme.primary;
+}
 
 /// Style for `IconButton.filled` and `IconButton.filledTonal` action buttons.
 ///
@@ -87,6 +101,35 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
                 ? const Color(0xFF2A2E38)
                 : const Color(0xFFE2DDD2),
           );
+
+  final christmasDark = christmas && isDark;
+  final accent = christmasDark ? _christmasDarkAccent : primary;
+  final contextualForeground = christmasDark
+      ? WidgetStateProperty.resolveWith<Color>((states) {
+          return states.contains(WidgetState.disabled)
+              ? scheme.onSurface.withValues(alpha: .38)
+              : accent;
+        })
+      : null;
+
+  final outlinedButtonStyle = OutlinedButton.styleFrom(
+    minimumSize: const Size(48, 48),
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  );
+  final resolvedOutlinedButtonStyle = christmasDark
+      ? outlinedButtonStyle.copyWith(
+          foregroundColor: contextualForeground,
+          side: WidgetStatePropertyAll(BorderSide(color: accent)),
+        )
+      : outlinedButtonStyle;
+  final textButtonStyle = TextButton.styleFrom(
+    minimumSize: const Size(48, 48),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  );
+  final resolvedTextButtonStyle = christmasDark
+      ? textButtonStyle.copyWith(foregroundColor: contextualForeground)
+      : textButtonStyle;
 
   final base = ThemeData(
     useMaterial3: true,
@@ -194,24 +237,15 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
     ),
     filledButtonTheme: FilledButtonThemeData(style: actionButtonStyle),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(48, 48),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+      style: resolvedOutlinedButtonStyle,
     ),
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        minimumSize: const Size(48, 48),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      ),
-    ),
+    textButtonTheme: TextButtonThemeData(style: resolvedTextButtonStyle),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
     ),
     listTileTheme: ListTileThemeData(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      iconColor: primary,
+      iconColor: accent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     chipTheme: base.chipTheme.copyWith(
@@ -262,7 +296,7 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
       columnSpacing: 28,
     ),
     tabBarTheme: TabBarThemeData(
-      labelColor: primary,
+      labelColor: accent,
       unselectedLabelColor: scheme.onSurfaceVariant,
       indicatorSize: TabBarIndicatorSize.label,
       dividerColor: scheme.outlineVariant,
@@ -280,11 +314,11 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
     expansionTileTheme: ExpansionTileThemeData(
       shape: const Border(),
       collapsedShape: const Border(),
-      iconColor: primary,
+      iconColor: accent,
       collapsedIconColor: scheme.onSurfaceVariant,
       tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
     ),
-    progressIndicatorTheme: ProgressIndicatorThemeData(color: primary),
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: accent),
     tooltipTheme: TooltipThemeData(
       textStyle: TextStyle(
         color: isDark ? const Color(0xFFF5F3ED) : Colors.white,

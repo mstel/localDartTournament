@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/app_theme.dart';
 import '../../../domain/tournament_models.dart';
 import 'result_entry.dart';
 import 'mobile_group_matches.dart';
@@ -110,7 +111,7 @@ class _GroupRunSectionState extends State<GroupRunSection> {
                         _showMatches
                             ? Icons.keyboard_arrow_down
                             : Icons.keyboard_arrow_right,
-                        color: colorScheme.primary,
+                        color: appAccentColor(context),
                       ),
                       const SizedBox(width: 8),
                       Expanded(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
+
 class SportMenuAction {
   const SportMenuAction({
     required this.label,
@@ -145,7 +147,7 @@ class SportMenuLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+      Icon(icon, size: 20, color: appAccentColor(context)),
       const SizedBox(width: 12),
       Expanded(child: Text(label)),
     ],
