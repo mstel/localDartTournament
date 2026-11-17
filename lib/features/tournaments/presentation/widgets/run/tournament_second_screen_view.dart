@@ -168,6 +168,8 @@ class _TournamentSecondScreenViewState
   String? _dragTargetWidgetId;
   int? _dragTargetEdge;
   final Map<String, GlobalKey> _monitorDropTargetKeys = {};
+  final Map<String, GlobalKey> _monitorCardKeys = {};
+  double _monitorUnitHeight = 220;
 
   TournamentStorage get _storage => widget.storage ?? TournamentStorage();
   LocalAppDatabase get _database => widget.database ?? LocalAppDatabase();
@@ -1553,6 +1555,7 @@ class _TournamentSecondScreenViewState
           constraints.maxHeight / 2.4,
           minimumUnitHeight,
         )).clamp(220.0, 360.0);
+        _monitorUnitHeight = unitHeight;
         final header = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1979,10 +1982,21 @@ class _TournamentSecondScreenViewState
           dragAnchorStrategy: pointerDragAnchorStrategy,
           feedback: SizedBox(
             width: width,
-            height: height,
+            height: min(height, 160),
             child: Material(
               color: Colors.transparent,
-              child: Opacity(opacity: 0.85, child: child),
+              child: Opacity(
+                opacity: 0.85,
+                child: Card(
+                  child: Center(
+                    child: Text(
+                      _monitorWidgetTitles[targetWidgetId] ?? targetWidgetId,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
           childWhenDragging: Opacity(opacity: 0.25, child: child),
@@ -2061,11 +2075,12 @@ class _TournamentSecondScreenViewState
       playedMatches,
     );
     if (!isEditing) {
-      return SizedBox(
+      return ConstrainedBox(
         key: ValueKey('monitor-widget-${placement.widgetId}'),
-        width: width,
-        height: height,
-        child: ClipRect(child: widgetContent),
+        constraints: BoxConstraints(maxWidth: width, maxHeight: height),
+        child: SingleChildScrollView(
+          child: ClipRect(child: widgetContent),
+        ),
       );
     }
 
@@ -2128,21 +2143,29 @@ class _TournamentSecondScreenViewState
         icon: const Icon(Icons.unfold_more),
       ),
       IconButton(
+        tooltip: 'Höhe an Inhalt anpassen',
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onPressed: () => _snapMonitorWidgetHeight(index),
+        icon: const Icon(Icons.vertical_align_center),
+      ),
+      IconButton(
         tooltip: 'Widget entfernen',
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         onPressed: () => _removeMonitorWidget(index),
         icon: const Icon(Icons.close),
       ),
     ];
-    return SizedBox(
+    final contentKey =
+        _monitorCardKeys.putIfAbsent(placement.widgetId, GlobalKey.new);
+    return ConstrainedBox(
       key: ValueKey('monitor-widget-${placement.widgetId}'),
-      width: width,
-      height: height,
+      constraints: BoxConstraints(maxWidth: width, maxHeight: height),
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               LayoutBuilder(
@@ -2177,6 +2200,10 @@ class _TournamentSecondScreenViewState
                               child: const Text('Höhe vergrößern'),
                             ),
                             const PopupMenuItem(
+                              value: 'height-fit-content',
+                              child: Text('Höhe an Inhalt anpassen'),
+                            ),
+                            const PopupMenuItem(
                               value: 'remove',
                               child: Text('Widget entfernen'),
                             ),
@@ -2198,7 +2225,14 @@ class _TournamentSecondScreenViewState
               ),
               const Divider(height: 1),
               const SizedBox(height: 6),
-              Expanded(child: ClipRect(child: widgetContent)),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: SizedBox(
+                    key: contentKey,
+                    child: ClipRect(child: widgetContent),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -2217,9 +2251,25 @@ class _TournamentSecondScreenViewState
         _resizeMonitorWidget(index, heightUnits: placement.heightUnits - 0.5);
       case 'height-larger':
         _resizeMonitorWidget(index, heightUnits: placement.heightUnits + 0.5);
+      case 'height-fit-content':
+        _snapMonitorWidgetHeight(index);
       case 'remove':
         _removeMonitorWidget(index);
     }
+  }
+
+  /// Rastet die Kachelhöhe auf den tatsächlich gerenderten Inhalt ein, damit
+  /// das nächste Widget direkt unter diesem beginnt.
+  void _snapMonitorWidgetHeight(int index) {
+    final widgetId = _monitorPlacements[index].widgetId;
+    final renderObject = _monitorCardKeys[widgetId]?.currentContext
+        ?.findRenderObject();
+    if (renderObject is! RenderBox) return;
+    final measuredHeight = renderObject.size.height;
+    if (measuredHeight <= 0) return;
+    final unitHeight = _monitorUnitHeight > 0 ? _monitorUnitHeight : 220.0;
+    final units = (measuredHeight / unitHeight * 2).ceilToDouble() / 2;
+    _resizeMonitorWidget(index, heightUnits: units.clamp(0.5, 3.0));
   }
 
   Widget _buildMonitorWidgetContent(
@@ -2237,7 +2287,7 @@ class _TournamentSecondScreenViewState
           tournament,
           activeIndex,
           activeStage,
-          expand: true,
+          expand: false,
         );
       case 'standings':
         return _buildStandingsPanel(
@@ -2245,7 +2295,7 @@ class _TournamentSecondScreenViewState
           tournament,
           activeStage,
           full: true,
-          expand: true,
+          expand: false,
         );
       case 'combined':
         return _buildStandingsAndForecastWidget(
@@ -2300,7 +2350,7 @@ class _TournamentSecondScreenViewState
           context,
           tournament,
           playedMatches,
-          expand: true,
+          expand: false,
         );
       case 'liveBoard':
         return const SizedBox.shrink();
@@ -3319,6 +3369,7 @@ class _TournamentSecondScreenViewState
     TournamentRunStage? stage,
   ) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         LayoutBuilder(
@@ -3326,14 +3377,12 @@ class _TournamentSecondScreenViewState
               _buildStandingsDisplaySelector(context, constraints.maxWidth),
         ),
         const Divider(height: 8),
-        Expanded(
-          child: SingleChildScrollView(
-            child: _buildStandingsDisplayPanel(
-              context,
-              tournament,
-              activeIndex,
-              stage,
-            ),
+        SingleChildScrollView(
+          child: _buildStandingsDisplayPanel(
+            context,
+            tournament,
+            activeIndex,
+            stage,
           ),
         ),
       ],
@@ -3995,23 +4044,26 @@ class _TournamentSecondScreenViewState
 
     final hasPrognosis =
         currentStage is GroupTournamentRunStage && koStage != null;
+    final colors = _displayColors(context);
     final prognosisContent = hasPrognosis
         ? _buildContenderPrognosisList(context, currentStage)
         : (koStage != null
               ? _buildKnockoutRoundsPreview(context, koStage)
-              : const Center(
+              : Center(
                   child: Text(
                     'Keine K.-o.-Phase im aktuellen Turnier geplant.',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: colors.mutedText),
                   ),
                 ));
 
-    final colors = _displayColors(context);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colors.card,
-        border: Border.all(color: colors.border),
+        // The group tables already use the translucent display card color.
+        // Keeping this container transparent avoids stacking two semi
+        // transparent layers and hiding the Christmas background.
+        color: hasPrognosis ? Colors.transparent : colors.card,
+        border: hasPrognosis ? null : Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -4028,7 +4080,7 @@ class _TournamentSecondScreenViewState
               Flexible(
                 child: Text(
                   hasPrognosis
-                      ? 'KO-Prognose & Weiterkommen'
+                      ? 'Siegprognose & Weiterkommen'
                       : 'Turnierbaum Vorschau',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -4042,7 +4094,7 @@ class _TournamentSecondScreenViewState
           const SizedBox(height: 8),
           Text(
             hasPrognosis
-                ? 'Vorschau der K.-o.-Paarungen basierend auf aktuellen Tabellenständen und Siegesraten:'
+                ? 'Sieg- und Weiterkommen-Wahrscheinlichkeiten basierend auf aktuellen Tabellenständen:'
                 : 'Turnierbaum der finalen Phase:',
             style: TextStyle(fontSize: 12, color: colors.mutedText),
           ),
@@ -4060,10 +4112,6 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     GroupTournamentRunStage groupStage,
   ) {
-    final colors = _displayColors(context);
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final certainColor =
-        isLight ? const Color(0xFF2E7D32) : const Color(0xFF86EFAC);
     return FutureBuilder<Map<String, AdvancementChance>>(
       future: _forecastFor(groupStage),
       builder: (context, snapshot) {
@@ -4087,127 +4135,218 @@ class _TournamentSecondScreenViewState
         }
         final forecast = snapshot.data!;
         final plan = groupStage.qualificationPlan;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (
-              var groupIndex = 0;
-              groupIndex < groupStage.groups.length;
-              groupIndex++
-            )
-              Builder(
-                builder: (context) {
-                  final group = groupStage.groups[groupIndex];
-                  final standings = _calculateGroupStandings(
-                    group,
-                    groupStage.tieBreakers,
-                  );
-                  final fixedPlaces = plan == null
-                      ? 0
-                      : groupIndex < plan.fixedByGroup.length
-                      ? plan.fixedByGroup[groupIndex]
-                      : plan.fixedPerGroup;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colors.cardEmphasis,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          group.name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isLight
-                                ? Theme.of(context).colorScheme.primary
-                                : const Color(0xFF70E0BA),
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        for (var rank = 0; rank < standings.length; rank++)
-                          Builder(
-                            builder: (context) {
-                              final standing = standings[rank];
-                              final chance =
-                                  forecast[standing.player.profileId ??
-                                      standing.player.name] ??
-                                  const AdvancementChance(
-                                    groupWinProbability: 0,
-                                    advancementProbability: 0,
-                                  );
-                              final isCertain = const QualificationCertainty()
-                                  .isCertain(
-                                    standing: standing,
-                                    place: rank + 1,
-                                    fixedPlaces: fixedPlaces,
-                                    standings: standings,
-                                    matches: group.matches,
-                                    tieBreakers: groupStage.tieBreakers,
-                                  );
-                              final label =
-                                  '${chance.groupWinProbability.toStringAsFixed(1)} % Sieg · '
-                                  '${chance.advancementProbability.toStringAsFixed(1)} % weiter';
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 2,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      '${rank + 1}. ',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: isCertain
-                                            ? certainColor
-                                            : colors.mutedText,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Text(
-                                        standing.player.name,
-                                        style: TextStyle(
-                                          fontWeight: isCertain
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                          color: colors.text,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Tooltip(
-                                      message:
-                                          'Siegchance: ${chance.groupWinProbability.toStringAsFixed(1)} %\n'
-                                          'Weiterkommen: ${chance.advancementProbability.toStringAsFixed(1)} %',
-                                      child: Text(
-                                        label,
-                                        textAlign: TextAlign.end,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: isCertain
-                                              ? certainColor
-                                              : colors.mutedText,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-          ],
+        final cards = [
+          for (var groupIndex = 0; groupIndex < groupStage.groups.length; groupIndex++)
+            _buildGroupForecastCard(
+              context,
+              groupStage.groups[groupIndex],
+              groupNumber: groupIndex + 1,
+              forecast: forecast,
+              fixedPlaces: plan == null
+                  ? 0
+                  : groupIndex < plan.fixedByGroup.length
+                  ? plan.fixedByGroup[groupIndex]
+                  : plan.fixedPerGroup,
+              tieBreakers: groupStage.tieBreakers,
+            ),
+        ];
+        // Same two-column behavior as the standings view: on wide monitors the
+        // groups sit side by side, on narrow screens they stack vertically.
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 572 ? 2 : 1;
+            final cardWidth =
+                (constraints.maxWidth - 12 * (columns - 1)) / columns;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final card in cards)
+                  SizedBox(width: cardWidth, child: card),
+              ],
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildGroupForecastCard(
+    BuildContext context,
+    TournamentGroup group, {
+    required int groupNumber,
+    required Map<String, AdvancementChance> forecast,
+    required int fixedPlaces,
+    required List<String> tieBreakers,
+  }) {
+    final colors = _displayColors(context);
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final certainColor =
+        isLight ? const Color(0xFF2E7D32) : const Color(0xFF86EFAC);
+    final standings = _calculateGroupStandings(group, tieBreakers);
+
+    Widget headerCell(String label, {TextAlign align = TextAlign.start}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Text(
+          label,
+          textAlign: align,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: colors.mutedText,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      key: ValueKey('second-screen-forecast-group-$groupNumber'),
+      constraints: const BoxConstraints(minWidth: 300),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        // Translucent in the Christmas theme so the background stays visible.
+        color: colors.card,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                group.name,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: colors.text,
+                  fontSize: 15,
+                ),
+              ),
+              if (fixedPlaces > 0)
+                Text(
+                  'Top $fixedPlaces weiter',
+                  style: TextStyle(fontSize: 12, color: colors.mutedText),
+                ),
+            ],
+          ),
+          Divider(color: colors.border, height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 320),
+              child: Table(
+                columnWidths: const {
+                  0: FixedColumnWidth(28),
+                  2: FixedColumnWidth(92),
+                  3: FixedColumnWidth(92),
+                },
+                children: [
+                  TableRow(
+                    children: [
+                      headerCell('#', align: TextAlign.center),
+                      headerCell('Teilnehmer'),
+                      headerCell('% Sieg', align: TextAlign.end),
+                      headerCell('% weiter', align: TextAlign.end),
+                    ],
+                  ),
+                  for (var rank = 0; rank < standings.length; rank++)
+                    TableRow(
+                      children: [
+                        ...() {
+                          final standing = standings[rank];
+                          final chance = forecast[standing.player.profileId ??
+                                  standing.player.name] ??
+                              const AdvancementChance(
+                                groupWinProbability: 0,
+                                advancementProbability: 0,
+                              );
+                          final isCertain = const QualificationCertainty()
+                              .isCertain(
+                            standing: standing,
+                            place: rank + 1,
+                            fixedPlaces: fixedPlaces,
+                            standings: standings,
+                            matches: group.matches,
+                            tieBreakers: tieBreakers,
+                          );
+                          final valueColor = isCertain
+                              ? certainColor
+                              : colors.mutedText;
+                          final tooltip =
+                              'Siegchance: ${chance.groupWinProbability.toStringAsFixed(1)} %\n'
+                              'Weiterkommen: ${chance.advancementProbability.toStringAsFixed(1)} %';
+                          return [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                '${rank + 1}',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: valueColor,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 6,
+                              ),
+                              child: Text(
+                                standing.player.name,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isCertain
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: colors.text,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Tooltip(
+                                message: tooltip,
+                                child: Text(
+                                  '${chance.groupWinProbability.toStringAsFixed(1)} % Sieg',
+                                  textAlign: TextAlign.end,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: valueColor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Tooltip(
+                                message: tooltip,
+                                child: Text(
+                                  '${chance.advancementProbability.toStringAsFixed(1)} % weiter',
+                                  textAlign: TextAlign.end,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: valueColor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ];
+                        }(),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -4553,7 +4692,7 @@ class _TournamentSecondScreenViewState
         else if (expand)
           Expanded(child: recommendedContent)
         else
-          SizedBox(height: 240, child: recommendedContent),
+          recommendedContent,
         if (!hasOpenMatches && expand)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -4747,14 +4886,14 @@ class _TournamentSecondScreenViewState
     return Container(
       width: width,
       key: ValueKey('second-screen-free-board-$board'),
-      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: colors.card,
         border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -4771,7 +4910,7 @@ class _TournamentSecondScreenViewState
             const _BoardStatusBadge(label: 'FREI', color: Color(0xFF4ED9A4)),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Center(
           child: Text(
             'Aktuell keine Partie',
@@ -4779,6 +4918,7 @@ class _TournamentSecondScreenViewState
               color: colors.text,
               fontSize: 14,
               fontWeight: FontWeight.bold,
+              height: 1.2,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -4798,32 +4938,42 @@ class _TournamentSecondScreenViewState
     return Container(
       width: width,
       key: ValueKey('second-screen-blocked-board-$board'),
-      constraints: const BoxConstraints(minHeight: 74),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: colors.card,
         border: Border.all(color: Colors.redAccent, width: 2),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.tournament.boardDisplayName(board).toUpperCase(),
-            style: const TextStyle(
-              color: Colors.redAccent,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.tournament.boardDisplayName(board).toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const _BoardStatusBadge(
+                label: 'GESPERRT',
+                color: Colors.redAccent,
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 2),
           const Center(
             child: Text(
-              'BOARD GESPERRT',
+              'Keine Partie möglich',
               style: TextStyle(
                 color: Colors.redAccent,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
+                height: 1.2,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

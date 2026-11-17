@@ -60,6 +60,54 @@ void main() {
     );
   });
 
+  test('light filled buttons use a white surface with gold labels', () {
+    final light = buildDartTournamentTheme();
+    final dark = buildDartTournamentDarkTheme();
+
+    final lightStyle = light.filledButtonTheme.style!;
+    expect(
+      lightStyle.backgroundColor!.resolve(const <WidgetState>{}),
+      light.colorScheme.surface,
+    );
+    expect(
+      lightStyle.foregroundColor!.resolve(const <WidgetState>{}),
+      light.colorScheme.primary,
+    );
+
+    // Dark design keeps the regular filled-button appearance.
+    expect(dark.filledButtonTheme.style!.backgroundColor, isNull);
+    expect(dark.filledButtonTheme.style!.foregroundColor, isNull);
+  });
+
+  testWidgets('Christmas second screen uses dark text in light app design', (
+    tester,
+  ) async {
+    ThemeData? wrappedTheme;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildDartTournamentTheme(christmas: true),
+        home: Scaffold(
+          body: ChristmasDecorations(
+            child: Builder(
+              builder: (context) {
+                wrappedTheme = Theme.of(context);
+                return const Text('probe');
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(wrappedTheme, isNotNull);
+    expect(wrappedTheme!.brightness, Brightness.dark);
+    expect(
+      wrappedTheme!.colorScheme.onSurface,
+      buildDartTournamentDarkTheme(christmas: true).colorScheme.onSurface,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   test('run surfaces keep the dark blue palette in dark mode', () {
     final lightScheme = buildDartTournamentTheme().colorScheme;
     final darkScheme = buildDartTournamentDarkTheme().colorScheme;
@@ -87,7 +135,11 @@ void main() {
       expect(controller.themeStyleNotifier.value, AppThemeStyle.christmas);
       expect(
         buildDartTournamentDarkTheme(christmas: true).colorScheme.primary,
-        const Color(0xFFF0808B),
+        const Color(0xFF183D32),
+      );
+      expect(
+        buildDartTournamentTheme(christmas: true).colorScheme.primary,
+        const Color(0xFF183D32),
       );
       expect(
         buildDartTournamentDarkTheme().colorScheme.primary,

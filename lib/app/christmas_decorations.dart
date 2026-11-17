@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
 import 'theme_controller.dart';
 
 class ChristmasSecondScreenBackground extends StatelessWidget {
@@ -26,9 +27,16 @@ class ChristmasDecorations extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Even when the app is in light mode, the second monitor uses a dark
+    // background image. Provide a dark ColorScheme/TextTheme below this widget
+    // so every child (tables, cards, buttons, hints) uses readable light text
+    // instead of the light theme's dark ink.
+    final effectiveTheme = theme.colorScheme.brightness == Brightness.light
+        ? buildDartTournamentDarkTheme(christmas: true)
+        : theme;
     return Theme(
-      data: theme.copyWith(
-        cardTheme: theme.cardTheme.copyWith(
+      data: effectiveTheme.copyWith(
+        cardTheme: effectiveTheme.cardTheme.copyWith(
           color: const Color(0xD914202B),
           surfaceTintColor: Colors.transparent,
         ),

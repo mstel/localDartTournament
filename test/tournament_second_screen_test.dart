@@ -643,6 +643,12 @@ void main() {
     );
     expect(runningTile, findsOneWidget);
     expect(tester.getSize(runningTile).height, lessThan(110));
+    final freeTile = find.byKey(const ValueKey('second-screen-free-board-2'));
+    expect(freeTile, findsOneWidget);
+    expect(
+      tester.getSize(freeTile).height,
+      closeTo(tester.getSize(runningTile).height, 1),
+    );
     for (final name in ['Alexanderson', 'Robinson']) {
       final nameText = tester.widget<Text>(
         find.descendant(of: runningTile, matching: find.text(name)),
@@ -1565,7 +1571,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('KO-Prognose & Weiterkommen'), findsOneWidget);
+    expect(find.text('Siegprognose & Weiterkommen'), findsNWidgets(2));
     expect(find.textContaining('73.0 % Sieg'), findsAtLeastNWidgets(1));
     expect(find.textContaining('88.0 % weiter'), findsAtLeastNWidgets(1));
     expect(forecastService.calls, 1);
@@ -1573,6 +1579,85 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Tabellen & Zwischenstände'), findsAtLeastNWidgets(1));
     expect(find.text('Kombiniert'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('forecast tab places two groups side by side on a wide monitor', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _twoGroupPreviewTournament(),
+            isStandaloneWindow: true,
+            forecastService: _FixedForecastService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Siegprognose & Weiterkommen'));
+    await tester.pumpAndSettle();
+
+    final groupA = find.byKey(
+      const ValueKey('second-screen-forecast-group-1'),
+    );
+    final groupB = find.byKey(
+      const ValueKey('second-screen-forecast-group-2'),
+    );
+    expect(groupA, findsOneWidget);
+    expect(groupB, findsOneWidget);
+    expect(
+      tester.getTopLeft(groupA).dy,
+      closeTo(tester.getTopLeft(groupB).dy, 1),
+    );
+    expect(
+      tester.getCenter(groupA).dx,
+      lessThan(tester.getCenter(groupB).dx),
+    );
+    expect(find.text('% Sieg'), findsNWidgets(2));
+    expect(find.text('% weiter'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Christmas forecast tables use translucent cards', (tester) async {
+    final styleNotifier = AppThemeController.instance.themeStyleNotifier;
+    addTearDown(() => styleNotifier.value = AppThemeStyle.club);
+    styleNotifier.value = AppThemeStyle.christmas;
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _tournament(),
+            isStandaloneWindow: true,
+            forecastService: _FixedForecastService(),
+          ),
+        ),
+      ),
+    );
+    // Snowfall animates forever, so pump explicitly instead of settling.
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('Siegprognose & Weiterkommen'));
+    await tester.pump();
+    await tester.pump();
+
+    final table = tester.widget<Container>(
+      find.byKey(const ValueKey('second-screen-forecast-group-1')),
+    );
+    expect(
+      (table.decoration! as BoxDecoration).color,
+      const Color(0xFF14202B).withValues(alpha: .84),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -2564,6 +2649,99 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('widget tiles shrink to content so the next heading sits close', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament()
+      ..secondScreenActiveLayout = 'Standard'
+      ..secondScreenLayouts['Standard'] = const [
+        SecondScreenWidgetPlacement(
+          widgetId: 'boards',
+          widthUnits: 2,
+          heightUnits: 2,
+          columnIndex: 0,
+        ),
+        SecondScreenWidgetPlacement(
+          widgetId: 'recent',
+          widthUnits: 2,
+          columnIndex: 0,
+        ),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final boards = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-boards')),
+    );
+    final recent = tester.getRect(
+      find.byKey(const ValueKey('monitor-widget-recent')),
+    );
+    expect(recent.top, greaterThan(boards.top));
+    expect(recent.top - boards.bottom, lessThan(60));
+    final heading = find.text('Zuletzt beendete Matches');
+    expect(heading, findsOneWidget);
+    expect(tester.getRect(heading).top - recent.top, lessThan(60));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('snap height button fits a widget height to its content', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final storage = _MemoryTournamentStorage();
+    final tournament = _tournament();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: storage,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+
+    final boardsSnap = find.descendant(
+      of: find.byKey(const ValueKey('monitor-widget-boards')),
+      matching: find.byTooltip('Höhe an Inhalt anpassen'),
+    );
+    expect(boardsSnap, findsOneWidget);
+    await tester.tap(boardsSnap);
+    await tester.pump();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pump();
+
+    final saved = tournament.secondScreenLayouts['Standard']!;
+    final boards = saved.firstWhere(
+      (placement) => placement.widgetId == 'boards',
+    );
+    expect(boards.heightUnits, lessThan(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('dropping on a widget lower edge starts a new layout row', (
     tester,
   ) async {
@@ -2886,7 +3064,8 @@ void main() {
       final progress = tester.getRect(
         find.byKey(const ValueKey('monitor-widget-stageProgress')),
       );
-      expect(recent.center.dy, closeTo(progress.center.dy, 1));
+      expect(recent.top, lessThan(progress.bottom));
+      expect(progress.top, lessThan(recent.bottom));
       expect(recent.right, lessThanOrEqualTo(progress.left));
       expect(tester.takeException(), isNull);
     },

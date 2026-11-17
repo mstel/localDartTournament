@@ -672,6 +672,14 @@ class _TournamentDirectorDashboardState
                               match: entry.match,
                             ),
                           ),
+                          style: Theme.of(context).brightness == Brightness.light
+                              ? FilledButton.styleFrom(
+                                  backgroundColor:
+                                      Theme.of(context).colorScheme.surface,
+                                  foregroundColor:
+                                      Theme.of(context).colorScheme.primary,
+                                )
+                              : null,
                           child: Text(
                             '${widget.tournament.boardDisplayName(assignment.board)} starten',
                           ),
@@ -853,6 +861,16 @@ class _TournamentDirectorDashboardState
                       () => startOnBoard!(quickStartBoard, match: match),
                     ),
                     icon: const Icon(Icons.play_arrow_rounded),
+                    style: IconButton.styleFrom(
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.light
+                          ? Theme.of(context).colorScheme.surface
+                          : null,
+                      foregroundColor:
+                          Theme.of(context).brightness == Brightness.light
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
                   ),
                 ),
               if (showDragHandle && !isRunning)
@@ -1254,6 +1272,17 @@ class _TournamentDirectorDashboardState
                                           size: 18,
                                         ),
                                         label: Text(t.boardDisplayName(board)),
+                                        style: Theme.of(context).brightness ==
+                                                Brightness.light
+                                            ? FilledButton.styleFrom(
+                                                backgroundColor: Theme.of(
+                                                  context,
+                                                ).colorScheme.surface,
+                                                foregroundColor: Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                              )
+                                            : null,
                                       ),
                                     ),
                                 ],

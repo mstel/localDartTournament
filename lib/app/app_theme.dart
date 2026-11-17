@@ -10,7 +10,7 @@ ThemeData buildDartTournamentDarkTheme({bool christmas = false}) =>
 ThemeData _buildTheme({required bool isDark, required bool christmas}) {
   final ink = isDark ? const Color(0xFFF5F3ED) : const Color(0xFF191B20);
   final primary = christmas
-      ? (isDark ? const Color(0xFFF0808B) : const Color(0xFFB52D43))
+      ? const Color(0xFF183D32)
       : (isDark ? const Color(0xFFD49B44) : const Color(0xFFB5811E));
   final bg = isDark ? const Color(0xFF121316) : const Color(0xFFF7F5F0);
   final surface = isDark ? const Color(0xFF1B1D24) : const Color(0xFFFFFFFF);
@@ -18,10 +18,10 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
       ? const Color(0xFF242731)
       : const Color(0xFFF1EFEA);
   final primaryContainer = christmas
-      ? (isDark ? const Color(0xFF3A1D29) : const Color(0xFFFBE8EC))
+      ? (isDark ? const Color(0xFF1C3F35) : const Color(0xFFDCEBE3))
       : (isDark ? const Color(0xFF382B14) : const Color(0xFFFCEECF));
   final onPrimaryContainer = christmas
-      ? (isDark ? const Color(0xFFFFE7EA) : const Color(0xFF45101B))
+      ? (isDark ? const Color(0xFFE3F2E9) : const Color(0xFF10251D))
       : (isDark ? const Color(0xFFFDE8B5) : const Color(0xFF281C03));
 
   final scheme =
@@ -36,9 +36,9 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
                 ))
           .copyWith(
             primary: primary,
-            onPrimary: isDark || !christmas
-                ? const Color(0xFF121316)
-                : Colors.white,
+            onPrimary: christmas
+                ? Colors.white
+                : const Color(0xFF121316),
             primaryContainer: primaryContainer,
             onPrimaryContainer: onPrimaryContainer,
             secondary: christmas
@@ -72,6 +72,30 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
     borderRadius: BorderRadius.circular(12),
     borderSide: BorderSide(color: scheme.outlineVariant),
   );
+  final filledButtonStyle = FilledButton.styleFrom(
+    minimumSize: const Size(48, 48),
+    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    textStyle: base.textTheme.labelLarge?.copyWith(
+      fontWeight: FontWeight.w700,
+    ),
+  );
+  // Light design: primary actions use a white surface with the club gold
+  // (or Christmas green) label, instead of a gold fill with dark text.
+  final actionButtonStyle = isDark
+      ? filledButtonStyle
+      : filledButtonStyle.copyWith(
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.disabled)
+                ? scheme.surfaceContainerHighest
+                : scheme.surface;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.disabled)
+                ? scheme.onSurface.withValues(alpha: .38)
+                : primary;
+          }),
+        );
 
   return base.copyWith(
     scaffoldBackgroundColor: bg,
@@ -125,16 +149,7 @@ ThemeData _buildTheme({required bool isDark, required bool christmas}) {
         borderSide: BorderSide(color: primary, width: 2),
       ),
     ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        minimumSize: const Size(48, 48),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: base.textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    ),
+    filledButtonTheme: FilledButtonThemeData(style: actionButtonStyle),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(48, 48),
