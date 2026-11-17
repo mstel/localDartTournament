@@ -39,7 +39,7 @@ class ChristmasDecorations extends StatelessWidget {
           const Positioned.fill(
             child: ExcludeSemantics(
               child: Image(
-                image: AssetImage('assets/images/christmas_winter_forest.jpg'),
+                image: AssetImage('assets/images/christmas_theme.png'),
                 fit: BoxFit.cover,
                 alignment: Alignment.bottomCenter,
               ),

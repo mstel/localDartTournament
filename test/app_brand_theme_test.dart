@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:dart_tournament_manager/app/app_theme.dart';
 import 'package:dart_tournament_manager/app/theme_controller.dart';
 import 'package:dart_tournament_manager/app/christmas_decorations.dart';
+import 'package:dart_tournament_manager/features/settings/presentation/appearance_panel.dart';
+import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'package:dart_tournament_manager/shared/widgets/app_brand_mark.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -58,6 +60,21 @@ void main() {
     );
   });
 
+  test('run surfaces keep the dark blue palette in dark mode', () {
+    final lightScheme = buildDartTournamentTheme().colorScheme;
+    final darkScheme = buildDartTournamentDarkTheme().colorScheme;
+    final lightPalette = TournamentDisplayPalette.forColorScheme(lightScheme);
+    final darkPalette = TournamentDisplayPalette.forColorScheme(darkScheme);
+
+    expect(lightPalette.card, lightScheme.surfaceContainer);
+    expect(lightPalette.cardEmphasis, lightScheme.surfaceContainerHigh);
+    expect(darkPalette.card, TournamentDisplayPalette.card);
+    expect(darkPalette.cardEmphasis, TournamentDisplayPalette.cardEmphasis);
+    expect(darkPalette.border, TournamentDisplayPalette.border);
+    expect(darkPalette.accent, TournamentDisplayPalette.accent);
+    expect(darkPalette.card, isNot(darkScheme.surfaceContainer));
+  });
+
   test(
     'club and Christmas theme styles persist independently of brightness',
     () async {
@@ -90,6 +107,22 @@ void main() {
       expect(controller.themeStyleNotifier.value, AppThemeStyle.club);
     },
   );
+
+  testWidgets('appearance panel uses the short Christmas scheme label', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: AppearancePanel())),
+    );
+
+    await tester.tap(find.byType(DropdownButtonFormField<AppThemeStyle>));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Weihnachten'), findsOneWidget);
+    expect(find.textContaining('Schnee, Lichter'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Christmas winter background is limited to the Christmas style', (
     tester,
@@ -130,7 +163,7 @@ void main() {
         )
         .map((image) => (image.image as AssetImage).assetName)
         .toSet();
-    expect(imageAssets, {'assets/images/christmas_winter_forest.jpg'});
+    expect(imageAssets, {'assets/images/christmas_theme.png'});
     expect(find.byKey(const ValueKey('christmas-snowfall')), findsOneWidget);
     expect(find.text('🎅'), findsNothing);
     expect(find.text('Inhalt'), findsOneWidget);

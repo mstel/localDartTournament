@@ -1,6 +1,8 @@
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:dart_tournament_manager/app/theme_controller.dart';
+import 'package:dart_tournament_manager/features/league/application/league_board_runtime.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
@@ -541,6 +543,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final size in [
+    const Size(360, 800),
+    const Size(800, 600),
+    const Size(1440, 900),
+  ]) {
+    testWidgets('league completion overview uses league categories at $size', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: _completedLeagueTournament(),
+              isStandaloneWindow: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Turnier abgeschlossen'), findsOneWidget);
+      expect(find.text('Mannschaftsvergleich'), findsOneWidget);
+      expect(find.text('Spielbilanz'), findsOneWidget);
+      expect(find.text('Bestleistungen'), findsOneWidget);
+      expect(find.text('Platzierungen'), findsNothing);
+      expect(find.text('Ranglistenänderungen'), findsNothing);
+      expect(
+        find.textContaining('Heimmannschaft 1:1 Gastmannschaft'),
+        findsOneWidget,
+      );
+      expect(find.text('Lena'), findsOneWidget);
+      expect(find.text('Sp'), findsNWidgets(2));
+      expect(find.textContaining('Lena · 180+'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('running matches are clearly separated from suggestions', (
     tester,
   ) async {
@@ -583,7 +633,7 @@ void main() {
     expect(find.textContaining('Empfohlene Partien'), findsNWidgets(4));
     expect(find.text('BELEGT'), findsNothing);
     expect(find.text('LIVE'), findsOneWidget);
-    expect(find.textContaining('Partie läuft seit '), findsOneWidget);
+    expect(find.textContaining('Partie läuft seit '), findsNothing);
     final runningTile = find.byKey(
       ValueKey(
         'second-screen-running-match-${match.round}-'
@@ -602,13 +652,29 @@ void main() {
     }
     expect(find.text('Nächste Begegnungen'), findsOneWidget);
     expect(find.textContaining('Empfohlene Partien'), findsWidgets);
+    final nextHeading = find.text('Nächste Begegnungen');
+    final recentHeading = find.text('Zuletzt beendete Matches');
+    expect(recentHeading, findsOneWidget);
+    expect(
+      tester.getRect(recentHeading).top,
+      greaterThan(tester.getRect(nextHeading).bottom),
+    );
     expect(
       find.textContaining('EMPFOHLENE PARTIEN FÜR BOARD 1'),
       findsNothing,
     );
-    final firstBoardQueue = tester.widget<Container>(
-      find.byKey(const ValueKey('second-screen-director-board-1')),
+    expect(find.textContaining('JETZT ZUWEISEN'), findsNWidgets(3));
+    final firstBoardQueueFinder = find.byKey(
+      const ValueKey('second-screen-director-board-1'),
     );
+    expect(
+      find.descendant(
+        of: firstBoardQueueFinder,
+        matching: find.textContaining('JETZT ZUWEISEN'),
+      ),
+      findsNothing,
+    );
+    final firstBoardQueue = tester.widget<Container>(firstBoardQueueFinder);
 
     // Board status text was removed; border color still reflects status (tested below).
     final queueDecoration = firstBoardQueue.decoration! as BoxDecoration;
@@ -1001,6 +1067,7 @@ void main() {
       final occupancyTile = find.byKey(
         ValueKey('second-screen-free-board-$board'),
       );
+      expect(tester.getSize(occupancyTile).height, lessThan(74));
       expect(
         find.descendant(of: boardTile, matching: find.textContaining('Empfohlene Partien')),
         findsOneWidget,
@@ -1009,6 +1076,13 @@ void main() {
         find.descendant(
           of: occupancyTile,
           matching: find.text('JETZT PARTIE ZUWEISEN'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: boardTile,
+          matching: find.textContaining('JETZT ZUWEISEN'),
         ),
         findsOneWidget,
       );
@@ -1035,6 +1109,13 @@ void main() {
       find.descendant(
         of: boardTwoOccupancy,
         matching: find.text('JETZT PARTIE ZUWEISEN'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('second-screen-director-board-2')),
+        matching: find.textContaining('JETZT ZUWEISEN'),
       ),
       findsOneWidget,
     );
@@ -3268,6 +3349,44 @@ CreatedTournament _threeGroupEightQualifierPreviewTournament() {
       ),
     ],
   );
+}
+
+CreatedTournament _completedLeagueTournament() {
+  final players = [
+    TournamentPlayer.generated(1).copyWith(name: 'Lena'),
+    TournamentPlayer.generated(2).copyWith(name: 'Lars'),
+    TournamentPlayer.generated(3).copyWith(name: 'Mira'),
+    TournamentPlayer.generated(4).copyWith(name: 'Mattes'),
+  ];
+  final league = LeagueMatch.adjusted(
+    homeTeam: 'Heimmannschaft',
+    awayTeam: 'Gastmannschaft',
+    homePlayers: const ['Lena', 'Lars'],
+    awayPlayers: const ['Mira', 'Mattes'],
+    singlesPerPlayer: 1,
+    doublesCount: 0,
+    gameFormat: const TournamentGameFormat(bestOfLegs: 3),
+  );
+  final tournament = CreatedTournament(
+    id: 'league-completion',
+    name: 'Freundschaftsspiel',
+    players: players,
+    stages: const [],
+    runStages: const [],
+    leagueMatch: league,
+    boardCount: 2,
+    startedAt: DateTime(2026, 11, 17, 10),
+  );
+  league.games[0].score(2, 0, format: league.gameFormat);
+  league.games[1].score(0, 2, format: league.gameFormat);
+  final runtime = LeagueBoardRuntime(tournament);
+  runtime.matches.first.bestPerformances = const [
+    BestPerformance(type: BestPerformanceType.score180, playerName: 'Lena'),
+  ];
+  runtime.writeTo(tournament);
+  return tournament
+    ..finishedAt = DateTime(2026, 11, 17, 12)
+    ..updatedAt = DateTime(2026, 11, 17, 12);
 }
 
 CreatedTournament _tournament() {

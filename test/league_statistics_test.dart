@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_player_record.dart';
 import 'package:dart_tournament_manager/features/league/presentation/league_match_page.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/tournament_player_statistics.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/statistics_period.dart';
@@ -40,6 +41,34 @@ void main() {
       expect(row.matches, 1);
       expect(row.legsFor, row.wins == 1 ? 3 : 1);
       expect(row.legsAgainst, row.wins == 1 ? 1 : 3);
+    }
+  });
+  test('league player records count doubles once per partner', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: const ['H1', 'H2'],
+      awayPlayers: const ['G1', 'G2'],
+      singlesPerPlayer: 1,
+      doublesCount: 1,
+      gameFormat: const TournamentGameFormat(bestOfLegs: 3),
+    );
+    for (final game in league.games) {
+      game.score(2, 0, format: league.gameFormat);
+    }
+
+    final records = leaguePlayerRecords(league);
+
+    expect(records, hasLength(4));
+    for (final record in records.where((item) => item.teamSide == 0)) {
+      expect(record.matches, 2);
+      expect(record.wins, 2);
+      expect(record.losses, 0);
+    }
+    for (final record in records.where((item) => item.teamSide == 1)) {
+      expect(record.matches, 2);
+      expect(record.wins, 0);
+      expect(record.losses, 2);
     }
   });
   test(

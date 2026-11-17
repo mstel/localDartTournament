@@ -12,18 +12,20 @@ class TournamentDisplayPalette {
   static const text = Color(0xFFF1F3F5);
   static const mutedText = Color(0xFFBCC6CE);
 
-  static TournamentDisplayColors forColorScheme(ColorScheme scheme) =>
-      TournamentDisplayColors(
-        background: scheme.surface,
-        card: scheme.surfaceContainer,
-        cardEmphasis: scheme.surfaceContainerHigh,
-        border: scheme.outlineVariant,
-        accent: scheme.brightness == Brightness.light
-            ? Color.lerp(scheme.tertiary, scheme.onSurface, .22)!
-            : scheme.tertiary,
-        text: scheme.onSurface,
-        mutedText: scheme.onSurfaceVariant,
-      );
+  static TournamentDisplayColors forColorScheme(ColorScheme scheme) {
+    final isDark = scheme.brightness == Brightness.dark;
+    return TournamentDisplayColors(
+      background: isDark ? background : scheme.surface,
+      card: isDark ? card : scheme.surfaceContainer,
+      cardEmphasis: isDark ? cardEmphasis : scheme.surfaceContainerHigh,
+      border: isDark ? border : scheme.outlineVariant,
+      accent: isDark
+          ? accent
+          : Color.lerp(scheme.tertiary, scheme.onSurface, .22)!,
+      text: isDark ? text : scheme.onSurface,
+      mutedText: isDark ? mutedText : scheme.onSurfaceVariant,
+    );
+  }
 }
 
 class TournamentDisplayColors {

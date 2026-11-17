@@ -149,9 +149,7 @@ class _AppearancePanelState extends State<AppearancePanel> {
                   ),
                   DropdownMenuItem(
                     value: AppThemeStyle.christmas,
-                    child: Text(
-                      'Weihnachten · Schnee, Lichter & Weihnachtsmann',
-                    ),
+                    child: Text('Weihnachten'),
                   ),
                 ],
                 onChanged: (value) {

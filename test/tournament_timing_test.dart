@@ -152,6 +152,48 @@ void main() {
     expect(tournament.plannedMinutes, 112);
     expect(tournament.plannedMatchEndSeconds, [1500, 3240, 4980, 6720]);
   });
+  test('completed league is marked finished by the normal save path', () async {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: const ['H1', 'H2'],
+      awayPlayers: const ['G1', 'G2'],
+      singlesPerPlayer: 1,
+      doublesCount: 0,
+      gameFormat: const TournamentGameFormat(bestOfLegs: 3),
+    );
+    final tournament = CreatedTournament(
+      name: 'Liga',
+      players: [
+        TournamentPlayer.generated(1).copyWith(name: 'H1'),
+        TournamentPlayer.generated(2).copyWith(name: 'H2'),
+        TournamentPlayer.generated(3).copyWith(name: 'G1'),
+        TournamentPlayer.generated(4).copyWith(name: 'G2'),
+      ],
+      stages: const [],
+      runStages: const [],
+      leagueMatch: league,
+      boardCount: 1,
+      startedAt: start,
+    );
+    league.games[0].score(2, 0, format: league.gameFormat);
+    league.games[1].score(0, 2, format: league.gameFormat);
+
+    await TournamentTiming.prepare(
+      tournament,
+      parameters: const TournamentPlanningParameters(),
+    );
+
+    expect(tournament.finishedAt, isNotNull);
+
+    league.games[1].score(null, null);
+    TournamentTiming.capture(
+      tournament,
+      const TournamentPlanningParameters(),
+    );
+
+    expect(tournament.finishedAt, isNull);
+  });
   test(
     'reset clock uses the selected tournament date without clearing matches',
     () {

@@ -37,8 +37,11 @@ import '../../../../rankings/application/local_ranking_elo_service.dart';
 import '../../../../rankings/application/tournament_ranking_changes_service.dart';
 import '../../../../rankings/domain/local_elo_calculator.dart';
 import '../../../../rankings/domain/local_ranking.dart';
+import '../../../../statistics/domain/best_performance.dart';
 import '../../../data/tournament_storage.dart';
 import 'recent_match_result_card.dart';
+import '../../../../league/domain/league_match.dart';
+import '../../../../league/domain/league_player_record.dart';
 import '../../../../league/presentation/league_overview.dart';
 
 const Map<String, String> _monitorWidgetTitles = {
@@ -136,6 +139,8 @@ class _TournamentSecondScreenViewState
   final _previewVerticalController = ScrollController();
   final _previewHorizontalController = ScrollController();
   final _recentResultsController = ScrollController();
+  final _completionTeamComparisonScrollController = ScrollController();
+  final _completionPlayerRecordScrollController = ScrollController();
   TournamentFlowPrioritySettings get _prioritySettings {
     final settings = widget.tournament.tournamentSettings;
     return TournamentFlowPrioritySettings(
@@ -582,6 +587,8 @@ class _TournamentSecondScreenViewState
     _previewVerticalController.dispose();
     _previewHorizontalController.dispose();
     _recentResultsController.dispose();
+    _completionTeamComparisonScrollController.dispose();
+    _completionPlayerRecordScrollController.dispose();
     super.dispose();
   }
 
@@ -811,7 +818,7 @@ class _TournamentSecondScreenViewState
   ) {
     final theme = Theme.of(context);
     final displayColors = _displayColors(context);
-    final placements = _completionPlacements(tournament, playedMatches);
+    final league = tournament.leagueMatch;
     final performances = [
       for (final match in playedMatches) ...match.bestPerformances,
     ];
@@ -824,160 +831,171 @@ class _TournamentSecondScreenViewState
     final durationLabel =
         '${duration.inHours} h ${duration.inMinutes % 60} min'
         '${measuredDuration == null ? ' (geschätzt)' : ''}';
-    final sections = [
-      _completionSection(
-        'Platzierungen',
-        placements.isEmpty
-            ? const Text('Keine Platzierungen verfügbar.')
-            : Column(
-                children: [
-                  for (var index = 0; index < placements.length; index++)
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        radius: 16,
-                        backgroundColor: index == 0
-                            ? const Color(0xFFFFD54F)
-                            : index == 1
-                            ? const Color(0xFFB0BEC5)
-                            : index == 2
-                            ? const Color(0xFFB87333)
-                            : const Color(0xFF546E7A),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text('${index + 1}'),
+    final List<Widget> sections;
+    if (league == null) {
+      final placements = _completionPlacements(tournament, playedMatches);
+      sections = [
+        _completionSection(
+          'Platzierungen',
+          placements.isEmpty
+              ? const Text('Keine Platzierungen verfügbar.')
+              : Column(
+                  children: [
+                    for (var index = 0; index < placements.length; index++)
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: index == 0
+                              ? const Color(0xFFFFD54F)
+                              : index == 1
+                              ? const Color(0xFFB0BEC5)
+                              : index == 2
+                              ? const Color(0xFFB87333)
+                              : const Color(0xFF546E7A),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('${index + 1}'),
+                          ),
+                        ),
+                        title: Text(
+                          placements[index].name,
+                          style: TextStyle(color: displayColors.text),
                         ),
                       ),
-                      title: Text(
-                        placements[index].name,
-                        style: TextStyle(color: displayColors.text),
-                      ),
-                    ),
-                ],
-              ),
-        colors: displayColors,
-      ),
-      _completionSection(
-        'Ranglistenänderungen',
-        _completionRankingChanges(colors: displayColors),
-        colors: displayColors,
-      ),
-      _completionSection(
-        'Bestleistungen',
-        performances.isEmpty
-            ? Text(
-                'Keine Bestleistungen eingetragen.',
-                style: TextStyle(color: displayColors.mutedText),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final performance in performances.take(8))
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(
-                        '${performance.playerName} · ${performance.label}'
-                        '${performance.value == null ? '' : ' · ${performance.value}'}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: displayColors.text),
-                      ),
-                    ),
-                  if (performances.length > 8)
-                    Text(
-                      'Weitere ${performances.length - 8} …',
-                      style: TextStyle(color: displayColors.mutedText),
-                    ),
-                ],
-              ),
-        colors: displayColors,
-      ),
-    ];
+                  ],
+                ),
+          colors: displayColors,
+        ),
+        _completionSection(
+          'Ranglistenänderungen',
+          _completionRankingChanges(colors: displayColors),
+          colors: displayColors,
+        ),
+        _completionBestPerformancesSection(
+          performances,
+          colors: displayColors,
+        ),
+      ];
+    } else {
+      sections = [
+        _completionSection(
+          'Mannschaftsvergleich',
+          _completionLeagueTeamComparison(league, colors: displayColors),
+          colors: displayColors,
+        ),
+        _completionSection(
+          'Spielbilanz',
+          _completionLeaguePlayerRecords(
+            league,
+            leaguePlayerRecords(league),
+            colors: displayColors,
+          ),
+          colors: displayColors,
+        ),
+        _completionBestPerformancesSection(
+          performances,
+          colors: displayColors,
+        ),
+      ];
+    }
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1100),
-        child: SizedBox.expand(
-          child: Card(
-            color: displayColors.card,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.emoji_events_outlined,
-                    size: 48,
-                    color: displayColors.accent,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Turnier abgeschlossen',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      color: displayColors.text,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tournament.name,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: displayColors.accent,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '$durationLabel · ${tournament.players.length} Teilnehmer · '
-                    '${playedMatches.length} Partien gespielt',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: displayColors.text,
-                    ),
-                  ),
-                  Divider(
-                    height: 24,
-                    color: displayColors.border,
-                  ),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (constraints.maxWidth >= 820) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              for (
-                                var index = 0;
-                                index < sections.length;
-                                index++
-                              )
-                                Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.only(
-                                      left: index == 0 ? 0 : 8,
-                                    ),
-                                    child: sections[index],
-                                  ),
-                                ),
-                            ],
-                          );
-                        }
-                        return SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              for (final section in sections) ...[
-                                SizedBox(height: 220, child: section),
-                                const SizedBox(height: 8),
-                              ],
-                            ],
+        child: Card(
+          color: displayColors.card,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final sectionHeight = constraints.hasBoundedHeight
+                  ? (constraints.maxHeight - 220).clamp(220.0, 520.0).toDouble()
+                  : 420.0;
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.emoji_events_outlined,
+                          size: 48,
+                          color: displayColors.accent,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Turnier abgeschlossen',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            color: displayColors.text,
+                            fontWeight: FontWeight.bold,
                           ),
-                        );
-                      },
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          tournament.name,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: displayColors.accent,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '$durationLabel · ${tournament.players.length} Teilnehmer · '
+                          '${playedMatches.length} Partien gespielt',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: displayColors.text,
+                          ),
+                        ),
+                        Divider(
+                          height: 24,
+                          color: displayColors.border,
+                        ),
+                        LayoutBuilder(
+                          builder: (context, sectionConstraints) {
+                            if (sectionConstraints.maxWidth >= 820) {
+                              return SizedBox(
+                                height: sectionHeight,
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (
+                                      var index = 0;
+                                      index < sections.length;
+                                      index++
+                                    )
+                                      Expanded(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                            left: index == 0 ? 0 : 8,
+                                          ),
+                                          child: sections[index],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (final section in sections) ...[
+                                  SizedBox(height: 220, child: section),
+                                  const SizedBox(height: 8),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -1008,6 +1026,162 @@ class _TournamentSecondScreenViewState
             Divider(height: 16, color: colors.border),
             Expanded(child: SingleChildScrollView(child: content)),
           ],
+        ),
+      );
+
+  Widget _completionBestPerformancesSection(
+    List<BestPerformance> performances, {
+    required TournamentDisplayColors colors,
+  }) =>
+      _completionSection(
+        'Bestleistungen',
+        performances.isEmpty
+            ? Text(
+                'Keine Bestleistungen eingetragen.',
+                style: TextStyle(color: colors.mutedText),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final performance in performances.take(8))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        '${performance.playerName} · ${performance.label}'
+                        '${performance.value == null ? '' : ' · ${performance.value}'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.text),
+                      ),
+                    ),
+                  if (performances.length > 8)
+                    Text(
+                      'Weitere ${performances.length - 8} …',
+                      style: TextStyle(color: colors.mutedText),
+                    ),
+                ],
+              ),
+        colors: colors,
+      );
+
+  Widget _completionLeagueTeamComparison(
+    LeagueMatch league, {
+    required TournamentDisplayColors colors,
+  }) {
+    final played = league.games.where((game) => game.complete).length;
+    final homeScores = league.games.fold<int>(
+      0,
+      (sum, game) => sum + (game.homeScore(league.gameFormat) ?? 0),
+    );
+    final awayScores = league.games.fold<int>(
+      0,
+      (sum, game) => sum + (game.awayScore(league.gameFormat) ?? 0),
+    );
+    final scoreLabel = league.gameFormat.bestOfSets > 1 ? 'Sets' : 'Legs';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '${league.homeTeam} ${league.homePoints}:${league.awayPoints} ${league.awayTeam}',
+          style: TextStyle(
+            color: colors.text,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$played von ${league.games.length} Begegnungen · ${league.outcome}',
+          style: TextStyle(color: colors.mutedText),
+        ),
+        const SizedBox(height: 8),
+        _completionDataTable(
+          controller: _completionTeamComparisonScrollController,
+          headers: ['Mannschaft', 'Sp', 'S', 'N', scoreLabel, 'Pkt.'],
+          rows: [
+            [
+              league.homeTeam,
+              '$played',
+              '${league.homePoints}',
+              '${league.awayPoints}',
+              '$homeScores:$awayScores',
+              '${league.homePoints}',
+            ],
+            [
+              league.awayTeam,
+              '$played',
+              '${league.awayPoints}',
+              '${league.homePoints}',
+              '$awayScores:$homeScores',
+              '${league.awayPoints}',
+            ],
+          ],
+          colors: colors,
+        ),
+      ],
+    );
+  }
+
+  Widget _completionLeaguePlayerRecords(
+    LeagueMatch league,
+    List<LeaguePlayerRecord> records, {
+    required TournamentDisplayColors colors,
+  }) {
+    if (records.isEmpty) {
+      return Text(
+        'Noch keine Spielbilanzen erfasst.',
+        style: TextStyle(color: colors.mutedText),
+      );
+    }
+    return _completionDataTable(
+      controller: _completionPlayerRecordScrollController,
+      headers: ['Spieler', 'Team', 'Sp', 'S', 'N'],
+      rows: [
+        for (final record in records)
+          [
+            record.name,
+            record.teamSide == 0 ? league.homeTeam : league.awayTeam,
+            '${record.matches}',
+            '${record.wins}',
+            '${record.losses}',
+          ],
+      ],
+      colors: colors,
+    );
+  }
+
+  Widget _completionDataTable({
+    required ScrollController controller,
+    required List<String> headers,
+    required List<List<String>> rows,
+    required TournamentDisplayColors colors,
+  }) =>
+      Scrollbar(
+        controller: controller,
+        thumbVisibility: true,
+        notificationPredicate:
+            (notification) => notification.metrics.axis == Axis.horizontal,
+        child: SingleChildScrollView(
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            border: TableBorder.all(color: colors.border),
+            columnSpacing: 12,
+            headingTextStyle: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.bold,
+            ),
+            dataTextStyle: TextStyle(color: colors.text),
+            columns: [
+              for (final header in headers) DataColumn(label: Text(header)),
+            ],
+            rows: [
+              for (final row in rows)
+                DataRow(
+                  cells: [for (final cell in row) DataCell(Text(cell))],
+                ),
+            ],
+          ),
         ),
       );
 
@@ -1262,14 +1436,15 @@ class _TournamentSecondScreenViewState
             ),
           );
         } else {
-          content = Column(
+          content = Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: Row(
+                flex: 6,
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(
-                      flex: 6,
                       child: _buildBoardsAndPriorityPanel(
                         context,
                         t,
@@ -1278,26 +1453,26 @@ class _TournamentSecondScreenViewState
                         expand: true,
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 5,
-                      child: _buildStandingsAndPreviewControl(
-                        context,
-                        t,
-                        activeIndex,
-                        activeStage,
-                        expand: true,
-                      ),
+                    const SizedBox(height: 8),
+                    _buildRecentMatchesAndEloPanel(
+                      context,
+                      t,
+                      playedMatches,
+                      expand: false,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              _buildRecentMatchesAndEloPanel(
-                context,
-                t,
-                playedMatches,
-                expand: false,
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 5,
+                child: _buildStandingsAndPreviewControl(
+                  context,
+                  t,
+                  activeIndex,
+                  activeStage,
+                  expand: true,
+                ),
               ),
             ],
           );
@@ -4519,13 +4694,6 @@ class _TournamentSecondScreenViewState
                 );
               },
           ),
-          const SizedBox(height: 2),
-          Center(
-            child: _RunningMatchElapsedLabel(
-              boardNumber: match.boardNumber,
-              startedAt: match.startedAt,
-            ),
-          ),
         ],
       ),
     );
@@ -4579,8 +4747,7 @@ class _TournamentSecondScreenViewState
     return Container(
       width: width,
       key: ValueKey('second-screen-free-board-$board'),
-      constraints: const BoxConstraints(minHeight: 74),
-      padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
       decoration: BoxDecoration(
         color: colors.card,
         border: Border.all(color: const Color(0xFF4ED9A4), width: 2),
@@ -4615,17 +4782,6 @@ class _TournamentSecondScreenViewState
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        const SizedBox(height: 2),
-        const Center(
-          child: Text(
-            'JETZT PARTIE ZUWEISEN',
-            style: TextStyle(
-              color: Color(0xFF4ED9A4),
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
-            ),
           ),
         ),
       ],
@@ -4837,6 +4993,8 @@ class _TournamentSecondScreenViewState
                                   final anyRunning = statuses.any(
                                     (status) => status.label == 'Besetzt',
                                   );
+                                  final canAssignNow =
+                                      !anyRunning && !allBlocked;
                                   final span = boards.length > 1 ? 2 : 1;
                                   final tileWidth =
                                       singleColumnWidth * span +
@@ -4891,6 +5049,18 @@ class _TournamentSecondScreenViewState
                                                     fontSize: 12,
                                                   ),
                                                 ),
+                                                if (canAssignNow)
+                                                  const TextSpan(
+                                                    text: ' · JETZT ZUWEISEN',
+                                                    style: TextStyle(
+                                                      color: Color(
+                                                        0xFF4ED9A4,
+                                                      ),
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
                                               ],
                                             ),
                                             maxLines: 1,
@@ -5369,69 +5539,6 @@ class _MonitorTournamentClockState extends State<_MonitorTournamentClock> {
   }
 }
 
-class _RunningMatchElapsedLabel extends StatefulWidget {
-  const _RunningMatchElapsedLabel({
-    required this.boardNumber,
-    required this.startedAt,
-  });
-
-  final int? boardNumber;
-  final DateTime? startedAt;
-
-  @override
-  State<_RunningMatchElapsedLabel> createState() =>
-      _RunningMatchElapsedLabelState();
-}
-
-class _RunningMatchElapsedLabelState extends State<_RunningMatchElapsedLabel> {
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _syncTimer();
-  }
-
-  @override
-  void didUpdateWidget(covariant _RunningMatchElapsedLabel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _syncTimer();
-  }
-
-  void _syncTimer() {
-    final shouldRun = widget.startedAt != null;
-    if (shouldRun == (_timer != null)) return;
-    _timer?.cancel();
-    _timer = shouldRun
-        ? Timer.periodic(const Duration(minutes: 1), (_) {
-            if (mounted) setState(() {});
-          })
-        : null;
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final startedAt = widget.startedAt;
-    final elapsed = startedAt == null
-        ? null
-        : DateTime.now().difference(startedAt);
-    return Text(
-      'Partie läuft seit ${elapsed?.inMinutes ?? 0} min',
-      style: const TextStyle(
-        color: TournamentDisplayPalette.accent,
-        fontWeight: FontWeight.bold,
-        fontSize: 13,
-      ),
-    );
-  }
-}
-
 class _BoardStatusBadge extends StatelessWidget {
   const _BoardStatusBadge({required this.label, required this.color});
 
@@ -5440,7 +5547,7 @@ class _BoardStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     decoration: BoxDecoration(
       color: color.withAlpha(28),
       borderRadius: BorderRadius.circular(20),
