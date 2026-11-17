@@ -7,6 +7,7 @@ import 'package:dart_tournament_manager/features/rankings/domain/elo_tier.dart'
     show EloTier;
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_completion_image_generator.dart';
+import 'package:dart_tournament_manager/shared/theme/tournament_display_palette.dart';
 import 'package:flutter/material.dart' show Brightness, Color, ColorScheme;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -88,11 +89,36 @@ void main() {
   );
 
   test(
-    'uses the selected color scheme for exported image backgrounds',
+    'uses the fixed dark display palette for dark exported image backgrounds',
     () async {
       final scheme = ColorScheme.fromSeed(
         seedColor: const Color(0xFF176B87),
         brightness: Brightness.dark,
+      );
+      final bytes = await const TournamentCompletionImageGenerator()
+          .generatePortraitPng(data: _emptyImageData(), colorScheme: scheme);
+      final codec = await ui.instantiateImageCodec(bytes);
+      final image = (await codec.getNextFrame()).image;
+      final rgba = (await image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      ))!;
+
+      final background = TournamentDisplayPalette.background;
+      expect(rgba.getUint8(0), (background.r * 255).round());
+      expect(rgba.getUint8(1), (background.g * 255).round());
+      expect(rgba.getUint8(2), (background.b * 255).round());
+
+      image.dispose();
+      codec.dispose();
+    },
+  );
+
+  test(
+    'uses the selected light color scheme for exported image backgrounds',
+    () async {
+      final scheme = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF176B87),
+        brightness: Brightness.light,
       );
       final bytes = await const TournamentCompletionImageGenerator()
           .generatePortraitPng(data: _emptyImageData(), colorScheme: scheme);
