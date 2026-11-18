@@ -539,8 +539,9 @@ class _TournamentDirectorDashboardState
       runSpacing: 8,
       children: [
         Text(title, style: Theme.of(context).textTheme.titleLarge),
-        if (title == 'Spielplan' && _canRecomputeSchedule)
-          _recomputeScheduleButton('recompute-fixed-schedule-queue'),
+        if (title == 'Spielplan' &&
+            (_canRecomputeSchedule || _canEditFixedSchedule))
+          _fixedScheduleActions('queue'),
       ],
     ),
     const SizedBox(height: 8),
@@ -1710,15 +1711,6 @@ class _TournamentDirectorDashboardState
           )
         else ...[
           notices,
-          const SizedBox(height: 12),
-        ],
-        if ((widget.directorModeEnabled ||
-                widget.tournament.leagueMatch != null) &&
-            (_canRecomputeSchedule || _canEditFixedSchedule)) ...[
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: _fixedScheduleActions('director'),
-          ),
           const SizedBox(height: 12),
         ],
         if (!widget.directorModeEnabled) ...[

@@ -94,11 +94,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('fixed schedules expose recompute actions in both views', (
+  testWidgets('fixed schedules expose all actions in the Spielplan section', (
     tester,
   ) async {
     final tournament = fixture()..directorPlayOrderMode = 'fixed_schedule';
     var recomputeCount = 0;
+    var perBoardCount = 0;
+    var overallCount = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -111,6 +113,8 @@ void main() {
               onResult: (_) async {},
               onBlock: (_) async {},
               onRecomputeSchedule: () => recomputeCount++,
+              onEditFixedSchedulePerBoard: () => perBoardCount++,
+              onEditFixedScheduleOverall: () => overallCount++,
             ),
           ),
         ),
@@ -120,18 +124,29 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('recompute-fixed-schedule-director')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('recompute-fixed-schedule-queue')),
-      findsOneWidget,
+      findsNothing,
     );
     final queueButton = find.byKey(
       const ValueKey('recompute-fixed-schedule-queue'),
     );
+    final perBoardButton = find.byKey(
+      const ValueKey('edit-fixed-schedule-per-board-queue'),
+    );
+    final overallButton = find.byKey(
+      const ValueKey('edit-fixed-schedule-overall-queue'),
+    );
+    expect(queueButton, findsOneWidget);
+    expect(perBoardButton, findsOneWidget);
+    expect(overallButton, findsOneWidget);
     await tester.ensureVisible(queueButton);
     await tester.tap(queueButton);
+    await tester.ensureVisible(perBoardButton);
+    await tester.tap(perBoardButton);
+    await tester.ensureVisible(overallButton);
+    await tester.tap(overallButton);
     expect(recomputeCount, 1);
+    expect(perBoardCount, 1);
+    expect(overallCount, 1);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -144,6 +159,8 @@ void main() {
               onResult: (_) async {},
               onBlock: (_) async {},
               onRecomputeSchedule: () => recomputeCount++,
+              onEditFixedSchedulePerBoard: () => perBoardCount++,
+              onEditFixedScheduleOverall: () => overallCount++,
             ),
           ),
         ),
@@ -152,6 +169,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('recompute-fixed-schedule-overview')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('edit-fixed-schedule-per-board-overview')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('edit-fixed-schedule-overall-overview')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
