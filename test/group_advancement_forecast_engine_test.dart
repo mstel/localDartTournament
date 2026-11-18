@@ -57,6 +57,73 @@ void main() {
     }
   });
 
+  test('blank tournament gives every player exactly identical chances', () {
+    final players = [
+      for (var index = 0; index < 8; index++)
+        TournamentPlayer.generated(index + 1),
+    ];
+    final groups = [
+      for (var groupIndex = 0; groupIndex < 2; groupIndex++)
+        TournamentGroup(
+          name: 'Gruppe ${groupIndex + 1}',
+          playType: 'round_robin',
+          players: players.sublist(groupIndex * 4, groupIndex * 4 + 4),
+          matches: [
+            for (var home = 0; home < 4; home++)
+              for (var away = home + 1; away < 4; away++)
+                GroupMatch(
+                  homePlayer: players[groupIndex * 4 + home],
+                  awayPlayer: players[groupIndex * 4 + away],
+                  round: 1,
+                ),
+          ],
+        ),
+    ];
+    final stage = GroupTournamentRunStage(
+      name: 'Gruppenphase',
+      groupPlayType: 'round_robin',
+      groups: groups,
+      qualificationPlan: QualificationPlan(
+        totalQualifiers: 4,
+        fixedPerGroup: 2,
+        extraCount: 0,
+        extraRank: 0,
+        eligibleGroupSize: 4,
+        extraGroups: const [],
+        fixedByGroup: const [2, 2],
+      ),
+      tieBreakers: defaultGroupTieBreakers,
+    );
+    final knockout = KnockoutTournamentRunStage(
+      name: 'K.-o.-Phase',
+      rounds: [
+        [GroupMatch(round: 1), GroupMatch(round: 1)],
+        [GroupMatch(round: 2)],
+      ],
+      participants: players,
+    );
+    final result = const GroupAdvancementForecastEngine().calculate(
+      stage: stage,
+      knockoutStage: knockout,
+      simulations: 2000,
+      seed: 91,
+    );
+
+    expect(result, hasLength(8));
+    final reference = result.values.first;
+    for (final chance in result.values) {
+      expect(chance.groupWinProbability, reference.groupWinProbability);
+      expect(chance.advancementProbability, reference.advancementProbability);
+      expect(
+        chance.tournamentWinProbability,
+        reference.tournamentWinProbability,
+      );
+    }
+    expect(reference.groupWinProbability, 25);
+    expect(reference.advancementProbability, 50);
+    expect(reference.tournamentWinProbability, 12.5);
+  });
+
   test('forecast combines Elo and historical win rate', () {
     final stronger = TournamentPlayer(
       name: 'Stark',

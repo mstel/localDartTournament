@@ -90,8 +90,9 @@ class MatchResultTile extends StatelessWidget {
     }
 
     final isLight = colorScheme.brightness == Brightness.light;
-    final cardColor =
-        isLight ? colorScheme.surfaceContainer : TournamentDisplayPalette.card;
+    final cardColor = isLight
+        ? colorScheme.surfaceContainer
+        : TournamentDisplayPalette.card;
     final borderColor = isRunning
         ? const Color(0xFF4ED9A4)
         : isFocused
@@ -497,6 +498,8 @@ class _ResultDialogState extends State<ResultDialog> {
   late final FocusNode _homeFocusNode;
   late final FocusNode _awayFocusNode;
 
+  int get _maxLegs => widget.format.bestOfLegs ~/ 2 + 1;
+
   @override
   void initState() {
     super.initState();
@@ -520,15 +523,41 @@ class _ResultDialogState extends State<ResultDialog> {
         _selectInitialZero(_awayLegsController);
       }
     });
+    _homeLegsController.addListener(_onLegsChanged);
+    _awayLegsController.addListener(_onLegsChanged);
   }
 
   @override
   void dispose() {
+    _homeLegsController.removeListener(_onLegsChanged);
+    _awayLegsController.removeListener(_onLegsChanged);
     _homeFocusNode.dispose();
     _awayFocusNode.dispose();
     _homeLegsController.dispose();
     _awayLegsController.dispose();
     super.dispose();
+  }
+
+  void _onLegsChanged() {
+    setState(() => _error = null);
+  }
+
+  String? _provisionalWinnerName() {
+    final homeLegs = int.tryParse(_homeLegsController.text);
+    final awayLegs = int.tryParse(_awayLegsController.text);
+    if (homeLegs == null ||
+        awayLegs == null ||
+        homeLegs == awayLegs ||
+        !isValidLegResult(
+          widget.format,
+          homeLegs: homeLegs,
+          awayLegs: awayLegs,
+        )) {
+      return null;
+    }
+    return homeLegs > awayLegs
+        ? (widget.match.homePlayer?.name ?? 'Heim')
+        : (widget.match.awayPlayer?.name ?? 'Gast');
   }
 
   void _selectInitialZero(TextEditingController controller) {
@@ -551,7 +580,7 @@ class _ResultDialogState extends State<ResultDialog> {
         )) {
       setState(
         () => _error =
-            'Das Ergebnis muss zum Spielformat passen; pro Seite sind höchstens ${widget.format.bestOfLegs ~/ 2 + 1} Legs möglich.',
+            'Das Ergebnis muss zum Spielformat passen; pro Seite sind höchstens $_maxLegs Legs möglich.',
       );
       return;
     }
@@ -619,7 +648,7 @@ class _ResultDialogState extends State<ResultDialog> {
       spacing: 4,
       runSpacing: 4,
       children: [
-        for (var value = 0; value <= 5; value++)
+        for (var value = 0; value <= _maxLegs; value++)
           SizedBox(
             width: 48,
             height: 48,
@@ -630,7 +659,6 @@ class _ResultDialogState extends State<ResultDialog> {
                 controller.selection = TextSelection.collapsed(
                   offset: controller.text.length,
                 );
-                if (_error != null) setState(() => _error = null);
               },
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(48, 48),
@@ -656,6 +684,7 @@ class _ResultDialogState extends State<ResultDialog> {
         allowAdministration: widget.allowAdministration,
       );
     }
+    final provisionalWinner = _provisionalWinnerName();
     return AlertDialog(
       title: const Text('Ergebnis eingeben'),
       content: SingleChildScrollView(
@@ -677,10 +706,22 @@ class _ResultDialogState extends State<ResultDialog> {
               '${widget.match.homePlayer?.name ?? 'offen'} vs '
               '${widget.match.awayPlayer?.name ?? 'offen'}',
             ),
+            if (provisionalWinner != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Sieger: $provisionalWinner',
+                  key: const ValueKey('provisional-winner'),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             const SizedBox(height: 16),
             Builder(
               builder: (context) {
-                final maxLegs = widget.format.bestOfLegs ~/ 2 + 1;
+                final maxLegs = _maxLegs;
                 return Row(
                   children: [
                     Expanded(
@@ -692,7 +733,8 @@ class _ResultDialogState extends State<ResultDialog> {
                             controller: _homeLegsController,
                             focusNode: _homeFocusNode,
                             autofocus: true,
-                            onTap: () => _selectInitialZero(_homeLegsController),
+                            onTap: () =>
+                                _selectInitialZero(_homeLegsController),
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.next,
                             inputFormatters: [
@@ -732,7 +774,8 @@ class _ResultDialogState extends State<ResultDialog> {
                             key: const ValueKey('away-legs-field'),
                             controller: _awayLegsController,
                             focusNode: _awayFocusNode,
-                            onTap: () => _selectInitialZero(_awayLegsController),
+                            onTap: () =>
+                                _selectInitialZero(_awayLegsController),
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.done,
                             inputFormatters: [

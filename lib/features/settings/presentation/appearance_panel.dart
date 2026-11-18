@@ -145,7 +145,7 @@ class _AppearancePanelState extends State<AppearancePanel> {
                 items: const [
                   DropdownMenuItem(
                     value: AppThemeStyle.club,
-                    child: Text('Vereinsdesign · Blau'),
+                    child: Text('Vereinsdesign · Blau/Gold'),
                   ),
                   DropdownMenuItem(
                     value: AppThemeStyle.christmas,

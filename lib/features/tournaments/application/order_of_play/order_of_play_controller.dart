@@ -7,6 +7,12 @@ export '../../domain/engines/board_scheduling_engine.dart';
 String tournamentGroupBoardKey(int stageIndex, String groupName) =>
     '$stageIndex:${groupName.trim()}';
 
+/// Only the regular-tournament modes `expand` and `merge` allow a group to
+/// spread across boards. `mirror` and the league/friendly `assigned` mode keep
+/// one group on its reserved boards so the fixed queue stays predictable.
+bool allowsGroupBoardExpansion(String behavior) =>
+    behavior == 'expand' || behavior == 'merge';
+
 /// Deterministic greedy scheduling: fill boards, then prefer rested players.
 /// No predictions of winners: unresolved future pairings stay in the waiting list.
 class OrderOfPlayController {
@@ -195,8 +201,9 @@ class OrderOfPlayController {
         for (final entry in tournament.directorGroupBoardAssignments.entries)
           entry.key: entry.value.toSet(),
       },
-      allowGroupBoardExpansion:
-          tournament.directorMultiBoardAssignmentBehavior != 'mirror',
+      allowGroupBoardExpansion: allowsGroupBoardExpansion(
+        tournament.directorMultiBoardAssignmentBehavior,
+      ),
     );
     return BoardSchedule(planned, running, finished, waiting);
   }
@@ -264,8 +271,9 @@ class OrderOfPlayController {
             tournament.directorSchedulingStrategy == 'group' &&
             stageEntries.every((entry) => entry.groupKey != null),
         groupBoardAssignments: groupAssignments,
-        allowGroupBoardExpansion:
-            tournament.directorMultiBoardAssignmentBehavior != 'mirror',
+        allowGroupBoardExpansion: allowsGroupBoardExpansion(
+          tournament.directorMultiBoardAssignmentBehavior,
+        ),
       );
       schedule.addAll(assignments.map((assignment) => assignment.entry));
       schedule.addAll(stageEntries.where((entry) => !known.contains(entry)));

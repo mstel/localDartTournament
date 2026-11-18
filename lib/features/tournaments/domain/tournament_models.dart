@@ -84,6 +84,8 @@ String _directorMultiBoardAssignmentBehaviorFromJson(Object? value) =>
     ? 'expand'
     : value == 'merge'
     ? 'merge'
+    : value == 'assigned'
+    ? 'assigned'
     : 'mirror';
 
 List<String> _groupTieBreakersFromJson(Object? value) {

@@ -8,7 +8,7 @@ import '../domain/tournament_models.dart';
 class GroupAdvancementForecastService {
   GroupAdvancementForecastService({
     LocalAppDatabase? database,
-    this.simulations = 3000,
+    this.simulations = 10000,
   }) : _database = database ?? LocalAppDatabase();
 
   final LocalAppDatabase _database;

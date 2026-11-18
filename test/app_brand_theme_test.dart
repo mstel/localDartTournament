@@ -307,6 +307,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Weihnachten'), findsOneWidget);
+    expect(find.text('Vereinsdesign · Blau/Gold'), findsWidgets);
     expect(find.textContaining('Schnee, Lichter'), findsNothing);
     expect(tester.takeException(), isNull);
   });

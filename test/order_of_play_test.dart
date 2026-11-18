@@ -51,6 +51,11 @@ void main() {
       tournament.toJson()..['directorMultiBoardAssignmentBehavior'] = 'merge',
     );
     expect(merged.directorMultiBoardAssignmentBehavior, 'merge');
+    final assigned = CreatedTournament.fromJson(
+      tournament.toJson()
+        ..['directorMultiBoardAssignmentBehavior'] = 'assigned',
+    );
+    expect(assigned.directorMultiBoardAssignmentBehavior, 'assigned');
     expect(
       CreatedTournament.fromJson(
         tournament.toJson()
@@ -213,6 +218,52 @@ void main() {
       );
     },
   );
+  test('assigned league mode keeps a unique rotating queue per board', () {
+    final tournament = fixture(boards: 4)
+      ..directorModeEnabled = true
+      ..directorSchedulingStrategy = 'group'
+      ..directorPlayOrderMode = 'fixed_schedule'
+      ..directorMultiBoardAssignmentBehavior = 'assigned'
+      ..directorGroupBoardAssignments['0:A'] = [1, 2, 3, 4];
+
+    controller.initializeFixedSchedule(tournament);
+    final snapshot = TournamentDirectorSnapshot(tournament, 0);
+    final boardOne = snapshot
+        .upcomingForBoard(1)
+        .map((assignment) => assignment.entry.match)
+        .toList();
+    final boardTwo = snapshot
+        .upcomingForBoard(2)
+        .map((assignment) => assignment.entry.match)
+        .toList();
+
+    expect(boardOne, isNotEmpty);
+    expect(boardTwo, isNotEmpty);
+    expect(boardOne.first, isNot(boardTwo.first));
+    expect(
+      snapshot
+          .upcomingForBoard(1)
+          .map((assignment) => assignment.board)
+          .toSet(),
+      {1},
+    );
+    expect(
+      snapshot
+          .upcomingForBoard(2)
+          .map((assignment) => assignment.board)
+          .toSet(),
+      {2},
+    );
+    final boardOneOrders = boardOne
+        .map((match) => match.fixedScheduleOrder!)
+        .toList();
+    final boardTwoOrders = boardTwo
+        .map((match) => match.fixedScheduleOrder!)
+        .toList();
+    expect(boardOneOrders, orderedEquals([...boardOneOrders]..sort()));
+    expect(boardTwoOrders, orderedEquals([...boardTwoOrders]..sort()));
+    expect(boardOneOrders.first, lessThan(boardTwoOrders.first));
+  });
   test(
     'merge behavior expands the schedule and combines recommendations across assigned boards',
     () {

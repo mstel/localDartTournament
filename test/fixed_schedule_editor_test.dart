@@ -13,7 +13,8 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final tournament = fixture(boards: 2)..directorPlayOrderMode = 'fixed_schedule';
+    final tournament = fixture(boards: 2)
+      ..directorPlayOrderMode = 'fixed_schedule';
     const OrderOfPlayController().initializeFixedSchedule(tournament);
     var applied = 0;
 
@@ -36,19 +37,28 @@ void main() {
     expect(find.text('Spielplan gesamt bearbeiten'), findsOneWidget);
     expect(find.byType(ReorderableListView), findsOneWidget);
     expect(find.text('Speichern & Anwenden'), findsOneWidget);
-    expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+    expect(find.text('Phase'), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+    expect(find.text('Gruppe'), findsOneWidget);
+    expect(find.text('Spieler 1'), findsOneWidget);
+    expect(find.text('Spieler 2'), findsOneWidget);
+    expect(find.text('A'), findsWidgets);
+    expect(find.text('Teilnehmer 1'), findsWidgets);
 
     await tester.tap(find.text('Speichern & Anwenden'));
     await tester.pumpAndSettle();
     expect(applied, 1);
   });
 
-  testWidgets('per-board schedule editor offers a board selector', (tester) async {
+  testWidgets('per-board schedule editor offers a board selector', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final tournament = fixture(boards: 3)..directorPlayOrderMode = 'fixed_schedule';
+    final tournament = fixture(boards: 3)
+      ..directorPlayOrderMode = 'fixed_schedule';
     const OrderOfPlayController().initializeFixedSchedule(tournament);
     var applied = 0;
 
@@ -70,8 +80,13 @@ void main() {
 
     expect(find.text('Spielplan je Board bearbeiten'), findsOneWidget);
     expect(find.byType(ReorderableListView), findsOneWidget);
-    expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+    expect(find.text('Phase'), findsOneWidget);
+    expect(find.text('Board'), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<int>), findsNWidgets(2));
     expect(find.text('Board 1'), findsOneWidget);
+    expect(find.text('Gruppe'), findsOneWidget);
+    expect(find.text('Spieler 1'), findsOneWidget);
+    expect(find.text('Spieler 2'), findsOneWidget);
 
     await tester.tap(find.text('Speichern & Anwenden'));
     await tester.pumpAndSettle();

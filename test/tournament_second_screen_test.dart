@@ -3,6 +3,7 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:dart_tournament_manager/app/theme_controller.dart';
 import 'package:dart_tournament_manager/features/league/application/league_board_runtime.dart';
 import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
+import 'package:dart_tournament_manager/features/league/presentation/league_overview.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/group_advancement_forecast_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
@@ -590,6 +591,50 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets(
+    'league combined widget shows the team comparison in the second monitor',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final tournament = _completedLeagueTournament()
+        ..finishedAt = null
+        ..secondScreenLayouts['Standard'] = const [
+          SecondScreenWidgetPlacement(widgetId: 'combined', widthUnits: 4),
+        ]
+        ..secondScreenActiveLayout = 'Standard';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Keine K.-o.-Phase im aktuellen Turnier geplant.'),
+        findsNothing,
+      );
+      await tester.tap(find.text('Mannschaftsvergleich').last);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LeagueOverview), findsWidgets);
+      expect(find.text('Heimmannschaft'), findsWidgets);
+      expect(find.text('Gastmannschaft'), findsWidgets);
+      expect(
+        find.text('Keine K.-o.-Phase im aktuellen Turnier geplant.'),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('league substitutions appear in the monitor activity panel', (
     tester,

@@ -1,3 +1,4 @@
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_run_controller.dart';
@@ -15,7 +16,10 @@ class _MemoryTournamentStorage extends TournamentStorage {
   }
 }
 
-CreatedTournament _tournament({required bool hasResult}) {
+CreatedTournament _tournament({
+  required bool hasResult,
+  LeagueMatch? leagueMatch,
+}) {
   final players = [
     TournamentPlayer.generated(1),
     TournamentPlayer.generated(2),
@@ -30,7 +34,8 @@ CreatedTournament _tournament({required bool hasResult}) {
   return CreatedTournament(
     name: 'Konfigurationstest',
     players: players,
-    stages: const [TournamentStage(name: 'Gruppenphase', type: 'groups')],
+    leagueMatch: leagueMatch,
+    stages: [TournamentStage(name: 'Gruppenphase', type: 'groups')],
     runStages: [
       GroupTournamentRunStage(
         name: 'Gruppenphase',
@@ -240,16 +245,77 @@ void main() {
     expect(
       tester
           .widget<Switch>(
-            find.descendant(
-              of: restoredSwitch,
-              matching: find.byType(Switch),
-            ),
+            find.descendant(of: restoredSwitch, matching: find.byType(Switch)),
           )
           .value,
       isTrue,
     );
     expect(find.text('Fester Spielplan'), findsOneWidget);
     expect(find.text('Turnierweit optimiert'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('league fixed schedule offers both board suggestion modes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final storage = _MemoryTournamentStorage();
+    final tournament = _tournament(
+      hasResult: false,
+      leagueMatch: LeagueMatch.adjusted(
+        homeTeam: 'Heim',
+        awayTeam: 'Gast',
+        homePlayers: const ['Teilnehmer 1'],
+        awayPlayers: const ['Teilnehmer 2'],
+        singlesPerPlayer: 1,
+        doublesCount: 0,
+      ),
+    )..directorPlayOrderMode = 'fixed_schedule';
+
+    Finder labeledDropdown(String label) => find.byWidgetPredicate(
+      (widget) =>
+          widget is DropdownButtonFormField<String> &&
+          widget.decoration.labelText == label,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: tournament,
+          tournamentStorage: storage,
+          runController: TournamentRunController(storage: storage),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+
+    final suggestionDropdown = labeledDropdown('Partievorschläge');
+    await tester.scrollUntilVisible(
+      suggestionDropdown,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(suggestionDropdown);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Flexible Boardwahl - Gespiegelte Partievorschläge'),
+      findsWidgets,
+    );
+    expect(
+      find.text('Fest zugewiesene Partien - Keine Doppelungen'),
+      findsWidgets,
+    );
+    await tester.tap(
+      find.text('Fest zugewiesene Partien - Keine Doppelungen').last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(storage.saved, isNotNull);
+    expect(storage.saved!.directorMultiBoardAssignmentBehavior, 'assigned');
     expect(tester.takeException(), isNull);
   });
 }

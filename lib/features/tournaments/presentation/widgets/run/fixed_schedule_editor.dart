@@ -31,6 +31,8 @@ class FixedScheduleEditorDialog extends StatefulWidget {
 class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
   final OrderOfPlayController _controller = const OrderOfPlayController();
   late final Map<GroupMatch, int?> _initialOrders;
+  late final Map<GroupMatch, String> _groupByMatch;
+  late int _selectedStageIndex;
   late int _selectedBoard;
   late List<GroupMatch> _matches;
   late List<int> _slots;
@@ -43,8 +45,39 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
       for (final entry in _controller.entries(widget.tournament))
         entry.match: entry.match.fixedScheduleOrder,
     };
+    _groupByMatch = _indexGroups();
+    _selectedStageIndex = widget.stageIndex.clamp(
+      0,
+      widget.tournament.runStages.isEmpty
+          ? 0
+          : widget.tournament.runStages.length - 1,
+    );
     _selectedBoard = 1;
     _reload();
+  }
+
+  Map<GroupMatch, String> _indexGroups() {
+    final result = <GroupMatch, String>{};
+    for (final stage in widget.tournament.runStages) {
+      if (stage is GroupTournamentRunStage) {
+        for (final group in stage.groups) {
+          for (final match in group.matches) {
+            result[match] = group.name;
+          }
+          for (final match in group.knockoutRounds.expand((round) => round)) {
+            result[match] = group.name;
+          }
+          for (final match in group.placementMatches) {
+            result[match] = group.name;
+          }
+        }
+      } else if (stage is KnockoutTournamentRunStage) {
+        for (final match in stage.matches) {
+          result[match] = '-';
+        }
+      }
+    }
+    return result;
   }
 
   void _reload() {
@@ -56,7 +89,7 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
         return order != 0 ? order : a.origin.compareTo(b.origin);
       });
     final stageEntries = all
-        .where((entry) => entry.stageIndex == widget.stageIndex)
+        .where((entry) => entry.stageIndex == _selectedStageIndex)
         .toList();
     final selectable = <GroupMatch>[];
     if (widget.scope == FixedScheduleEditorScope.overall) {
@@ -72,7 +105,7 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
       );
     } else {
       final boardAssignments = _controller
-          .plan(widget.tournament, widget.stageIndex)
+          .plan(widget.tournament, _selectedStageIndex)
           .planned
           .where((assignment) => assignment.board == _selectedBoard);
       selectable.addAll(
@@ -86,41 +119,47 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
             .map((assignment) => assignment.entry.match),
       );
     }
-    final slotSet = selectable
-        .map((match) => match.fixedScheduleOrder)
-        .whereType<int>()
-        .toSet()
-        .toList()
-      ..sort();
+    final slotSet =
+        selectable
+            .map((match) => match.fixedScheduleOrder)
+            .whereType<int>()
+            .toSet()
+            .toList()
+          ..sort();
     _matches = selectable;
     _slots = slotSet;
   }
 
-  List<PlayEntry> _stageEntries() => _controller.entries(widget.tournament)
-    ..sort((a, b) {
-      final order = (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
-        b.match.fixedScheduleOrder ?? 1 << 30,
-      );
-      return order != 0 ? order : a.origin.compareTo(b.origin);
-    });
+  List<PlayEntry> _stageEntries() =>
+      _controller.entries(widget.tournament)..sort((a, b) {
+        final order = (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+          b.match.fixedScheduleOrder ?? 1 << 30,
+        );
+        return order != 0 ? order : a.origin.compareTo(b.origin);
+      });
 
-  String _label(GroupMatch match) {
-    final entry = _controller
-        .entries(widget.tournament)
-        .where((candidate) => identical(candidate.match, match))
-        .firstOrNull;
-    return entry?.origin ??
-        '${match.homePlayer?.name ?? 'offen'} – ${match.awayPlayer?.name ?? 'offen'}';
-  }
+  String _groupLabel(GroupMatch match) =>
+      _groupByMatch[match] ?? match.label ?? '-';
+
+  String _playerOneLabel(GroupMatch match) => match.isKratzer
+      ? match.participantLabel
+      : match.homePlayer?.name ?? 'offen';
+
+  String _playerTwoLabel(GroupMatch match) =>
+      match.isKratzer ? '-' : match.awayPlayer?.name ?? 'offen';
 
   Future<void> _apply() async {
     setState(() => _saving = true);
     final stageEntries = _stageEntries();
-    for (var index = 0; index < _matches.length && index < _slots.length; index++) {
+    for (
+      var index = 0;
+      index < _matches.length && index < _slots.length;
+      index++
+    ) {
       if (stageEntries.any(
         (entry) =>
             identical(entry.match, _matches[index]) &&
-            entry.stageIndex != widget.stageIndex,
+            entry.stageIndex != _selectedStageIndex,
       )) {
         continue;
       }
@@ -136,7 +175,9 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Spielplan konnte nicht gespeichert werden: $error')),
+          SnackBar(
+            content: Text('Spielplan konnte nicht gespeichert werden: $error'),
+          ),
         );
       }
     }
@@ -145,11 +186,42 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final boardCount = widget.tournament.boardCount;
+    final stages = widget.tournament.runStages;
+    final phaseSelector = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: DropdownButtonFormField<int>(
+        key: ValueKey('fixed-schedule-phase-$_selectedStageIndex'),
+        initialValue: _selectedStageIndex,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Phase',
+          border: OutlineInputBorder(),
+        ),
+        items: [
+          for (var index = 0; index < stages.length; index++)
+            DropdownMenuItem<int>(
+              value: index,
+              child: Text('${index + 1}. ${stages[index].name}'),
+            ),
+        ],
+        onChanged: (stageIndex) {
+          if (stageIndex == null) return;
+          setState(() {
+            _selectedStageIndex = stageIndex;
+            _reload();
+          });
+        },
+      ),
+    );
     final boardSelector = widget.scope == FixedScheduleEditorScope.perBoard
         ? Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: DropdownButtonFormField<int>(
+              key: ValueKey(
+                'fixed-schedule-board-$_selectedStageIndex-$_selectedBoard',
+              ),
               initialValue: _selectedBoard.clamp(1, boardCount),
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Board',
                 border: OutlineInputBorder(),
@@ -184,6 +256,7 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            phaseSelector,
             boardSelector,
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -192,10 +265,24 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
                 'beendete Begegnungen bleiben an ihrer Position.',
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: const [
+                  SizedBox(width: 36),
+                  Expanded(flex: 2, child: Text('Gruppe')),
+                  Expanded(flex: 3, child: Text('Spieler 1')),
+                  Expanded(flex: 3, child: Text('Spieler 2')),
+                  SizedBox(width: 48),
+                ],
+              ),
+            ),
+            const Divider(height: 8),
             Expanded(
               child: _matches.isEmpty
                   ? const Center(child: Text('Keine editierbaren Begegnungen.'))
                   : ReorderableListView.builder(
+                      buildDefaultDragHandles: false,
                       itemCount: _matches.length,
                       onReorderItem: (oldIndex, newIndex) {
                         setState(() {
@@ -208,8 +295,42 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
                         return ListTile(
                           key: ValueKey(match),
                           leading: CircleAvatar(child: Text('${index + 1}')),
-                          title: Text(_label(match), maxLines: 2),
-                          trailing: const Icon(Icons.drag_indicator),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  _groupLabel(match),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  _playerOneLabel(match),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  _playerTwoLabel(match),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          trailing: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: ReorderableDragStartListener(
+                              index: index,
+                              child: const Tooltip(
+                                message: 'Ziehen, um die Reihenfolge zu ändern',
+                                child: Icon(Icons.drag_indicator),
+                              ),
+                            ),
+                          ),
                         );
                       },
                     ),

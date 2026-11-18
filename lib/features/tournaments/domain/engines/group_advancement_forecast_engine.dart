@@ -45,6 +45,7 @@ class GroupAdvancementForecastEngine {
     if (plan == null) return const {};
     final random = Random(seed);
     final outcomes = <String, _ChanceTotals>{};
+    final exchangeabilityKeys = <String, String>{};
     final simulatedStandings = <List<List<_SimulatedStanding>>>[];
     final advancingBySimulation = List<List<String>>.generate(
       simulations,
@@ -66,6 +67,20 @@ class GroupAdvancementForecastEngine {
       for (final standing in base.values) {
         outcomes.putIfAbsent(standing.key, () => _ChanceTotals());
       }
+      final fixedPlaces = groupIndex < plan.fixedByGroup.length
+          ? plan.fixedByGroup[groupIndex]
+          : plan.fixedPerGroup;
+      for (final standing in base.values) {
+        final key = _exchangeabilityKey(
+          playerKey: standing.key,
+          group: group,
+          groupIndex: groupIndex,
+          fixedPlaces: fixedPlaces,
+          plan: plan,
+          players: players,
+        );
+        if (key != null) exchangeabilityKeys[standing.key] = key;
+      }
       final groupSimulations = <List<_SimulatedStanding>>[];
       for (var simulation = 0; simulation < simulations; simulation++) {
         final standings = {
@@ -77,7 +92,11 @@ class GroupAdvancementForecastEngine {
           final homeStanding = standings[_playerKey(home)];
           final awayStanding = standings[_playerKey(away)];
           if (homeStanding == null || awayStanding == null) continue;
-          final homeChance = _winProbability(_playerKey(home), _playerKey(away), players);
+          final homeChance = _winProbability(
+            _playerKey(home),
+            _playerKey(away),
+            players,
+          );
           final homeWins = random.nextDouble() < homeChance;
           final winnerLegs = 2;
           final loserLegs = random.nextDouble() < 0.35 ? 1 : 0;
@@ -93,9 +112,6 @@ class GroupAdvancementForecastEngine {
         );
       }
       simulatedStandings.add(groupSimulations);
-      final fixedPlaces = groupIndex < plan.fixedByGroup.length
-          ? plan.fixedByGroup[groupIndex]
-          : plan.fixedPerGroup;
       for (var simulation = 0; simulation < simulations; simulation++) {
         final ranked = groupSimulations[simulation];
         if (ranked.isEmpty) continue;
@@ -149,16 +165,12 @@ class GroupAdvancementForecastEngine {
           advancingBySimulation[simulation],
           knockoutStage,
         );
-        final champion = _simulateKnockoutChampion(
-          field,
-          players,
-          random,
-        );
+        final champion = _simulateKnockoutChampion(field, players, random);
         if (champion != null) outcomes[champion]!.tournamentWins++;
       }
     }
 
-    return {
+    final raw = {
       for (final entry in outcomes.entries)
         entry.key: AdvancementChance(
           groupWinProbability: entry.value.groupWins * 100 / simulations,
@@ -167,6 +179,88 @@ class GroupAdvancementForecastEngine {
               entry.value.tournamentWins * 100 / simulations,
         ),
     };
+    return _averageExchangeablePlayers(raw, exchangeabilityKeys);
+  }
+
+  /// Players with identical strength and an identical structural role are
+  /// interchangeable before any result is played. Monte-Carlo sampling alone
+  /// would still give them slightly different percentages; averaging those
+  /// exchangeable players removes that noise without changing any result that
+  /// actually depends on ratings, history or entered results.
+  Map<String, AdvancementChance> _averageExchangeablePlayers(
+    Map<String, AdvancementChance> chances,
+    Map<String, String> exchangeabilityKeys,
+  ) {
+    final byKey = <String, List<String>>{};
+    for (final key in chances.keys) {
+      final signature = exchangeabilityKeys[key];
+      if (signature == null) continue;
+      byKey.putIfAbsent(signature, () => <String>[]).add(key);
+    }
+    final averaged = <String, AdvancementChance>{};
+    for (final keys in byKey.values) {
+      if (keys.length < 2) continue;
+      var groupWin = 0.0;
+      var advances = 0.0;
+      var tournamentWins = 0.0;
+      for (final key in keys) {
+        final chance = chances[key]!;
+        groupWin += chance.groupWinProbability;
+        advances += chance.advancementProbability;
+        tournamentWins += chance.tournamentWinProbability;
+      }
+      final count = keys.length;
+      final chance = AdvancementChance(
+        groupWinProbability: groupWin / count,
+        advancementProbability: advances / count,
+        tournamentWinProbability: tournamentWins / count,
+      );
+      for (final key in keys) {
+        averaged[key] = chance;
+      }
+    }
+    return {
+      for (final entry in chances.entries)
+        entry.key: averaged[entry.key] ?? entry.value,
+    };
+  }
+
+  String? _exchangeabilityKey({
+    required String playerKey,
+    required TournamentGroup group,
+    required int groupIndex,
+    required int fixedPlaces,
+    required QualificationPlan plan,
+    required Map<String, GroupAdvancementPlayerData> players,
+  }) {
+    final data = players[playerKey] ?? const GroupAdvancementPlayerData();
+    var scheduled = 0;
+    var hasResult = false;
+    for (final match in group.matches) {
+      if (match.isDecider || !match.hasPlayers) continue;
+      final home = match.homePlayer;
+      final away = match.awayPlayer;
+      if (home == null || away == null) continue;
+      if (_playerKey(home) != playerKey && _playerKey(away) != playerKey) {
+        continue;
+      }
+      scheduled++;
+      if (match.hasResult) hasResult = true;
+    }
+    // Once a player has an entered result they are no longer interchangeable
+    // with players who have not played, so exclude them from averaging.
+    if (hasResult) return null;
+    final extraRole = plan.extraGroups.contains(groupIndex + 1)
+        ? 'extra:${plan.extraRank}'
+        : '-';
+    return [
+      group.players.length,
+      fixedPlaces,
+      extraRole,
+      data.rating,
+      data.historicalWinRate.toStringAsFixed(4),
+      scheduled,
+    ].join('|');
   }
 
   double _winProbability(
@@ -174,10 +268,8 @@ class GroupAdvancementForecastEngine {
     String awayKey,
     Map<String, GroupAdvancementPlayerData> players,
   ) {
-    final homeData =
-        players[homeKey] ?? const GroupAdvancementPlayerData();
-    final awayData =
-        players[awayKey] ?? const GroupAdvancementPlayerData();
+    final homeData = players[homeKey] ?? const GroupAdvancementPlayerData();
+    final awayData = players[awayKey] ?? const GroupAdvancementPlayerData();
     final eloChance = eloExpectedScore(homeData.rating, awayData.rating);
     final historyChance =
         (0.5 + (homeData.historicalWinRate - awayData.historicalWinRate) / 2)
@@ -279,7 +371,18 @@ class GroupAdvancementForecastEngine {
       };
       if (comparison != 0) return comparison;
     }
-    return a.player.name.compareTo(b.player.name);
+    // A stable, neutral draw avoids favouring alphabetically early names when
+    // everything else is tied. This mirrors the real standings' tie draw.
+    final draw = _stableTieDrawKey(a.key).compareTo(_stableTieDrawKey(b.key));
+    return draw != 0 ? draw : a.player.name.compareTo(b.player.name);
+  }
+
+  static int _stableTieDrawKey(String value) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in value.codeUnits) {
+      hash = ((hash ^ codeUnit) * 0x01000193) & 0xffffffff;
+    }
+    return hash;
   }
 
   int _compareHeadToHead(_SimulatedStanding first, _SimulatedStanding second) {

@@ -150,7 +150,9 @@ void main() {
     );
   });
 
-  testWidgets('quick leg buttons fill both sides up to Bo5', (tester) async {
+  testWidgets('quick leg buttons match the format and show the winner', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(800, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -182,32 +184,44 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await openDialog(const TournamentGameFormat(bestOfLegs: 5));
+    Future<void> closeDialog() async {
+      await tester.tap(find.text('Abbrechen'));
+      await tester.pumpAndSettle();
+    }
+
+    await openDialog(const TournamentGameFormat(bestOfLegs: 3));
     for (final side in ['home', 'away']) {
-      for (var value = 0; value <= 5; value++) {
+      for (var value = 0; value <= 2; value++) {
         expect(find.byKey(ValueKey('leg-quick-$side-$value')), findsOneWidget);
       }
+      expect(find.byKey(ValueKey('leg-quick-$side-3')), findsNothing);
     }
+    await closeDialog();
+
+    await openDialog(const TournamentGameFormat(bestOfLegs: 5));
+    for (final side in ['home', 'away']) {
+      for (var value = 0; value <= 3; value++) {
+        expect(find.byKey(ValueKey('leg-quick-$side-$value')), findsOneWidget);
+      }
+      expect(find.byKey(ValueKey('leg-quick-$side-4')), findsNothing);
+      expect(find.byKey(ValueKey('leg-quick-$side-5')), findsNothing);
+    }
+    expect(find.byKey(const ValueKey('provisional-winner')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('leg-quick-home-3')));
-    await tester.tap(find.byKey(const ValueKey('leg-quick-away-2')));
-    expect(
-      tester.widget<TextField>(find.byKey(const ValueKey('home-legs-field')))
-          .controller!
-          .text,
-      '3',
-    );
-    expect(
-      tester.widget<TextField>(find.byKey(const ValueKey('away-legs-field')))
-          .controller!
-          .text,
-      '2',
-    );
-    await tester.tap(find.text('Abbrechen'));
     await tester.pumpAndSettle();
+    expect(find.text('Sieger: Teilnehmer 1'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('leg-quick-away-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sieger: Teilnehmer 1'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('leg-quick-away-3')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sieger: Teilnehmer 1'), findsNothing);
+    await closeDialog();
 
     await openDialog(const TournamentGameFormat(bestOfLegs: 7));
     expect(find.byKey(const ValueKey('leg-quick-home-0')), findsNothing);
     expect(find.byKey(const ValueKey('leg-quick-away-0')), findsNothing);
+    await closeDialog();
     expect(tester.takeException(), isNull);
   });
 

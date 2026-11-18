@@ -3362,6 +3362,10 @@ class _TournamentSecondScreenViewState
           expand: false,
         );
       case _StandingsDisplayMode.forecast:
+        final league = tournament.leagueMatch;
+        if (league != null) {
+          return LeagueOverview(league: league);
+        }
         return _buildKoPrognosisPanel(
           context,
           tournament,

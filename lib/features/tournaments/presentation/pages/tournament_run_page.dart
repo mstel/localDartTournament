@@ -2347,7 +2347,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       widget.tournament.addActivity(
         'substitution',
         '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
-        'ausgewechselt. Übrige Auswechselungen: $remainingAfter',
+            'ausgewechselt. Übrige Auswechselungen: $remainingAfter',
       );
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
         ..installOn(widget.tournament);
@@ -6844,6 +6844,53 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           },
                                         ),
                                       ),
+                                    if (widget.tournament.leagueMatch != null &&
+                                        widget
+                                                .tournament
+                                                .directorPlayOrderMode ==
+                                            'fixed_schedule')
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: DropdownButtonFormField<String>(
+                                          key: const ValueKey(
+                                            'league-board-suggestion-mode',
+                                          ),
+                                          initialValue: widget
+                                              .tournament
+                                              .directorMultiBoardAssignmentBehavior,
+                                          isExpanded: true,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Partievorschläge',
+                                            border: OutlineInputBorder(),
+                                            helperText:
+                                                'Gespiegelt zeigt auf jedem Board die nächste freie Partie; fest zugewiesen verteilt die Partien der Reihe nach auf die Boards.',
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'mirror',
+                                              child: Text(
+                                                'Flexible Boardwahl - Gespiegelte Partievorschläge',
+                                              ),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'assigned',
+                                              child: Text(
+                                                'Fest zugewiesene Partien - Keine Doppelungen',
+                                              ),
+                                            ),
+                                          ],
+                                          onChanged: (behavior) {
+                                            if (behavior != null) {
+                                              _handleDirectorSettings(
+                                                () =>
+                                                    _setMultiBoardAssignmentBehavior(
+                                                      behavior,
+                                                    ),
+                                              );
+                                            }
+                                          },
+                                        ),
+                                      ),
                                     if (widget
                                             .tournament
                                             .directorPlayOrderMode ==
@@ -6855,7 +6902,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                           runSpacing: 8,
                                           children: [
                                             OutlinedButton.icon(
-                                              onPressed: _recomputeFixedSchedule,
+                                              onPressed:
+                                                  _recomputeFixedSchedule,
                                               icon: const Icon(
                                                 Icons.replay_outlined,
                                               ),
@@ -6888,9 +6936,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                                     FixedScheduleEditorScope
                                                         .overall,
                                                   ),
-                                              icon: const Icon(
-                                                Icons.list_alt,
-                                              ),
+                                              icon: const Icon(Icons.list_alt),
                                               label: const Text(
                                                 'Spielplan gesamt bearbeiten',
                                               ),
