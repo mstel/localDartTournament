@@ -1,4 +1,5 @@
 import 'package:dart_tournament_manager/main.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_player_allocation_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -49,6 +50,12 @@ void main() {
     await reveal(groupOptions);
     final allocation = find.byKey(const ValueKey('group-player-allocation'));
     await reveal(allocation);
+    expect(
+      tester
+          .widget<DropdownButtonFormField<GroupPlayerAllocationMode>>(allocation)
+          .initialValue,
+      GroupPlayerAllocationMode.manual,
+    );
     await tester.tap(allocation);
     await tester.pumpAndSettle();
 

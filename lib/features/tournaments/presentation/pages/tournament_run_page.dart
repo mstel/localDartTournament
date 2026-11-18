@@ -3870,7 +3870,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final stageIndex = _activeStageIndex;
     if (stageIndex >= widget.tournament.stages.length) return;
     final stage = widget.tournament.stages[stageIndex];
-    if (!stage.groupDrawOnStart || !stage.groupDrawCompleted) return;
+    final isStartDraw = stage.groupDrawOnStart && stage.groupDrawCompleted;
+    final isManualAssignment = stage.groupAssignmentMode == 'manual';
+    if (!stage.isGroupStage || (!isStartDraw && !isManualAssignment)) return;
     final incomingPlayers = _incomingPlayersForStage(stageIndex);
     if (stage.groupSizes.length != runStage.groups.length) return;
     final slotOrder = <int?>[];
@@ -3893,6 +3895,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     widget.tournament.stages[stageIndex] = stage.copyWith(
       groupSlotOrder: List.unmodifiable(slotOrder),
+      groupDrawCompleted: true,
     );
   }
 

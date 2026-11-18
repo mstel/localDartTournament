@@ -168,6 +168,9 @@ class _TournamentSecondScreenViewState
   bool _customLayoutBeforeEditing = false;
   DateTime? _completionObservedAt;
   Timer? _completionWatchTimer;
+  bool _showGroupAssignmentSuccess = false;
+  bool _lastGroupAssignmentPending = false;
+  Timer? _groupAssignmentMessageTimer;
   List<SecondScreenWidgetPlacement>? _placementsBeforeEditing;
   String? _dragTargetWidgetId;
   int? _dragTargetEdge;
@@ -182,6 +185,7 @@ class _TournamentSecondScreenViewState
   void initState() {
     super.initState();
     _showNextStagePreview = widget.showNextStagePreviewInitially;
+    _lastGroupAssignmentPending = _groupAssignmentPending(widget.tournament);
     _loadedLayoutName = widget.tournament.secondScreenActiveLayout;
     _useCustomLayout = _loadedLayoutName != null;
     _monitorPlacements = _savedLayoutOrDefault();
@@ -309,6 +313,7 @@ class _TournamentSecondScreenViewState
   @override
   void didUpdateWidget(covariant TournamentSecondScreenView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _updateGroupAssignmentNotice();
     _checkTournamentCompletion();
     _monitorPlacements = _monitorPlacements
         .where(_isMonitorWidgetAvailable)
@@ -590,6 +595,7 @@ class _TournamentSecondScreenViewState
   @override
   void dispose() {
     _completionWatchTimer?.cancel();
+    _groupAssignmentMessageTimer?.cancel();
     _previewVerticalController.dispose();
     _previewHorizontalController.dispose();
     _recentResultsController.dispose();
@@ -607,6 +613,66 @@ class _TournamentSecondScreenViewState
     _completionObservedAt = DateTime.now();
     _completionWatchTimer?.cancel();
     if (mounted) setState(() {});
+  }
+
+  bool _groupAssignmentPending(CreatedTournament tournament) {
+    for (final stage in tournament.stages) {
+      if (stage.isGroupStage &&
+          stage.groupAssignmentMode == 'manual' &&
+          stage.groupSlotOrder.isEmpty &&
+          !stage.groupDrawCompleted &&
+          !stage.groupDrawOnStart) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _updateGroupAssignmentNotice() {
+    final isPending = _groupAssignmentPending(widget.tournament);
+    if (_lastGroupAssignmentPending && !isPending && mounted) {
+      setState(() => _showGroupAssignmentSuccess = true);
+      _groupAssignmentMessageTimer?.cancel();
+      _groupAssignmentMessageTimer = Timer(const Duration(seconds: 6), () {
+        if (mounted) setState(() => _showGroupAssignmentSuccess = false);
+      });
+    }
+    _lastGroupAssignmentPending = isPending;
+  }
+
+  Widget? _buildGroupAssignmentNotice(BuildContext context) {
+    final colors = _displayColors(context);
+    final pending = _groupAssignmentPending(widget.tournament);
+    if (!pending && !_showGroupAssignmentSuccess) return null;
+    final success = !pending && _showGroupAssignmentSuccess;
+    final color = success ? const Color(0xFF70E0BA) : Colors.amber;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border.all(color: color),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            success ? Icons.check_circle_outline : Icons.info_outline,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              success
+                  ? 'Gruppen erfolgreich zugewiesen'
+                  : 'Zuweisung der Gruppen noch nicht erfolgt! Standardmäßig alphabetisch',
+              style: TextStyle(color: color, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _closeStandaloneWindow() async {
@@ -3428,6 +3494,44 @@ class _TournamentSecondScreenViewState
     return null;
   }
 
+  /// Fügt Platzierungsspiele als eigene Spalte in die Vorschau ein, damit sie
+  /// genauso sichtbar sind wie im Turnierbaum unter „Partien & Ergebnisse“.
+  List<List<GroupMatch>> _previewRoundsWithPlacement(
+    KnockoutTournamentRunStage stage, {
+    List<GroupMatch>? placementMatches,
+  }) {
+    final rounds = stage.rounds;
+    placementMatches ??= stage.placementMatches;
+    if (placementMatches.isEmpty) return rounds;
+    if (rounds.isEmpty) return [placementMatches];
+
+    final displayRounds = [
+      for (final round in rounds) List<GroupMatch>.from(round),
+    ];
+    final fifthSemis = placementMatches
+        .where((match) => match.label?.startsWith('Platz 5 Halbfinale') ?? false)
+        .toList();
+    final finalColumnMatches = placementMatches
+        .where(
+          (match) =>
+              match.label == 'Spiel um Platz 3' ||
+              match.label == 'Spiel um Platz 5' ||
+              match.label == 'Spiel um Platz 7',
+        )
+        .toList();
+
+    if (fifthSemis.isNotEmpty) {
+      final targetIndex = displayRounds.length >= 2
+          ? displayRounds.length - 2
+          : displayRounds.length - 1;
+      displayRounds[targetIndex].addAll(fifthSemis);
+    }
+    if (finalColumnMatches.isNotEmpty) {
+      displayRounds.add(finalColumnMatches);
+    }
+    return displayRounds;
+  }
+
   Widget _buildNextStagePreview(
     BuildContext context,
     CreatedTournament t,
@@ -3521,13 +3625,26 @@ class _TournamentSecondScreenViewState
     final groupStageIsSet =
         groupStage != null &&
         const GroupStagePreviewService().isStageSet(groupStage);
+    final rounds = _previewRoundsWithPlacement(
+      previewStage,
+      placementMatches: previewStage.placementMatches.isNotEmpty
+          ? previewStage.placementMatches
+          : stage.placementMatches,
+    );
 
     String playerLabel(
       TournamentPlayer? player,
       int roundIndex,
       int matchIndex, {
       required bool home,
+      bool isPlacement = false,
     }) {
+      if (isPlacement) {
+        if (player != null && !player.name.contains('(noch offen)')) {
+          return isActiveStage ? player.shortDisplayName : player.name;
+        }
+        return isActiveStage ? 'Offen' : 'Teilnehmer offen';
+      }
       if (isActiveStage) {
         if (player != null && !player.name.contains('(noch offen)')) {
           return player.shortDisplayName;
@@ -3606,7 +3723,7 @@ class _TournamentSecondScreenViewState
           ),
         const SizedBox(height: 6),
         Expanded(
-          child: previewStage.rounds.isEmpty
+          child: rounds.isEmpty
               ? const Center(
                   child: Text(
                     'Für diese Phase ist noch kein Turnierbaum vorhanden.',
@@ -3615,7 +3732,6 @@ class _TournamentSecondScreenViewState
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {
-                    final rounds = previewStage.rounds;
                     const roundWidth = 280.0;
                     const roundGap = 28.0;
                     const roundHeaderHeight = 42.0;
@@ -3696,10 +3812,17 @@ class _TournamentSecondScreenViewState
                                                     alignment:
                                                         Alignment.topLeft,
                                                     child: Text(
-                                                      knockoutRoundName(
-                                                        roundIndex,
-                                                        rounds.length,
-                                                      ),
+                                                      rounds[roundIndex].every(
+                                                            (match) =>
+                                                                match
+                                                                    .placementKey !=
+                                                                null,
+                                                          )
+                                                          ? 'Platzierung'
+                                                          : knockoutRoundName(
+                                                              roundIndex,
+                                                              rounds.length,
+                                                            ),
                                                       style: const TextStyle(
                                                         color: Color(
                                                           0xFF70E0BA,
@@ -3740,6 +3863,10 @@ class _TournamentSecondScreenViewState
                                                             roundIndex,
                                                             matchIndex,
                                                             home: true,
+                                                            isPlacement:
+                                                                rounds[roundIndex][matchIndex]
+                                                                    .placementKey !=
+                                                                null,
                                                           ),
                                                           awayLabel: playerLabel(
                                                             rounds[roundIndex][matchIndex]
@@ -3747,6 +3874,10 @@ class _TournamentSecondScreenViewState
                                                             roundIndex,
                                                             matchIndex,
                                                             home: false,
+                                                            isPlacement:
+                                                                rounds[roundIndex][matchIndex]
+                                                                    .placementKey !=
+                                                                null,
                                                           ),
                                                           matchNumber:
                                                               matchIndex + 1,
@@ -3896,6 +4027,7 @@ class _TournamentSecondScreenViewState
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          ?_buildGroupAssignmentNotice(context),
           Row(
             children: [
               const Icon(Icons.leaderboard, size: 20, color: Color(0xFF70E0BA)),

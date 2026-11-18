@@ -1491,6 +1491,113 @@ void main() {
     },
   );
 
+  testWidgets('unassigned manual groups show a notice and success feedback', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CreatedTournament withManualGroups({required bool assigned}) {
+      final source = _tournament();
+      return CreatedTournament(
+        name: source.name,
+        players: source.players,
+        stages: [
+          source.stages[0].copyWith(
+            groupAssignmentMode: 'manual',
+            groupSlotOrder: assigned ? const [1, 2, 3, 4] : const [],
+            groupDrawCompleted: assigned,
+          ),
+          source.stages[1],
+        ],
+        runStages: source.runStages,
+        boardCount: source.boardCount,
+      );
+    }
+
+    CreatedTournament current = withManualGroups(assigned: false);
+    StateSetter? refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setBuilderState) {
+            refresh = setBuilderState;
+            return Scaffold(
+              body: TournamentSecondScreenView(
+                tournament: current,
+                isStandaloneWindow: true,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Zuweisung der Gruppen noch nicht erfolgt! Standardmäßig alphabetisch',
+      ),
+      findsOneWidget,
+    );
+
+    current = withManualGroups(assigned: true);
+    refresh!(() {});
+    await tester.pump();
+
+    expect(
+      find.text(
+        'Zuweisung der Gruppen noch nicht erfolgt! Standardmäßig alphabetisch',
+      ),
+      findsNothing,
+    );
+    expect(find.text('Gruppen erfolgreich zugewiesen'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('next-stage preview shows the optional third-place match', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament();
+    final ko = tournament.runStages[1] as KnockoutTournamentRunStage;
+    tournament.runStages[1] = KnockoutTournamentRunStage(
+      name: ko.name,
+      rounds: ko.rounds,
+      placementMatches: [
+        GroupMatch(
+          round: 101,
+          placementKey: 'ko/0',
+          placementRank: 3,
+          label: 'Spiel um Platz 3',
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            showNextStagePreviewInitially: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    expect(find.text('Platzierung'), findsOneWidget);
+    expect(find.text('Begegnung um Platz 3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'next-stage preview uses current standings for projected qualifiers',
     (tester) async {

@@ -854,6 +854,9 @@ class _TournamentFormatPlannerDialogState
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Auslosungsmethode',
+                        helperText:
+                            'Gilt nur für die gewünschte letzte Phase (K.-o.-Phase), nicht für alle ausgewählten Phasen.',
+                        helperMaxLines: 2,
                         border: OutlineInputBorder(),
                       ),
                       items: [
@@ -886,23 +889,24 @@ class _TournamentFormatPlannerDialogState
                             },
                     ),
                   ],
-                  DropdownButtonFormField<int>(
-                    initialValue: _maximumLives,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Maximale Leben im Kratzer-Modus',
+                  if (_enabledModes.contains('kratzer'))
+                    DropdownButtonFormField<int>(
+                      initialValue: _maximumLives,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Maximale Leben im Kratzer-Modus',
+                      ),
+                      items: [
+                        for (var n = 2; n <= 10; n++)
+                          DropdownMenuItem(value: n, child: Text('$n')),
+                      ],
+                      onChanged: _calculating
+                          ? null
+                          : (n) => setState(() {
+                              _maximumLives = n!;
+                              _suggestions = null;
+                            }),
                     ),
-                    items: [
-                      for (var n = 2; n <= 10; n++)
-                        DropdownMenuItem(value: n, child: Text('$n')),
-                    ],
-                    onChanged: _calculating
-                        ? null
-                        : (n) => setState(() {
-                            _maximumLives = n!;
-                            _suggestions = null;
-                          }),
-                  ),
                   const SizedBox(height: 12),
                 ],
               ),

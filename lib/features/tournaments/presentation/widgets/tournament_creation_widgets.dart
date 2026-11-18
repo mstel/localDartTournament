@@ -83,6 +83,8 @@ class _KnockoutPreview extends StatelessWidget {
           initialValue: effectiveSeedingMode,
           decoration: const InputDecoration(
             labelText: 'Auslosungsmethode',
+            helperText: 'Gilt für die aktuell bearbeitete K.-o.-Phase.',
+            helperMaxLines: 2,
             border: OutlineInputBorder(),
           ),
           items: [

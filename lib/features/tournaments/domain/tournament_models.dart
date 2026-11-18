@@ -410,6 +410,7 @@ class TournamentStage {
     this.groupDrawOnStart = false,
     this.groupSlotOrder = const [],
     this.groupDrawCompleted = false,
+    this.groupAssignmentMode = 'strengthLevels',
     this.knockoutParticipantCount,
     this.knockoutAdvancingCount,
     this.knockoutBracketSize,
@@ -489,6 +490,8 @@ class TournamentStage {
       groupSlotOrder: groupSlotOrder,
       groupDrawCompleted:
           json['groupDrawCompleted'] as bool? ?? groupSlotOrder.isNotEmpty,
+      groupAssignmentMode:
+          json['groupAssignmentMode'] as String? ?? 'strengthLevels',
       knockoutParticipantCount: json['knockoutParticipantCount'] as int?,
       knockoutAdvancingCount: json['knockoutAdvancingCount'] as int?,
       knockoutBracketSize: json['knockoutBracketSize'] as int?,
@@ -558,6 +561,9 @@ class TournamentStage {
   final bool groupDrawOnStart;
   final List<int?> groupSlotOrder;
   final bool groupDrawCompleted;
+  /// 'manual', 'strengthLevels', 'balanced' oder 'random' bei Erstellung.
+  /// Alte Turniere ohne Feld behalten 'strengthLevels'.
+  final String groupAssignmentMode;
   final int? knockoutParticipantCount;
   final int? knockoutAdvancingCount;
   final int? knockoutBracketSize;
@@ -610,6 +616,7 @@ class TournamentStage {
       'groupDrawOnStart': groupDrawOnStart,
       'groupSlotOrder': groupSlotOrder,
       'groupDrawCompleted': groupDrawCompleted,
+      'groupAssignmentMode': groupAssignmentMode,
       'knockoutParticipantCount': knockoutParticipantCount,
       'knockoutAdvancingCount': knockoutAdvancingCount,
       'knockoutBracketSize': knockoutBracketSize,
@@ -636,6 +643,7 @@ class TournamentStage {
     bool? groupDrawOnStart,
     List<int?>? groupSlotOrder,
     bool? groupDrawCompleted,
+    String? groupAssignmentMode,
     List<String>? groupMatchmakingStrategies,
     Map<String, int>? groupMatchmakingRatings,
     List<int?>? knockoutSlotOrder,
@@ -677,6 +685,7 @@ class TournamentStage {
     groupDrawOnStart: groupDrawOnStart ?? this.groupDrawOnStart,
     groupSlotOrder: groupSlotOrder ?? this.groupSlotOrder,
     groupDrawCompleted: groupDrawCompleted ?? this.groupDrawCompleted,
+    groupAssignmentMode: groupAssignmentMode ?? this.groupAssignmentMode,
     knockoutParticipantCount: knockoutParticipantCount,
     knockoutAdvancingCount: knockoutAdvancingCount,
     knockoutBracketSize: knockoutBracketSize,

@@ -1,5 +1,6 @@
 import 'package:dart_tournament_manager/main.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/result_entry.dart';
+import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/planning_suggestion_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -1945,5 +1946,61 @@ void main() {
     expect(find.textContaining('K.-o.-Runde'), findsWidgets);
     expect(find.text('Spielplan'), findsOneWidget);
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
+  });
+
+  testWidgets('form finder suggestion opens first phase in edit mode', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const DartTournamentApp());
+    await openTournamentCreation(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Anzahl Teilnehmende'),
+      '8',
+    );
+    await revealPlayerGenerator(tester);
+    await tester.tap(find.text('Teilnehmer erzeugen'));
+    await tester.pumpAndSettle();
+    await openTournamentStructure(tester);
+
+    for (
+      var attempt = 0;
+      attempt < 8 && find.text('Passende Turnierform finden').evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, 600));
+      await tester.pumpAndSettle();
+    }
+    final finderButton = find.text('Passende Turnierform finden');
+    await tester.ensureVisible(finderButton);
+    await tester.pumpAndSettle();
+    await tester.tap(finderButton);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Vorschläge berechnen'));
+    for (
+      var attempt = 0;
+      attempt < 20 && find.byType(PlanningSuggestionCard).evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 250)),
+      );
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+
+    final suggestion = find.byType(PlanningSuggestionCard).first;
+    await tester.ensureVisible(suggestion);
+    await tester.tap(suggestion);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Änderungen speichern'), findsOneWidget);
+    expect(find.text('Phase hinzufügen'), findsNothing);
   });
 }

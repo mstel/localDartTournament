@@ -94,7 +94,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   );
   int? _editingStageIndex;
   GroupPlayerAllocationMode _groupAllocationMode =
-      GroupPlayerAllocationMode.strengthLevels;
+      GroupPlayerAllocationMode.manual;
   List<int?>? _manualGroupSlotOrder;
   List<int?>? _manualKnockoutSlotOrder;
   final Set<int> _placementPlaces = {};
@@ -1904,8 +1904,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     final manualOrder = _manualGroupSlotOrder;
     if (_selectedStageType == 'groups' &&
         _groupAllocationMode == GroupPlayerAllocationMode.manual &&
-        (manualOrder == null ||
-            manualOrder.length != participantCount ||
+        manualOrder != null &&
+        (manualOrder.length != participantCount ||
             manualOrder.any(
               (playerIndex) =>
                   playerIndex == null ||
@@ -2016,6 +2016,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       groupDrawOnStart: _selectedStageType == 'groups'
           ? _groupDrawOnStart
           : false,
+      groupAssignmentMode: _isGroupStageForm
+          ? _groupAllocationMode.name
+          : 'strengthLevels',
       groupSlotOrder:
           _selectedStageType == 'groups' &&
               _groupAllocationMode == GroupPlayerAllocationMode.manual
@@ -2109,9 +2112,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _knockoutSeedingMode = 'cross';
     _groupDrawOnStart = false;
     _manualGroupSlotOrder = null;
-    if (_groupAllocationMode == GroupPlayerAllocationMode.manual) {
-      _groupAllocationMode = GroupPlayerAllocationMode.strengthLevels;
-    }
+    _groupAllocationMode = GroupPlayerAllocationMode.manual;
     _kratzerBoardDistribution = 'balanced';
     _stageGameFormat = const TournamentGameFormat();
   }
@@ -2185,7 +2186,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           _groupAllocationMode = GroupPlayerAllocationMode.manual;
           _manualGroupSlotOrder = List<int?>.from(stage.groupSlotOrder);
         } else {
-          _groupAllocationMode = GroupPlayerAllocationMode.strengthLevels;
+          _groupAllocationMode = GroupPlayerAllocationMode.values.firstWhere(
+            (mode) => mode.name == stage.groupAssignmentMode,
+            orElse: () => GroupPlayerAllocationMode.manual,
+          );
           _manualGroupSlotOrder = null;
         }
       } else {
@@ -2268,12 +2272,20 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         }
         _stages
           ..clear()
-          ..addAll(suggestion.configurations);
+          ..addAll(
+            suggestion.configurations.map(
+              (stage) =>
+                  stage.isGroupStage
+                  ? stage.copyWith(groupAssignmentMode: 'manual')
+                  : stage,
+            ),
+          );
         _plannedBoardCount = suggestion.boardCount.clamp(1, 64);
         _playerCountController.text = '${suggestion.participantCount}';
         _resetStageForm();
         _showEntryChoices = false;
       });
+      if (_stages.isNotEmpty) _editStage(0);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -2350,6 +2362,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   groupCount: groups,
                   groupSizes: sizes,
                   groupPlayType: 'round_robin',
+                  groupAssignmentMode: 'manual',
                   groupPlayTypes: List.filled(groups, 'round_robin'),
                   groupRoundRobinRepeats: List.filled(groups, 1),
                   qualifiedParticipantCount: groups == 1
@@ -2382,6 +2395,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       }
       _resetStageForm();
     });
+    if (_stages.isNotEmpty) _editStage(0);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -2750,7 +2764,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
             : const GroupPlayerAllocationEngine().allocate(
                 players: incomingPlayers,
                 groupSizes: stage.groupSizes,
-                mode: _groupAllocationMode,
+                mode: _groupAllocationMode == GroupPlayerAllocationMode.manual
+                    ? GroupPlayerAllocationMode.strengthLevels
+                    : _groupAllocationMode,
                 ratings: ratings,
               );
         final groups = _buildTournamentGroupsForPlayers(

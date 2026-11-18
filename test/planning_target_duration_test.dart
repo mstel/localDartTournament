@@ -36,6 +36,53 @@ void main() {
     expect(preference.initialValue, isNull);
   });
 
+  testWidgets('Kratzer life setting is only shown when Kratzer is enabled', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: TournamentFormatPlannerDialog()),
+    );
+    await tester.ensureVisible(find.text('Aufbau & Gruppen'));
+    await tester.tap(find.text('Aufbau & Gruppen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Maximale Leben im Kratzer-Modus'), findsNothing);
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentFormatPlannerDialog(
+          key: const ValueKey('kratzer-planner'),
+          initialEnabledModes: const {'kratzer'},
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Aufbau & Gruppen'));
+    await tester.tap(find.text('Aufbau & Gruppen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Maximale Leben im Kratzer-Modus'), findsOneWidget);
+  });
+
+  testWidgets('seeding helper clarifies the last knockout phase scope', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TournamentFormatPlannerDialog(
+          initialPreferredFinalStage: 'single_knockout',
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Aufbau & Gruppen'));
+    await tester.tap(find.text('Aufbau & Gruppen'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Gilt nur für die gewünschte letzte Phase (K.-o.-Phase), nicht für alle ausgewählten Phasen.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   test('target replaces window and sorts by absolute distance', () {
     for (final target in [90, 180, 300]) {
       final results = planner.suggestFormats(request(target));
