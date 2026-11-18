@@ -42,7 +42,7 @@ class TournamentSettings {
       idleBoardSoundStartMinutes <= 5 &&
       idleBoardSoundRepeatMinutes >= 1 &&
       idleBoardSoundRepeatMinutes <= 5 &&
-      alternativeRecommendationCount >= 1 &&
+      alternativeRecommendationCount >= 0 &&
       alternativeRecommendationCount <= 3;
 
   TournamentSettings copyWith({
@@ -118,7 +118,7 @@ class TournamentSettings {
       alternativeRecommendationCount: _boundedInt(
         json['alternativeRecommendationCount'],
         fallback: 3,
-        minimum: 1,
+        minimum: 0,
         maximum: 3,
       ),
       announcementNameFormat: AnnouncementNameFormat.values.firstWhere(

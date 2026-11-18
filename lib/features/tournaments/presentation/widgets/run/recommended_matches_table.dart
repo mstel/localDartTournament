@@ -14,6 +14,8 @@ class RecommendedMatchGroup {
     this.isDelayed = false,
     this.playedMatches,
     this.totalMatches,
+    this.boardLabel,
+    this.preferredCopies = 1,
   });
 
   final String name;
@@ -21,6 +23,18 @@ class RecommendedMatchGroup {
   final bool isDelayed;
   final int? playedMatches;
   final int? totalMatches;
+  final String? boardLabel;
+  final int preferredCopies;
+
+  RecommendedMatchGroup withPageCount(int pageCount) => RecommendedMatchGroup(
+    name: name,
+    matches: matches,
+    isDelayed: isDelayed,
+    playedMatches: playedMatches,
+    totalMatches: totalMatches,
+    boardLabel: boardLabel,
+    preferredCopies: pageCount,
+  );
 }
 
 class RecommendedMatchesTable extends StatelessWidget {
@@ -83,9 +97,17 @@ class RecommendedMatchesTable extends StatelessWidget {
         final width =
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
         final columnCounts = List<int>.filled(visibleGroups.length, 1);
-        for (var index = visibleGroups.length; index < columns; index++) {
-          columnCounts[openGroupIndexes[(index - visibleGroups.length) %
-              openGroupIndexes.length]]++;
+        for (var index = 0; index < visibleGroups.length; index++) {
+          columnCounts[index] = min(columns, max(1, visibleGroups[index].preferredCopies));
+        }
+        var remainingColumns =
+            columns - columnCounts.fold<int>(0, (sum, count) => sum + count);
+        while (remainingColumns > 0 && openGroupIndexes.isNotEmpty) {
+          for (final index in openGroupIndexes) {
+            if (remainingColumns <= 0) break;
+            columnCounts[index]++;
+            remainingColumns--;
+          }
         }
         final displayColumns =
             <
@@ -108,11 +130,12 @@ class RecommendedMatchesTable extends StatelessWidget {
             prioritizeForDisplay,
           );
           final copies = columnCounts[groupIndex];
+          final displayGroup = group.withPageCount(copies);
           for (var copyIndex = 0; copyIndex < copies; copyIndex++) {
             final start = matches.length * copyIndex ~/ copies;
             final end = matches.length * (copyIndex + 1) ~/ copies;
             displayColumns.add((
-              group: group,
+              group: displayGroup,
               matches: matches.sublist(start, end),
               copyIndex: copyIndex,
             ));
@@ -216,12 +239,33 @@ class _GroupTable extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    group.name,
-                    style: TextStyle(
-                      color: palette.accent,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(text: group.name),
+                            if (group.boardLabel != null &&
+                                group.boardLabel!.trim().isNotEmpty)
+                              TextSpan(text: ': ${group.boardLabel}'),
+                          ],
+                        ),
+                        style: TextStyle(
+                          color: palette.accent,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (group.preferredCopies > 1)
+                        Text(
+                          '(Seite ${copyIndex + 1})',
+                          style: TextStyle(
+                            color: palette.mutedText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 if (group.playedMatches != null && group.totalMatches != null)

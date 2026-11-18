@@ -1,13 +1,17 @@
 import 'dart:convert';
 
+import '../../settings/data/director_mode_defaults.dart';
 import '../data/tournament_storage.dart';
 import '../domain/tournament_models.dart';
 
 class TournamentCreationController {
-  const TournamentCreationController({TournamentStorage? storage})
-    : _storage = storage;
+  const TournamentCreationController({
+    TournamentStorage? storage,
+    this.defaults = DirectorModeDefaults.defaults,
+  }) : _storage = storage;
 
   final TournamentStorage? _storage;
+  final DirectorModeDefaults defaults;
 
   bool hasRecordedResults(CreatedTournament tournament) =>
       tournament.runStages.any((stage) {
@@ -42,18 +46,20 @@ class TournamentCreationController {
     int? plannedMinutes,
     int? plannedMatches,
   }) async {
-    final tournament = _buildTournament(
-      boardCount: boardCount,
-      name: name,
-      players: players,
-      stages: stages,
-      runStages: runStages,
-      countsForRanking: countsForRanking,
-      rankingIds: rankingIds,
-      tournamentDate: tournamentDate,
-      plannedMinimumMinutes: plannedMinimumMinutes,
-      plannedMinutes: plannedMinutes,
-      plannedMatches: plannedMatches,
+    final tournament = defaults.applyToTournament(
+      _buildTournament(
+        boardCount: boardCount,
+        name: name,
+        players: players,
+        stages: stages,
+        runStages: runStages,
+        countsForRanking: countsForRanking,
+        rankingIds: rankingIds,
+        tournamentDate: tournamentDate,
+        plannedMinimumMinutes: plannedMinimumMinutes,
+        plannedMinutes: plannedMinutes,
+        plannedMatches: plannedMatches,
+      ),
     );
     await (_storage ?? TournamentStorage()).saveTournament(tournament);
     return tournament;

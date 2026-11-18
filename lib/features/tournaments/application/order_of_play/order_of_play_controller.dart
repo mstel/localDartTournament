@@ -243,8 +243,15 @@ class OrderOfPlayController {
           .whereType<String>()
           .toSet()
           .toList();
-      final defaultAssignments = GroupBoardAssignment.defaults(
-        groupNames: groupKeys,
+      final defaultAssignments = GroupBoardAssignment.defaultsForStage(
+        stageIndex: stageIndex,
+        groupNames:
+            groupKeys
+                .map(
+                  (key) =>
+                      key.contains(':') ? key.substring(key.indexOf(':') + 1) : key,
+                )
+                .toList(),
         boardCount: tournament.boardCount,
       );
       final groupAssignments = <String, Set<int>>{
@@ -255,32 +262,145 @@ class OrderOfPlayController {
                       const <int>{})
                   .toSet(),
       };
-      final assignments = const BoardSchedulingEngine().schedule(
-        all: stageEntries,
-        ready: known,
-        boardCount: tournament.boardCount,
-        blockedBoards: tournament.blockedBoards,
-        preferredBoardsByGroup: tournament.groupBoardAssignments,
-        strategy:
-            tournament.directorModeEnabled &&
-                tournament.directorSchedulingStrategy == 'global'
-            ? 'global'
-            : 'sequence',
-        assignGroupsToBoards:
-            tournament.directorModeEnabled &&
-            tournament.directorSchedulingStrategy == 'group' &&
-            stageEntries.every((entry) => entry.groupKey != null),
-        groupBoardAssignments: groupAssignments,
-        allowGroupBoardExpansion: allowsGroupBoardExpansion(
-          tournament.directorMultiBoardAssignmentBehavior,
-        ),
-      );
-      schedule.addAll(assignments.map((assignment) => assignment.entry));
+      final useGroupBoardRoundRobin =
+          tournament.directorModeEnabled &&
+          tournament.directorSchedulingStrategy == 'group' &&
+          stageEntries.every((entry) => entry.groupKey != null);
+      final orderedKnown = useGroupBoardRoundRobin
+          ? _roundRobinKnownEntriesByBoard(
+            stageIndex: stageIndex,
+            stageEntries: stageEntries,
+            known: known,
+            groupAssignments: groupAssignments,
+            boardCount: tournament.boardCount,
+            blockedBoards: tournament.blockedBoards,
+          )
+          : const BoardSchedulingEngine()
+              .schedule(
+                all: stageEntries,
+                ready: known,
+                boardCount: tournament.boardCount,
+                blockedBoards: tournament.blockedBoards,
+                preferredBoardsByGroup: tournament.groupBoardAssignments,
+                strategy:
+                    tournament.directorModeEnabled &&
+                    tournament.directorSchedulingStrategy == 'global'
+                    ? 'global'
+                    : 'sequence',
+                assignGroupsToBoards: false,
+                groupBoardAssignments: groupAssignments,
+                allowGroupBoardExpansion: allowsGroupBoardExpansion(
+                  tournament.directorMultiBoardAssignmentBehavior,
+                ),
+              )
+              .map((assignment) => assignment.entry)
+              .toList();
+      schedule.addAll(orderedKnown);
       schedule.addAll(stageEntries.where((entry) => !known.contains(entry)));
     }
     for (var index = 0; index < schedule.length; index++) {
       schedule[index].match.fixedScheduleOrder = index;
     }
+  }
+
+  /// Builds the persisted fixed order in play blocks: the best match for each
+  /// board comes first, then the second-best for each board, and so on. Boards
+  /// remain assigned to their groups while those groups still have matches;
+  /// groups with remaining matches can move onto boards whose groups are done.
+  List<PlayEntry> _roundRobinKnownEntriesByBoard({
+    required int stageIndex,
+    required List<PlayEntry> stageEntries,
+    required List<PlayEntry> known,
+    required Map<String, Set<int>> groupAssignments,
+    required int boardCount,
+    required Set<int> blockedBoards,
+  }) {
+    final originalOrder = {
+      for (var index = 0; index < stageEntries.length; index++)
+        stageEntries[index]: index,
+    };
+    final groupOrder = <String, int>{};
+    for (final entry in stageEntries) {
+      final groupKey = entry.groupKey;
+      if (groupKey != null) {
+        groupOrder.putIfAbsent(groupKey, () => groupOrder.length);
+      }
+    }
+    final remainingByGroup = <String, List<PlayEntry>>{
+      for (final groupKey in groupOrder.keys)
+        groupKey:
+            known
+                .where((entry) => entry.groupKey == groupKey)
+                .toList()
+                .cast<PlayEntry>()
+              ..sort(
+                (a, b) => originalOrder[a]!.compareTo(originalOrder[b]!),
+              ),
+    };
+    final groupsByBoard = <int, List<String>>{};
+    for (final entry in groupAssignments.entries) {
+      if (!groupOrder.containsKey(entry.key)) continue;
+      for (final board in entry.value) {
+        if (board < 1 || board > boardCount || blockedBoards.contains(board)) {
+          continue;
+        }
+        groupsByBoard.putIfAbsent(board, () => <String>[]).add(entry.key);
+      }
+    }
+    final boards = [
+      for (var board = 1; board <= boardCount; board++)
+        if (!blockedBoards.contains(board)) board,
+    ];
+    final ordered = <PlayEntry>[];
+    while (remainingByGroup.values.any((entries) => entries.isNotEmpty)) {
+      final usedPlayers = <String>{};
+      var addedInBlock = false;
+      for (final board in boards) {
+        final assignedCandidates =
+            (groupsByBoard[board] ?? const <String>[])
+                .where(
+                  (groupKey) => remainingByGroup[groupKey]?.isNotEmpty == true,
+                )
+                .toSet();
+        final allCandidates = groupOrder.keys
+            .where(
+              (groupKey) => remainingByGroup[groupKey]?.isNotEmpty == true,
+            )
+            .toSet();
+        final candidateSets = <Set<String>>[assignedCandidates, allCandidates];
+        for (final candidateSet in candidateSets) {
+          if (candidateSet.isEmpty) continue;
+          final candidates = candidateSet.toList()..sort((a, b) {
+            final remainingComparison = remainingByGroup[b]!.length.compareTo(
+              remainingByGroup[a]!.length,
+            );
+            return remainingComparison != 0
+                ? remainingComparison
+                : groupOrder[a]!.compareTo(groupOrder[b]!);
+          });
+          for (final groupKey in candidates) {
+            final entries = remainingByGroup[groupKey]!;
+            final index = entries.indexWhere(
+              (entry) => !entry.players.any(usedPlayers.contains),
+            );
+            if (index < 0) continue;
+            final entry = entries.removeAt(index);
+            ordered.add(entry);
+            usedPlayers.addAll(entry.players);
+            addedInBlock = true;
+            break;
+          }
+          if (addedInBlock) break;
+        }
+      }
+      if (!addedInBlock) break;
+    }
+    // Groups without a usable assignment keep their creation order at the end.
+    final orderedSet = ordered.toSet();
+    ordered.addAll(
+      known.where((entry) => !orderedSet.contains(entry)),
+    );
+    return ordered;
   }
 
   bool moveFixedScheduleMatch(

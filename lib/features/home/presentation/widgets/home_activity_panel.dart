@@ -44,7 +44,7 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
         _preferencesLoaded = true;
         _rotationTimer?.cancel();
         _rotationTimer = null;
-        if (_dashboardEnabled) _load();
+        _load();
       });
     } catch (_) {
       if (!mounted) return;
@@ -58,7 +58,7 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
   @override
   void didUpdateWidget(covariant HomeActivityPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.service != widget.service && _dashboardEnabled) _load();
+    if (oldWidget.service != widget.service) _load();
   }
 
   @override
@@ -79,7 +79,7 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_preferencesLoaded || !_dashboardEnabled) {
+    if (!_preferencesLoaded) {
       return const SizedBox.shrink();
     }
     return FutureBuilder<HomeOverviewSnapshot>(
@@ -117,9 +117,9 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
         final overview = snapshot.data!;
         final active = overview.activeTournament;
         final latest = overview.latestTournament;
-        final carouselCards = overview.cards
-            .where((card) => card != latest)
-            .toList();
+        final carouselCards = !_dashboardEnabled
+            ? const <HomeOverviewCard>[]
+            : overview.cards.where((card) => card != latest).toList();
         if (carouselCards.isEmpty && active == null && latest == null) {
           return const SizedBox.shrink();
         }

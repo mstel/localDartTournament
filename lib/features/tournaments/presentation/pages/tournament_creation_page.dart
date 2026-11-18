@@ -136,6 +136,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   bool _kratzerHandicapsEnabled = false;
   bool _isOpeningPlayerPicker = false;
   bool _isCreatingTournament = false;
+  DirectorModeDefaults _directorDefaults = DirectorModeDefaults.defaults;
   DateTime _tournamentDate = DateUtils.dateOnly(DateTime.now());
   TournamentGameFormat _stageGameFormat = const TournamentGameFormat();
 
@@ -162,6 +163,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     unawaited(_loadGroupTieBreakers());
     unawaited(_applyDefaultRanking());
     unawaited(_refreshEloRankingAvailability());
+    unawaited(_loadDirectorDefaults());
+  }
+
+  Future<void> _loadDirectorDefaults() async {
+    final defaults = await const DirectorModeDefaultsStorage().load();
+    if (!mounted) return;
+    setState(() => _directorDefaults = defaults);
   }
 
   Future<void> _loadGroupTieBreakers() async {
@@ -2466,6 +2474,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     try {
       final controller = TournamentCreationController(
         storage: widget.tournamentStorage,
+        defaults: _directorDefaults,
       );
       final name = _tournamentNameController.text.trim().isEmpty
           ? 'Neues Turnier'

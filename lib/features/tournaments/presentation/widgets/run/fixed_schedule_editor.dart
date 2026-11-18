@@ -247,7 +247,7 @@ class _FixedScheduleEditorDialogState extends State<FixedScheduleEditorDialog> {
     return AlertDialog(
       title: Text(
         widget.scope == FixedScheduleEditorScope.overall
-            ? 'Spielplan gesamt bearbeiten'
+            ? 'Gesamten Spielplan bearbeiten'
             : 'Spielplan je Board bearbeiten',
       ),
       content: SizedBox(

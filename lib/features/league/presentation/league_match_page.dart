@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:math' show max, min;
 
 import '../../../shared/widgets/sport_settings_section.dart';
@@ -17,6 +18,7 @@ import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../domain/league_match.dart';
 import '../../settings/data/planning_settings_storage.dart';
+import '../../settings/data/director_mode_defaults.dart';
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'league_pairing_dialog.dart';
 import 'league_team_dialogs.dart';
@@ -310,6 +312,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
   );
   late final _storage = widget.storage ?? TournamentStorage();
   late CreatedTournament? _tournament = widget.tournament;
+  DirectorModeDefaults _directorDefaults = DirectorModeDefaults.defaults;
   bool _busy = false;
   DateTime _tournamentDate = DateUtils.dateOnly(DateTime.now());
   String? _error;
@@ -569,6 +572,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
   @override
   void initState() {
     super.initState();
+    unawaited(_loadDirectorDefaults());
     final existing = widget.tournament;
     final league = existing?.leagueMatch;
     if (widget.editConfigurationOnly && existing != null && league != null) {
@@ -672,6 +676,12 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     }
   }
 
+  Future<void> _loadDirectorDefaults() async {
+    final defaults = await const DirectorModeDefaultsStorage().load();
+    if (!mounted) return;
+    setState(() => _directorDefaults = defaults);
+  }
+
   Future<void> _create() async {
     if (_busy) return;
     if (!_form.currentState!.validate()) {
@@ -722,6 +732,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                 isGenerated: false,
               ),
     ];
+    final directorDefaults = _directorDefaults;
     final existing = widget.editConfigurationOnly ? widget.tournament : null;
     if (existing?.leagueMatch?.games.any((game) => game.complete) ?? false) {
       setState(
@@ -731,14 +742,16 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       return;
     }
     final tournament = existing == null
-        ? CreatedTournament(
-            name: _name.text.trim(),
-            players: players,
-            stages: [],
-            runStages: [],
-            leagueMatch: league,
-            boardCount: _boards,
-            tournamentDate: _tournamentDate,
+        ? directorDefaults.applyToLeagueMatch(
+            CreatedTournament(
+              name: _name.text.trim(),
+              players: players,
+              stages: [],
+              runStages: [],
+              leagueMatch: league,
+              boardCount: _boards,
+              tournamentDate: _tournamentDate,
+            ),
           )
         : CreatedTournament.fromJson({
             ...existing.toJson(),

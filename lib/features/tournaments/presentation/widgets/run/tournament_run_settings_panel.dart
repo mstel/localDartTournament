@@ -210,11 +210,11 @@ class _TournamentRunSettingsPanelState
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Anzahl weiterer Vorschläge',
-                      helperText: 'Zwischen 1 und 3',
+                      helperText: 'Zwischen 0 und 3',
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) =>
-                        _validateRange(value, minimum: 1, maximum: 3),
+                        _validateRange(value, minimum: 0, maximum: 3),
                   ),
                 ),
               ),

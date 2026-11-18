@@ -34,7 +34,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Spielplan gesamt bearbeiten'), findsOneWidget);
+    expect(find.text('Gesamten Spielplan bearbeiten'), findsOneWidget);
     expect(find.byType(ReorderableListView), findsOneWidget);
     expect(find.text('Speichern & Anwenden'), findsOneWidget);
     expect(find.text('Phase'), findsOneWidget);

@@ -46,6 +46,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'features/settings/presentation/settings_page.dart';
 import 'features/settings/data/planning_settings_storage.dart';
+import 'features/settings/data/director_mode_defaults.dart';
 
 import 'features/players/presentation/players_page.dart';
 import 'features/rankings/presentation/rankings_page.dart';

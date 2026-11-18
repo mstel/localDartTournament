@@ -1232,10 +1232,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final previousOrders = _fixedScheduleOrders();
     final stage = widget.tournament.runStages[stageIndex];
     if (stage is! GroupTournamentRunStage) return;
-    final defaults = GroupBoardAssignment.defaults(
-      groupNames: stage.groups
-          .map((group) => GroupBoardAssignment.keyFor(stageIndex, group.name))
-          .toList(),
+    final defaults = GroupBoardAssignment.defaultsForStage(
+      stageIndex: stageIndex,
+      groupNames: stage.groups.map((group) => group.name).toList(),
       boardCount: widget.tournament.boardCount,
     );
     final current = (assignments[key] ?? defaults[key] ?? const <int>{})
@@ -1997,14 +1996,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         stageIndex,
                         group.name,
                       );
-                      final defaults = GroupBoardAssignment.defaults(
+                      final defaults = GroupBoardAssignment.defaultsForStage(
+                        stageIndex: stageIndex,
                         groupNames: stage.groups
-                            .map(
-                              (item) => GroupBoardAssignment.keyFor(
-                                stageIndex,
-                                item.name,
-                              ),
-                            )
+                            .map((item) => item.name)
                             .toList(),
                         boardCount: widget.tournament.boardCount,
                       );
@@ -2073,7 +2068,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         widget.tournament,
         stageIndex,
       );
-      final boardAssignments = snapshot.upcomingForBoard(board);
+      final count = snapshot.tournament.tournamentSettings
+          .alternativeRecommendationCount;
+      final boardAssignments = snapshot.suggestionsForBoard(
+        board,
+        limit: 1 + count,
+      );
       if (boardAssignments.isEmpty) return;
       final nextMatch = boardAssignments.first.entry.match;
       final boardName = widget.tournament.boardDisplayName(board);
@@ -2138,7 +2138,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               widget.tournament,
               stageIndex,
             );
-            final refreshedAssignments = refreshed.upcomingForBoard(board);
+            final refreshedAssignments = refreshed.suggestionsForBoard(
+              board,
+              limit: 1 + count,
+            );
             final refreshedNext = refreshedAssignments.firstOrNull;
             final refreshedAlternativeTexts =
                 settings.readAlternativeRecommendations
@@ -6631,8 +6634,25 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               : null,
                           onRecomputeSchedule:
                               _simulation == null &&
-                                  displayedTournament.directorModeEnabled
+                                  (displayedTournament.leagueMatch != null ||
+                                      displayedTournament.directorModeEnabled)
                               ? _recomputeFixedSchedule
+                              : null,
+                          onEditFixedSchedulePerBoard:
+                              _simulation == null &&
+                                  (displayedTournament.leagueMatch != null ||
+                                      displayedTournament.directorModeEnabled)
+                              ? () => _openFixedScheduleEditor(
+                                FixedScheduleEditorScope.perBoard,
+                              )
+                              : null,
+                          onEditFixedScheduleOverall:
+                              _simulation == null &&
+                                  (displayedTournament.leagueMatch != null ||
+                                      displayedTournament.directorModeEnabled)
+                              ? () => _openFixedScheduleEditor(
+                                FixedScheduleEditorScope.overall,
+                              )
                               : null,
                         )
                       else if (_stageViewMode == StageViewMode.settings)
@@ -6774,6 +6794,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 );
                               },
                             ),
+                            if (widget.tournament.leagueMatch != null) ...[
+                              const SizedBox(height: 12),
+                              _leagueTeamSettingsCard(),
+                              const SizedBox(height: 12),
+                              ..._playerManagementSections(),
+                            ],
                             const SizedBox(height: 12),
                             Card(
                               child: Padding(
@@ -6938,7 +6964,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                                   ),
                                               icon: const Icon(Icons.list_alt),
                                               label: const Text(
-                                                'Spielplan gesamt bearbeiten',
+                                                'Gesamten Spielplan bearbeiten',
                                               ),
                                             ),
                                           ],
@@ -7415,14 +7441,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                   ],
                                 ),
                               ),
-                            if (widget.tournament.leagueMatch == null)
-                              const SizedBox(height: 12),
-                            if (widget.tournament.leagueMatch != null) ...[
-                              const SizedBox(height: 12),
-                              _leagueTeamSettingsCard(),
-                            ],
                             // 4. Teilnehmer verwalten
-                            ..._playerManagementSections(),
+                            if (widget.tournament.leagueMatch == null) ...[
+                              const SizedBox(height: 12),
+                              ..._playerManagementSections(),
+                            ],
                             if (widget.tournament.leagueMatch == null &&
                                 !widget.tournament.isKratzerTournament &&
                                 !widget.tournament.players.any(

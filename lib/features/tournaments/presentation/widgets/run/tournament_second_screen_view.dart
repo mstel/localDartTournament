@@ -5094,7 +5094,7 @@ class _TournamentSecondScreenViewState
                                       ? '${boardNames.first} & ${boardNames.skip(1).map((name) => name.substring('Board '.length)).join(' & ')}'
                                       : boardNames.join(' & ');
                                   final recommendations = mergedGroupKey == null
-                                      ? snapshot.upcomingForBoard(board)
+                                      ? snapshot.suggestionsForBoard(board)
                                       : snapshot.upcomingForBoards(
                                           boards,
                                           groupKey: mergedGroupKey,

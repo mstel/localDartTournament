@@ -56,6 +56,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
     this.canResetCurrentStage = false,
     this.simulationControls,
     this.onRecomputeSchedule,
+    this.onEditFixedSchedulePerBoard,
+    this.onEditFixedScheduleOverall,
     this.isSimulationMode = false,
     this.canStartSimulationMatch,
   });
@@ -93,6 +95,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final bool canResetCurrentStage;
   final Widget? simulationControls;
   final VoidCallback? onRecomputeSchedule;
+  final VoidCallback? onEditFixedSchedulePerBoard;
+  final VoidCallback? onEditFixedScheduleOverall;
   final bool isSimulationMode;
   final bool Function(GroupMatch match, int board)? canStartSimulationMatch;
   @override
@@ -125,12 +129,43 @@ class _TournamentDirectorDashboardState
   bool get _canRecomputeSchedule =>
       widget.tournament.directorPlayOrderMode == 'fixed_schedule' &&
       widget.onRecomputeSchedule != null;
+  bool get _canEditFixedSchedule =>
+      widget.tournament.directorPlayOrderMode == 'fixed_schedule' &&
+      (widget.onEditFixedSchedulePerBoard != null ||
+          widget.onEditFixedScheduleOverall != null);
 
   Widget _recomputeScheduleButton(String key) => OutlinedButton.icon(
     key: ValueKey(key),
     onPressed: widget.onRecomputeSchedule,
     icon: const Icon(Icons.replay_outlined),
     label: const Text('Spielplan neu berechnen'),
+  );
+
+  List<Widget> _fixedScheduleEditButtons(String suffix) => [
+    if (widget.onEditFixedSchedulePerBoard != null)
+      OutlinedButton.icon(
+        key: ValueKey('edit-fixed-schedule-per-board-$suffix'),
+        onPressed: widget.onEditFixedSchedulePerBoard,
+        icon: const Icon(Icons.view_week_outlined),
+        label: const Text('Spielplan je Board bearbeiten'),
+      ),
+    if (widget.onEditFixedScheduleOverall != null)
+      OutlinedButton.icon(
+        key: ValueKey('edit-fixed-schedule-overall-$suffix'),
+        onPressed: widget.onEditFixedScheduleOverall,
+        icon: const Icon(Icons.list_alt_outlined),
+        label: const Text('Gesamten Spielplan bearbeiten'),
+      ),
+  ];
+
+  Widget _fixedScheduleActions(String suffix) => Wrap(
+    spacing: 12,
+    runSpacing: 8,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
+      if (_canRecomputeSchedule) _recomputeScheduleButton('recompute-fixed-schedule-$suffix'),
+      ..._fixedScheduleEditButtons(suffix),
+    ],
   );
 
   TournamentFlowPrioritySettings get _prioritySettings {
@@ -991,7 +1026,7 @@ class _TournamentDirectorDashboardState
         .toList();
     final boardAssignments = <int, List<BoardAssignment>>{
       for (var board = 1; board <= t.boardCount; board++)
-        board: state.upcomingForBoard(board),
+        board: state.suggestionsForBoard(board),
     };
     final mergedBoards = state
         .mergedGroupBoards()
@@ -1045,6 +1080,7 @@ class _TournamentDirectorDashboardState
                       ? Colors.green.shade700
                       : _palette.mutedText;
                   final assignedGroups =
+                      state.configuredGroupsByBoard()[board] ??
                       <String>{
                             ?running?.groupKey,
                             for (final assignment in upcomingForBoard)
@@ -1313,6 +1349,7 @@ class _TournamentDirectorDashboardState
               ),
           ];
     final recommendedGroups = <RecommendedMatchGroup>[];
+    final configuredBoards = state.configuredBoardsByGroup();
     final stage = t.runStages[widget.activeStage];
     final orderedEntries = const OrderOfPlayController().orderedEntriesForStage(
       t,
@@ -1322,20 +1359,23 @@ class _TournamentDirectorDashboardState
     );
     if (stage is GroupTournamentRunStage) {
       for (final group in stage.groups) {
+        final groupKey = tournamentGroupBoardKey(widget.activeStage, group.name);
+        final boards = (configuredBoards[groupKey] ?? const <int>{}).toList()
+          ..sort();
         recommendedGroups.add(
           RecommendedMatchGroup(
             name: group.name,
             matches: [
               for (final entry in orderedEntries)
-                if (entry.groupKey ==
-                        tournamentGroupBoardKey(
-                          widget.activeStage,
-                          group.name,
-                        ) &&
+                if (entry.groupKey == groupKey &&
                     pendingMatchSet.contains(entry.match))
                   entry.match,
             ],
             isDelayed: flowPriority.delayedGroups.contains(group.name),
+            boardLabel: boards.isEmpty
+                ? null
+                : boards.map(t.boardDisplayName).join(' & '),
+            preferredCopies: boards.isEmpty ? 1 : boards.length,
           ),
         );
       }
@@ -1672,12 +1712,12 @@ class _TournamentDirectorDashboardState
           notices,
           const SizedBox(height: 12),
         ],
-        if (widget.directorModeEnabled && _canRecomputeSchedule) ...[
+        if ((widget.directorModeEnabled ||
+                widget.tournament.leagueMatch != null) &&
+            (_canRecomputeSchedule || _canEditFixedSchedule)) ...[
           Align(
             alignment: AlignmentDirectional.centerStart,
-            child: _recomputeScheduleButton(
-              'recompute-fixed-schedule-director',
-            ),
+            child: _fixedScheduleActions('director'),
           ),
           const SizedBox(height: 12),
         ],
@@ -1736,8 +1776,8 @@ class _TournamentDirectorDashboardState
                   'Spielplan',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                if (_canRecomputeSchedule)
-                  _recomputeScheduleButton('recompute-fixed-schedule-overview'),
+                if (_canRecomputeSchedule || _canEditFixedSchedule)
+                  _fixedScheduleActions('overview'),
               ],
             ),
             const SizedBox(height: 8),

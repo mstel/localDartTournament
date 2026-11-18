@@ -7,12 +7,11 @@ import 'package:flutter/material.dart';
 import '../data/planning_settings_storage.dart';
 import '../../notifications/presentation/push_sender_menu.dart';
 import '../../notifications/presentation/push_device_menu.dart';
-import '../../dev_tools/presentation/dev_tools_page.dart';
-import '../../govee/presentation/govee_hub_page.dart';
 import '../../random_draw/presentation/random_draw_tool_page.dart';
 import 'tie_breaker_defaults_panel.dart';
 import 'player_insight_defaults_panel.dart';
 import 'app_presentation_settings.dart';
+import 'director_mode_defaults_dialog.dart';
 
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'appearance_panel.dart';
@@ -121,14 +120,12 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
       const AppPresentationSettings(),
       Card(
         child: ListTile(
-          leading: const Icon(Icons.lightbulb_outline),
-          title: const Text('Govee API-Key'),
+          leading: const Icon(Icons.tune),
+          title: const Text('Standardwerte für Turnierleitermodus'),
           subtitle: const Text(
-            'API-Key für Ambiente-Licht im Turnier speichern.',
+            'Legt Spielleiter-Modus, Spielplan, Vorschläge und Sprachausgabe für neue Turniere und Ligaspiele fest.',
           ),
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: (_) => const GoveeHubPage())),
+          onTap: () => showDirectorModeDefaultsDialog(context),
         ),
       ),
       Card(
@@ -157,15 +154,6 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
         ),
       ),
       const Card(child: TieBreakerDefaultsPanel()),
-      Card(
-        child: ListTile(
-          leading: const Icon(Icons.science_outlined),
-          title: const Text('Dev Tools'),
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: (_) => const DevToolsPage())),
-        ),
-      ),
     ],
   );
 }

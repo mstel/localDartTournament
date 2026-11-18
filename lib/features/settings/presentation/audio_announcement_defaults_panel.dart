@@ -129,13 +129,14 @@ class _AudioAnnouncementDefaultsPanelState
           key: ValueKey(
             'audio-alt-count-${_settings.alternativeRecommendationCount}',
           ),
-          initialValue: _settings.alternativeRecommendationCount.clamp(1, 3),
+          initialValue: _settings.alternativeRecommendationCount.clamp(0, 3),
           isExpanded: true,
           decoration: const InputDecoration(
             labelText: 'Anzahl weiterer Vorschläge',
             border: OutlineInputBorder(),
           ),
           items: const [
+            DropdownMenuItem(value: 0, child: Text('Keine weiteren Vorschläge')),
             DropdownMenuItem(value: 1, child: Text('1 weiterer Vorschlag')),
             DropdownMenuItem(value: 2, child: Text('2 weitere Vorschläge')),
             DropdownMenuItem(value: 3, child: Text('3 weitere Vorschläge')),

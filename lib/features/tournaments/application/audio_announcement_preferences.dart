@@ -10,7 +10,7 @@ class AudioAnnouncementPreferences {
     this.nameFormat = AnnouncementNameFormat.fullName,
     this.speakNicknameWhenAvailable = false,
     this.readAlternativeRecommendations = false,
-    this.alternativeRecommendationCount = 1,
+    this.alternativeRecommendationCount = 3,
   });
 
   final AnnouncementNameFormat nameFormat;
@@ -43,7 +43,7 @@ class AudioAnnouncementPreferencesStorage {
   Future<AudioAnnouncementPreferences> load() async {
     final preferences = await SharedPreferences.getInstance();
     final storedFormat = preferences.getString(_nameFormatKey);
-    final altCount = preferences.getInt(_altCountKey) ?? 1;
+    final altCount = preferences.getInt(_altCountKey) ?? 3;
     return AudioAnnouncementPreferences(
       nameFormat: AnnouncementNameFormat.values.firstWhere(
         (format) => format.name == storedFormat,
@@ -52,7 +52,7 @@ class AudioAnnouncementPreferencesStorage {
       speakNicknameWhenAvailable: preferences.getBool(_nicknameKey) ?? false,
       readAlternativeRecommendations:
           preferences.getBool(_readAlternativesKey) ?? false,
-      alternativeRecommendationCount: altCount.clamp(1, 3),
+      alternativeRecommendationCount: altCount.clamp(0, 3),
     );
   }
 
@@ -72,7 +72,7 @@ class AudioAnnouncementPreferencesStorage {
     );
     final altCountSaved = await preferences.setInt(
       _altCountKey,
-      value.alternativeRecommendationCount.clamp(1, 3),
+      value.alternativeRecommendationCount.clamp(0, 3),
     );
     if (!formatSaved ||
         !nicknameSaved ||

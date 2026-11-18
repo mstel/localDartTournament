@@ -96,19 +96,34 @@ class BoardSchedulingEngine {
           .whereType<String>()
           .toSet()
           .toList();
-      final defaults = GroupBoardAssignment.defaults(
-        groupNames: groupKeys,
+      final defaults = GroupBoardAssignment.defaultsForStage(
+        stageIndex: activeStage ?? 0,
+        groupNames:
+            groupKeys
+                .map(
+                  (key) =>
+                      key.contains(':') ? key.substring(key.indexOf(':') + 1) : key,
+                )
+                .toList(),
         boardCount: boardCount,
       );
       for (final groupKey in groupKeys) {
-        final assigned = groupBoardAssignments[groupKey];
-        final preferred = groupBoards[groupKey];
+        final assigned = GroupBoardAssignment.lookup(
+          groupBoardAssignments,
+          activeStage ?? 0,
+          groupKey,
+        );
+        final preferred = groupBoards[groupKey] ?? const <int>{};
         groupBoards[groupKey] =
-            (assigned?.isNotEmpty == true
-                    ? assigned!
-                    : preferred?.isNotEmpty == true
-                    ? preferred!
-                    : defaults[groupKey] ?? const <int>{})
+            (assigned.isNotEmpty
+                    ? assigned
+                    : preferred.isNotEmpty
+                    ? preferred
+                    : GroupBoardAssignment.lookup(
+                      defaults,
+                      activeStage ?? 0,
+                      groupKey,
+                    ))
                 .where(
                   (board) =>
                       board >= 1 &&

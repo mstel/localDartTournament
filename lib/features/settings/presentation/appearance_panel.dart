@@ -5,6 +5,8 @@ import '../../../app/theme_controller.dart';
 
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 
+import 'app_presentation_settings.dart';
+
 class AppearancePanel extends StatefulWidget {
   const AppearancePanel({super.key});
 
@@ -74,6 +76,8 @@ class _AppearancePanelState extends State<AppearancePanel> {
       padding: const EdgeInsets.all(20),
       children: [
         Text('Darstellung', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 16),
+        const DynamicDashboardSettings(),
         const SizedBox(height: 8),
         Text('Eigenes Logo', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),

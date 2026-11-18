@@ -151,7 +151,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(AlertDialog),
-        matching: find.text('Spielplan gesamt bearbeiten'),
+        matching: find.text('Gesamten Spielplan bearbeiten'),
       ),
       findsOneWidget,
     );
