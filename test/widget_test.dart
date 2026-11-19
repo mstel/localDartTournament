@@ -1937,6 +1937,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Phase abschließen'));
     await tester.pumpAndSettle();
+    final groupEndReview = find.byKey(const ValueKey('group-end-review-dialog'));
+    if (groupEndReview.evaluate().isNotEmpty) {
+      await tester.tap(
+        find.byKey(const ValueKey('group-end-review-acknowledge')),
+      );
+      await tester.pumpAndSettle();
+    }
     await tester.drag(
       find.byType(CustomScrollView).first,
       const Offset(0, 1000),

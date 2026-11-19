@@ -538,6 +538,62 @@ void main() {
     },
   );
 
+  test('keeps a below-threshold ranked player as hypothetical member', () {
+    final players = {
+      for (var index = 1; index <= 16; index++) 'p$index': 'Spieler $index',
+    };
+    GroupMatch match(String home, String away, int round) => GroupMatch(
+      round: round,
+      homePlayer: TournamentPlayer(
+        profileId: home,
+        name: players[home]!,
+        isGenerated: false,
+      ),
+      awayPlayer: TournamentPlayer(
+        profileId: away,
+        name: players[away]!,
+        isGenerated: false,
+      ),
+      homeLegs: 2,
+      awayLegs: 0,
+    );
+
+    // Alle 16 spielen im ersten Turnier, 15 im zweiten. p16 bleibt damit
+    // unter der Teilnahme-Schwelle von zwei Turnieren.
+    final first = tournamentWithMatches('first', DateTime.utc(2026, 1), [
+      for (var index = 1; index <= 16; index += 2)
+        match('p$index', 'p${index + 1}', index),
+    ]);
+    final second = tournamentWithMatches('second', DateTime.utc(2026, 2), [
+      for (var index = 1; index <= 13; index += 2)
+        match('p$index', 'p${index + 1}', index),
+      match('p15', 'p1', 16),
+    ]);
+
+    final snapshot = calculator.calculate(
+      players: players,
+      tournaments: [first, second],
+      rankingId: 'season',
+      minimumParticipationTournaments: 2,
+    );
+
+    expect(
+      snapshot.entries.map((player) => player.id).toSet(),
+      isNot(contains('p16')),
+    );
+    expect(
+      snapshot.allMembers.map((player) => player.id).toSet(),
+      players.keys.toSet(),
+    );
+    expect(snapshot.isHypothetical('p16'), isTrue);
+    expect(snapshot.hypotheticalPlayerIds, contains('p16'));
+    expect(snapshot.hypotheticalPlayerIds, isNot(contains('p1')));
+    final hypothetical = snapshot.allMembers.firstWhere(
+      (player) => player.id == 'p16',
+    );
+    expect(hypothetical.matches, 0);
+  });
+
   test('applies ranking assignment and date range before replay', () {
     final old = tournament('old', DateTime.utc(2025, 12), 'a', 'b');
     final unassigned = tournament(

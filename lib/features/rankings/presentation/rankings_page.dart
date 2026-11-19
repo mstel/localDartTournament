@@ -2479,56 +2479,9 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
             const Text(
               'Elo wird chronologisch aus abgeschlossenen Turnierspielen berechnet. Nur zugewiesene Teilnehmer und für diese Rangliste markierte Turniere zählen.',
             ),
-            for (var i = 0; i < entries.entries.length; i++)
-              Card(
-                child: ListTile(
-                  leading: CircleAvatar(child: Text('${i + 1}')),
-                  title: Row(
-                    children: [
-                      Flexible(child: Text(entries.entries[i].name)),
-                      if (widget.ranking.enableTiers) ...[
-                        const SizedBox(width: 8),
-                        _TierBadge(
-                          tier: EloTier.fromElo(
-                            entries.entries[i].rating,
-                            tiers: widget.ranking.effectiveTierBands,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text(
-                    '${entries.entries[i].matches} gewertete Matches · ${entries.entries[i].wins} Siege · ${entries.entries[i].losses} Niederlagen',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${entries.entries[i].rating} Elo',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right, size: 20),
-                    ],
-                  ),
-                  onTap: () {
-                    final player = entries.entries[i];
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => PlayerEloHistoryPage(
-                          player: player,
-                          rankingName: widget.ranking.name,
-                          history: entries.history[player.id] ?? const [],
-                          enableTiers: widget.ranking.enableTiers,
-                          tierBands: widget.ranking.effectiveTierBands,
-                          onOpenTournament: widget.onOpenTournament,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            if (entries.entries.isEmpty)
+            for (var i = 0; i < entries.allMembers.length; i++)
+              _buildRankingMemberCard(context, entries, i),
+            if (entries.allMembers.isEmpty)
               const Card(
                 child: ListTile(
                   title: Text('Noch keine gewerteten Ergebnisse.'),
@@ -2542,6 +2495,90 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
       ),
     ),
   );
+
+  Widget _buildRankingMemberCard(
+    BuildContext context,
+    LocalEloSnapshot snapshot,
+    int index,
+  ) {
+    final player = snapshot.allMembers[index];
+    final hypothetical = snapshot.isHypothetical(player.id);
+    final muted = hypothetical ? Theme.of(context).disabledColor : null;
+    final strike = hypothetical
+        ? TextDecoration.lineThrough
+        : TextDecoration.none;
+    return Card(
+      child: ListTile(
+        key: ValueKey(
+          hypothetical
+              ? 'ranking-hypothetical-${player.id}'
+              : 'ranking-member-${player.id}',
+        ),
+        leading: CircleAvatar(child: Text('${index + 1}')),
+        title: Row(
+          children: [
+            Flexible(
+              child: Tooltip(
+                message: hypothetical
+                    ? 'Unter der Teilnahme-Schwelle – Wert hypothetisch.'
+                    : '',
+                child: Text(
+                  player.name,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: muted,
+                    decoration: strike,
+                  ),
+                ),
+              ),
+            ),
+            if (widget.ranking.enableTiers) ...[
+              const SizedBox(width: 8),
+              _TierBadge(
+                tier: EloTier.fromElo(
+                  player.rating,
+                  tiers: widget.ranking.effectiveTierBands,
+                ),
+              ),
+            ],
+          ],
+        ),
+        subtitle: Text(
+          hypothetical
+              ? 'Hypothetischer Startwert · unter der Teilnahme-Schwelle'
+              : '${player.matches} gewertete Matches · ${player.wins} Siege · ${player.losses} Niederlagen',
+          style: TextStyle(color: muted),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${player.rating} Elo',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: muted,
+                decoration: strike,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => PlayerEloHistoryPage(
+                player: player,
+                rankingName: widget.ranking.name,
+                history: snapshot.history[player.id] ?? const [],
+                enableTiers: widget.ranking.enableTiers,
+                tierBands: widget.ranking.effectiveTierBands,
+                onOpenTournament: widget.onOpenTournament,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 }
 
 class LocalRankingSeriesStandingsPage extends StatefulWidget {
@@ -3265,11 +3302,7 @@ class _StatChip extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: appAccentColor(context),
-                ),
+                Icon(icon, size: 16, color: appAccentColor(context)),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Column(

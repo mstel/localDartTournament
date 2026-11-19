@@ -91,10 +91,25 @@ class LocalEloSnapshot {
     this.entries,
     this.history, {
     this.matchDeltas = const {},
-  });
+    List<LocalEloPlayer>? allMembers,
+    Set<String>? hypotheticalPlayerIds,
+  }) : allMembers = allMembers ?? entries,
+       hypotheticalPlayerIds = hypotheticalPlayerIds ?? const <String>{};
+
+  /// Gewertete Spieler (nach Teilnahme-Schwelle).
   final List<LocalEloPlayer> entries;
+
+  /// Alle Ranking-Mitglieder, auch die unter der Teilnahme-Schwelle.
+  final List<LocalEloPlayer> allMembers;
+
+  /// Mitglieder ohne gewertete Partie; ihre Werte sind hypothetisch.
+  final Set<String> hypotheticalPlayerIds;
+
   final Map<String, List<LocalEloHistoryItem>> history;
   final Map<String, LocalEloMatchDelta> matchDeltas;
+
+  bool isHypothetical(String playerId) =>
+      hypotheticalPlayerIds.contains(playerId);
 }
 
 class LocalEloMatchDelta {
@@ -320,8 +335,8 @@ class LocalEloCalculator {
           .intersection(eligiblePlayers);
       if (event.match == null) {
         for (final playerId in rankingPlayerIds) {
-          final player = entries[playerId]!;
-          if (!eligiblePlayers.contains(playerId)) continue;
+          final player = entries[playerId];
+          if (player == null || !eligiblePlayers.contains(playerId)) continue;
           if (participants.contains(player.id)) {
             missedTournamentStreaks[player.id] = 0;
             continue;
@@ -567,16 +582,24 @@ class LocalEloCalculator {
         );
       }
     }
-    final result =
-        entries.values
-            .where(
-              (e) =>
-                  rankingPlayerIds.contains(e.id) &&
-                  (e.matches > 0 || e.rating != startRating),
-            )
-            .toList()
+    final members =
+        entries.values.where((e) => rankingPlayerIds.contains(e.id)).toList()
           ..sort((a, b) => b.rating.compareTo(a.rating));
-    return LocalEloSnapshot(result, history, matchDeltas: matchDeltas);
+    final result =
+        members.where((e) => e.matches > 0 || e.rating != startRating).toList()
+          ..sort((a, b) => b.rating.compareTo(a.rating));
+    final ratedIds = result.map((entry) => entry.id).toSet();
+    final hypothetical = members
+        .where((entry) => !ratedIds.contains(entry.id))
+        .map((entry) => entry.id)
+        .toSet();
+    return LocalEloSnapshot(
+      result,
+      history,
+      matchDeltas: matchDeltas,
+      allMembers: members,
+      hypotheticalPlayerIds: hypothetical,
+    );
   }
 
   String? matchKey(CreatedTournament tournament, GroupMatch match) {

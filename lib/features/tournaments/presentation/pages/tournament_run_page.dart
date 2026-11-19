@@ -2068,8 +2068,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         widget.tournament,
         stageIndex,
       );
-      final count = snapshot.tournament.tournamentSettings
-          .alternativeRecommendationCount;
+      final count =
+          snapshot.tournament.tournamentSettings.alternativeRecommendationCount;
       final boardAssignments = snapshot.suggestionsForBoard(
         board,
         limit: 1 + count,
@@ -6013,58 +6013,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return null;
     }
 
-    final groupCount = stage.groupSizes.length;
-    final maxQualifiers = stage.groupSizes.fold<int>(
-      0,
-      (sum, size) => sum + size,
-    );
-    final totalQualifiers = stage.qualifiedParticipantCount! > maxQualifiers
-        ? maxQualifiers
-        : stage.qualifiedParticipantCount!;
-    final fixedPerGroup = totalQualifiers ~/ groupCount;
-    final fixedByGroup = stage.fixedQualifiersByGroup.length == groupCount
-        ? [
-            for (var index = 0; index < groupCount; index++)
-              stage.fixedQualifiersByGroup[index]
-                  .clamp(0, stage.groupSizes[index])
-                  .toInt(),
-          ]
-        : [
-            for (final groupSize in stage.groupSizes)
-              fixedPerGroup > groupSize ? groupSize : fixedPerGroup,
-          ];
-    final fixedTotal = fixedByGroup.fold<int>(0, (sum, value) => sum + value);
-    final automaticExtraCount = (totalQualifiers - fixedTotal)
-        .clamp(0, groupCount)
-        .toInt();
-    final extraCount = stage.qualificationAutoAdjust
-        ? automaticExtraCount
-        : (stage.extraQualifierCount ?? automaticExtraCount)
-              .clamp(0, groupCount)
-              .toInt();
-    final extraRank = stage.extraQualifierRank ?? fixedPerGroup + 1;
-    final extraGroups = extraCount == 0
-        ? const <int>[]
-        : stage.qualifiersByGroup.isNotEmpty
-        ? stage.qualifiersByGroup
-        : [
-            for (var index = 0; index < stage.groupSizes.length; index++)
-              if (stage.groupSizes[index] >= extraRank) index + 1,
-          ];
-    final eligibleGroupSize = extraCount == 0
-        ? null
-        : stage.groupSizes
-              .where((size) => size >= extraRank)
-              .fold<int>(0, (largest, size) => size > largest ? size : largest);
-
-    return QualificationPlan(
-      totalQualifiers: totalQualifiers,
-      fixedPerGroup: fixedPerGroup,
-      extraCount: extraCount,
-      extraRank: extraRank,
-      eligibleGroupSize: eligibleGroupSize,
-      extraGroups: extraGroups,
-      fixedByGroup: fixedByGroup,
+    return const QualificationPlanEngine().build(
+      groupSizes: stage.groupSizes,
+      totalQualifiers: stage.qualifiedParticipantCount!,
+      autoAdjust: stage.qualificationAutoAdjust,
+      advancementPolicy: stage.qualificationAdvancementPolicy,
+      fixedByGroup: stage.fixedQualifiersByGroup.isEmpty
+          ? null
+          : stage.fixedQualifiersByGroup,
+      manualExtraRank: stage.extraQualifierRank,
+      manualExtraCount: stage.extraQualifierCount,
+      selectedExtraGroups: stage.qualifiersByGroup,
+      placeStatuses: parseQualificationPlaceStatuses(
+        stage.qualificationPlaceStatuses,
+      ),
     );
   }
 
@@ -6198,6 +6160,34 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _completeCurrentStage() async {
     if (_simulation != null) return;
+    final activeStage = widget.tournament.runStages[_activeStageIndex];
+    if (activeStage is GroupTournamentRunStage &&
+        GroupEndReviewService.hasTieOrComparison(
+          widget.tournament,
+          activeStage,
+        ) &&
+        !GroupEndReviewService.isAcknowledged(
+          widget.tournament,
+          _activeStageIndex,
+          activeStage,
+        )) {
+      final confirmed = await GroupEndReviewDialog.show(
+        context: context,
+        tournament: widget.tournament,
+        stageIndex: _activeStageIndex,
+        stage: activeStage,
+      );
+      if (confirmed != true || !mounted) return;
+      GroupEndReviewService.acknowledge(
+        widget.tournament,
+        _activeStageIndex,
+        activeStage,
+      );
+      widget.tournament.updatedAt = DateTime.now();
+      await _saveTournamentProgress();
+      if (!mounted) return;
+      setState(() {});
+    }
     final nextStageIndex = _activeStageIndex + 1;
     final hasNextStage = nextStageIndex < widget.tournament.runStages.length;
     final completedStageIndex = _activeStageIndex;
@@ -6646,16 +6636,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                   (displayedTournament.leagueMatch != null ||
                                       displayedTournament.directorModeEnabled)
                               ? () => _openFixedScheduleEditor(
-                                FixedScheduleEditorScope.perBoard,
-                              )
+                                  FixedScheduleEditorScope.perBoard,
+                                )
                               : null,
                           onEditFixedScheduleOverall:
                               _simulation == null &&
                                   (displayedTournament.leagueMatch != null ||
                                       displayedTournament.directorModeEnabled)
                               ? () => _openFixedScheduleEditor(
-                                FixedScheduleEditorScope.overall,
-                              )
+                                  FixedScheduleEditorScope.overall,
+                                )
                               : null,
                         )
                       else if (_stageViewMode == StageViewMode.settings)

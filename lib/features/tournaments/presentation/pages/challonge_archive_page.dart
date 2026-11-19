@@ -448,6 +448,7 @@ class _ArchivePerformanceDialog extends StatefulWidget {
 
 class _ArchivePerformanceDialogState extends State<_ArchivePerformanceDialog> {
   late List<BestPerformance> items = [...widget.initial];
+  final _editorKey = GlobalKey<BestPerformanceEditorState>();
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: const Text('Bestleistungen erfassen'),
@@ -455,6 +456,7 @@ class _ArchivePerformanceDialogState extends State<_ArchivePerformanceDialog> {
       width: 480,
       child: SingleChildScrollView(
         child: BestPerformanceEditor(
+          key: _editorKey,
           match: widget.match,
           initial: items,
           onChanged: (value) => items = value,
@@ -467,7 +469,11 @@ class _ArchivePerformanceDialogState extends State<_ArchivePerformanceDialog> {
         child: const Text('Abbrechen'),
       ),
       FilledButton(
-        onPressed: () => Navigator.pop(context, items),
+        onPressed: () {
+          if (_editorKey.currentState?.commitPending() ?? true) {
+            Navigator.pop(context, items);
+          }
+        },
         child: const Text('Speichern'),
       ),
     ],

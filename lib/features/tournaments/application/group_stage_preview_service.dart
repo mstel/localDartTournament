@@ -19,9 +19,12 @@ class GroupStagePreviewService {
     final presented = [
       for (final player in projectedPlayers)
         player.copyWith(
-          name:
-              '${player.name} · '
-              '${stageIsSet || _isCertainQualifier(stage, player, tournament) ? 'gesetzt' : 'vorläufig'}',
+          name: '${player.name} · ${_statusMarker(
+            stage,
+            player,
+            tournament,
+            stageIsSet,
+          )}',
         ),
     ];
     if (presented.length < targetCount) {
@@ -36,6 +39,50 @@ class GroupStagePreviewService {
       );
     }
     return presented;
+  }
+
+  String _statusMarker(
+    TournamentRunStage stage,
+    TournamentPlayer player,
+    CreatedTournament tournament,
+    bool stageIsSet,
+  ) {
+    if (stage is! GroupTournamentRunStage) {
+      return stageIsSet ? 'gesetzt' : 'vorläufig';
+    }
+    final plan = stage.qualificationPlan;
+    if (plan == null) return 'vorläufig';
+    final position = _standingPosition(stage, player, tournament);
+    if (position == null) return 'vorläufig';
+    final status = plan.statusFor(position[0], position[1]);
+    if (status == QualificationPlaceStatus.comparison && !stageIsSet) {
+      return 'Vergleich';
+    }
+    return stageIsSet || _isCertainQualifier(stage, player, tournament)
+        ? 'gesetzt'
+        : 'vorläufig';
+  }
+
+  List<int>? _standingPosition(
+    GroupTournamentRunStage stage,
+    TournamentPlayer player,
+    CreatedTournament tournament,
+  ) {
+    for (var groupIndex = 0; groupIndex < stage.groups.length; groupIndex++) {
+      final standings = const GroupStandingsEngine().calculate(
+        stage.groups[groupIndex],
+        stage.tieBreakers,
+        tournament: tournament,
+      );
+      final rank = standings.indexWhere(
+        (standing) =>
+            standing.player.profileId != null && player.profileId != null
+            ? standing.player.profileId == player.profileId
+            : standing.player.name == player.name,
+      );
+      if (rank >= 0) return [groupIndex + 1, rank + 1];
+    }
+    return null;
   }
 
   int _placeholderCount(

@@ -151,7 +151,7 @@ void main() {
         [5],
       );
       expect(await File('${file.path}.v21.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 46);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 48);
       expect(
         TournamentStage.fromJson({
           'name': 'Alt',

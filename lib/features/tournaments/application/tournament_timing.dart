@@ -44,6 +44,30 @@ class TournamentTiming {
             .map((e) => e.match)
             .toList();
 
+  /// Alle Partien, die von Anfang an im Spielplan vorgesehen sind.
+  ///
+  /// K.-o.-Runden nach der ersten Runde und Platzierungsspiele zählen auch
+  /// dann, wenn ihre Teilnehmer noch offen sind. Dadurch ergibt eine
+  /// 16er-Gruppenphase mit Top-8-K.-o. sofort 35 + 8 = 43 Partien.
+  static List<GroupMatch> scheduledMatches(CreatedTournament tournament) {
+    final all = matches(tournament);
+    final alwaysScheduled = <GroupMatch>{};
+    for (final stage in tournament.runStages) {
+      if (stage is! KnockoutTournamentRunStage) continue;
+      for (var roundIndex = 1; roundIndex < stage.rounds.length; roundIndex++) {
+        alwaysScheduled.addAll(stage.rounds[roundIndex]);
+      }
+      alwaysScheduled.addAll(stage.placementMatches);
+    }
+    return all
+        .where(
+          (match) =>
+              !match.isAnnulled &&
+              (match.hasPlayers || alwaysScheduled.contains(match)),
+        )
+        .toList();
+  }
+
   /// Moves all recorded match timestamps by a whole number of local calendar
   /// days, preserving the time of day and the matches' relative ordering.
   static int shiftMatchDates(

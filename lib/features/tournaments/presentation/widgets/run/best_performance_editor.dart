@@ -17,14 +17,15 @@ class BestPerformanceEditor extends StatefulWidget {
   final ValueChanged<List<BestPerformance>> onChanged;
 
   @override
-  State<BestPerformanceEditor> createState() => _BestPerformanceEditorState();
+  State<BestPerformanceEditor> createState() => BestPerformanceEditorState();
 }
 
-class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
+class BestPerformanceEditorState extends State<BestPerformanceEditor> {
   late final List<BestPerformance> _items = [...widget.initial];
   BestPerformanceType _type = BestPerformanceType.score180;
   String? _playerId;
   final TextEditingController _value = TextEditingController();
+  bool _pending = true;
 
   List<TournamentPlayer> get _players => [
     if (widget.match.homePlayer != null) widget.match.homePlayer!,
@@ -44,9 +45,14 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
     super.dispose();
   }
 
-  void _add() {
+  /// Übernimmt die gerade eingestellte Bestleistung auch dann, wenn der
+  /// Benutzer nicht auf „Bestleistung hinzufügen“, sondern direkt auf das
+  /// allgemeine „Speichern“ des Dialogs drückt.
+  ///
+  /// Mehrfache Aufrufe ohne neue Eingabe erzeugen keine Dublette.
+  bool commitPending() {
     final players = _players;
-    if (players.isEmpty) return;
+    if (players.isEmpty || !_pending) return true;
     final player = players.firstWhere(
       (candidate) => (candidate.profileId ?? candidate.name) == _playerId,
       orElse: () => players.first,
@@ -58,7 +64,7 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
             (value == null || value < 1 || value > 18)) ||
         (_type == BestPerformanceType.bullseyeFinish &&
             (value == null || value < 50 || value > 170))) {
-      return;
+      return false;
     }
     setState(() {
       _items.add(
@@ -70,8 +76,19 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
         ),
       );
       _value.clear();
+      _pending = false;
     });
     widget.onChanged(List.unmodifiable(_items));
+    return true;
+  }
+
+  void _add() => commitPending();
+
+  void _markPending(void Function() change) {
+    setState(() {
+      change();
+      _pending = true;
+    });
   }
 
   @override
@@ -111,7 +128,7 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
                   child: Text(player.name),
                 ),
             ],
-            onChanged: (value) => setState(() => _playerId = value),
+            onChanged: (value) => _markPending(() => _playerId = value),
           ),
         const SizedBox(height: 8),
         DropdownButtonFormField<BestPerformanceType>(
@@ -122,7 +139,7 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
             for (final type in _selectableTypes)
               DropdownMenuItem(value: type, child: Text(_label(type))),
           ],
-          onChanged: (value) => setState(() => _type = value ?? _type),
+          onChanged: (value) => _markPending(() => _type = value ?? _type),
         ),
         if (_type == BestPerformanceType.highFinish ||
             _type == BestPerformanceType.shortLeg ||
@@ -130,6 +147,7 @@ class _BestPerformanceEditorState extends State<BestPerformanceEditor> {
           const SizedBox(height: 8),
           TextField(
             controller: _value,
+            onChanged: (_) => _markPending(() {}),
             keyboardType: _type == BestPerformanceType.bullseyeFinish
                 ? TextInputType.number
                 : TextInputType.number,

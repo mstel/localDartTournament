@@ -26,6 +26,7 @@ class _SetResultDialogState extends State<SetResultDialog> {
   String? error;
   bool recordBestPerformances = false;
   List<BestPerformance> bestPerformances = [];
+  final _bestPerformanceKey = GlobalKey<BestPerformanceEditorState>();
   @override
   void initState() {
     super.initState();
@@ -112,6 +113,14 @@ class _SetResultDialogState extends State<SetResultDialog> {
       setState(
         () => error =
             'Bitte ein vollständiges Set-Ergebnis mit dazu passenden Leg-Summen eingeben.',
+      );
+      return;
+    }
+    if (recordBestPerformances &&
+        !(_bestPerformanceKey.currentState?.commitPending() ?? true)) {
+      setState(
+        () =>
+            error = 'Bitte einen gültigen Wert für die Bestleistung eingeben.',
       );
       return;
     }
@@ -225,6 +234,7 @@ class _SetResultDialogState extends State<SetResultDialog> {
             ),
             if (recordBestPerformances)
               BestPerformanceEditor(
+                key: _bestPerformanceKey,
                 match: widget.match,
                 initial: bestPerformances,
                 onChanged: (items) => bestPerformances = items,

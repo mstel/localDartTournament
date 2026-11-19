@@ -882,49 +882,11 @@ class _GroupQualificationSetup extends StatelessWidget {
   final ValueChanged<String> onAdvancementPolicyChanged;
   final ValueChanged<String> onBestOfQualifierCountChanged;
 
-  int _selectedQualifierCount(QualificationPlan plan) {
-    final fixedTotal = plan.fixedByGroup.fold<int>(
-      0,
-      (sum, value) => sum + value,
-    );
-    return fixedTotal + plan.extraCount.clamp(0, plan.extraGroups.length);
-  }
-
   List<String> _validationMessages(QualificationPlan? plan) {
     if (autoAdjust || plan == null) {
       return const [];
     }
-
-    final selectedCount = _selectedQualifierCount(plan);
-    final fixedTotal = plan.fixedByGroup.fold<int>(
-      0,
-      (sum, value) => sum + value,
-    );
-    if (fixedTotal > plan.totalQualifiers) {
-      return [
-        'Es sind ${fixedTotal - plan.totalQualifiers} feste Plätze zu viel markiert.',
-      ];
-    }
-
-    if (plan.extraGroups.length < plan.extraCount) {
-      return [
-        'Es fehlen ${plan.extraCount - plan.extraGroups.length} Gruppen für den Beste-${plan.extraCount}-Vergleich.',
-      ];
-    }
-
-    if (selectedCount == plan.totalQualifiers) {
-      return const [];
-    }
-
-    if (selectedCount < plan.totalQualifiers) {
-      return [
-        'Es kommen noch ${plan.totalQualifiers - selectedCount} Teilnehmer zu wenig weiter. Erhöhe "Beste-N Weiter" oder markiere feste Plätze.',
-      ];
-    }
-
-    return [
-      'Es kommen ${selectedCount - plan.totalQualifiers} Teilnehmer zu viel weiter. Reduziere "Beste-N Weiter" oder feste Plätze.',
-    ];
+    return const QualificationPlanEngine().validationMessages(plan);
   }
 
   @override

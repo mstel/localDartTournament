@@ -179,7 +179,14 @@ class _BestOfComparisonTableState extends State<BestOfComparisonTable> {
                       cells: [
                         DataCell(Text('${index + 1}')),
                         DataCell(Text(candidates[index].groupName)),
-                        DataCell(Text(candidates[index].standing.player.name)),
+                        DataCell(
+                          Tooltip(
+                            message: index < plan.extraCount && allComplete
+                                ? 'Kommt sicher weiter'
+                                : 'Vergleich um Zusatzplatz',
+                            child: Text(candidates[index].standing.player.name),
+                          ),
+                        ),
                         DataCell(Text('${candidates[index].standing.points}')),
                         DataCell(
                           Text(

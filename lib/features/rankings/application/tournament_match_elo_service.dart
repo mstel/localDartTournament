@@ -14,6 +14,8 @@ class TournamentMatchEloChange {
     this.homeRatingAfter,
     this.awayRatingBefore,
     this.awayRatingAfter,
+    this.homeHypothetical = false,
+    this.awayHypothetical = false,
   });
 
   final String rankingName;
@@ -23,6 +25,10 @@ class TournamentMatchEloChange {
   final int? homeRatingAfter;
   final int? awayRatingBefore;
   final int? awayRatingAfter;
+
+  /// Spieler unter der Teilnahme-Schwelle: Wert ist hypothetisch (Startwert).
+  final bool homeHypothetical;
+  final bool awayHypothetical;
 }
 
 class TournamentMatchEloService {
@@ -74,12 +80,11 @@ class TournamentMatchEloService {
         };
         for (final match in matches) {
           final key = calculator.matchKey(tournament, match);
-          if (key == null) continue;
-          final delta = snapshot.matchDeltas[key];
-          if (delta == null || (delta.home == null && delta.away == null)) {
+          if (key == null ||
+              match.homePlayer == null ||
+              match.awayPlayer == null) {
             continue;
           }
-          final matchIndex = int.tryParse(key.split(':').last);
           final homeKey = calculator.participantKey(
             tournament,
             match.homePlayer!,
@@ -90,6 +95,13 @@ class TournamentMatchEloService {
             match.awayPlayer!,
             includeUnassignedPlayers: ranking.countUnassignedPlayers,
           );
+          final homeHypothetical = snapshot.isHypothetical(homeKey);
+          final awayHypothetical = snapshot.isHypothetical(awayKey);
+          final delta = snapshot.matchDeltas[key];
+          if (delta == null && !homeHypothetical && !awayHypothetical) {
+            continue;
+          }
+          final matchIndex = int.tryParse(key.split(':').last);
           final homeHistory = matchIndex == null
               ? null
               : snapshot.history[homeKey]
@@ -113,12 +125,22 @@ class TournamentMatchEloService {
               .add(
                 TournamentMatchEloChange(
                   rankingName: ranking.name,
-                  homeDelta: delta.home,
-                  awayDelta: delta.away,
-                  homeRatingBefore: homeHistory?.ratingBefore,
-                  homeRatingAfter: homeHistory?.ratingAfter,
-                  awayRatingBefore: awayHistory?.ratingBefore,
-                  awayRatingAfter: awayHistory?.ratingAfter,
+                  homeDelta: homeHypothetical ? 0 : delta?.home,
+                  awayDelta: awayHypothetical ? 0 : delta?.away,
+                  homeRatingBefore: homeHypothetical
+                      ? ranking.startRating
+                      : homeHistory?.ratingBefore,
+                  homeRatingAfter: homeHypothetical
+                      ? ranking.startRating
+                      : homeHistory?.ratingAfter,
+                  awayRatingBefore: awayHypothetical
+                      ? ranking.startRating
+                      : awayHistory?.ratingBefore,
+                  awayRatingAfter: awayHypothetical
+                      ? ranking.startRating
+                      : awayHistory?.ratingAfter,
+                  homeHypothetical: homeHypothetical,
+                  awayHypothetical: awayHypothetical,
                 ),
               );
         }

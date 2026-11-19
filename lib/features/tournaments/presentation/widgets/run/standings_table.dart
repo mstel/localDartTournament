@@ -43,17 +43,14 @@ class _StandingsTableState extends State<StandingsTable> {
     super.dispose();
   }
 
-  bool _isFixedQualificationPlace(int place) {
-    final plan = widget.qualificationPlan;
-    if (plan == null) {
-      return false;
-    }
+  QualificationPlaceStatus? _qualificationStatus(int place) =>
+      widget.qualificationPlan?.statusFor(widget.groupNumber, place);
 
-    final fixedForGroup = widget.groupNumber - 1 < plan.fixedByGroup.length
-        ? plan.fixedByGroup[widget.groupNumber - 1]
-        : plan.fixedPerGroup;
-    return place <= fixedForGroup;
-  }
+  bool _isFixedQualificationPlace(int place) =>
+      _qualificationStatus(place) == QualificationPlaceStatus.fixed;
+
+  bool _isBestOfCandidatePlace(int place) =>
+      _qualificationStatus(place) == QualificationPlaceStatus.comparison;
 
   void _sortBy(int columnIndex) {
     setState(() {
@@ -85,17 +82,6 @@ class _StandingsTableState extends State<StandingsTable> {
       return result == 0 || _sortAscending ? result : -result;
     });
     return standings;
-  }
-
-  bool _isBestOfCandidatePlace(int place) {
-    final plan = widget.qualificationPlan;
-    if (plan == null) {
-      return false;
-    }
-
-    return plan.extraCount > 0 &&
-        place == plan.extraRank &&
-        plan.extraGroups.contains(widget.groupNumber);
   }
 
   bool _isSureQualification(PlayerStanding standing, int place) {
@@ -278,12 +264,20 @@ class _StandingsTableState extends State<StandingsTable> {
           ),
         ),
         DataCell(
-          _StandingText(
-            widget.compact
-                ? standing.player.shortDisplayName
-                : standing.player.name,
-            textColor: cellTextColor,
-            fontWeight: fontWeight,
+          Tooltip(
+            message: switch (_qualificationStatus(place)) {
+              QualificationPlaceStatus.fixed => 'Kommt sicher weiter',
+              QualificationPlaceStatus.comparison =>
+                'Vergleich um Zusatzplatz',
+              _ => 'Scheidet nach aktuellem Stand aus',
+            },
+            child: _StandingText(
+              widget.compact
+                  ? standing.player.shortDisplayName
+                  : standing.player.name,
+              textColor: cellTextColor,
+              fontWeight: fontWeight,
+            ),
           ),
           onTap: widget.onPlayerTap == null
               ? null

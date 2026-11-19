@@ -120,12 +120,12 @@ class TournamentRankingChangesService {
         includeTournament: true,
       );
       final beforePositions = {
-        for (var index = 0; index < before.entries.length; index++)
-          before.entries[index].id: index + 1,
+        for (var index = 0; index < before.allMembers.length; index++)
+          before.allMembers[index].id: index + 1,
       };
       final afterPositions = {
-        for (var index = 0; index < after.entries.length; index++)
-          after.entries[index].id: index + 1,
+        for (var index = 0; index < after.allMembers.length; index++)
+          after.allMembers[index].id: index + 1,
       };
       for (final entry in after.history.entries) {
         if (!after.entries.any((player) => player.id == entry.key)) continue;

@@ -86,6 +86,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final List<int> _fixedQualifiersByGroup = [];
   int? _manualExtraRank;
   int? _manualExtraCount;
+  Map<String, QualificationPlaceStatus> _qualificationPlaceStatuses = const {};
   bool _autoAdjustQualification = true;
   String _qualificationAdvancementPolicy = 'larger_group';
   bool _allowGroupTieBreakDeciders = false;
@@ -1011,6 +1012,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     return _defaultFixedQualifiersForPlan(groupSizes, fallbackPlan);
   }
 
+  Map<String, QualificationPlaceStatus> _placeStatusesFromStored(
+    Map<String, String> stored,
+  ) => {
+    for (final entry in stored.entries)
+      entry.key: parseQualificationPlaceStatus(entry.value) ??
+          QualificationPlaceStatus.eliminated,
+  };
+
   int _compareKnockoutSeedStrength(
     _KnockoutSeedSource a,
     _KnockoutSeedSource b,
@@ -1423,88 +1432,22 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     List<int> groupSizes,
     int? participantCount,
   ) {
-    if (participantCount == null) {
+    if (participantCount == null || groupSizes.isEmpty) {
       return null;
     }
 
-    final groupCount = groupSizes.length;
-    if (groupCount == 0) {
-      return null;
-    }
-
-    final maxQualifiers = groupSizes.fold<int>(0, (sum, size) => sum + size);
-    final cappedParticipantCount = participantCount > maxQualifiers
-        ? maxQualifiers
-        : participantCount;
-    final fixedPerGroup = cappedParticipantCount ~/ groupCount;
-    final hasManualFixed = _fixedQualifiersByGroup.length == groupSizes.length;
-    var fixedByGroup = hasManualFixed
-        ? _currentFixedQualifiersByGroup(groupSizes, null)
-        : [
-            for (final groupSize in groupSizes)
-              fixedPerGroup > groupSize ? groupSize : fixedPerGroup,
-          ];
-    final extraRank = hasManualFixed
-        ? (_manualExtraRank ?? fixedPerGroup + 1)
-        : fixedPerGroup + 1;
-    var remainingExtraCount =
-        cappedParticipantCount -
-        fixedByGroup.fold<int>(0, (sum, value) => sum + value);
-    if (_autoAdjustQualification &&
-        _qualificationAdvancementPolicy == 'larger_group' &&
-        !hasManualFixed &&
-        remainingExtraCount > 0) {
-      final orderedGroupIndexes = List<int>.generate(groupCount, (i) => i)
-        ..sort((a, b) => groupSizes[b].compareTo(groupSizes[a]));
-      for (
-        var index = 0;
-        index < orderedGroupIndexes.length && remainingExtraCount > 0;
-        index++
-      ) {
-        final groupIndex = orderedGroupIndexes[index];
-        final nextSize = index + 1 < orderedGroupIndexes.length
-            ? groupSizes[orderedGroupIndexes[index + 1]]
-            : -1;
-        if (groupSizes[groupIndex] <= nextSize ||
-            groupSizes[groupIndex] < fixedByGroup[groupIndex] + 1) {
-          continue;
-        }
-        fixedByGroup = List<int>.from(fixedByGroup)
-          ..[groupIndex] = fixedByGroup[groupIndex] + 1;
-        remainingExtraCount--;
-      }
-    }
-    final extraCount = !_autoAdjustQualification && hasManualFixed
-        ? (_manualExtraCount ?? 0).clamp(0, groupCount).toInt()
-        : remainingExtraCount.clamp(0, groupCount).toInt();
-    final eligibleGroups = [
-      for (var index = 0; index < groupSizes.length; index++)
-        if (groupSizes[index] >= extraRank && fixedByGroup[index] < extraRank)
-          index + 1,
-    ];
-    final eligibleGroupSize = eligibleGroups.isEmpty
-        ? null
-        : eligibleGroups
-              .map((groupNumber) => groupSizes[groupNumber - 1])
-              .reduce(max);
-    final manualExtraGroups =
-        _selectedExtraGroups
-            .where((groupNumber) => eligibleGroups.contains(groupNumber))
-            .toList()
-          ..sort();
-    final extraGroups =
-        manualExtraGroups.isNotEmpty || !_autoAdjustQualification
-        ? manualExtraGroups
-        : eligibleGroups;
-
-    return QualificationPlan(
-      totalQualifiers: cappedParticipantCount,
-      fixedPerGroup: fixedPerGroup,
-      extraCount: extraCount,
-      extraRank: extraRank,
-      eligibleGroupSize: eligibleGroupSize,
-      extraGroups: extraGroups,
-      fixedByGroup: fixedByGroup,
+    return const QualificationPlanEngine().build(
+      groupSizes: groupSizes,
+      totalQualifiers: participantCount,
+      autoAdjust: _autoAdjustQualification,
+      advancementPolicy: _qualificationAdvancementPolicy,
+      fixedByGroup: _fixedQualifiersByGroup.isEmpty
+          ? null
+          : _currentFixedQualifiersByGroup(groupSizes, null),
+      manualExtraRank: _manualExtraRank,
+      manualExtraCount: _manualExtraCount,
+      selectedExtraGroups: _selectedExtraGroups.toList()..sort(),
+      placeStatuses: _qualificationPlaceStatuses,
     );
   }
 
@@ -1516,95 +1459,24 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   QualificationPlan? _storedGroupQualificationPlan(TournamentStage? stage) {
-    if (stage == null || stage.groupSizes.isEmpty) {
+    if (stage == null ||
+        stage.groupSizes.isEmpty ||
+        stage.qualifiedParticipantCount == null) {
       return null;
     }
 
-    final participantCount = stage.qualifiedParticipantCount;
-    if (participantCount == null) {
-      return null;
-    }
-
-    final groupCount = stage.groupSizes.length;
-    final maxQualifiers = stage.groupSizes.fold<int>(
-      0,
-      (sum, size) => sum + size,
-    );
-    final cappedParticipantCount = participantCount > maxQualifiers
-        ? maxQualifiers
-        : participantCount;
-    final fixedPerGroup = cappedParticipantCount ~/ groupCount;
-    var storedFixedByGroup = stage.fixedQualifiersByGroup.length == groupCount
-        ? [
-            for (var index = 0; index < groupCount; index++)
-              stage.fixedQualifiersByGroup[index]
-                  .clamp(0, stage.groupSizes[index])
-                  .toInt(),
-          ]
-        : [
-            for (final groupSize in stage.groupSizes)
-              fixedPerGroup > groupSize ? groupSize : fixedPerGroup,
-          ];
-    if (stage.qualificationAutoAdjust) {
-      storedFixedByGroup = [
-        for (final groupSize in stage.groupSizes)
-          fixedPerGroup > groupSize ? groupSize : fixedPerGroup,
-      ];
-      var remaining =
-          cappedParticipantCount -
-          storedFixedByGroup.fold<int>(0, (sum, value) => sum + value);
-      if (stage.qualificationAdvancementPolicy == 'larger_group') {
-        final ordered = List<int>.generate(groupCount, (index) => index)
-          ..sort((a, b) => stage.groupSizes[b].compareTo(stage.groupSizes[a]));
-        for (var index = 0; index < ordered.length && remaining > 0; index++) {
-          final groupIndex = ordered[index];
-          final nextSize = index + 1 < ordered.length
-              ? stage.groupSizes[ordered[index + 1]]
-              : -1;
-          if (stage.groupSizes[groupIndex] <= nextSize ||
-              stage.groupSizes[groupIndex] <= storedFixedByGroup[groupIndex]) {
-            continue;
-          }
-          storedFixedByGroup[groupIndex]++;
-          remaining--;
-        }
-      }
-    }
-    final fixedTotal = storedFixedByGroup.fold<int>(
-      0,
-      (sum, value) => sum + value,
-    );
-    final automaticExtraCount = (cappedParticipantCount - fixedTotal)
-        .clamp(0, groupCount)
-        .toInt();
-    final extraCount = stage.qualificationAutoAdjust
-        ? automaticExtraCount
-        : (stage.extraQualifierCount ?? automaticExtraCount)
-              .clamp(0, groupCount)
-              .toInt();
-    final extraRank = stage.extraQualifierRank ?? fixedPerGroup + 1;
-    final eligibleGroups = [
-      for (var index = 0; index < groupCount; index++)
-        if (stage.groupSizes[index] >= extraRank &&
-            storedFixedByGroup[index] < extraRank)
-          index + 1,
-    ];
-    final eligibleGroupSize = eligibleGroups.isEmpty
-        ? null
-        : eligibleGroups
-              .map((groupNumber) => stage.groupSizes[groupNumber - 1])
-              .reduce(max);
-
-    return QualificationPlan(
-      totalQualifiers: cappedParticipantCount,
-      fixedPerGroup: fixedPerGroup,
-      extraCount: extraCount,
-      extraRank: extraRank,
-      eligibleGroupSize: eligibleGroupSize,
-      extraGroups: stage.qualificationAutoAdjust
-          ? eligibleGroups
-          : stage.qualifiersByGroup,
-      fixedByGroup: storedFixedByGroup,
+    return const QualificationPlanEngine().build(
+      groupSizes: stage.groupSizes,
+      totalQualifiers: stage.qualifiedParticipantCount!,
+      autoAdjust: stage.qualificationAutoAdjust,
+      advancementPolicy: stage.qualificationAdvancementPolicy,
+      fixedByGroup: stage.fixedQualifiersByGroup.isEmpty
+          ? null
+          : stage.fixedQualifiersByGroup,
+      manualExtraRank: stage.extraQualifierRank,
+      manualExtraCount: stage.extraQualifierCount,
+      selectedExtraGroups: stage.qualifiersByGroup,
+      placeStatuses: _placeStatusesFromStored(stage.qualificationPlaceStatuses),
     );
   }
 
@@ -2074,6 +1946,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       qualificationSummary: _isGroupStageForm
           ? groupQualificationPlan?.summary
           : inheritedQualificationPlan?.summary,
+      qualificationPlaceStatuses: _isGroupStageForm
+          ? {
+              for (final entry in groupQualificationPlan?.placeStatuses.entries ??
+                  const <MapEntry<String, QualificationPlaceStatus>>[])
+                entry.key: entry.value.jsonValue,
+            }
+          : const {},
       gameFormat: _stageGameFormat,
     );
   }
@@ -2099,6 +1978,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _fixedQualifiersByGroup.clear();
     _manualExtraRank = null;
     _manualExtraCount = null;
+    _qualificationPlaceStatuses = const {};
     _bestOfQualifierCountController.text = '0';
     _autoAdjustQualification = true;
     _qualificationAdvancementPolicy = 'larger_group';
@@ -2174,6 +2054,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           );
         _manualExtraRank = stage.extraQualifierRank;
         _manualExtraCount = stage.extraQualifierCount;
+        _qualificationPlaceStatuses = _placeStatusesFromStored(
+          stage.qualificationPlaceStatuses,
+        );
         _bestOfQualifierCountController.text =
             '${stage.extraQualifierCount ?? 0}';
         _autoAdjustQualification = stage.qualificationAutoAdjust;
@@ -2201,6 +2084,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _fixedQualifiersByGroup.clear();
         _manualExtraRank = null;
         _manualExtraCount = null;
+        _qualificationPlaceStatuses = const {};
         _bestOfQualifierCountController.text = '0';
         _autoAdjustQualification = true;
         _qualificationAdvancementPolicy = 'larger_group';
@@ -3070,6 +2954,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     bool selected,
     List<int> currentGroups,
   ) {
+    final plan = _groupQualificationPlan();
     setState(() {
       if (_selectedExtraGroups.isEmpty && currentGroups.isNotEmpty) {
         _selectedExtraGroups.addAll(currentGroups);
@@ -3079,6 +2964,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _selectedExtraGroups.add(groupNumber);
       } else {
         _selectedExtraGroups.remove(groupNumber);
+      }
+      if (plan != null) {
+        _qualificationPlaceStatuses = {
+          ..._qualificationPlaceStatuses,
+          qualificationPlaceKey(groupNumber, plan.extraRank): selected
+              ? QualificationPlaceStatus.comparison
+              : QualificationPlaceStatus.eliminated,
+        };
       }
     });
   }
@@ -3098,6 +2991,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ..clear()
           ..addAll(plan.extraGroups);
         _manualExtraRank = plan.extraRank;
+        _qualificationPlaceStatuses = Map.unmodifiable(plan.placeStatuses);
       }
       if (enabled && plan != null) {
         _manualExtraCount = null;
@@ -3113,6 +3007,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _qualificationAdvancementPolicy = policy;
     _fixedQualifiersByGroup.clear();
     _selectedExtraGroups.clear();
+    _qualificationPlaceStatuses = const {};
   });
 
   void _setBestOfQualifierCount(String value) {
@@ -3136,33 +3031,42 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     setState(() {
       final fixed = _currentFixedQualifiersByGroup(groupSizes, plan);
       final groupIndex = groupNumber - 1;
-      final isFixed = place <= fixed[groupIndex];
-      final isExtra =
-          place == plan.extraRank && plan.extraGroups.contains(groupNumber);
+      final status = plan.statusFor(groupNumber, place);
+      final key = qualificationPlaceKey(groupNumber, place);
 
-      if (isExtra) {
-        _selectedExtraGroups.remove(groupNumber);
-      } else if (isFixed) {
-        fixed[groupIndex] = place - 1;
-        _manualExtraRank = place;
-        _selectedExtraGroups.add(groupNumber);
-      } else {
-        fixed[groupIndex] = place;
-        _selectedExtraGroups.remove(groupNumber);
+      switch (status) {
+        case QualificationPlaceStatus.comparison:
+          _selectedExtraGroups.add(groupNumber);
+          _qualificationPlaceStatuses = {
+            ..._qualificationPlaceStatuses,
+            key: QualificationPlaceStatus.fixed,
+          };
+        case QualificationPlaceStatus.fixed:
+          if (place <= fixed[groupIndex]) {
+            fixed[groupIndex] = place - 1;
+          }
+          _selectedExtraGroups.remove(groupNumber);
+          _qualificationPlaceStatuses = {
+            ..._qualificationPlaceStatuses,
+            key: QualificationPlaceStatus.eliminated,
+          };
+        case QualificationPlaceStatus.eliminated:
+          _manualExtraRank = place;
+          _selectedExtraGroups.add(groupNumber);
+          _qualificationPlaceStatuses = {
+            ..._qualificationPlaceStatuses,
+            key: QualificationPlaceStatus.comparison,
+          };
       }
 
       _fixedQualifiersByGroup
         ..clear()
         ..addAll(fixed);
-      if (_autoAdjustQualification) {
-        final safeTotal = fixed.fold<int>(0, (sum, value) => sum + value);
-        final currentExtraCount =
-            plan.extraCount == 0 && _selectedExtraGroups.isNotEmpty
-            ? 1
-            : plan.extraCount.clamp(0, _selectedExtraGroups.length).toInt();
-        _bestOfQualifierCountController.text = '$currentExtraCount';
-        _groupQualifierCountController.text =
-            '${safeTotal + currentExtraCount}';
+      final updatedPlan = _groupQualificationPlan();
+      if (updatedPlan != null) {
+        _qualificationPlaceStatuses = Map.unmodifiable(
+          updatedPlan.placeStatuses,
+        );
       }
     });
   }

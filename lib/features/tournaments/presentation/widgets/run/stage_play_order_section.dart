@@ -125,14 +125,28 @@ class _StagePlayOrderSectionState extends State<StagePlayOrderSection> {
   }
 
   String _roundTitle(List<GroupMatch> roundMatches) {
-    if (roundMatches.every((match) => _isPlacementMatchLabel(match.label))) {
-      return 'Platzierung';
-    }
     final firstMatch = roundMatches.isEmpty ? null : roundMatches.first;
     if (firstMatch != null && firstMatch.isDecider) {
       return 'Decider';
     }
+    if (roundMatches.isNotEmpty &&
+        roundMatches.every(
+          (match) =>
+              match.placementKey != null || _isPlacementMatchLabel(match.label),
+        )) {
+      return knockoutRoundColumnTitle(
+        roundMatches,
+        0,
+        _totalRoundCountForColumnTitles(),
+      );
+    }
     return firstMatch == null ? 'Runde' : stageMatchName(stage, firstMatch);
+  }
+
+  int _totalRoundCountForColumnTitles() {
+    if (stage is! KnockoutTournamentRunStage) return 1;
+    final rounds = (stage as KnockoutTournamentRunStage).rounds.length;
+    return rounds > 0 ? rounds : 1;
   }
 
   String? _leadingLabel(GroupMatch match) {

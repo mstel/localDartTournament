@@ -493,6 +493,7 @@ class _ResultDialogState extends State<ResultDialog> {
   String? _error;
   bool _recordBestPerformances = false;
   List<BestPerformance> _bestPerformances = [];
+  final _bestPerformanceKey = GlobalKey<BestPerformanceEditorState>();
   late final TextEditingController _homeLegsController;
   late final TextEditingController _awayLegsController;
   late final FocusNode _homeFocusNode;
@@ -588,6 +589,14 @@ class _ResultDialogState extends State<ResultDialog> {
       setState(
         () => _error =
             'Unentschieden nur bei gerader Leg-Zahl und vollständig gespieltem Match. Entscheidungsspiele benötigen einen Sieger.',
+      );
+      return;
+    }
+    if (_recordBestPerformances &&
+        !(_bestPerformanceKey.currentState?.commitPending() ?? true)) {
+      setState(
+        () =>
+            _error = 'Bitte einen gültigen Wert für die Bestleistung eingeben.',
       );
       return;
     }
@@ -818,6 +827,7 @@ class _ResultDialogState extends State<ResultDialog> {
             ),
             if (_recordBestPerformances)
               BestPerformanceEditor(
+                key: _bestPerformanceKey,
                 match: widget.match,
                 initial: _bestPerformances,
                 onChanged: (items) => _bestPerformances = items,

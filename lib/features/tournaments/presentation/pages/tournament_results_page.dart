@@ -985,6 +985,7 @@ class _TournamentMatchesPageState extends State<TournamentMatchesPage> {
 
   Future<void> _editBestPerformances(GroupMatch match) async {
     var items = [...match.bestPerformances];
+    final editorKey = GlobalKey<BestPerformanceEditorState>();
     final result = await showDialog<List<BestPerformance>>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -994,6 +995,7 @@ class _TournamentMatchesPageState extends State<TournamentMatchesPage> {
             width: 460,
             child: SingleChildScrollView(
               child: BestPerformanceEditor(
+                key: editorKey,
                 match: match,
                 initial: items,
                 onChanged: (value) {
@@ -1009,7 +1011,11 @@ class _TournamentMatchesPageState extends State<TournamentMatchesPage> {
               child: const Text('Abbrechen'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, items),
+              onPressed: () {
+                if (editorKey.currentState?.commitPending() ?? true) {
+                  Navigator.pop(context, items);
+                }
+              },
               child: const Text('Speichern'),
             ),
           ],

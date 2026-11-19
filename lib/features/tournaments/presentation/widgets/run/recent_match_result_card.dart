@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../shared/theme/tournament_display_palette.dart';
+import '../../../../../shared/utils/match_display.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
 import '../../../application/player_withdrawal_service.dart';
 import '../../../domain/engines/group_standings_engine.dart';
@@ -61,10 +62,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
         if (homeStatus != null)
           TextSpan(
             text: ' ($homeStatus)',
-            style: TextStyle(
-              color: palette.mutedText,
-              fontSize: 10,
-            ),
+            style: TextStyle(color: palette.mutedText, fontSize: 10),
           ),
       ],
     );
@@ -77,10 +75,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
         if (awayStatus != null)
           TextSpan(
             text: ' ($awayStatus)',
-            style: TextStyle(
-              color: palette.mutedText,
-              fontSize: 10,
-            ),
+            style: TextStyle(color: palette.mutedText, fontSize: 10),
           ),
       ],
     );
@@ -154,7 +149,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                         ? match.scratchedPlayer == null
                               ? 'Kratzer offen'
                               : 'Kratzer: ${match.scratchedPlayer!.name}'
-                        : '${match.homeScore ?? 0}:${match.awayScore ?? 0}',
+                        : winnerFirstScore(match),
                     style: TextStyle(
                       color: match.isKratzer
                           ? const Color(0xFFFFAAAA)
@@ -170,10 +165,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                 Text(
                   '${time.hour.toString().padLeft(2, '0')}:'
                   '${time.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                    color: palette.mutedText,
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: palette.mutedText, fontSize: 11),
                 ),
               ],
             ],
@@ -226,6 +218,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                         change.homeRatingBefore,
                         change.homeRatingAfter,
                         TextAlign.start,
+                        hypothetical: change.homeHypothetical,
                       ),
                     ),
                     Expanded(
@@ -247,6 +240,7 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                         change.awayRatingBefore,
                         change.awayRatingAfter,
                         TextAlign.end,
+                        hypothetical: change.awayHypothetical,
                       ),
                     ),
                   ],
@@ -304,31 +298,30 @@ String? _recentPlayerStatus(
       );
       if (place < 0) return null;
       final plan = stage.qualificationPlan;
-      final fixedPlaces = plan == null
-          ? 2
-          : groupIndex < plan.fixedByGroup.length
-          ? plan.fixedByGroup[groupIndex]
-          : plan.fixedPerGroup;
-      if (const QualificationCertainty().isCertain(
-        standing: standings[place],
-        place: place + 1,
-        fixedPlaces: fixedPlaces,
-        standings: standings,
-        matches: group.matches,
-        tieBreakers: stage.tieBreakers,
-      )) {
-        return 'Gesetzt';
+      final status = plan?.statusFor(groupIndex + 1, place + 1);
+      if (status == QualificationPlaceStatus.fixed) {
+        final fixedPlaces = plan == null
+            ? 2
+            : plan.fixedForGroup(groupIndex + 1);
+        if (const QualificationCertainty().isCertain(
+          standing: standings[place],
+          place: place + 1,
+          fixedPlaces: fixedPlaces,
+          standings: standings,
+          matches: group.matches,
+          tieBreakers: stage.tieBreakers,
+        )) {
+          return 'Kommt sicher weiter';
+        }
+      }
+      if (status == QualificationPlaceStatus.comparison) {
+        return 'Vergleich um Zusatzplatz';
       }
       final groupComplete = group.matches
           .where((item) => item.hasPlayers)
           .every((item) => item.isResolved);
-      final eligibleForExtra =
-          plan != null &&
-          plan.extraCount > 0 &&
-          plan.extraGroups.contains(groupIndex + 1) &&
-          place + 1 == plan.extraRank;
-      if (groupComplete && place + 1 > fixedPlaces && !eligibleForExtra) {
-        return 'Ausgeschieden';
+      if (groupComplete && status == QualificationPlaceStatus.eliminated) {
+        return 'Scheidet nach aktuellem Stand aus';
       }
       return null;
     }
@@ -400,8 +393,16 @@ class _RecentPerformanceBadge extends StatelessWidget {
   }
 }
 
-Widget _eloRatingText(int? delta, int? before, int? after, TextAlign align) {
-  final color = delta == null || delta == 0
+Widget _eloRatingText(
+  int? delta,
+  int? before,
+  int? after,
+  TextAlign align, {
+  bool hypothetical = false,
+}) {
+  final color = hypothetical
+      ? const Color(0xFF7A8894)
+      : delta == null || delta == 0
       ? const Color(0xFFB0BEC5)
       : delta > 0
       ? const Color(0xFF4ED9A4)
@@ -412,11 +413,24 @@ Widget _eloRatingText(int? delta, int? before, int? after, TextAlign align) {
       ? '+$delta'
       : '$delta';
   final rating = before != null && after != null ? ' ($before → $after)' : '';
-  return Text(
-    '$change Elo$rating',
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    textAlign: align,
-    style: TextStyle(color: color, fontSize: 11),
+  final suffix = hypothetical ? ' (hypothetisch)' : '';
+  return Tooltip(
+    message: hypothetical
+        ? 'Unter der Teilnahme-Schwelle – Wert hypothetisch.'
+        : '',
+    child: Text(
+      '$change Elo$rating$suffix',
+      key: ValueKey(
+        hypothetical ? 'recent-elo-hypothetical-$align' : 'recent-elo-$align',
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: align,
+      style: TextStyle(
+        color: color,
+        fontSize: 11,
+        decoration: hypothetical ? TextDecoration.lineThrough : null,
+      ),
+    ),
   );
 }

@@ -6,6 +6,8 @@ import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/application/tournament_timing.dart';
+import '../../tournaments/domain/engines/placement_engine.dart';
+import '../../../shared/utils/match_display.dart';
 
 abstract interface class HomeOverviewDataSource {
   Future<List<CreatedTournament>> loadTournaments();
@@ -119,7 +121,10 @@ class HomeOverviewService {
       final matches =
           matchesByTournament[tournament.id] ?? const <GroupMatch>[];
       if (_isActive(tournament, matches)) {
-        activeSummary = _activeSummary(tournament, matches);
+        activeSummary = _activeSummary(
+          tournament,
+          TournamentTiming.scheduledMatches(tournament),
+        );
         break;
       }
     }
@@ -202,9 +207,7 @@ class HomeOverviewService {
     CreatedTournament tournament,
     List<GroupMatch> allMatches,
   ) {
-    final matches = allMatches
-        .where((match) => match.hasPlayers && !match.isAnnulled)
-        .toList();
+    final matches = allMatches;
     final played = matches.where((match) => match.hasResult).length;
     return HomeOverviewActiveTournament(
       id: tournament.id,
@@ -263,7 +266,7 @@ class HomeOverviewService {
     final winner = match.winner!;
     final loser = match.loser;
     final score =
-        '${match.homeScore ?? 0}:${match.awayScore ?? 0}${match.hasSetScore ? ' Sets' : ''}';
+        '${winnerFirstScore(match)}${match.hasSetScore ? ' Sets' : ''}';
     final key = calculator.matchKey(tournament, match);
     final delta = key == null ? null : elo?.matchDeltas[key];
     final winnerDelta = winner == match.homePlayer ? delta?.home : delta?.away;
@@ -301,12 +304,27 @@ class HomeOverviewService {
       tournament,
       matchesByTournament[tournament.id] ?? const [],
     );
-    final ranking = stats.values.toList()
-      ..sort((left, right) {
-        final wins = right.wins.compareTo(left.wins);
-        if (wins != 0) return wins;
-        return right.legsFor.compareTo(left.legsFor);
-      });
+    final ranking = _finalStageRanking(tournament)
+        .map((player) => stats[player.name])
+        .whereType<_HomePlayerStats>()
+        .toList();
+    final rankedNames = ranking.map((entry) => entry.player.name).toSet();
+    final remaining =
+        stats.values
+            .where((entry) => !rankedNames.contains(entry.player.name))
+            .toList()
+          ..sort((left, right) {
+            final wins = right.wins.compareTo(left.wins);
+            if (wins != 0) return wins;
+            final difference = right.legDifference.compareTo(
+              left.legDifference,
+            );
+            if (difference != 0) return difference;
+            final legs = right.legsFor.compareTo(left.legsFor);
+            if (legs != 0) return legs;
+            return left.player.name.compareTo(right.player.name);
+          });
+    ranking.addAll(remaining);
     final podium = ranking.take(3).toList();
     return HomeOverviewCard(
       title: 'Letztes Turnier · ${tournament.name}',
@@ -594,16 +612,129 @@ class HomeOverviewService {
       final winner = stats[match.winner!.name];
       final loser = stats[match.loser!.name];
       if (winner == null || loser == null) continue;
+      final winnerLegs = match.homePlayer == match.winner
+          ? match.homeLegs ?? 0
+          : match.awayLegs ?? 0;
+      final loserLegs = match.homePlayer == match.loser
+          ? match.homeLegs ?? 0
+          : match.awayLegs ?? 0;
       winner.wins++;
-      winner.legsFor += match.homePlayer == match.winner
-          ? match.homeLegs ?? 0
-          : match.awayLegs ?? 0;
+      winner.legsFor += winnerLegs;
+      winner.legsAgainst += loserLegs;
       loser.losses++;
-      loser.legsFor += match.homePlayer == match.loser
-          ? match.homeLegs ?? 0
-          : match.awayLegs ?? 0;
+      loser.legsFor += loserLegs;
+      loser.legsAgainst += winnerLegs;
     }
     return stats;
+  }
+
+  /// Das Podium folgt dem finalen K.-o.-Baum, nicht der Anzahl aller Siege.
+  /// Sonst kann ein Finalverlierer mit vielen Gruppensiegen vor dem
+  /// Finalsieger stehen.
+  List<TournamentPlayer> _finalStageRanking(CreatedTournament tournament) {
+    final finalStage = tournament.runStages.isEmpty
+        ? null
+        : tournament.runStages.last;
+    if (finalStage is! KnockoutTournamentRunStage) return const [];
+    return PlacementEngine.applyRanking(
+      _knockoutRanking(finalStage),
+      finalStage.placementMatches,
+    );
+  }
+
+  List<TournamentPlayer> _knockoutRanking(KnockoutTournamentRunStage stage) {
+    if (stage.isKratzer) {
+      final players = [...stage.participants];
+      players.sort((a, b) {
+        final lives = stage
+            .livesRemainingFor(b)
+            .compareTo(stage.livesRemainingFor(a));
+        return lives != 0 ? lives : a.name.compareTo(b.name);
+      });
+      return players;
+    }
+
+    final ranking = <TournamentPlayer>[];
+    void addUnique(List<TournamentPlayer> target, TournamentPlayer? player) {
+      if (player != null && !target.any((entry) => entry.name == player.name)) {
+        target.add(player);
+      }
+    }
+
+    if (stage.eliminationLossLimit > 1) {
+      final losses = <String, int>{};
+      final lastRound = <String, int>{};
+      final players = <TournamentPlayer>[];
+      for (final round in stage.rounds) {
+        for (final match in round) {
+          addUnique(players, match.homePlayer);
+          addUnique(players, match.awayPlayer);
+          if (!match.hasResult) continue;
+          final loser = match.loser;
+          final winner = match.winner;
+          if (loser != null) {
+            losses[loser.name] = (losses[loser.name] ?? 0) + 1;
+            lastRound[loser.name] = match.round;
+          }
+          if (winner != null) lastRound[winner.name] = match.round;
+        }
+      }
+      players.sort((a, b) {
+        final lossComparison = (losses[a.name] ?? 0).compareTo(
+          losses[b.name] ?? 0,
+        );
+        if (lossComparison != 0) return lossComparison;
+        final roundComparison = (lastRound[b.name] ?? 0).compareTo(
+          lastRound[a.name] ?? 0,
+        );
+        if (roundComparison != 0) return roundComparison;
+        return a.name.compareTo(b.name);
+      });
+      if (stage.finalEndsTournament &&
+          stage.rounds.isNotEmpty &&
+          stage.rounds.last.length == 1 &&
+          stage.rounds.last.single.hasResult) {
+        final last = stage.rounds.last.single;
+        players.removeWhere(
+          (player) =>
+              player.name == last.winner?.name ||
+              player.name == last.loser?.name,
+        );
+        players.insertAll(0, [
+          if (last.winner != null) last.winner!,
+          if (last.loser != null) last.loser!,
+        ]);
+      }
+      return PlacementEngine.applyRanking(players, stage.placementMatches);
+    }
+
+    if (stage.rounds.isNotEmpty) {
+      final finalRound = stage.rounds.last;
+      if (finalRound.length == 1) {
+        addUnique(ranking, finalRound.first.winner);
+        addUnique(ranking, finalRound.first.loser);
+      } else {
+        for (final match in finalRound) {
+          addUnique(ranking, match.winner);
+        }
+      }
+      for (final match in stage.placementMatches.where(
+        (match) => match.label == 'Spiel um Platz 3',
+      )) {
+        addUnique(ranking, match.winner);
+        addUnique(ranking, match.loser);
+      }
+      for (
+        var roundIndex = stage.rounds.length - 2;
+        roundIndex >= 0;
+        roundIndex--
+      ) {
+        for (final match in stage.rounds[roundIndex]) {
+          addUnique(ranking, match.loser);
+        }
+      }
+    }
+    return ranking;
   }
 
   int _ratingBeforeTournament(
@@ -673,4 +804,7 @@ class _HomePlayerStats {
   int wins = 0;
   int losses = 0;
   int legsFor = 0;
+  int legsAgainst = 0;
+
+  int get legDifference => legsFor - legsAgainst;
 }

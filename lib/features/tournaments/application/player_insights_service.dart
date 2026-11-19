@@ -603,7 +603,7 @@ class PlayerInsightEngine {
   ) {
     if (ranking == null || snapshot == null || participants.length < 3) return;
     final rankings = [
-      for (final entry in snapshot.entries)
+      for (final entry in snapshot.allMembers)
         if (participants.containsKey(entry.id)) entry,
     ]..sort((left, right) => right.rating.compareTo(left.rating));
     if (rankings.length < 3 || rankings.length != participants.length) return;
@@ -650,12 +650,16 @@ class PlayerInsightEngine {
     final cutoff = now.subtract(const Duration(days: 30));
     final gains = <String, int>{};
     final ratings = {
-      for (final entry in snapshot.entries) entry.id: entry.rating,
+      for (final entry in snapshot.allMembers) entry.id: entry.rating,
     };
-    if (participants.keys.any((playerId) => !ratings.containsKey(playerId))) {
-      return;
-    }
-    for (final playerId in participants.keys) {
+    final eligibleIds = participants.keys
+        .where(
+          (id) =>
+              ratings.containsKey(id) && !snapshot.isHypothetical(id),
+        )
+        .toList();
+    final baselines = <String, LocalEloHistoryItem>{};
+    for (final playerId in eligibleIds) {
       final baseline = (snapshot.history[playerId] ?? const [])
           .where((item) => !item.playedAt.isAfter(cutoff))
           .fold<LocalEloHistoryItem?>(
@@ -665,9 +669,15 @@ class PlayerInsightEngine {
                 ? item
                 : latest,
           );
+      // Ohne 30-Tage-Basis für alle gewerteten Teilnehmer wäre der
+      // Zuwachs nicht vergleichbar – deshalb abbrechen statt raten.
       if (baseline == null) return;
-      gains[playerId] = ratings[playerId]! - baseline.ratingAfter;
+      baselines[playerId] = baseline;
     }
+    for (final playerId in eligibleIds) {
+      gains[playerId] = ratings[playerId]! - baselines[playerId]!.ratingAfter;
+    }
+    if (gains.isEmpty) return;
     final highestGain = gains.values.fold<int>(
       0,
       (highest, gain) => gain > highest ? gain : highest,

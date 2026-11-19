@@ -460,19 +460,6 @@ class _QualificationGroupCard extends StatelessWidget {
   final QualificationPlan qualificationPlan;
   final void Function(int groupNumber, int place) onCyclePlace;
 
-  int get _fixedForGroup {
-    if (groupNumber - 1 < qualificationPlan.fixedByGroup.length) {
-      return qualificationPlan.fixedByGroup[groupNumber - 1];
-    }
-    return qualificationPlan.fixedPerGroup;
-  }
-
-  bool _isExtraCandidate(int place) {
-    return qualificationPlan.extraCount > 0 &&
-        place == qualificationPlan.extraRank &&
-        qualificationPlan.extraGroups.contains(groupNumber);
-  }
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -499,8 +486,7 @@ class _QualificationGroupCard extends StatelessWidget {
               for (var place = 1; place <= playerCount; place++)
                 _QualificationPlaceBadge(
                   place: place,
-                  isQualified: place <= _fixedForGroup,
-                  isExtraCandidate: _isExtraCandidate(place),
+                  status: qualificationPlan.statusFor(groupNumber, place),
                   onTap: () => onCyclePlace(groupNumber, place),
                 ),
             ],
@@ -514,36 +500,34 @@ class _QualificationGroupCard extends StatelessWidget {
 class _QualificationPlaceBadge extends StatelessWidget {
   const _QualificationPlaceBadge({
     required this.place,
-    required this.isQualified,
-    required this.isExtraCandidate,
+    required this.status,
     required this.onTap,
   });
 
   final int place;
-  final bool isQualified;
-  final bool isExtraCandidate;
+  final QualificationPlaceStatus status;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isQualified = status == QualificationPlaceStatus.fixed;
+    final isComparison = status == QualificationPlaceStatus.comparison;
     final backgroundColor = isQualified
         ? colorScheme.primary
-        : isExtraCandidate
+        : isComparison
         ? colorScheme.primaryContainer
         : colorScheme.surfaceContainerHighest;
-    final borderColor = isQualified
-        ? colorScheme.primary
-        : isExtraCandidate
+    final borderColor = isQualified || isComparison
         ? colorScheme.primary
         : colorScheme.outlineVariant;
 
     return Tooltip(
       message: isQualified
-          ? 'Sicher weiter'
-          : isExtraCandidate
+          ? 'Kommt sicher weiter'
+          : isComparison
           ? 'Vergleich um Zusatzplatz'
-          : 'Scheidet aus',
+          : 'Scheidet nach aktuellem Stand aus',
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: onTap,
@@ -561,7 +545,7 @@ class _QualificationPlaceBadge extends StatelessWidget {
             style: TextStyle(
               color: isQualified
                   ? colorScheme.onPrimary
-                  : isExtraCandidate
+                  : isComparison
                   ? colorScheme.onPrimaryContainer
                   : colorScheme.onSurface,
               fontWeight: FontWeight.w700,

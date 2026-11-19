@@ -16,6 +16,44 @@ const List<String> defaultGroupTieBreakers = [
   'headToHead',
 ];
 
+enum QualificationPlaceStatus {
+  fixed,
+  comparison,
+  eliminated;
+
+  String get jsonValue => switch (this) {
+    QualificationPlaceStatus.fixed => 'fixed',
+    QualificationPlaceStatus.comparison => 'comparison',
+    QualificationPlaceStatus.eliminated => 'eliminated',
+  };
+}
+
+QualificationPlaceStatus? parseQualificationPlaceStatus(Object? value) =>
+    switch (value) {
+      'fixed' => QualificationPlaceStatus.fixed,
+      'comparison' => QualificationPlaceStatus.comparison,
+      'eliminated' => QualificationPlaceStatus.eliminated,
+      _ => null,
+    };
+
+String qualificationPlaceKey(int groupNumber, int place) =>
+    '$groupNumber:$place';
+
+Map<String, QualificationPlaceStatus> parseQualificationPlaceStatuses(
+  Object? value,
+) {
+  if (value is! Map) return const {};
+  final result = <String, QualificationPlaceStatus>{};
+  for (final entry in value.entries) {
+    final key = entry.key;
+    final status = parseQualificationPlaceStatus(entry.value);
+    if (key is String && status != null) {
+      result[key] = status;
+    }
+  }
+  return Map.unmodifiable(result);
+}
+
 String groupLabel(int groupNumber) {
   var number = groupNumber;
   var label = '';
@@ -143,6 +181,44 @@ Map<String, int> _stringIntMapFromJson(Object? value) {
     for (final entry in value.entries)
       if (entry.value is int) entry.key.toString(): entry.value as int,
   };
+}
+
+Map<String, String> _stringStringMapFromJson(Object? value) {
+  if (value is! Map) return const {};
+  return {
+    for (final entry in value.entries)
+      if (entry.key is String && entry.value is String)
+        entry.key as String: entry.value as String,
+  };
+}
+
+Map<String, String> _deriveQualificationPlaceStatuses({
+  required List<int> groupSizes,
+  required List<int> fixedByGroup,
+  required int fixedPerGroup,
+  required int? extraRank,
+  required List<int> extraGroups,
+}) {
+  if (groupSizes.isEmpty) return const {};
+  final comparisonRank = extraRank;
+  final result = <String, String>{};
+  for (var groupIndex = 0; groupIndex < groupSizes.length; groupIndex++) {
+    final groupNumber = groupIndex + 1;
+    final fixed = groupIndex < fixedByGroup.length
+        ? fixedByGroup[groupIndex]
+        : fixedPerGroup;
+    for (var place = 1; place <= groupSizes[groupIndex]; place++) {
+      final status = place <= fixed
+          ? QualificationPlaceStatus.fixed
+          : comparisonRank != null &&
+                place == comparisonRank &&
+                extraGroups.contains(groupNumber)
+          ? QualificationPlaceStatus.comparison
+          : QualificationPlaceStatus.eliminated;
+      result[qualificationPlaceKey(groupNumber, place)] = status.jsonValue;
+    }
+  }
+  return Map.unmodifiable(result);
 }
 
 List<T> _mapListFromJson<T>(
@@ -426,6 +502,7 @@ class TournamentStage {
     this.qualificationAdvancementPolicy = 'larger_group',
     this.qualifiedParticipantCount,
     this.qualificationSummary,
+    this.qualificationPlaceStatuses = const {},
     this.gameFormat = const TournamentGameFormat(),
   }) : groupPlayType =
            groupPlayType ?? (type == 'swiss' ? 'swiss' : 'round_robin');
@@ -440,6 +517,24 @@ class TournamentStage {
     final type = storedType == 'groups' && groupPlayType == 'swiss'
         ? 'swiss'
         : storedType;
+    final storedGroupSizes = _intListFromJson(json['groupSizes']);
+    final storedExtraGroups = _intListFromJson(json['qualifiersByGroup']);
+    final storedFixedByGroup = _intListFromJson(json['fixedQualifiersByGroup']);
+    final storedExtraRank = json['extraQualifierRank'] as int?;
+    final storedPlaceStatuses = _stringStringMapFromJson(
+      json['qualificationPlaceStatuses'],
+    );
+    final qualificationPlaceStatuses = storedPlaceStatuses.isNotEmpty
+        ? storedPlaceStatuses
+        : _deriveQualificationPlaceStatuses(
+            groupSizes: storedGroupSizes,
+            fixedByGroup: storedFixedByGroup,
+            fixedPerGroup:
+                (json['qualifiedParticipantCount'] as int? ?? 0) ~/
+                (storedGroupSizes.isEmpty ? 1 : storedGroupSizes.length),
+            extraRank: storedExtraRank,
+            extraGroups: storedExtraGroups,
+          );
     return TournamentStage(
       name: json['name'] as String? ?? '',
       type: type,
@@ -499,15 +594,16 @@ class TournamentStage {
       knockoutSlotOrder: _nullableIntListFromJson(json['knockoutSlotOrder']),
       knockoutSeedingMode: json['knockoutSeedingMode'] as String? ?? 'cross',
       knockoutDrawOnStart: json['knockoutDrawOnStart'] as bool? ?? false,
-      qualifiersByGroup: _intListFromJson(json['qualifiersByGroup']),
-      fixedQualifiersByGroup: _intListFromJson(json['fixedQualifiersByGroup']),
-      extraQualifierRank: json['extraQualifierRank'] as int?,
+      qualifiersByGroup: storedExtraGroups,
+      fixedQualifiersByGroup: storedFixedByGroup,
+      extraQualifierRank: storedExtraRank,
       extraQualifierCount: json['extraQualifierCount'] as int?,
       qualificationAutoAdjust: json['qualificationAutoAdjust'] as bool? ?? true,
       qualificationAdvancementPolicy:
           json['qualificationAdvancementPolicy'] as String? ?? 'larger_group',
       qualifiedParticipantCount: json['qualifiedParticipantCount'] as int?,
       qualificationSummary: json['qualificationSummary'] as String?,
+      qualificationPlaceStatuses: qualificationPlaceStatuses,
       gameFormat: json['gameFormat'] is Map<String, dynamic>
           ? TournamentGameFormat.fromJson(
               json['gameFormat'] as Map<String, dynamic>,
@@ -561,6 +657,7 @@ class TournamentStage {
   final bool groupDrawOnStart;
   final List<int?> groupSlotOrder;
   final bool groupDrawCompleted;
+
   /// 'manual', 'strengthLevels', 'balanced' oder 'random' bei Erstellung.
   /// Alte Turniere ohne Feld behalten 'strengthLevels'.
   final String groupAssignmentMode;
@@ -579,6 +676,7 @@ class TournamentStage {
   final String qualificationAdvancementPolicy;
   final int? qualifiedParticipantCount;
   final String? qualificationSummary;
+  final Map<String, String> qualificationPlaceStatuses;
   final TournamentGameFormat gameFormat;
 
   Map<String, dynamic> toJson() {
@@ -632,6 +730,7 @@ class TournamentStage {
       'qualificationAdvancementPolicy': qualificationAdvancementPolicy,
       'qualifiedParticipantCount': qualifiedParticipantCount,
       'qualificationSummary': qualificationSummary,
+      'qualificationPlaceStatuses': qualificationPlaceStatuses,
       'gameFormat': gameFormat.toJson(),
     };
   }
@@ -649,6 +748,7 @@ class TournamentStage {
     List<int?>? knockoutSlotOrder,
     bool? knockoutDrawOnStart,
     String? qualificationAdvancementPolicy,
+    Map<String, String>? qualificationPlaceStatuses,
     bool? kratzerHandicapsEnabled,
     List<String>? kratzerHandicaps,
     Map<int, String>? kratzerHandicapAssignments,
@@ -702,6 +802,8 @@ class TournamentStage {
         qualificationAdvancementPolicy ?? this.qualificationAdvancementPolicy,
     qualifiedParticipantCount: qualifiedParticipantCount,
     qualificationSummary: qualificationSummary,
+    qualificationPlaceStatuses:
+        qualificationPlaceStatuses ?? this.qualificationPlaceStatuses,
     gameFormat: gameFormat,
   );
 }
@@ -815,6 +917,7 @@ class CreatedTournament {
     this.plannedMatches,
     this.plannedMatchEndSeconds = const [],
     Set<int>? completedStageIndexes,
+    Set<String>? acknowledgedGroupEndReviews,
   }) : tournamentSettings = tournamentSettings == null
            ? TournamentSettings(soundModeEnabled: soundModeEnabled ?? false)
            : soundModeEnabled == null
@@ -832,6 +935,7 @@ class CreatedTournament {
              ),
        updatedAt = updatedAt ?? DateTime.now(),
        completedStageIndexes = completedStageIndexes ?? <int>{},
+       acknowledgedGroupEndReviews = acknowledgedGroupEndReviews ?? <String>{},
        blockedBoards = blockedBoards ?? <int>{},
        groupBoardAssignments = {
          for (final entry in (groupBoardAssignments ?? const {}).entries)
@@ -981,6 +1085,9 @@ class CreatedTournament {
       completedStageIndexes: _intListFromJson(
         json['completedStageIndexes'],
       ).toSet(),
+      acknowledgedGroupEndReviews: _stringListFromJson(
+        json['acknowledgedGroupEndReviews'],
+      ).toSet(),
     );
   }
 
@@ -1046,6 +1153,7 @@ class CreatedTournament {
   int? plannedMinutes, plannedMatches;
   List<int> plannedMatchEndSeconds;
   final Set<int> completedStageIndexes;
+  final Set<String> acknowledgedGroupEndReviews;
 
   String boardDisplayName(int board) {
     final name = directorBoardNames[board]?.trim();
@@ -1134,6 +1242,8 @@ class CreatedTournament {
       'plannedMatches': plannedMatches,
       'plannedMatchEndSeconds': plannedMatchEndSeconds,
       'completedStageIndexes': completedStageIndexes.toList()..sort(),
+      'acknowledgedGroupEndReviews': acknowledgedGroupEndReviews.toList()
+        ..sort(),
     };
   }
 }
@@ -1674,6 +1784,7 @@ class QualificationPlan {
     required this.eligibleGroupSize,
     required this.extraGroups,
     this.fixedByGroup = const [],
+    this.placeStatuses = const {},
   });
 
   final int totalQualifiers;
@@ -1683,6 +1794,39 @@ class QualificationPlan {
   final int? eligibleGroupSize;
   final List<int> extraGroups;
   final List<int> fixedByGroup;
+  final Map<String, QualificationPlaceStatus> placeStatuses;
+
+  int fixedForGroup(int groupNumber) {
+    if (groupNumber < 1) return 0;
+    return groupNumber <= fixedByGroup.length
+        ? fixedByGroup[groupNumber - 1]
+        : fixedPerGroup;
+  }
+
+  QualificationPlaceStatus statusFor(int groupNumber, int place) {
+    final explicit = placeStatuses[qualificationPlaceKey(groupNumber, place)];
+    if (explicit != null) return explicit;
+    if (place <= fixedForGroup(groupNumber)) {
+      return QualificationPlaceStatus.fixed;
+    }
+    if (extraCount > 0 &&
+        place == extraRank &&
+        extraGroups.contains(groupNumber)) {
+      return QualificationPlaceStatus.comparison;
+    }
+    return QualificationPlaceStatus.eliminated;
+  }
+
+  int get lockedComparisonSlots {
+    if (extraCount == 0) return 0;
+    return extraGroups
+        .where(
+          (groupNumber) =>
+              statusFor(groupNumber, extraRank) ==
+              QualificationPlaceStatus.fixed,
+        )
+        .length;
+  }
 
   factory QualificationPlan.fromJson(Map<String, dynamic> json) {
     return QualificationPlan(
@@ -1693,6 +1837,7 @@ class QualificationPlan {
       eligibleGroupSize: json['eligibleGroupSize'] as int?,
       extraGroups: _intListFromJson(json['extraGroups']),
       fixedByGroup: _intListFromJson(json['fixedByGroup']),
+      placeStatuses: parseQualificationPlaceStatuses(json['placeStatuses']),
     );
   }
 
@@ -1705,6 +1850,10 @@ class QualificationPlan {
       'eligibleGroupSize': eligibleGroupSize,
       'extraGroups': extraGroups,
       'fixedByGroup': fixedByGroup,
+      'placeStatuses': {
+        for (final entry in placeStatuses.entries)
+          entry.key: entry.value.jsonValue,
+      },
     };
   }
 

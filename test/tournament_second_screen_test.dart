@@ -354,7 +354,12 @@ void main() {
       );
       expect(firstSuggestion.dx, lessThan(fourthSuggestion.dx));
       expect(
-        find.descendant(of: merged, matching: find.textContaining('Empfohlene Partien')).evaluate(),
+        find
+            .descendant(
+              of: merged,
+              matching: find.textContaining('Empfohlene Partien'),
+            )
+            .evaluate(),
         hasLength(1),
       );
       expect(tester.takeException(), isNull);
@@ -746,15 +751,9 @@ void main() {
       tester.getRect(recentHeading).top,
       greaterThan(tester.getRect(nextHeading).bottom),
     );
-    expect(
-      find.textContaining('EMPFOHLENE PARTIEN FÜR BOARD 1'),
-      findsNothing,
-    );
+    expect(find.textContaining('EMPFOHLENE PARTIEN FÜR BOARD 1'), findsNothing);
     expect(find.textContaining('JETZT ZUWEISEN'), findsNothing);
-    expect(
-      find.textContaining('Empfohlene Partien · Gruppe A'),
-      findsWidgets,
-    );
+    expect(find.textContaining('Empfohlene Partien · Gruppe A'), findsWidgets);
     final firstBoardQueueFinder = find.byKey(
       const ValueKey('second-screen-director-board-1'),
     );
@@ -773,6 +772,185 @@ void main() {
     expect(find.text('Aktuell: ${match.participantShortLabel}'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'assigning a match shows the preparing animation on the standalone TV',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final tournament = _tournament()
+        ..directorModeEnabled = true
+        ..boardCount = 2;
+
+      Widget buildView() => MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            key: const ValueKey('tv'),
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildView());
+      await tester.pumpAndSettle();
+      expect(find.text('In Vorbereitung'), findsNothing);
+
+      final match = const OrderOfPlayController()
+          .plan(tournament, 0)
+          .planned
+          .first
+          .entry
+          .match;
+      expect(
+        const OrderOfPlayController().start(tournament, 0, match, 1),
+        isTrue,
+      );
+      await tester.pumpWidget(buildView());
+      await tester.pump();
+
+      expect(find.text('In Vorbereitung'), findsOneWidget);
+      expect(find.text('LIVE'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('second-screen-preparing-board-1')),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      expect(find.text('In Vorbereitung'), findsNothing);
+      expect(find.text('LIVE'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a finished match keeps its green board animation for ten seconds',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final tournament = _tournament()
+        ..directorModeEnabled = true
+        ..boardCount = 2;
+      final match = const OrderOfPlayController()
+          .plan(tournament, 0)
+          .planned
+          .first
+          .entry
+          .match;
+      expect(
+        const OrderOfPlayController().start(tournament, 0, match, 1),
+        isTrue,
+      );
+
+      Widget buildView() => MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            key: const ValueKey('tv'),
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildView());
+      await tester.pumpAndSettle();
+      expect(find.text('LIVE'), findsOneWidget);
+
+      match
+        ..homeLegs = 2
+        ..awayLegs = 0
+        ..finishedAt = DateTime.now();
+      await tester.pumpWidget(buildView());
+      await tester.pump();
+
+      expect(find.text('Partie beendet'), findsNWidgets(2));
+      expect(
+        find.byKey(const ValueKey('second-screen-finished-board-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('second-screen-finished-badge-1')),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      expect(find.text('Partie beendet'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('second-screen-free-board-1')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a new best performance opens a confetti popup for three seconds',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final tournament = _tournament()
+        ..directorModeEnabled = true
+        ..boardCount = 2;
+
+      Widget buildView() => MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            key: const ValueKey('tv'),
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildView());
+      await tester.pumpAndSettle();
+      expect(find.text('180 von Robin'), findsNothing);
+
+      final match = const OrderOfPlayController()
+          .plan(tournament, 0)
+          .planned
+          .first
+          .entry
+          .match;
+      match.bestPerformances = [
+        ...match.bestPerformances,
+        const BestPerformance(
+          type: BestPerformanceType.score180,
+          playerName: 'Robin',
+        ),
+      ];
+      await tester.pumpWidget(buildView());
+      await tester.pump();
+
+      expect(find.text('180 von Robin'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'second-screen-best-performance-popup-',
+              ),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      expect(find.text('180 von Robin'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('four active matches use a two-column board layout', (
     tester,
@@ -1160,7 +1338,10 @@ void main() {
       );
       expect(tester.getSize(occupancyTile).height, lessThan(74));
       expect(
-        find.descendant(of: boardTile, matching: find.textContaining('Empfohlene Partien')),
+        find.descendant(
+          of: boardTile,
+          matching: find.textContaining('Empfohlene Partien'),
+        ),
         findsOneWidget,
       );
       expect(
@@ -1593,7 +1774,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.text('Platzierung'), findsOneWidget);
+    expect(find.text('Finale / Spiel um Platz 3'), findsOneWidget);
     expect(find.text('Begegnung um Platz 3'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -1796,28 +1977,23 @@ void main() {
     await tester.tap(find.text('Siegprognose & Weiterkommen'));
     await tester.pumpAndSettle();
 
-    final groupA = find.byKey(
-      const ValueKey('second-screen-forecast-group-1'),
-    );
-    final groupB = find.byKey(
-      const ValueKey('second-screen-forecast-group-2'),
-    );
+    final groupA = find.byKey(const ValueKey('second-screen-forecast-group-1'));
+    final groupB = find.byKey(const ValueKey('second-screen-forecast-group-2'));
     expect(groupA, findsOneWidget);
     expect(groupB, findsOneWidget);
     expect(
       tester.getTopLeft(groupA).dy,
       closeTo(tester.getTopLeft(groupB).dy, 1),
     );
-    expect(
-      tester.getCenter(groupA).dx,
-      lessThan(tester.getCenter(groupB).dx),
-    );
+    expect(tester.getCenter(groupA).dx, lessThan(tester.getCenter(groupB).dx));
     expect(find.text('% Sieg'), findsNWidgets(2));
     expect(find.text('% Weiter'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Christmas forecast tables use translucent cards', (tester) async {
+  testWidgets('Christmas forecast tables use translucent cards', (
+    tester,
+  ) async {
     final styleNotifier = AppThemeController.instance.themeStyleNotifier;
     addTearDown(() => styleNotifier.value = AppThemeStyle.club);
     styleNotifier.value = AppThemeStyle.christmas;
@@ -2080,8 +2256,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.textContaining('Gesetzt'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('Ausgeschieden'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Kommt sicher weiter'), findsAtLeastNWidgets(1));
+    expect(
+      find.textContaining('Scheidet nach aktuellem Stand aus'),
+      findsAtLeastNWidgets(1),
+    );
     final recentMatch = find.byKey(const ValueKey('recent-result-6-C-D'));
     expect(recentMatch, findsOneWidget);
     final winnerSpans = <TextSpan>[];
@@ -2108,7 +2287,7 @@ void main() {
     expect(
       find.descendant(
         of: recentMatch,
-        matching: find.textContaining('Ausgeschieden'),
+        matching: find.textContaining('Scheidet nach aktuellem Stand aus'),
       ),
       findsOneWidget,
     );
@@ -2418,6 +2597,172 @@ void main() {
     expect(find.text('4 von 63 Partien abgeschlossen'), findsOneWidget);
     expect(find.text('4 / 56 Partien'), findsOneWidget);
     expect(find.text('0 / 7 Partien'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'top eight tournament counts all 43 scheduled matches from the start',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final players = [
+        for (var index = 1; index <= 16; index++)
+          TournamentPlayer.generated(index),
+      ];
+      final tournament = _tournament()
+        ..secondScreenActiveLayout = 'Fortschritt'
+        ..secondScreenLayouts['Fortschritt'] = const [
+          SecondScreenWidgetPlacement(
+            widgetId: 'stageProgress',
+            widthUnits: 2,
+            columnIndex: 1,
+          ),
+        ];
+      tournament.runStages
+        ..clear()
+        ..addAll([
+          GroupTournamentRunStage(
+            name: 'Gruppenphase',
+            groupPlayType: 'round_robin',
+            groups: [
+              TournamentGroup(
+                name: 'Gruppen',
+                playType: 'round_robin',
+                players: players,
+                matches: [
+                  for (var index = 0; index < 35; index++)
+                    GroupMatch(
+                      homePlayer: players[index % players.length],
+                      awayPlayer: players[(index + 1) % players.length],
+                      round: index + 1,
+                    ),
+                ],
+              ),
+            ],
+            qualificationPlan: null,
+            tieBreakers: const [],
+          ),
+          KnockoutTournamentRunStage(
+            name: 'Top 8',
+            rounds: [
+              [
+                for (var index = 0; index < 4; index++)
+                  GroupMatch(
+                    homePlayer: players[index * 2],
+                    awayPlayer: players[index * 2 + 1],
+                    round: 1,
+                  ),
+              ],
+              [for (var index = 0; index < 2; index++) GroupMatch(round: 2)],
+              [GroupMatch(round: 3)],
+            ],
+            placementMatches: [
+              GroupMatch(
+                round: 101,
+                placementKey: 'ko/0',
+                placementRank: 3,
+                label: 'Spiel um Platz 3',
+              ),
+            ],
+          ),
+        ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+              storage: _MemoryTournamentStorage(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('0 von 43 Partien abgeschlossen'), findsOneWidget);
+      expect(find.text('0 / 35 Partien'), findsOneWidget);
+      expect(find.text('0 / 8 Partien'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('recent results height can be increased and fitted to content', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final storage = _MemoryTournamentStorage();
+    final base = _tournament();
+    final group = base.runStages.first as GroupTournamentRunStage;
+    final groupPlayers = group.groups.first.players;
+    for (var index = 0; index < 6; index++) {
+      group.groups.first.matches.add(
+        GroupMatch(
+          homePlayer: groupPlayers[index % groupPlayers.length],
+          awayPlayer: groupPlayers[(index + 1) % groupPlayers.length],
+          round: 10 + index,
+          homeLegs: 2,
+          awayLegs: 0,
+        ),
+      );
+    }
+    final tournament = base
+      ..secondScreenActiveLayout = 'Standard'
+      ..secondScreenLayouts['Standard'] = const [
+        SecondScreenWidgetPlacement(
+          widgetId: 'recent',
+          widthUnits: 2,
+          heightUnits: 1,
+          columnIndex: 0,
+        ),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: storage,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+
+    final recentTile = find.byKey(const ValueKey('monitor-widget-recent'));
+    await tester.tap(
+      find.descendant(of: recentTile, matching: find.byTooltip('Höhe erhöhen')),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pump();
+    expect(tournament.secondScreenLayouts['Standard']!.first.heightUnits, 1.5);
+
+    await tester.tap(find.text('Layout anpassen'));
+    await tester.pump();
+    await tester.tap(
+      find.descendant(
+        of: recentTile,
+        matching: find.byTooltip('Höhe an Inhalt anpassen'),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Layout anwenden'));
+    await tester.pump();
+
+    expect(
+      tournament.secondScreenLayouts['Standard']!.first.heightUnits,
+      greaterThan(1.5),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -3411,7 +3756,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.textContaining(RegExp(r'· (vorläufig|gesetzt)')), findsNWidgets(16));
+    expect(
+      find.textContaining(RegExp(r'· (vorläufig|gesetzt)')),
+      findsNWidgets(16),
+    );
     expect(find.text('Halbfinale'), findsOneWidget);
     expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
     final verticalPreview = find.byKey(
@@ -3446,9 +3794,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining(RegExp(r'· (vorläufig|gesetzt)')), findsNWidgets(8));
-    expect(find.text('Gewinner Begegnung 1'), findsNWidgets(2));
-    expect(find.text('Gewinner Begegnung 2'), findsNWidgets(2));
+    expect(
+      find.textContaining(RegExp(r'· (vorläufig|gesetzt)')),
+      findsNWidgets(8),
+    );
+    expect(find.text('Gewinner Begegnung 1'), findsOneWidget);
+    expect(find.text('Gewinner Begegnung 2'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

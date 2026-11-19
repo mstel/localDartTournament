@@ -273,11 +273,7 @@ String _singleKnockoutColumnTitle(
   int roundIndex,
   int totalRounds,
 ) {
-  if (matches.isNotEmpty &&
-      matches.every((match) => _isPlacementMatchLabel(match.label))) {
-    return 'Platzierung';
-  }
-  return _bracketRoundTitle(roundIndex, totalRounds);
+  return knockoutRoundColumnTitle(matches, roundIndex, totalRounds);
 }
 
 bool _isPlacementMatchLabel(String? label) {
@@ -1077,7 +1073,9 @@ class _DoubleEliminationBracketView extends StatelessWidget {
             for (final match in finalMatches) [match],
           ],
           sourceMatches: sourceMatches,
-          roundTitles: const ['Finale'],
+          // Jedes Finale (inklusive Reset-Finale) bekommt eine eigene Spalte,
+          // damit die Spaltentitel zur Anzahl der Runden passt.
+          roundTitles: [for (var i = 0; i < finalMatches.length; i++) 'Finale'],
           roundCards: [
             for (var i = 0; i < finalMatches.length; i++)
               _matchCards([finalMatches[i]], i, finalMatches.length),
@@ -2210,6 +2208,14 @@ String? _emptySlotLabel({
   return sourceLabel ?? (allowsBye ? 'Freilos' : null);
 }
 
+String? _bracketQualificationHint(String label) {
+  if (label.contains('gesetzt')) return 'fixed';
+  if (label.contains('Vergleich') || label.contains('vorläufig')) {
+    return 'comparison';
+  }
+  return null;
+}
+
 bool _isRealBracketPlayer(TournamentPlayer? player) {
   if (player == null) {
     return false;
@@ -2253,6 +2259,15 @@ class _BracketPlayerSlot extends StatelessWidget {
         ? player?.name ?? 'offen'
         : matchDisplayLabel(label, fallback: '');
 
+    final qualificationHint = _bracketQualificationHint(displayLabel);
+    final qualificationColor = switch (qualificationHint) {
+      'fixed' =>
+        Theme.of(context).brightness == Brightness.light
+            ? const Color(0xFF2E7D32)
+            : const Color(0xFF86EFAC),
+      'comparison' => const Color(0xFFD6A441),
+      _ => isOpen ? colorScheme.onSurfaceVariant : null,
+    };
     final baseSlot = Container(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 6 : 10,
@@ -2281,8 +2296,12 @@ class _BracketPlayerSlot extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: isOpen ? colorScheme.onSurfaceVariant : null,
-                fontWeight: isWinner ? FontWeight.bold : FontWeight.normal,
+                color:
+                    qualificationColor ??
+                    (isOpen ? colorScheme.onSurfaceVariant : null),
+                fontWeight: isWinner || qualificationHint != null
+                    ? FontWeight.bold
+                    : FontWeight.normal,
               ),
             ),
           ),
@@ -2327,7 +2346,7 @@ class _BracketPlayerSlot extends StatelessWidget {
     }
 
     if (isEditable && player != null && slotIndex != null) {
-      return Draggable<int>(
+      slot = Draggable<int>(
         data: slotIndex!,
         feedback: Material(
           color: Colors.transparent,
@@ -2338,7 +2357,13 @@ class _BracketPlayerSlot extends StatelessWidget {
       );
     }
 
-    return slot;
+    final tooltip = switch (qualificationHint) {
+      'fixed' => 'Kommt sicher weiter',
+      'comparison' => 'Vergleich um Zusatzplatz',
+      'eliminated' => 'Scheidet nach aktuellem Stand aus',
+      _ => null,
+    };
+    return tooltip == null ? slot : Tooltip(message: tooltip, child: slot);
   }
 }
 

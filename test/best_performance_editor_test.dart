@@ -67,4 +67,51 @@ void main() {
 
     addTearDown(tester.view.reset);
   });
+
+  testWidgets('general save commits a pending best performance once', (
+    tester,
+  ) async {
+    List<BestPerformance> changed = const [];
+    final key = GlobalKey<BestPerformanceEditorState>();
+    final match = GroupMatch(
+      homePlayer: TournamentPlayer(
+        profileId: 'robin',
+        name: 'Robin',
+        isGenerated: false,
+      ),
+      awayPlayer: TournamentPlayer(
+        profileId: 'marvin',
+        name: 'Marvin',
+        isGenerated: false,
+      ),
+      round: 1,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BestPerformanceEditor(
+            key: key,
+            match: match,
+            initial: const [],
+            onChanged: (performances) => changed = performances,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Robin'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Marvin').last);
+    await tester.pumpAndSettle();
+
+    expect(key.currentState!.commitPending(), isTrue);
+    expect(changed, hasLength(1));
+    expect(changed.single.playerName, 'Marvin');
+    expect(changed.single.type, BestPerformanceType.score180);
+
+    expect(key.currentState!.commitPending(), isTrue);
+    expect(changed, hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
 }
