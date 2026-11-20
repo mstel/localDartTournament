@@ -270,7 +270,9 @@ void main() {
       final change = changes.values.single.single;
 
       expect(change.homeHypothetical, isTrue);
-      expect(change.awayHypothetical, isFalse);
+      // Auch der qualifizierte Gegner erhält hier nur hypothetische Punkte,
+      // weil beide Werte aus dem What-if-Replay stammen.
+      expect(change.awayHypothetical, isTrue);
       expect(change.homeDelta, greaterThan(0));
       expect(change.homeRatingBefore, isNotNull);
       expect(change.homeRatingAfter, isNotNull);

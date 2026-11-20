@@ -77,7 +77,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'Gilt nur für die gewünschte letzte Phase (K.-o.-Phase), nicht für alle ausgewählten Phasen.',
+        'Gilt nur für die gewünschte letzte Phase (KO-Phase), nicht für alle ausgewählten Phasen.',
       ),
       findsOneWidget,
     );

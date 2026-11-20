@@ -76,20 +76,25 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Einstellungen'));
         await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(
-          find.text('Turnierkonfiguration bearbeiten'),
-          300,
-          scrollable: find.byType(Scrollable).first,
+        final editButtonFinder = find.byKey(
+          const ValueKey('edit-tournament-configuration'),
         );
-        await tester.pumpAndSettle();
-
-        final editButton = tester.widget<OutlinedButton>(
-          find.ancestor(
-            of: find.text('Turnierkonfiguration bearbeiten'),
-            matching: find.byType(OutlinedButton),
-          ),
-        );
-        expect(editButton.onPressed == null, hasResult);
+        if (hasResult) {
+          // Nach Ergebniseintrag wird der Button komplett ausgeblendet,
+          // statt nur deaktiviert zu bleiben.
+          expect(editButtonFinder, findsNothing);
+          expect(find.text('Turnierkonfiguration bearbeiten'), findsNothing);
+        } else {
+          await tester.scrollUntilVisible(
+            editButtonFinder,
+            300,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.pumpAndSettle();
+          expect(editButtonFinder, findsOneWidget);
+          final editButton = tester.widget<OutlinedButton>(editButtonFinder);
+          expect(editButton.onPressed, isNotNull);
+        }
         expect(tester.takeException(), isNull);
       },
     );

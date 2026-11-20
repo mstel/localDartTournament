@@ -10,9 +10,9 @@ import 'tournament_planning_parameters.dart';
 
 class TournamentPlanningRequest {
   static const modeLabels = <String, String>{
-    'single_knockout': 'Einfaches KO',
-    'double_knockout': 'Doppel-KO (Verlierer-Runde)',
-    'triple_knockout': 'Triple-KO (zwei Verlierer-Chancen)',
+    'single_knockout': 'KO-Phase',
+    'double_knockout': 'Doppel-KO-Phase (Verlierer-Runde)',
+    'triple_knockout': 'Triple-KO-Phase (zwei Verlierer-Chancen)',
     'kratzer': 'Kratzer (Leben-System)',
     'groups:round_robin': 'Gruppen: Jeder gegen jeden (einmal)',
     'groups:double_round_robin': 'Gruppen: Jeder gegen jeden (zweimal)',
@@ -153,9 +153,8 @@ class PlannedStage {
   final String type;
   final int groupCount;
   final TournamentGameFormat format;
-  String get label => type == 'groups'
-      ? '$groupCount Gruppen (Jeder gegen jeden)'
-      : 'K.-o.-Finalrunde';
+  String get label =>
+      type == 'groups' ? '$groupCount Gruppen (Jeder gegen jeden)' : 'KO-Phase';
 }
 
 /// Estimates dependencies per round. This prevents unrealistically counting
@@ -336,7 +335,7 @@ class TournamentFormatPlanner {
                     duration.totalMinutes <= request.maximumMinutes));
         candidates.add(
           TournamentFormatSuggestion(
-            title: 'Einfaches K.-o.',
+            title: 'KO-Phase',
             stages: [
               PlannedStage(
                 type: 'single_knockout',

@@ -1,6 +1,6 @@
 import '../../../../domain/tournament_models.dart';
 
-/// Einheitliche Beschriftung der gewählten K.-o.-Auslosungsmethode.
+/// Einheitliche Beschriftung der gewählten KO-Auslosungsmethode.
 String knockoutSeedingModeLabel(String mode) => switch (mode) {
   'random_cross' => 'Gruppenplatzierung - Zufällige Kreuzpaarungen',
   'elo' => 'Leistungsbasierte Setzliste (ELO)',

@@ -628,7 +628,7 @@ class HomeOverviewService {
     return stats;
   }
 
-  /// Das Podium folgt dem finalen K.-o.-Baum, nicht der Anzahl aller Siege.
+  /// Das Podium folgt dem finalen KO-Baum, nicht der Anzahl aller Siege.
   /// Sonst kann ein Finalverlierer mit vielen Gruppensiegen vor dem
   /// Finalsieger stehen.
   List<TournamentPlayer> _finalStageRanking(CreatedTournament tournament) {

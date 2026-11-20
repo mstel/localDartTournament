@@ -49,7 +49,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(stageType);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Doppel-KO').last);
+    await tester.tap(find.text('Doppel-KO-Phase').last);
     await tester.pumpAndSettle();
 
     List<String?> previewPlayers() {

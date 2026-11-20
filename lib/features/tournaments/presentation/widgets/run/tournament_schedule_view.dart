@@ -160,7 +160,7 @@ class TournamentScheduleView extends StatelessWidget {
                         ),
                       ),
                       icon: const Icon(Icons.account_tree_outlined),
-                      label: const Text('K.-o.-Baum im Vollbild öffnen'),
+                      label: const Text('KO-Baum im Vollbild öffnen'),
                     ),
                   ),
                 ],
@@ -306,7 +306,7 @@ class _KnockoutTreePage extends StatelessWidget {
     final rounds = stage.rounds;
     return Scaffold(
       appBar: AppBar(
-        title: Text('${stage.name} · K.-o.-Baum'),
+        title: Text('${stage.name} · KO-Baum'),
         leading: IconButton(
           tooltip: 'Zurück zum Spielplan',
           onPressed: () => Navigator.of(context).pop(),

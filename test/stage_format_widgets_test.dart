@@ -51,7 +51,7 @@ void main() {
       );
       expect(
         find.textContaining(
-          'K.-o.: ${suggestion.duration!.knockoutSlots} Zeitblöcke',
+          'KO: ${suggestion.duration!.knockoutSlots} Zeitblöcke',
         ),
         findsOneWidget,
       );

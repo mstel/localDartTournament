@@ -83,7 +83,7 @@ class _KnockoutPreview extends StatelessWidget {
           initialValue: effectiveSeedingMode,
           decoration: const InputDecoration(
             labelText: 'Auslosungsmethode',
-            helperText: 'Gilt für die aktuell bearbeitete K.-o.-Phase.',
+            helperText: 'Gilt für die aktuell bearbeitete KO-Phase.',
             helperMaxLines: 2,
             border: OutlineInputBorder(),
           ),
@@ -1310,9 +1310,9 @@ class _StageList extends StatelessWidget {
   String _typeLabel(String type) {
     return switch (type) {
       'swiss' => 'Schweizer System',
-      'single_knockout' => 'K.-o.-Runde',
-      'double_knockout' => 'Doppel-K.-o.',
-      'triple_knockout' => 'Triple-K.-o.',
+      'single_knockout' => 'KO-Phase',
+      'double_knockout' => 'Doppel-KO-Phase',
+      'triple_knockout' => 'Triple-KO-Phase',
       'kratzer' => 'Kratzer-Modus',
       _ => 'Gruppen/Liga',
     };

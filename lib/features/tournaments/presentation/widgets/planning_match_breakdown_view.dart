@@ -24,7 +24,7 @@ class PlanningMatchBreakdownView extends StatelessWidget {
           ),
         if (breakdown.knockoutParticipants > 1) ...[
           Text(
-            'K.-o.: ${breakdown.knockoutParticipants} ${breakdown.groupSizes.isEmpty ? 'Teilnehmer' : 'Teilnehmer (bis zu ${breakdown.qualifiersPerGroup} je Gruppe)'} → '
+            'KO: ${breakdown.knockoutParticipants} ${breakdown.groupSizes.isEmpty ? 'Teilnehmer' : 'Teilnehmer (bis zu ${breakdown.qualifiersPerGroup} je Gruppe)'} → '
             '${breakdown.knockoutParticipants} − 1 = ${breakdown.knockoutMatches} Begegnungen',
           ),
           if (breakdown.byes > 0)
@@ -33,7 +33,7 @@ class PlanningMatchBreakdownView extends StatelessWidget {
             ),
         ],
         Text(
-          'Gesamt: ${breakdown.groupTotal} Gruppenspiele + ${breakdown.knockoutMatches} K.-o.-Begegnungen = ${breakdown.total} Begegnungen',
+          'Gesamt: ${breakdown.groupTotal} Gruppenspiele + ${breakdown.knockoutMatches} KO-Begegnungen = ${breakdown.total} Begegnungen',
         ),
         const Text(
           'Begegnungen sind Matches; die Legs innerhalb eines Matches werden hier nicht einzeln gezählt.',

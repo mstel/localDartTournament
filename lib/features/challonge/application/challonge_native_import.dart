@@ -335,7 +335,7 @@ class ChallongeNativeImport {
         final expected = qualified.map(_playerIdentity).toSet();
         if (actual.length != expected.length || !actual.containsAll(expected)) {
           issues.add(
-            'Weiterkommen aus der Gruppenphase unterscheidet sich von Challonge. Die historische K.-o.-Besetzung wird als tatsächliche Teilnehmerliste übernommen.',
+            'Weiterkommen aus der Gruppenphase unterscheidet sich von Challonge. Die historische KO-Besetzung wird als tatsächliche Teilnehmerliste übernommen.',
           );
         }
       }
@@ -416,7 +416,7 @@ class ChallongeNativeImport {
           mode == 'double elimination' &&
           finals.any((m) => (m['round'] as int? ?? 0) > winnerRounds + 1);
       final setup = TournamentStage(
-        name: mode == 'double elimination' ? 'Doppel-K.-o.' : 'K.-o.-Phase',
+        name: mode == 'double elimination' ? 'Doppel-KO-Phase' : 'KO-Phase',
         type: mode == 'double elimination'
             ? 'double_knockout'
             : 'single_knockout',
@@ -496,7 +496,7 @@ class ChallongeNativeImport {
                     : null);
             if (selected == null) {
               throw FormatException(
-                '${archived.name}: Challonge-Spiel ${match['id']} in Runde $roundNumber (${home?.name} gegen ${away?.name}) passt nicht in das rekonstruierte Doppel-K.-o.-Bracket. Zielspiele: ${available.map((target) => '${target.homePlayer?.name ?? 'offen'} gegen ${target.awayPlayer?.name ?? 'offen'}').join('; ')}.',
+                '${archived.name}: Challonge-Spiel ${match['id']} in Runde $roundNumber (${home?.name} gegen ${away?.name}) passt nicht in das rekonstruierte Doppel-KO-Bracket. Zielspiele: ${available.map((target) => '${target.homePlayer?.name ?? 'offen'} gegen ${target.awayPlayer?.name ?? 'offen'}').join('; ')}.',
               );
             }
             applyResult(selected, match);
@@ -652,7 +652,7 @@ class ChallongeNativeImport {
             )
             .join('; ');
         throw FormatException(
-          'Die eigene K.-o.-Weiterleitung konnte ${pending.length} historische Begegnungen von ${archived.name} nicht nachspielen: ${pending.map((m) => '${m['id']} (${bySourceId['${m['player1_id']}']?.name ?? 'Freilos'} gegen ${bySourceId['${m['player2_id']}']?.name ?? 'Freilos'})').join('; ')}. Offene Zielspiele: $unresolvedTargets. Import vor dem Speichern abgebrochen.',
+          'Die eigene KO-Weiterleitung konnte ${pending.length} historische Begegnungen von ${archived.name} nicht nachspielen: ${pending.map((m) => '${m['id']} (${bySourceId['${m['player1_id']}']?.name ?? 'Freilos'} gegen ${bySourceId['${m['player2_id']}']?.name ?? 'Freilos'})').join('; ')}. Offene Zielspiele: $unresolvedTargets. Import vor dem Speichern abgebrochen.',
         );
       }
       runs[runs.length - 1] = replayStage;
@@ -665,7 +665,7 @@ class ChallongeNativeImport {
         });
         if (i < 0) {
           issues.add(
-            'Gesamtplatz ${p['name']} (${p['finalRank']}) liegt außerhalb der finalen K.-o.-Phase und wurde nicht gegen deren Rangfolge geprüft. Die Gruppenwertung bleibt separat erhalten.',
+            'Gesamtplatz ${p['name']} (${p['finalRank']}) liegt außerhalb der finalen KO-Phase und wurde nicht gegen deren Rangfolge geprüft. Die Gruppenwertung bleibt separat erhalten.',
           );
         }
         if (i >= 0 && i + 1 != p['finalRank']) {

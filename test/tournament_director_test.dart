@@ -936,6 +936,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
+    // In Übersicht/Leitung wird die Auslosungsmethode bewusst nicht gezeigt -
+    // weder neben dem Button noch in der Vollbild-Vorschau.
+    expect(find.textContaining('Auslosungsmethode:'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

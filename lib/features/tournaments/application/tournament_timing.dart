@@ -46,9 +46,9 @@ class TournamentTiming {
 
   /// Alle Partien, die von Anfang an im Spielplan vorgesehen sind.
   ///
-  /// K.-o.-Runden nach der ersten Runde und Platzierungsspiele zählen auch
+  /// KO-Runden nach der ersten Runde und Platzierungsspiele zählen auch
   /// dann, wenn ihre Teilnehmer noch offen sind. Dadurch ergibt eine
-  /// 16er-Gruppenphase mit Top-8-K.-o. sofort 35 + 8 = 43 Partien.
+  /// 16er-Gruppenphase mit Top-8-KO sofort 35 + 8 = 43 Partien.
   static List<GroupMatch> scheduledMatches(CreatedTournament tournament) {
     final all = matches(tournament);
     final alwaysScheduled = <GroupMatch>{};

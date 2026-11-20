@@ -495,6 +495,13 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _manualGroupSlotOrder = null;
         _manualKnockoutSlotOrder = null;
       });
+      // Beim Wechsel in "Turnierstruktur" soll direkt die erste Phase
+      // vorausgewählt und mit ihren Einstellungen geladen sein - analog zu
+      // initState und dem Format-Planner.
+      if (_stages.isNotEmpty) {
+        _editStage(0);
+        _structureSectionController.expand();
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1016,7 +1023,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     Map<String, String> stored,
   ) => {
     for (final entry in stored.entries)
-      entry.key: parseQualificationPlaceStatus(entry.value) ??
+      entry.key:
+          parseQualificationPlaceStatus(entry.value) ??
           QualificationPlaceStatus.eliminated,
   };
 
@@ -1404,9 +1412,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   String _stageTypeLabel(String type) {
     return switch (type) {
       'swiss' => 'Schweizer System',
-      'single_knockout' => 'K.-o.-Runde',
-      'double_knockout' => 'Doppel-K.-o.',
-      'triple_knockout' => 'Triple-K.-o.',
+      'single_knockout' => 'KO-Phase',
+      'double_knockout' => 'Doppel-KO-Phase',
+      'triple_knockout' => 'Triple-KO-Phase',
       'kratzer' => 'Kratzer-Modus',
       _ => 'Gruppenphase',
     };
@@ -1503,12 +1511,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     if (widget.existingTournament != null || _groupQualifierCountEdited) {
       return;
     }
-    final participantCount =
-        _players.isNotEmpty
-            ? _players.length
-            : int.tryParse(_playerCountController.text);
+    final participantCount = _players.isNotEmpty
+        ? _players.length
+        : int.tryParse(_playerCountController.text);
     if (participantCount == null || participantCount < 1) return;
-    final defaultCount = (participantCount / 2).round().clamp(1, participantCount);
+    final defaultCount = (participantCount / 2).round().clamp(
+      1,
+      participantCount,
+    );
     _groupQualifierCountController.text = '$defaultCount';
   }
 
@@ -1948,8 +1958,9 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           : inheritedQualificationPlan?.summary,
       qualificationPlaceStatuses: _isGroupStageForm
           ? {
-              for (final entry in groupQualificationPlan?.placeStatuses.entries ??
-                  const <MapEntry<String, QualificationPlaceStatus>>[])
+              for (final entry
+                  in groupQualificationPlan?.placeStatuses.entries ??
+                      const <MapEntry<String, QualificationPlaceStatus>>[])
                 entry.key: entry.value.jsonValue,
             }
           : const {},
@@ -2158,8 +2169,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ..clear()
           ..addAll(
             suggestion.configurations.map(
-              (stage) =>
-                  stage.isGroupStage
+              (stage) => stage.isGroupStage
                   ? stage.copyWith(groupAssignmentMode: 'manual')
                   : stage,
             ),
@@ -2225,7 +2235,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ..add(
           groups == 0
               ? TournamentStage(
-                  name: 'K.-o.-Finale',
+                  name: 'KO-Phase',
                   type: 'single_knockout',
                   knockoutParticipantCount: inferredPlayerCount,
                   knockoutBracketSize: _plannerNextPowerOfTwo(
@@ -2264,7 +2274,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       if (suggestion.stages.length > 1) {
         _stages.add(
           TournamentStage(
-            name: 'K.-o.-Finale',
+            name: 'KO-Phase',
             type: 'single_knockout',
             knockoutParticipantCount: qualifierCount,
             knockoutBracketSize: _plannerNextPowerOfTwo(qualifierCount),
@@ -2378,7 +2388,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           ? 'Neues Turnier'
           : _tournamentNameController.text.trim();
       final existing = widget.existingTournament;
-      final preparedStages = _preserveExistingGroupAssignment(existing, _stages);
+      final preparedStages = _preserveExistingGroupAssignment(
+        existing,
+        _stages,
+      );
       final needsMatchmakingRatings = preparedStages.any(
         (stage) => stage.groupSizes.asMap().entries.any(
           (entry) =>
@@ -3477,15 +3490,15 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       ),
                     const DropdownMenuItem(
                       value: 'single_knockout',
-                      child: Text('K.-o.-Runde'),
+                      child: Text('KO-Phase'),
                     ),
                     const DropdownMenuItem(
                       value: 'double_knockout',
-                      child: Text('Doppel-KO'),
+                      child: Text('Doppel-KO-Phase'),
                     ),
                     const DropdownMenuItem(
                       value: 'triple_knockout',
-                      child: Text('Triple-KO'),
+                      child: Text('Triple-KO-Phase'),
                     ),
                   ],
                   onChanged:

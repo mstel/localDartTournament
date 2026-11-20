@@ -208,4 +208,52 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'second monitor closes the review after main window acknowledgement',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final tournament = _tiedGroupTournament();
+
+      Widget buildView(CreatedTournament current) => MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: current,
+            isStandaloneWindow: true,
+            storage: _RecordingStorage([current]),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildView(tournament));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('group-end-review-dialog')),
+        findsOneWidget,
+      );
+
+      // Das Hauptfenster bestätigt und speichert; der Monitor liest das Turnier
+      // beim nächsten Poll als neue Instanz ein.
+      GroupEndReviewService.acknowledge(
+        tournament,
+        0,
+        tournament.runStages.first as GroupTournamentRunStage,
+      );
+      tournament.updatedAt = DateTime.now();
+      final acknowledged = CreatedTournament.fromJson(tournament.toJson());
+
+      await tester.pumpWidget(buildView(acknowledged));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('group-end-review-dialog')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

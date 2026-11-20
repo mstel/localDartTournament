@@ -96,9 +96,15 @@ class TournamentMatchEloService {
             match.awayPlayer!,
             includeUnassignedPlayers: ranking.countUnassignedPlayers,
           );
-          final homeHypothetical = snapshot.isHypothetical(homeKey);
-          final awayHypothetical = snapshot.isHypothetical(awayKey);
-          final hasHypothetical = homeHypothetical || awayHypothetical;
+          final homeBelowThreshold = snapshot.isHypothetical(homeKey);
+          final awayBelowThreshold = snapshot.isHypothetical(awayKey);
+          final hasHypothetical = homeBelowThreshold || awayBelowThreshold;
+          // Sobald ein Beteiligter die Qualifikationsschwelle noch nicht
+          // erfüllt, kommen BEIDE Werte aus dem What-if-Replay. Auch der
+          // eigentlich qualifizierte Gegner erhält dadurch nur hypothetische
+          // Punkte und muss entsprechend gekennzeichnet werden.
+          final homeHypothetical = hasHypothetical;
+          final awayHypothetical = hasHypothetical;
           final delta = hasHypothetical
               ? snapshot.hypotheticalMatchDeltas[key]
               : snapshot.matchDeltas[key];

@@ -61,7 +61,7 @@ class _MiniKnockoutGroupRunSectionState
               const SizedBox(height: 6),
               Text(
                 group.playType == 'mini_knockout'
-                    ? 'Mini-KO-Runde'
+                    ? 'Mini-KO-Phase'
                     : _groupPlayTypeLabel(group.playType),
                 style: Theme.of(context).textTheme.titleMedium,
               ),

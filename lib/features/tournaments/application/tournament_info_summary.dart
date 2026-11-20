@@ -50,7 +50,11 @@ class TournamentInfoSummary {
 
   static String advancement(TournamentStage stage) {
     final plan = stage.qualificationSummary;
-    if (plan != null && plan.isNotEmpty) return plan;
+    if (plan != null && plan.isNotEmpty) {
+      // Bestehende Turniere haben den alten Text „8 Teilnehmer - …“ bereits
+      // persistiert. Auch dort soll die Anzeige jetzt „8 weiter - …“ zeigen.
+      return plan.replaceFirst(' Teilnehmer -', ' weiter -');
+    }
     final count = stage.qualifiedParticipantCount;
     return count == null ? 'Keine Weiterkommen-Regel' : '$count weiter';
   }
@@ -92,9 +96,9 @@ class TournamentInfoSummary {
   static String stageType(TournamentStage stage) {
     if (stage.isGroupStage) return 'Gruppenphase';
     return switch (stage.type) {
-      'double_knockout' => 'Doppel-K.-o.',
+      'double_knockout' => 'Doppel-KO-Phase',
       'triple_knockout' || 'kratzer' => 'Kratzer-Modus',
-      _ => 'K.-o.-Phase',
+      _ => 'KO-Phase',
     };
   }
 }

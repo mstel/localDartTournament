@@ -178,8 +178,8 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
         children: [
           Text(
             '${archive.usesNativeLogic ? 'Challonge-Vergleich' : 'Challonge-Archiv'} · ${switch (archive.mode) {
-              'single elimination' => 'Einfach-K.-o.',
-              'double elimination' => 'Doppel-K.-o.',
+              'single elimination' => 'KO-Phase',
+              'double elimination' => 'Doppel-KO-Phase',
               'round robin' => 'Jeder gegen jeden',
               'swiss' => 'Schweizer System',
               _ => archive.mode,
@@ -282,7 +282,7 @@ class _ChallongeArchivePageState extends State<ChallongeArchivePage> {
                 child: Text('$issue'),
               ),
             const Text(
-              'Historische Paarungen und K.-o.-Startplätze werden übernommen; die Auslosung wird damit nicht geprüft.',
+              'Historische Paarungen und KO-Startplätze werden übernommen; die Auslosung wird damit nicht geprüft.',
             ),
             const SizedBox(height: 16),
           ],

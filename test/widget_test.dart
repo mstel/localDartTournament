@@ -278,7 +278,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('stage-type-field')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('K.-o.-Runde').last);
+    await tester.tap(find.text('KO-Phase').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Start mit allen Teilnehmern'), findsOneWidget);
@@ -324,7 +324,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('K.-o.-Runde 1'),
+      find.text('KO-Phase 1'),
       500,
       scrollable: find
           .descendant(
@@ -335,7 +335,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('K.-o.-Runde 1'), findsOneWidget);
+    expect(find.text('KO-Phase 1'), findsOneWidget);
 
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
@@ -378,10 +378,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      tester.widget<TextField>(qualifierField).controller!.text,
-      '5',
-    );
+    expect(tester.widget<TextField>(qualifierField).controller!.text, '5');
     expect(tester.takeException(), isNull);
   });
 
@@ -413,9 +410,9 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('stage-type-field')));
     await tester.pumpAndSettle();
-    expect(find.text('Doppel-KO'), findsWidgets);
-    expect(find.text('Triple-KO'), findsWidgets);
-    await tester.tap(find.text('Doppel-KO').last);
+    expect(find.text('Doppel-KO-Phase'), findsWidgets);
+    expect(find.text('Triple-KO-Phase'), findsWidgets);
+    await tester.tap(find.text('Doppel-KO-Phase').last);
     await tester.pumpAndSettle();
 
     await _expectRandomSeedingOption(tester);
@@ -426,7 +423,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('stage-type-field')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Triple-KO').last);
+    await tester.tap(find.text('Triple-KO-Phase').last);
     await tester.pumpAndSettle();
 
     await _expectRandomSeedingOption(tester);
@@ -1485,7 +1482,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('stage-type-field')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('K.-o.-Runde').last);
+    await tester.tap(find.text('KO-Phase').last);
     await tester.pumpAndSettle();
 
     expect(find.text('12 Weiter'), findsOneWidget);
@@ -1581,7 +1578,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('stage-type-field')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('K.-o.-Runde').last);
+    await tester.tap(find.text('KO-Phase').last);
     await tester.pumpAndSettle();
 
     expect(find.text('16 Weiter'), findsOneWidget);
@@ -1808,7 +1805,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('stage-type-field')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('K.-o.-Runde').last);
+    await tester.tap(find.text('KO-Phase').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Übernahme aus vorheriger Phase'), findsOneWidget);
@@ -1855,8 +1852,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2 Phasen im Turnier'), findsOneWidget);
-    expect(find.text('K.-o.-Runde 1'), findsOneWidget);
-    expect(find.textContaining('K.-o.-Runde'), findsWidgets);
+    expect(find.text('KO-Phase 1'), findsOneWidget);
+    expect(find.textContaining('KO-Phase'), findsWidgets);
 
     await openReviewSection(tester);
     await revealInCurrentForm(tester, find.text('Turnier anlegen'));
@@ -1869,7 +1866,7 @@ void main() {
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
     expect(find.text('Runde 1'), findsNothing);
 
-    await selectTournamentStage(tester, '2. K.-o.-Runde 1');
+    await selectTournamentStage(tester, '2. KO-Phase 1');
 
     expect(find.byType(TournamentRunPage), findsOneWidget);
     expect(find.text('Turnieransicht'), findsOneWidget);
@@ -1937,7 +1934,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Phase abschließen'));
     await tester.pumpAndSettle();
-    final groupEndReview = find.byKey(const ValueKey('group-end-review-dialog'));
+    final groupEndReview = find.byKey(
+      const ValueKey('group-end-review-dialog'),
+    );
     if (groupEndReview.evaluate().isNotEmpty) {
       await tester.tap(
         find.byKey(const ValueKey('group-end-review-acknowledge')),
@@ -1950,7 +1949,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('K.-o.-Runde'), findsWidgets);
+    expect(find.textContaining('KO-Phase'), findsWidgets);
     expect(find.text('Spielplan'), findsOneWidget);
     expect(find.text('Letzte Ergebnisse'), findsOneWidget);
   });
@@ -1976,7 +1975,8 @@ void main() {
 
     for (
       var attempt = 0;
-      attempt < 8 && find.text('Passende Turnierform finden').evaluate().isEmpty;
+      attempt < 8 &&
+          find.text('Passende Turnierform finden').evaluate().isEmpty;
       attempt++
     ) {
       await tester.drag(find.byType(ListView).last, const Offset(0, 600));
@@ -1986,7 +1986,9 @@ void main() {
     await tester.ensureVisible(finderButton);
     await tester.pumpAndSettle();
     await tester.tap(finderButton);
-    await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 1)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 1)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Vorschläge berechnen'));

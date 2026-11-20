@@ -26,7 +26,7 @@ class AdvancementChance {
   /// Chance to reach the next stage.
   final double advancementProbability;
 
-  /// Chance to win the whole tournament, including the following K.O. stage.
+  /// Chance to win the whole tournament, including the following KO stage.
   final double tournamentWinProbability;
 }
 

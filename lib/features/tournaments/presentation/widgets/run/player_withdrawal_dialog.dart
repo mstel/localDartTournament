@@ -102,7 +102,7 @@ class _WithdrawalState extends State<PlayerWithdrawalDialog> {
           ),
           const SizedBox(height: 12),
           const Text(
-            '„Alle Begegnungen“ betrifft auch bisherige Ergebnisse. Wenn frühere Phasen betroffen sind, werden die davon abhängigen späteren Phasen neu aufgebaut und ihre Ergebnisse zurückgesetzt. Im K.-o.-Baum kommt der Gegner eines offenen Spiels kampflos weiter.',
+            '„Alle Begegnungen“ betrifft auch bisherige Ergebnisse. Wenn frühere Phasen betroffen sind, werden die davon abhängigen späteren Phasen neu aufgebaut und ihre Ergebnisse zurückgesetzt. Im KO-Baum kommt der Gegner eines offenen Spiels kampflos weiter.',
           ),
         ],
       ),

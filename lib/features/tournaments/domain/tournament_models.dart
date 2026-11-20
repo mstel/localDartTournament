@@ -1878,14 +1878,14 @@ class QualificationPlan {
         : 'Top $fixedPerGroup je Gruppe';
 
     if (extraCount == 0) {
-      return '$totalQualifiers Teilnehmer - $fixedText';
+      return '$totalQualifiers weiter - $fixedText';
     }
 
     final groupText = extraGroups.isEmpty
         ? ''
         : ' aus ${_formatGroupSelection(extraGroups)}';
 
-    return '$totalQualifiers Teilnehmer - $fixedText + '
+    return '$totalQualifiers weiter - $fixedText + '
         'beste $extraCount $extraRank. Plätze$groupText';
   }
 

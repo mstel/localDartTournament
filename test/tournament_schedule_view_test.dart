@@ -129,7 +129,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.drag(find.byType(ListView).first, const Offset(0, -500));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('K.-o.-Baum im Vollbild öffnen'));
+    await tester.tap(find.text('KO-Baum im Vollbild öffnen'));
     await tester.pumpAndSettle();
     expect(find.text('Finale'), findsWidgets);
     expect(find.text('Teilnehmer 1'), findsWidgets);

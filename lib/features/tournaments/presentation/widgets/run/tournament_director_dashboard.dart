@@ -15,7 +15,6 @@ import '../../../application/tournament_audio_announcement_service.dart';
 import '../../../application/result_entry_performance_trace.dart';
 import '../../../domain/tournament_models.dart';
 import 'tournament_timing_panel.dart';
-import 'brackets/knockout_seeding_mode_label.dart';
 import 'tournament_second_screen_view.dart';
 import 'recommended_matches_table.dart';
 import 'recent_match_result_card.dart';
@@ -393,20 +392,6 @@ class _TournamentDirectorDashboardState
     return tournament.runStages
         .skip(widget.activeStage + 1)
         .any((stage) => stage is KnockoutTournamentRunStage);
-  }
-
-  String? _nextKnockoutDrawMethodLabel(CreatedTournament tournament) {
-    for (
-      var index = widget.activeStage + 1;
-      index < tournament.runStages.length;
-      index++
-    ) {
-      final stage = tournament.runStages[index];
-      if (stage is KnockoutTournamentRunStage) {
-        return knockoutSeedingModeLabelForStage(tournament, stage);
-      }
-    }
-    return null;
   }
 
   Widget _box(List<Widget> children) => Card(
@@ -1416,6 +1401,7 @@ class _TournamentDirectorDashboardState
                             tournament: t,
                             isStandaloneWindow: true,
                             showNextStagePreviewInitially: true,
+                            showDrawMethodInNextStagePreview: false,
                             onClose: () => Navigator.of(context).pop(),
                           ),
                         ),
@@ -1423,23 +1409,8 @@ class _TournamentDirectorDashboardState
                       icon: const Icon(Icons.account_tree_outlined),
                       label: const Text('Vorschau nächste Phase'),
                     ),
-                    if (_nextKnockoutDrawMethodLabel(t) case final label?)
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 260),
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Auslosungsmethode: $label',
-                            textAlign: TextAlign.end,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ),
-                      ),
+                    // In Übersicht/Leitung steht die Auslosungsmethode bewusst
+                    // nicht dabei - weder hier noch in der Vollbild-Vorschau.
                   ],
                 ),
             ],

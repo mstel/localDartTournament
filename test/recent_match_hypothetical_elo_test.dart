@@ -51,6 +51,7 @@ void main() {
                   awayRatingBefore: 1000,
                   awayRatingAfter: 987,
                   homeHypothetical: true,
+                  awayHypothetical: true,
                 ),
               ],
             ),
@@ -59,7 +60,7 @@ void main() {
       );
 
       expect(find.text('+13 Elo (1000 → 1013) (hypothetisch)'), findsOneWidget);
-      expect(find.text('-13 Elo (1000 → 987)'), findsOneWidget);
+      expect(find.text('-13 Elo (1000 → 987) (hypothetisch)'), findsOneWidget);
       expect(find.text('0 Elo (1000 → 1000)'), findsNothing);
       expect(tester.takeException(), isNull);
     },

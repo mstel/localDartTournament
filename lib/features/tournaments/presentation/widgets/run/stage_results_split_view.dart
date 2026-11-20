@@ -1209,10 +1209,10 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
           child: Center(
             child: Text(
               _filter == MatchCategoryFilter.open
-                  ? 'Keine offenen K.-o.-Begegnungen.'
+                  ? 'Keine offenen KO-Begegnungen.'
                   : _filter == MatchCategoryFilter.finished
-                  ? 'Noch keine K.-o.-Begegnungen beendet.'
-                  : 'Keine K.-o.-Begegnungen vorhanden.',
+                  ? 'Noch keine KO-Begegnungen beendet.'
+                  : 'Keine KO-Begegnungen vorhanden.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

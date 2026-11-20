@@ -393,11 +393,11 @@ class ExpandedFormatPlanner {
           if (type != 'kratzer' || target == 1) {
             yield TournamentStage(
               name: type == 'single_knockout'
-                  ? 'Einfaches KO'
+                  ? 'KO-Phase'
                   : type == 'double_knockout'
-                  ? 'Doppel-KO'
+                  ? 'Doppel-KO-Phase'
                   : type == 'triple_knockout'
-                  ? 'Triple-KO'
+                  ? 'Triple-KO-Phase'
                   : 'Kratzer ($lives Leben)',
               type: type,
               knockoutParticipantCount: n,

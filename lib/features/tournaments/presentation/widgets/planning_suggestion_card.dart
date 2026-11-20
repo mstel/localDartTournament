@@ -200,7 +200,7 @@ class PlanningSuggestionCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         'Gruppen: ${duration.groupSlots} Zeitblöcke × ${duration.matchMinutes.toStringAsFixed(1)} min = ${duration.groupMinutes} min'
-                        '  |  K.-o.: ${duration.knockoutSlots} Zeitblöcke × ${duration.knockoutMatchMinutes.toStringAsFixed(1)} min = ${duration.knockoutMinutes} min'
+                        '  |  KO: ${duration.knockoutSlots} Zeitblöcke × ${duration.knockoutMatchMinutes.toStringAsFixed(1)} min = ${duration.knockoutMinutes} min'
                         '  |  Gesamt: ${duration.totalMinutes} min',
                         style: theme.textTheme.bodySmall,
                       ),

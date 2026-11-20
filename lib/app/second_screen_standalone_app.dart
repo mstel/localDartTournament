@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'app_theme.dart';
 import 'theme_controller.dart';
+import '../features/tournaments/application/second_screen_session_registry.dart';
 import '../features/tournaments/data/tournament_storage.dart';
 import '../features/tournaments/domain/tournament_models.dart';
 import '../features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
@@ -106,6 +107,10 @@ class _SecondScreenStandalonePageState
   @override
   void dispose() {
     _pollTimer?.cancel();
+    final tournamentId = _tournament?.id;
+    if (tournamentId != null && tournamentId.isNotEmpty) {
+      unawaited(SecondScreenSessionRegistry.clear(tournamentId));
+    }
     super.dispose();
   }
 
@@ -129,6 +134,9 @@ class _SecondScreenStandalonePageState
           _loading = false;
           _loadError = null;
         });
+      }
+      if (matched != null && matched.id.isNotEmpty) {
+        unawaited(SecondScreenSessionRegistry.heartbeat(matched.id));
       }
     } catch (error) {
       if (mounted && _loadError != error.toString()) {

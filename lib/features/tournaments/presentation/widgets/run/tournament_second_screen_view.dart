@@ -17,6 +17,7 @@ import 'brackets/knockout_seeding_mode_label.dart';
 import '../../utils/match_display_label.dart';
 import '../../../domain/player_insight.dart';
 import '../../../domain/second_screen_widget_placement.dart';
+import '../../../domain/second_screen_dialog_requests.dart';
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../domain/engines/group_standings_engine.dart';
 import '../../../domain/tournament_flow_priority_settings.dart';
@@ -52,7 +53,7 @@ import '../../../../league/presentation/league_overview.dart';
 
 const Map<String, String> _monitorWidgetTitles = {
   'combined': 'Tabellen/Siegprognose mit Umschalter',
-  'knockoutBracket': 'K.-o.-Turnierbaum',
+  'knockoutBracket': 'KO-Turnierbaum',
   'recent': 'Zuletzt beendete Matches',
   'boards': 'Nächste Begegnungen',
   'stageProgress': 'Fortschritt nach Phasen',
@@ -130,6 +131,7 @@ class TournamentSecondScreenView extends StatefulWidget {
     this.isStandaloneWindow = false,
     this.onClose,
     this.showNextStagePreviewInitially = false,
+    this.showDrawMethodInNextStagePreview = true,
     this.forecastService,
     this.storage,
     this.database,
@@ -139,6 +141,7 @@ class TournamentSecondScreenView extends StatefulWidget {
   final bool isStandaloneWindow;
   final VoidCallback? onClose;
   final bool showNextStagePreviewInitially;
+  final bool showDrawMethodInNextStagePreview;
   final GroupAdvancementForecastService? forecastService;
   final TournamentStorage? storage;
   final LocalAppDatabase? database;
@@ -181,7 +184,9 @@ class _TournamentSecondScreenViewState
   DateTime? _completionObservedAt;
   Timer? _completionWatchTimer;
   String? _groupEndReviewShownKey;
+  bool _groupEndReviewDialogOpen = false;
   String? _shownGroupAssignmentRequestId;
+  bool _groupAssignmentDialogOpen = false;
   String? _shownTournamentInfoRequestId;
   bool _tournamentInfoDialogOpen = false;
   bool _showGroupAssignmentSuccess = false;
@@ -835,6 +840,13 @@ class _TournamentSecondScreenViewState
 
   void _checkGroupEndReview() {
     final review = _pendingGroupEndReview();
+    // Wurde die Bestätigung im Hauptfenster erteilt (oder die Phase inzwischen
+    // abgeschlossen), verschwindet der bereits geöffnete Dialog auch auf dem
+    // Zweitmonitor - analog zum Turnierinfo-Dialog.
+    if (_groupEndReviewDialogOpen &&
+        (review == null || review.key != _groupEndReviewShownKey)) {
+      _closeGroupEndReviewDialogIfOpen();
+    }
     if (review == null || _groupEndReviewShownKey == review.key) return;
     _groupEndReviewShownKey = review.key;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -843,15 +855,28 @@ class _TournamentSecondScreenViewState
     });
   }
 
+  void _closeGroupEndReviewDialogIfOpen() {
+    if (!_groupEndReviewDialogOpen) return;
+    _groupEndReviewDialogOpen = false;
+    _groupEndReviewShownKey = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (navigator.canPop()) navigator.pop();
+    });
+  }
+
   Future<void> _showGroupEndReview(
     ({int index, GroupTournamentRunStage stage, String key}) review,
   ) async {
+    _groupEndReviewDialogOpen = true;
     final confirmed = await GroupEndReviewDialog.show(
       context: context,
       tournament: widget.tournament,
       stageIndex: review.index,
       stage: review.stage,
     );
+    _groupEndReviewDialogOpen = false;
     if (confirmed != true || !mounted) return;
     GroupEndReviewService.acknowledge(
       widget.tournament,
@@ -885,13 +910,22 @@ class _TournamentSecondScreenViewState
     _shownGroupAssignmentRequestId = request.id;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(
-        SecondScreenGroupAssignmentDialog.show(
-          context: context,
-          request: request,
-        ),
-      );
+      // Den vorläufigen Hinweis aus der Tabelle entfernen, solange der
+      // Zuweisungsdialog sichtbar ist.
+      setState(() => _groupAssignmentDialogOpen = true);
+      unawaited(_showGroupAssignmentDialog(request));
     });
+  }
+
+  Future<void> _showGroupAssignmentDialog(
+    SecondScreenGroupAssignmentRequest request,
+  ) async {
+    await SecondScreenGroupAssignmentDialog.show(
+      context: context,
+      request: request,
+    );
+    if (!mounted) return;
+    setState(() => _groupAssignmentDialogOpen = false);
   }
 
   void _checkTournamentInfoRequest() {
@@ -973,7 +1007,12 @@ class _TournamentSecondScreenViewState
   Widget? _buildGroupAssignmentNotice(BuildContext context) {
     final colors = _displayColors(context);
     final pending = _groupAssignmentPending(widget.tournament);
-    if (!pending && !_showGroupAssignmentSuccess) return null;
+    // Sobald der Zuweisungsdialog auf dem Monitor erscheint, ist der Hinweis
+    // überflüssig und soll verschwinden.
+    if (_groupAssignmentDialogOpen ||
+        (!pending && !_showGroupAssignmentSuccess)) {
+      return null;
+    }
     final success = !pending && _showGroupAssignmentSuccess;
     final color = success ? const Color(0xFF70E0BA) : Colors.amber;
     return Container(
@@ -996,7 +1035,8 @@ class _TournamentSecondScreenViewState
             child: Text(
               success
                   ? 'Gruppen erfolgreich zugewiesen'
-                  : 'Zuweisung der Gruppen noch nicht erfolgt! Standardmäßig alphabetisch',
+                  : 'Zuweisung der Gruppen noch nicht erfolgt! Die Gruppen sind aktuell '
+                        'nur alphabetisch und vorläufig für die Darstellung sortiert.',
               style: TextStyle(color: color, fontSize: 12),
             ),
           ),
@@ -3825,8 +3865,9 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     CreatedTournament tournament,
     int activeIndex,
-    TournamentRunStage? stage,
-  ) {
+    TournamentRunStage? stage, {
+    bool showPanelHeader = true,
+  }) {
     switch (_standingsDisplayMode) {
       case _StandingsDisplayMode.standings:
         return _buildStandingsPanel(
@@ -3835,6 +3876,7 @@ class _TournamentSecondScreenViewState
           stage,
           full: true,
           expand: false,
+          showHeader: showPanelHeader,
         );
       case _StandingsDisplayMode.forecast:
         final league = tournament.leagueMatch;
@@ -3869,6 +3911,9 @@ class _TournamentSecondScreenViewState
             tournament,
             activeIndex,
             stage,
+            // Format-Hinweis und Tie-Breaker stehen bereits im Header oben;
+            // der Panel-Kopf würde sie ein zweites Mal zeigen.
+            showPanelHeader: false,
           ),
         ),
       ],
@@ -4021,7 +4066,7 @@ class _TournamentSecondScreenViewState
           const Expanded(
             child: Center(
               child: Text(
-                'Keine K.-o.-Phase als Nächstes geplant.',
+                'Keine KO-Phase als Nächstes geplant.',
                 style: TextStyle(color: Colors.white70),
               ),
             ),
@@ -4196,10 +4241,12 @@ class _TournamentSecondScreenViewState
                   placementMatches: displayStage.placementMatches,
                   onEditResult: (_) {},
                   canEditResults: false,
-                  drawMethodLabel: knockoutSeedingModeLabelForStage(
-                    widget.tournament,
-                    displayStage,
-                  ),
+                  drawMethodLabel: widget.showDrawMethodInNextStagePreview
+                      ? knockoutSeedingModeLabelForStage(
+                          widget.tournament,
+                          displayStage,
+                        )
+                      : null,
                 ),
         ),
       ],
@@ -4215,6 +4262,7 @@ class _TournamentSecondScreenViewState
     TournamentRunStage? stage, {
     bool full = false,
     bool expand = true,
+    bool showHeader = true,
   }) {
     if (stage == null) {
       return const Center(
@@ -4280,52 +4328,58 @@ class _TournamentSecondScreenViewState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ?_buildGroupAssignmentNotice(context),
-          Row(
-            children: [
-              const Icon(Icons.leaderboard, size: 20, color: Color(0xFF70E0BA)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Tabellen & Zwischenstände',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: _displayColors(context).text,
+          if (showHeader) ...[
+            Row(
+              children: [
+                const Icon(
+                  Icons.leaderboard,
+                  size: 20,
+                  color: Color(0xFF70E0BA),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Tabellen & Zwischenstände',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: _displayColors(context).text,
+                    ),
                   ),
                 ),
-              ),
-              if (formatText != null) ...[
+                if (formatText != null) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      '($formatText)',
+                      key: const ValueKey('standings-format-hint'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _displayColors(context).mutedText,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    '($formatText)',
-                    key: const ValueKey('standings-format-hint'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _displayColors(context).mutedText,
+                Tooltip(
+                  message: helpText,
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: OutlinedButton(
+                      key: const ValueKey('standings-tie-breaker-help'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                      ),
+                      onPressed: () {},
+                      child: const Text('?'),
                     ),
                   ),
                 ),
               ],
-              const SizedBox(width: 8),
-              Tooltip(
-                message: helpText,
-                child: SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: OutlinedButton(
-                    key: const ValueKey('standings-tie-breaker-help'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(48, 48),
-                    ),
-                    onPressed: () {},
-                    child: const Text('?'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
+            ),
+            const SizedBox(height: 10),
+          ],
           if (expand)
             Expanded(child: SingleChildScrollView(child: wrapContent))
           else
@@ -4342,7 +4396,7 @@ class _TournamentSecondScreenViewState
         child: Column(
           children: [
             Text(
-              'K.-o.-Runde: ${stage.name}',
+              'KO-Phase: ${stage.name}',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -4495,7 +4549,7 @@ class _TournamentSecondScreenViewState
               ? _buildKnockoutRoundsPreview(context, koStage)
               : Center(
                   child: Text(
-                    'Keine K.-o.-Phase im aktuellen Turnier geplant.',
+                    'Keine KO-Phase im aktuellen Turnier geplant.',
                     style: TextStyle(color: colors.mutedText),
                   ),
                 ));
@@ -6125,13 +6179,13 @@ class _BoardStatusBadge extends StatelessWidget {
   );
 }
 
-/// Status-Badge mit einem deutlich sichtbaren, einmaligen Impuls.
+/// Status-Badge mit einem deutlich sichtbaren, zweimaligen Impuls.
 ///
-/// Animiert werden nur Rand- und Hintergrundfarbe. Die Borderstärke ist fest,
-/// es gibt keinen Schatten und keine Geometrieänderung: dadurch bleibt die
-/// Kachel exakt gleich groß und andere Steuerelemente werden nicht verschoben.
-/// Der zehn Sekunden lange Status selbst wird weiterhin außerhalb dieses
-/// Widgets verwaltet.
+/// Animiert werden nur Rand- und Hintergrundfarbe. Die Borderstärke entspricht
+/// exakt der des ruhenden [_BoardStatusBadge] (1 px), es gibt keinen Schatten
+/// und keine Geometrieänderung: dadurch bleibt die Kachel beim Wechsel und
+/// während der Animation exakt gleich groß. Der zehn Sekunden lange Status
+/// selbst wird weiterhin außerhalb dieses Widgets verwaltet.
 class _GlowBadge extends StatefulWidget {
   const _GlowBadge({super.key, required this.label, required this.color});
 
@@ -6144,17 +6198,15 @@ class _GlowBadge extends StatefulWidget {
 
 class _GlowBadgeState extends State<_GlowBadge>
     with SingleTickerProviderStateMixin {
-  static const _pulseDuration = Duration(milliseconds: 900);
+  static const _pulseDuration = Duration(milliseconds: 1200);
 
   late final AnimationController _controller;
-  late final Animation<double> _pulse;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: _pulseDuration)
       ..forward();
-    _pulse = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
   }
 
   @override
@@ -6165,16 +6217,18 @@ class _GlowBadgeState extends State<_GlowBadge>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _pulse,
+    animation: _controller,
     builder: (context, _) {
-      final pulse = 1 - _pulse.value;
+      // Eine Cosinuswelle über vier Halbperioden = zwei vollständige Blinks.
+      // cos(0) = 1 (hell), cos(pi) = -1 (dunkel), ... am Ende wieder hell.
+      final pulse = (1 + cos(4 * pi * _controller.value)) / 2;
       final borderColor = widget.color.withValues(alpha: 0.35 + 0.65 * pulse);
-      final fillColor = widget.color.withValues(alpha: 0.12 + 0.32 * pulse);
+      final fillColor = widget.color.withValues(alpha: 0.1 + 0.4 * pulse);
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
           color: fillColor,
-          border: Border.all(color: borderColor, width: 3),
+          border: Border.all(color: borderColor, width: 1),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(

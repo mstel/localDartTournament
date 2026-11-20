@@ -72,7 +72,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(type.hitTestable());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('K.-o.-Runde').last);
+    await tester.tap(find.text('KO-Phase').last);
     await tester.pumpAndSettle();
     for (final place in [5, 7, 15]) {
       final chip = find.widgetWithText(FilterChip, 'Platz $place');
@@ -166,7 +166,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(type.hitTestable());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Doppel-KO').last);
+    await tester.tap(find.text('Doppel-KO-Phase').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Optionale Platzierungsspiele'), findsOneWidget);

@@ -1388,7 +1388,7 @@ class _TournamentResultSummary {
       legCount: legCount,
       playerCount: tournament.players.length,
       rankingHint: finalStage is KnockoutTournamentRunStage
-          ? 'Die Platzierung folgt dem finalen K.-o.-Baum; die Balken zeigen gewonnene Legs im gesamten Turnier.'
+          ? 'Die Platzierung folgt dem finalen KO-Baum; die Balken zeigen gewonnene Legs im gesamten Turnier.'
           : finalStage is GroupTournamentRunStage &&
                 finalStage.groups.length == 1
           ? 'Die Platzierung folgt den Tie-Breaker-Einstellungen der finalen Gruppenphase.'

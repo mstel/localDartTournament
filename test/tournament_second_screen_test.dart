@@ -638,7 +638,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Keine K.-o.-Phase im aktuellen Turnier geplant.'),
+        find.text('Keine KO-Phase im aktuellen Turnier geplant.'),
         findsNothing,
       );
       await tester.tap(find.text('Mannschaftsvergleich').last);
@@ -648,7 +648,7 @@ void main() {
       expect(find.text('Heimmannschaft'), findsWidgets);
       expect(find.text('Gastmannschaft'), findsWidgets);
       expect(
-        find.text('Keine K.-o.-Phase im aktuellen Turnier geplant.'),
+        find.text('Keine KO-Phase im aktuellen Turnier geplant.'),
         findsNothing,
       );
       expect(tester.takeException(), isNull);
@@ -959,7 +959,9 @@ void main() {
       final laterDecoration = badgeDecoration(tester, badge);
       final laterRect = tester.getRect(badge);
 
-      expect(startDecoration.border!.top.width, 3);
+      // Der animierte Badge hat exakt dieselbe feste Borderstärke wie der
+      // ruhende Status-Badge, sonst wächst die Kachel und verschiebt Controls.
+      expect(startDecoration.border!.top.width, 1);
       expect(startDecoration.boxShadow, isNull);
       expect(laterDecoration.boxShadow, isNull);
       expect(
@@ -967,6 +969,17 @@ void main() {
         isNot(laterDecoration.border!.top.color),
       );
       expect(startDecoration.color, isNot(laterDecoration.color));
+
+      // Nach der halben Laufzeit ist der zweite Blink wieder auf dem hellen
+      // Ausgangswert angekommen.
+      await tester.pump(const Duration(milliseconds: 300));
+      final secondBlinkDecoration = badgeDecoration(tester, badge);
+      expect(
+        secondBlinkDecoration.border!.top.color,
+        startDecoration.border!.top.color,
+      );
+      expect(secondBlinkDecoration.color, startDecoration.color);
+
       expect(laterRect.width, closeTo(startRect.width, 0.5));
       expect(laterRect.height, closeTo(startRect.height, 0.5));
       expect(tester.takeException(), isNull);
@@ -1868,7 +1881,7 @@ void main() {
 
     expect(
       find.text(
-        'Zuweisung der Gruppen noch nicht erfolgt! Standardmäßig alphabetisch',
+        'Zuweisung der Gruppen noch nicht erfolgt! Die Gruppen sind aktuell nur alphabetisch und vorläufig für die Darstellung sortiert.',
       ),
       findsOneWidget,
     );
@@ -1879,7 +1892,7 @@ void main() {
 
     expect(
       find.text(
-        'Zuweisung der Gruppen noch nicht erfolgt! Standardmäßig alphabetisch',
+        'Zuweisung der Gruppen noch nicht erfolgt! Die Gruppen sind aktuell nur alphabetisch und vorläufig für die Darstellung sortiert.',
       ),
       findsNothing,
     );
@@ -2019,10 +2032,7 @@ void main() {
       expect(find.text('KO · Turnierbaum'), findsOneWidget);
       expect(find.text('6/33 gespielt'), findsNothing);
       expect(find.text('KO: 0/3'), findsOneWidget);
-      expect(
-        find.text('Keine K.-o.-Phase als Nächstes geplant.'),
-        findsNothing,
-      );
+      expect(find.text('Keine KO-Phase als Nächstes geplant.'), findsNothing);
       expect(find.text('Teilnehmer offen'), findsNothing);
       expect(find.text('Bernd'), findsOneWidget);
       expect(find.text('Noah'), findsOneWidget);
@@ -2271,10 +2281,10 @@ void main() {
 
     final picker = find.byType(SimpleDialog);
     expect(
-      find.descendant(of: picker, matching: find.text('K.-o.-Turnierbaum')),
+      find.descendant(of: picker, matching: find.text('KO-Turnierbaum')),
       findsOneWidget,
     );
-    await tester.tap(find.text('K.-o.-Turnierbaum'));
+    await tester.tap(find.text('KO-Turnierbaum'));
     await tester.pumpAndSettle();
 
     final bracketWidget = find.byKey(
@@ -3628,7 +3638,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Tabellen & Zwischenstände'), findsAtLeastNWidgets(2));
+    // Der doppelte Format-/Tie-Breaker-Kopf wurde entfernt: nur noch der
+    // obere Block bleibt sichtbar.
+    expect(find.text('Tabellen & Zwischenstände'), findsOneWidget);
     expect(find.text('Nächste Partien · Vorschläge'), findsOneWidget);
     expect(find.text('Nächste Begegnungen'), findsNothing);
     expect(

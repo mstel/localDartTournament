@@ -52,6 +52,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _secondScreenFallbackActive = false;
   Timer? _secondScreenInfoPollTimer;
   bool _secondScreenInfoVisible = false;
+  bool _secondScreenDetected = false;
   int? _tieBreakerDraftStageIndex;
   List<String> _tieBreakerDraft = const [];
   Future<void> _checkpoint() {
@@ -1385,6 +1386,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     _tournamentNotesController.text = widget.tournament.tournamentNotes;
     _secondScreenInfoVisible =
         widget.tournament.secondScreenTournamentInfo?.visible ?? false;
+    // Der Monitor kann auch nachträglich oder aus einer anderen App-Instanz
+    // gestartet worden sein; deshalb wird unabhängig von einer lokalen
+    // Prozess-Referenz gepollt.
+    _startSecondScreenInfoPolling();
     WidgetsBinding.instance.addObserver(this);
     if (widget.tournament.leagueMatch != null) {
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
@@ -1414,7 +1419,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   bool get _isSecondScreenActive =>
-      _secondScreenProcess != null || _secondScreenFallbackActive;
+      _secondScreenProcess != null ||
+      _secondScreenFallbackActive ||
+      _secondScreenDetected;
 
   Future<void> _openSecondScreen() async {
     try {
@@ -1472,11 +1479,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _pollSecondScreenInfoState() async {
-    if (!_isSecondScreenActive) {
-      _secondScreenInfoPollTimer?.cancel();
-      return;
-    }
     try {
+      final detected =
+          _secondScreenProcess != null ||
+          _secondScreenFallbackActive ||
+          await SecondScreenSessionRegistry.isActive(widget.tournament.id);
+      if (!mounted) return;
+      if (detected != _secondScreenDetected) {
+        setState(() => _secondScreenDetected = detected);
+      }
+      if (!detected) return;
       final stored = (await _tournamentStorage.loadTournaments())
           .where((candidate) => candidate.id == widget.tournament.id)
           .cast<CreatedTournament>()
@@ -1492,7 +1504,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _handleSecondScreenClosed() async {
-    _secondScreenInfoPollTimer?.cancel();
     if (!mounted) return;
     setState(() {
       _secondScreenProcess = null;
@@ -6838,6 +6849,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     const Divider(height: 28),
                                     if (widget.tournament.importedArchive ==
                                             null &&
+                                        !_hasRecordedTournamentResults() &&
                                         (widget.tournament.leagueMatch ==
                                                 null ||
                                             !widget
@@ -6849,10 +6861,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         alignment:
                                             AlignmentDirectional.centerStart,
                                         child: OutlinedButton.icon(
+                                          key: const ValueKey(
+                                            'edit-tournament-configuration',
+                                          ),
                                           onPressed:
-                                              _hasRecordedTournamentResults()
-                                              ? null
-                                              : _editTournamentConfiguration,
+                                              _editTournamentConfiguration,
                                           icon: const Icon(Icons.edit_outlined),
                                           label: Text(
                                             widget.tournament.leagueMatch ==
@@ -6889,10 +6902,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         CrossAxisAlignment.stretch,
                                     children: [
                                       Expanded(
+                                        flex: 3,
                                         child: _secondScreenSettingsCard(),
                                       ),
                                       const SizedBox(width: 12),
-                                      Expanded(child: pdfButton),
+                                      // Schmaler, damit Öffnen-, Info- und
+                                      // Hilfe-Button in einer Zeile bleiben.
+                                      Expanded(flex: 2, child: pdfButton),
                                     ],
                                   ),
                                 );

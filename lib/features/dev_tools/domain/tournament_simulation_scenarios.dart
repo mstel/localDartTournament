@@ -447,7 +447,7 @@ const tournamentDevelopmentScenarios = [
     playerCount: 7,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'K.-o.-Runde',
+        name: 'KO-Runde',
         qualifiers: 1,
         lossLimit: 1,
       ),
@@ -458,7 +458,7 @@ const tournamentDevelopmentScenarios = [
     playerCount: 5,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Mini-K.-o.-Weiterkommen',
+        name: 'Mini-KO-Weiterkommen',
         qualifiers: 3,
         lossLimit: 1,
       ),
@@ -469,12 +469,12 @@ const tournamentDevelopmentScenarios = [
     playerCount: 13,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Play-in-K.-o.',
+        name: 'Play-in-KO',
         qualifiers: 8,
         lossLimit: 1,
       ),
       SimulationEliminationStageSpec(
-        name: 'Final-K.-o.',
+        name: 'Final-KO',
         qualifiers: 1,
         lossLimit: 1,
       ),
@@ -485,7 +485,7 @@ const tournamentDevelopmentScenarios = [
     playerCount: 10,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Doppel-K.-o.',
+        name: 'Doppel-KO',
         qualifiers: 1,
         lossLimit: 2,
       ),
@@ -496,7 +496,7 @@ const tournamentDevelopmentScenarios = [
     playerCount: 9,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Doppel-K.-o.-Weiterkommen',
+        name: 'Doppel-KO-Weiterkommen',
         qualifiers: 5,
         lossLimit: 2,
       ),
@@ -507,12 +507,12 @@ const tournamentDevelopmentScenarios = [
     playerCount: 18,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Doppel-K.-o.-Vorrunde',
+        name: 'Doppel-KO-Vorrunde',
         qualifiers: 6,
         lossLimit: 2,
       ),
       SimulationEliminationStageSpec(
-        name: 'K.-o.-Endrunde',
+        name: 'KO-Endrunde',
         qualifiers: 1,
         lossLimit: 1,
       ),
@@ -523,7 +523,7 @@ const tournamentDevelopmentScenarios = [
     playerCount: 12,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Triple-K.-o.',
+        name: 'Triple-KO',
         qualifiers: 1,
         lossLimit: 3,
       ),
@@ -534,7 +534,7 @@ const tournamentDevelopmentScenarios = [
     playerCount: 11,
     stages: [
       SimulationEliminationStageSpec(
-        name: 'Triple-K.-o.-Weiterkommen',
+        name: 'Triple-KO-Weiterkommen',
         qualifiers: 4,
         lossLimit: 3,
       ),
@@ -577,12 +577,12 @@ const tournamentDevelopmentScenarios = [
         roundRobinRepeats: [2, 1, 1, 2],
       ),
       SimulationEliminationStageSpec(
-        name: 'Doppel-K.-o.-Zwischenrunde',
+        name: 'Doppel-KO-Zwischenrunde',
         qualifiers: 4,
         lossLimit: 2,
       ),
       SimulationEliminationStageSpec(
-        name: 'Final-K.-o.',
+        name: 'Final-KO',
         qualifiers: 1,
         lossLimit: 1,
       ),
@@ -611,7 +611,7 @@ const tournamentDevelopmentScenarios = [
         extraGroups: [1, 2, 3, 4, 5, 6, 7],
       ),
       SimulationEliminationStageSpec(
-        name: 'Doppel-K.-o.-Finalrunde',
+        name: 'Doppel-KO-Finalrunde',
         qualifiers: 1,
         lossLimit: 2,
       ),
@@ -637,7 +637,7 @@ const tournamentDevelopmentScenarios = [
         extraGroups: [1, 2],
       ),
       SimulationEliminationStageSpec(
-        name: 'K.-o.-Finalrunde',
+        name: 'KO-Finalrunde',
         qualifiers: 1,
         lossLimit: 1,
       ),
@@ -669,7 +669,7 @@ const tournamentDevelopmentScenarios = [
         extraGroups: [1, 2, 3, 4],
       ),
       SimulationEliminationStageSpec(
-        name: 'Triple-K.-o.-Finalrunde',
+        name: 'Triple-KO-Finalrunde',
         qualifiers: 1,
         lossLimit: 3,
       ),
@@ -697,7 +697,7 @@ const tournamentDevelopmentScenarios = [
         extraGroups: [1, 2, 3],
       ),
       SimulationEliminationStageSpec(
-        name: 'Triple-K.-o.-Zwischenrunde',
+        name: 'Triple-KO-Zwischenrunde',
         qualifiers: 5,
         lossLimit: 3,
       ),

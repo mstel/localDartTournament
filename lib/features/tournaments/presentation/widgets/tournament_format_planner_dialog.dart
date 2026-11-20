@@ -92,14 +92,14 @@ class _TournamentFormatPlannerDialogState
 
   static const _modeDescriptions = <String, String>{
     'single_knockout':
-        'Einfaches K.-o.-System (Single Elimination):\n\n'
+        'Einfaches KO-System (Single Elimination):\n\n'
         'Wer eine Begegnung verliert, scheidet sofort aus dem Turnier aus. Der Gewinner zieht in die nächste Runde ein, bis im Finale der Turniersieger ermittelt wird.',
     'double_knockout':
-        'Doppel-K.-o.-System (Double Elimination):\n\n'
+        'Doppel-KO-System (Double Elimination):\n\n'
         'Jeder Teilnehmer hat zwei Chancen. Wer in der Hauptrunde (Winners Bracket) verliert, scheidet nicht aus, sondern wechselt in die Verliererrunde (Losers Bracket). Erst bei der zweiten Niederlage scheidet ein Teilnehmer endgültig aus.',
     'triple_knockout':
-        'Triple-K.-o.-System (Triple Elimination):\n\n'
-        'Jeder Teilnehmer scheidet erst nach der dritten Niederlage aus. Neben der Hauptrunde gibt es zwei Auffangrunden (B- und C-Bracket), wodurch allen Teilnehmern mindestens drei garantierte K.-o.-Partien geboten werden.',
+        'Triple-KO-System (Triple Elimination):\n\n'
+        'Jeder Teilnehmer scheidet erst nach der dritten Niederlage aus. Neben der Hauptrunde gibt es zwei Auffangrunden (B- und C-Bracket), wodurch allen Teilnehmern mindestens drei garantierte KO-Partien geboten werden.',
     'kratzer':
         'Kratzer-Modus (Leben-System):\n\n'
         'Alle Teilnehmer starten mit einer festen Anzahl an Leben (z. B. 3 bis 5 Leben). Jede verlorene Partie kostet ein Leben („Kratzer“). Wer alle Leben aufgebraucht hat, scheidet aus. Die verbleibenden Teilnehmer treten gegeneinander an, bis nur noch ein Sieger übrig ist.',
@@ -548,7 +548,7 @@ class _TournamentFormatPlannerDialogState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Die Schätzung berücksichtigt Runden, begrenzt nutzbare Boards und Wartezeiten zwischen KO-Runden.',
+                'Die Schätzung berücksichtigt Runden, begrenzt nutzbare Boards und Wartezeiten zwischen KO-Phasen.',
               ),
               const SizedBox(height: 16),
               AdaptiveTileLayout(
@@ -728,7 +728,7 @@ class _TournamentFormatPlannerDialogState
                     decoration: InputDecoration(
                       labelText: 'Teilnehmer (Top X / Finalrunde)',
                       helperText:
-                          'Anzahl Teilnehmer für die Final-/KO-Runde (z. B. 6 für Top 6 mit Freilosen bei 12 Teilnehmern). Leer: automatisch.',
+                          'Anzahl Teilnehmer für die Final-/KO-Phase (z. B. 6 für Top 6 mit Freilosen bei 12 Teilnehmern). Leer: automatisch.',
                       helperMaxLines: 3,
                       errorText: _manualQualifiersError,
                       border: const OutlineInputBorder(),
@@ -782,7 +782,7 @@ class _TournamentFormatPlannerDialogState
                     items: const [
                       DropdownMenuItem(
                         value: 'single_knockout',
-                        child: Text('Einfaches KO (Standard)'),
+                        child: Text('KO-Phase (Standard)'),
                       ),
                       DropdownMenuItem(
                         value: null,
@@ -790,11 +790,11 @@ class _TournamentFormatPlannerDialogState
                       ),
                       DropdownMenuItem(
                         value: 'double_knockout',
-                        child: Text('Doppel-KO'),
+                        child: Text('Doppel-KO-Phase'),
                       ),
                       DropdownMenuItem(
                         value: 'triple_knockout',
-                        child: Text('Triple-KO'),
+                        child: Text('Triple-KO-Phase'),
                       ),
                       DropdownMenuItem(
                         value: 'kratzer',
@@ -855,7 +855,7 @@ class _TournamentFormatPlannerDialogState
                       decoration: const InputDecoration(
                         labelText: 'Auslosungsmethode',
                         helperText:
-                            'Gilt nur für die gewünschte letzte Phase (K.-o.-Phase), nicht für alle ausgewählten Phasen.',
+                            'Gilt nur für die gewünschte letzte Phase (KO-Phase), nicht für alle ausgewählten Phasen.',
                         helperMaxLines: 2,
                         border: OutlineInputBorder(),
                       ),
@@ -1033,7 +1033,7 @@ class _TournamentFormatPlannerDialogState
                     key: const ValueKey('planner-allow-draws'),
                     title: const Text('Unentschieden erlauben'),
                     subtitle: const Text(
-                      'Zusätzlich gerade Leg-Längen in Liga-/Gruppenphasen: 1 Punkt je Teilnehmer. K.-o. und Set-Formate benötigen einen Sieger.',
+                      'Zusätzlich gerade Leg-Längen in Liga-/Gruppenphasen: 1 Punkt je Teilnehmer. KO und Set-Formate benötigen einen Sieger.',
                     ),
                     value: _allowDraws,
                     onChanged: _calculating
