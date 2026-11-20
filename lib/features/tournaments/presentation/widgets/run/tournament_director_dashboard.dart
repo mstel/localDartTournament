@@ -15,6 +15,7 @@ import '../../../application/tournament_audio_announcement_service.dart';
 import '../../../application/result_entry_performance_trace.dart';
 import '../../../domain/tournament_models.dart';
 import 'tournament_timing_panel.dart';
+import 'brackets/knockout_seeding_mode_label.dart';
 import 'tournament_second_screen_view.dart';
 import 'recommended_matches_table.dart';
 import 'recent_match_result_card.dart';
@@ -106,7 +107,6 @@ class TournamentDirectorDashboard extends StatefulWidget {
 
 class _TournamentDirectorDashboardState
     extends State<TournamentDirectorDashboard> {
-  final _matchSearchController = TextEditingController();
   final _recentResultsController = ScrollController();
   bool _busy = false;
   String? _actionError;
@@ -163,7 +163,8 @@ class _TournamentDirectorDashboardState
     runSpacing: 8,
     crossAxisAlignment: WrapCrossAlignment.center,
     children: [
-      if (_canRecomputeSchedule) _recomputeScheduleButton('recompute-fixed-schedule-$suffix'),
+      if (_canRecomputeSchedule)
+        _recomputeScheduleButton('recompute-fixed-schedule-$suffix'),
       ..._fixedScheduleEditButtons(suffix),
     ],
   );
@@ -326,7 +327,6 @@ class _TournamentDirectorDashboardState
     _idleBoardTimer?.cancel();
     final alertAudio = _alertAudio;
     if (alertAudio != null) unawaited(alertAudio.dispose());
-    _matchSearchController.dispose();
     _recentResultsController.dispose();
     super.dispose();
   }
@@ -393,6 +393,20 @@ class _TournamentDirectorDashboardState
     return tournament.runStages
         .skip(widget.activeStage + 1)
         .any((stage) => stage is KnockoutTournamentRunStage);
+  }
+
+  String? _nextKnockoutDrawMethodLabel(CreatedTournament tournament) {
+    for (
+      var index = widget.activeStage + 1;
+      index < tournament.runStages.length;
+      index++
+    ) {
+      final stage = tournament.runStages[index];
+      if (stage is KnockoutTournamentRunStage) {
+        return knockoutSeedingModeLabelForStage(tournament, stage);
+      }
+    }
+    return null;
   }
 
   Widget _box(List<Widget> children) => Card(
@@ -563,10 +577,8 @@ class _TournamentDirectorDashboardState
                     controller: _recentResultsController,
                     padding: EdgeInsets.zero,
                     itemCount: entries.length,
-                    separatorBuilder: (context, index) => Divider(
-                      height: 1,
-                      color: _palette.border,
-                    ),
+                    separatorBuilder: (context, index) =>
+                        Divider(height: 1, color: _palette.border),
                     itemBuilder: (context, index) => ConstrainedBox(
                       constraints: const BoxConstraints(minHeight: 66),
                       child: _recentMatchLogEntry(
@@ -633,93 +645,6 @@ class _TournamentDirectorDashboardState
         },
       ),
   ]);
-
-  Widget _matchSearch(TournamentDirectorSnapshot state) {
-    final query = _matchSearchController.text.trim();
-    final matches = query.isEmpty ? <PlayEntry>[] : state.search(query);
-    final busyPlayers = {
-      for (final running in state.schedule.running) ...running.players,
-    };
-    final startOnBoard = widget.onStartOnBoard;
-
-    return _box([
-      Text(
-        'Partien eines Teilnehmers finden',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const SizedBox(height: 8),
-      TextField(
-        key: const ValueKey('director-player-search'),
-        controller: _matchSearchController,
-        decoration: const InputDecoration(
-          labelText: 'Teilnehmername suchen',
-          hintText: 'Name eingeben',
-          prefixIcon: Icon(Icons.search),
-          border: OutlineInputBorder(),
-        ),
-        textInputAction: TextInputAction.search,
-        onChanged: (_) => setState(() {}),
-      ),
-      if (query.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        if (matches.isEmpty)
-          const Text('Keine offene Partie mit diesem Teilnehmer gefunden.')
-        else
-          for (final entry in matches)
-            Builder(
-              builder: (context) {
-                final running = state.schedule.running
-                    .where(
-                      (candidate) => identical(candidate.match, entry.match),
-                    )
-                    .firstOrNull;
-                final assignment = state.schedule.planned
-                    .where(
-                      (candidate) =>
-                          identical(candidate.entry.match, entry.match),
-                    )
-                    .firstOrNull;
-                final canStart =
-                    running == null &&
-                    assignment != null &&
-                    state.freeBoards.contains(assignment.board) &&
-                    startOnBoard != null &&
-                    widget.canOperate &&
-                    !widget.tournament.completedStageIndexes.contains(
-                      widget.activeStage,
-                    ) &&
-                    !entry.players.any(busyPlayers.contains);
-                final status = running != null
-                    ? 'Läuft auf ${running.match.boardNumber == null ? 'Board —' : widget.tournament.boardDisplayName(running.match.boardNumber!)}'
-                    : canStart
-                    ? 'Startbar · ${widget.tournament.boardDisplayName(assignment.board)}'
-                    : assignment != null
-                    ? 'Wartet auf ein freies Board oder die Phasenfreigabe'
-                    : 'Wartet auf vorherige Ergebnisse';
-
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(entry.match.participantShortLabel),
-                  subtitle: Text(status),
-                  trailing: canStart
-                      ? FilledButton.tonal(
-                          onPressed: () => _act(
-                            () => startOnBoard(
-                              assignment.board,
-                              match: entry.match,
-                            ),
-                          ),
-                          child: Text(
-                            '${widget.tournament.boardDisplayName(assignment.board)} starten',
-                          ),
-                        )
-                      : null,
-                );
-              },
-            ),
-      ],
-    ]);
-  }
 
   Widget _recentMatchLogEntry(
     GroupMatch match,
@@ -804,9 +729,7 @@ class _TournamentDirectorDashboardState
       width: width,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isPriority
-            ? _palette.cardEmphasis
-            : _palette.card,
+        color: isPriority ? _palette.cardEmphasis : _palette.card,
         border: Border.all(
           color: isRunning
               ? Colors.green.shade700
@@ -1021,10 +944,6 @@ class _TournamentDirectorDashboardState
         return pendingOrder[a.match]!.compareTo(pendingOrder[b.match]!);
       });
     }
-    final nextSix = upcoming
-        .take(6)
-        .map((assignment) => assignment.entry)
-        .toList();
     final boardAssignments = <int, List<BoardAssignment>>{
       for (var board = 1; board <= t.boardCount; board++)
         board: state.suggestionsForBoard(board),
@@ -1082,14 +1001,14 @@ class _TournamentDirectorDashboardState
                       : _palette.mutedText;
                   final assignedGroups =
                       state.configuredGroupsByBoard()[board] ??
-                      <String>{
-                            ?running?.groupKey,
-                            for (final assignment in upcomingForBoard)
-                              ?assignment.entry.groupKey,
-                          }
-                          .map(_displayGroupLabel)
-                          .where((value) => value.isNotEmpty)
-                          .toList()
+                            <String>{
+                                  ?running?.groupKey,
+                                  for (final assignment in upcomingForBoard)
+                                    ?assignment.entry.groupKey,
+                                }
+                                .map(_displayGroupLabel)
+                                .where((value) => value.isNotEmpty)
+                                .toList()
                         ..sort();
                   return Container(
                     key: ValueKey('director-board-$board'),
@@ -1143,9 +1062,7 @@ class _TournamentDirectorDashboardState
                             child: Text(
                               assignedGroups.join(' · '),
                               style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: _palette.mutedText,
-                                  ),
+                                  ?.copyWith(color: _palette.mutedText),
                             ),
                           ),
                         if (running != null)
@@ -1293,7 +1210,8 @@ class _TournamentDirectorDashboardState
                                           size: 18,
                                         ),
                                         label: Text(t.boardDisplayName(board)),
-                                        style: Theme.of(context).brightness ==
+                                        style:
+                                            Theme.of(context).brightness ==
                                                 Brightness.light
                                             ? FilledButton.styleFrom(
                                                 backgroundColor: Theme.of(
@@ -1360,7 +1278,10 @@ class _TournamentDirectorDashboardState
     );
     if (stage is GroupTournamentRunStage) {
       for (final group in stage.groups) {
-        final groupKey = tournamentGroupBoardKey(widget.activeStage, group.name);
+        final groupKey = tournamentGroupBoardKey(
+          widget.activeStage,
+          group.name,
+        );
         final boards = (configuredBoards[groupKey] ?? const <int>{}).toList()
           ..sort();
         recommendedGroups.add(
@@ -1483,20 +1404,43 @@ class _TournamentDirectorDashboardState
                   ),
                 ),
               if (_hasNextKnockoutStage(t))
-                OutlinedButton.icon(
-                  onPressed: () => showDialog<void>(
-                    context: context,
-                    builder: (context) => Dialog.fullscreen(
-                      child: TournamentSecondScreenView(
-                        tournament: t,
-                        isStandaloneWindow: true,
-                        showNextStagePreviewInitially: true,
-                        onClose: () => Navigator.of(context).pop(),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (context) => Dialog.fullscreen(
+                          child: TournamentSecondScreenView(
+                            tournament: t,
+                            isStandaloneWindow: true,
+                            showNextStagePreviewInitially: true,
+                            onClose: () => Navigator.of(context).pop(),
+                          ),
+                        ),
                       ),
+                      icon: const Icon(Icons.account_tree_outlined),
+                      label: const Text('Vorschau nächste Phase'),
                     ),
-                  ),
-                  icon: const Icon(Icons.account_tree_outlined),
-                  label: const Text('Vorschau nächste Phase'),
+                    if (_nextKnockoutDrawMethodLabel(t) case final label?)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 260),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Auslosungsmethode: $label',
+                            textAlign: TextAlign.end,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
             ],
           )
@@ -1639,11 +1583,7 @@ class _TournamentDirectorDashboardState
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.priority_high,
-                color: _palette.accent,
-                size: 20,
-              ),
+              Icon(Icons.priority_high, color: _palette.accent, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1720,8 +1660,6 @@ class _TournamentDirectorDashboardState
             LeagueOverview(league: league),
             const SizedBox(height: 12),
           ],
-          clock,
-          const SizedBox(height: 12),
         ],
         if (widget.directorModeEnabled) ...[
           boardOverview,
@@ -1732,8 +1670,6 @@ class _TournamentDirectorDashboardState
             clock,
             const SizedBox(height: 12),
           ],
-          _matchSearch(state),
-          const SizedBox(height: 12),
           _matchQueue(
             'Spielplan',
             directorPlan,
@@ -1746,17 +1682,6 @@ class _TournamentDirectorDashboardState
             },
           ),
         ] else ...[
-          _matchQueue(
-            'Empfohlene Partien',
-            nextSix,
-            emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
-            prioritizedMatches: flowPriority.prioritizedMatches,
-            plannedBoards: {
-              for (final assignment in upcoming)
-                assignment.entry.match: assignment.board,
-            },
-          ),
-          const SizedBox(height: 12),
           _box([
             Wrap(
               alignment: WrapAlignment.spaceBetween,

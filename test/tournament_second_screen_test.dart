@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:dart_tournament_manager/app/theme_controller.dart';
@@ -11,6 +12,7 @@ import 'package:dart_tournament_manager/features/tournaments/application/tournam
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_advancement_forecast_engine.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/second_screen_dialog_requests.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/second_screen_widget_placement.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
@@ -27,6 +29,18 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
+
+  BoxDecoration badgeDecoration(WidgetTester tester, Finder badge) {
+    final decorated = find.descendant(
+      of: badge,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is DecoratedBox && widget.decoration is BoxDecoration,
+      ),
+    );
+    return tester.widget<DecoratedBox>(decorated.first).decoration
+        as BoxDecoration;
+  }
 
   testWidgets('recommended table splits two groups into four match columns', (
     tester,
@@ -892,6 +906,73 @@ void main() {
   );
 
   testWidgets(
+    'board status animation pulses only the border and keeps badge geometry',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final tournament = _tournament()
+        ..directorModeEnabled = true
+        ..boardCount = 2;
+      final match = const OrderOfPlayController()
+          .plan(tournament, 0)
+          .planned
+          .first
+          .entry
+          .match;
+      expect(
+        const OrderOfPlayController().start(tournament, 0, match, 1),
+        isTrue,
+      );
+
+      Widget buildView() => MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            key: const ValueKey('tv'),
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildView());
+      await tester.pumpAndSettle();
+      expect(find.text('LIVE'), findsOneWidget);
+
+      match
+        ..homeLegs = 2
+        ..awayLegs = 0
+        ..finishedAt = DateTime.now();
+      await tester.pumpWidget(buildView());
+      await tester.pump();
+      final badge = find.byKey(
+        const ValueKey('second-screen-finished-badge-1'),
+      );
+      expect(badge, findsOneWidget);
+
+      final startRect = tester.getRect(badge);
+      final startDecoration = badgeDecoration(tester, badge);
+      await tester.pump(const Duration(milliseconds: 300));
+      final laterDecoration = badgeDecoration(tester, badge);
+      final laterRect = tester.getRect(badge);
+
+      expect(startDecoration.border!.top.width, 1);
+      expect(startDecoration.boxShadow, isNull);
+      expect(laterDecoration.boxShadow, isNull);
+      expect(
+        startDecoration.border!.top.color,
+        isNot(laterDecoration.border!.top.color),
+      );
+      expect(laterRect.width, closeTo(startRect.width, 0.5));
+      expect(laterRect.height, closeTo(startRect.height, 0.5));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'a new best performance opens a confetti popup for three seconds',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 900);
@@ -1671,6 +1752,73 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('a taller recent tile shows more than two results at once', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tournament();
+    final group =
+        (tournament.runStages.first as GroupTournamentRunStage).groups.first;
+    for (var index = 0; index < 6; index++) {
+      group.matches.add(
+        GroupMatch(
+          homePlayer: group.players[index % group.players.length],
+          awayPlayer: group.players[(index + 1) % group.players.length],
+          round: 10 + index,
+          homeLegs: 2,
+          awayLegs: 0,
+          finishedAt: DateTime(2026, 11, 20, 10, index),
+        ),
+      );
+    }
+    tournament
+      ..secondScreenActiveLayout = 'Tall'
+      ..secondScreenLayouts['Tall'] = const [
+        SecondScreenWidgetPlacement(
+          widgetId: 'recent',
+          widthUnits: 2,
+          heightUnits: 3,
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final viewport = tester.getRect(
+      find.byKey(const ValueKey('recent-results-scroll')),
+    );
+    expect(viewport.height, greaterThan(2 * 66));
+    final rows = find.byWidgetPredicate(
+      (widget) => widget.key?.toString().contains('recent-result-') ?? false,
+    );
+    expect(rows, findsAtLeastNWidgets(3));
+    final rowRects = [
+      'recent-result-15-B-C',
+      'recent-result-14-A-B',
+      'recent-result-13-D-A',
+    ].map((key) => tester.getRect(find.byKey(ValueKey(key)))).toList();
+    expect(
+      rowRects.where(
+        (rect) => rect.top >= viewport.top && rect.bottom <= viewport.bottom,
+      ),
+      hasLength(3),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('unassigned manual groups show a notice and success feedback', (
     tester,
@@ -3827,8 +3975,49 @@ void main() {
     final groupCTop = tester.getTopLeft(find.text('Gruppe C').last).dy;
     expect(groupATop, closeTo(groupBTop, 1));
     expect(groupCTop, greaterThan(groupATop));
-    expect(find.text('Top 3 weiter'), findsNWidgets(2));
+    expect(
+      find.text('Top 3 & 2 beste 3. Plätze (größere Gruppe)'),
+      findsNWidgets(2),
+    );
     expect(find.text('Top 2 weiter'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('standings header shows format and tie breaker help', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: _tournament(),
+            isStandaloneWindow: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final hint = find.byKey(const ValueKey('standings-format-hint'));
+    expect(hint, findsOneWidget);
+    final hintText = tester.widget<Text>(hint).data ?? '';
+    expect(hintText, contains('Bo3 Legs'));
+    expect(hintText, contains('2 weiter'));
+
+    final help = find.byKey(const ValueKey('standings-tie-breaker-help'));
+    expect(help, findsOneWidget);
+    expect(
+      find.byTooltip(
+        'Tie-Breaker: Matchpunkte > Leg-Differenz > Gewonnene Legs',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.getRect(help).width, 48);
     expect(tester.takeException(), isNull);
   });
 
@@ -3849,6 +4038,104 @@ void main() {
     );
     await tester.tap(find.byTooltip('Schließen'));
     expect(didClose, isTrue);
+  });
+
+  testWidgets(
+    'group assignment dialog shows mode and groups and confirm only closes',
+    (tester) async {
+      final request = SecondScreenGroupAssignmentRequest.create(
+        modeLabel: 'Nach Spielstärke gruppieren',
+        groups: const [
+          SecondScreenAssignmentGroup(name: 'Gruppe A', members: ['A', 'B']),
+          SecondScreenAssignmentGroup(name: 'Gruppe B', members: ['C', 'D']),
+        ],
+      );
+      final tournament = _tournament()..secondScreenGroupAssignment = request;
+      final before = jsonEncode(request.toJson());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final title = find.byKey(const ValueKey('group-assignment-dialog-title'));
+      expect(title, findsOneWidget);
+      expect(
+        tester.widget<Text>(title).data,
+        'Gruppenzuweisung beendet: ausgewählter modus - '
+        'Nach Spielstärke gruppieren',
+      );
+      final dialog = find
+          .ancestor(of: title, matching: find.byType(Dialog))
+          .first;
+      expect(
+        find.descendant(of: dialog, matching: find.text('Gruppe A')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dialog, matching: find.text('Gruppe B')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dialog, matching: find.text('A')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dialog, matching: find.text('D')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('group-assignment-dialog-confirm')),
+      );
+      await tester.pumpAndSettle();
+      expect(title, findsNothing);
+      expect(jsonEncode(request.toJson()), before);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('tournament info dialog close hides its request', (tester) async {
+    final request = SecondScreenTournamentInfoRequest.show();
+    final tournament = _tournament()..secondScreenTournamentInfo = request;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final title = find.byKey(const ValueKey('tournament-info-dialog-title'));
+    expect(title, findsOneWidget);
+    expect(
+      find.ancestor(of: title, matching: find.byType(Dialog)),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('tournament-info-dialog-close')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(title, findsNothing);
+    expect(tournament.secondScreenTournamentInfo, isNotNull);
+    expect(tournament.secondScreenTournamentInfo!.id, request.id);
+    expect(tournament.secondScreenTournamentInfo!.visible, isFalse);
+    expect(tester.takeException(), isNull);
   });
 }
 

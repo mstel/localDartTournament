@@ -10,6 +10,7 @@ class KnockoutBracketView extends StatelessWidget {
     this.placementMatches = const [],
     this.isEditMode = false,
     this.onSwapSlot,
+    this.drawMethodLabel,
   });
 
   final KnockoutTournamentRunStage stage;
@@ -20,8 +21,51 @@ class KnockoutBracketView extends StatelessWidget {
   final bool isEditMode;
   final void Function(int fromSlotIndex, int toSlotIndex)? onSwapSlot;
 
+  /// Optionaler Hinweis auf die im Turnier gewählte Auslosungsmethode.
+  /// Wird nur gesetzt, wenn der Aufrufer die Planungsphase kennt.
+  final String? drawMethodLabel;
+
   @override
   Widget build(BuildContext context) {
+    final body = _buildBracketBody(context);
+    final label = drawMethodLabel;
+    if (label == null || label.isEmpty) return body;
+
+    final caption = Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Text(
+        'Auslosungsmethode: $label',
+        textAlign: TextAlign.start,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisAlignment = constraints.maxWidth.isFinite
+            ? CrossAxisAlignment.stretch
+            : CrossAxisAlignment.start;
+        if (constraints.maxHeight.isFinite) {
+          return Column(
+            crossAxisAlignment: crossAxisAlignment,
+            children: [
+              Flexible(child: body),
+              caption,
+            ],
+          );
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: crossAxisAlignment,
+          children: [body, caption],
+        );
+      },
+    );
+  }
+
+  Widget _buildBracketBody(BuildContext context) {
     if (placementMatches.any((m) => m.placementKey != null)) {
       final edges = stage.eliminationLossLimit == 2
           ? PlacementEngine.doubleEliminationSources(

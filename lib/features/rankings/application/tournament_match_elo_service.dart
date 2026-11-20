@@ -26,7 +26,8 @@ class TournamentMatchEloChange {
   final int? awayRatingBefore;
   final int? awayRatingAfter;
 
-  /// Spieler unter der Teilnahme-Schwelle: Wert ist hypothetisch (Startwert).
+  /// Spieler unter der Teilnahme-Schwelle: Wert stammt aus der What-if-
+  /// Projektion mit Teilnahme-Schwelle 0 (kein erfundener Startwert).
   final bool homeHypothetical;
   final bool awayHypothetical;
 }
@@ -97,14 +98,20 @@ class TournamentMatchEloService {
           );
           final homeHypothetical = snapshot.isHypothetical(homeKey);
           final awayHypothetical = snapshot.isHypothetical(awayKey);
-          final delta = snapshot.matchDeltas[key];
-          if (delta == null && !homeHypothetical && !awayHypothetical) {
+          final hasHypothetical = homeHypothetical || awayHypothetical;
+          final delta = hasHypothetical
+              ? snapshot.hypotheticalMatchDeltas[key]
+              : snapshot.matchDeltas[key];
+          if (delta == null && !hasHypothetical) {
             continue;
           }
           final matchIndex = int.tryParse(key.split(':').last);
+          final replayHistory = hasHypothetical
+              ? snapshot.hypotheticalHistory
+              : snapshot.history;
           final homeHistory = matchIndex == null
               ? null
-              : snapshot.history[homeKey]
+              : replayHistory[homeKey]
                     ?.where(
                       (item) =>
                           item.tournamentId == tournament.id &&
@@ -113,7 +120,7 @@ class TournamentMatchEloService {
                     .firstOrNull;
           final awayHistory = matchIndex == null
               ? null
-              : snapshot.history[awayKey]
+              : replayHistory[awayKey]
                     ?.where(
                       (item) =>
                           item.tournamentId == tournament.id &&
@@ -125,20 +132,12 @@ class TournamentMatchEloService {
               .add(
                 TournamentMatchEloChange(
                   rankingName: ranking.name,
-                  homeDelta: homeHypothetical ? 0 : delta?.home,
-                  awayDelta: awayHypothetical ? 0 : delta?.away,
-                  homeRatingBefore: homeHypothetical
-                      ? ranking.startRating
-                      : homeHistory?.ratingBefore,
-                  homeRatingAfter: homeHypothetical
-                      ? ranking.startRating
-                      : homeHistory?.ratingAfter,
-                  awayRatingBefore: awayHypothetical
-                      ? ranking.startRating
-                      : awayHistory?.ratingBefore,
-                  awayRatingAfter: awayHypothetical
-                      ? ranking.startRating
-                      : awayHistory?.ratingAfter,
+                  homeDelta: delta?.home,
+                  awayDelta: delta?.away,
+                  homeRatingBefore: homeHistory?.ratingBefore,
+                  homeRatingAfter: homeHistory?.ratingAfter,
+                  awayRatingBefore: awayHistory?.ratingBefore,
+                  awayRatingAfter: awayHistory?.ratingAfter,
                   homeHypothetical: homeHypothetical,
                   awayHypothetical: awayHypothetical,
                 ),

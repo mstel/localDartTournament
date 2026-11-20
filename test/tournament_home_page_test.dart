@@ -141,11 +141,106 @@ void main() {
     expect(find.text('Zweitbildschirm-Modus (TV-Anzeige)'), findsOneWidget);
     await tester.tap(find.text('Spielleiter-Modus aktivieren'));
     await tester.pumpAndSettle();
-    expect(find.text('Boards: 1'), findsOneWidget);
+    expect(find.text('Boards: 1'), findsNothing);
     expect(find.text('Board Zuweisung'), findsNothing);
     expect(find.text('Player Insights anzeigen'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('director-settings')));
+    await tester.pumpAndSettle();
+    expect(find.text('Boards: 1'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'settings keep director options collapsed and the info toggle disabled',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final players = [
+        TournamentPlayer(name: 'P1', isGenerated: false),
+        TournamentPlayer(name: 'P2', isGenerated: false),
+      ];
+      final group = TournamentGroup(
+        name: 'Gruppe A',
+        playType: 'round_robin',
+        players: players,
+        matches: const [],
+      );
+      final tournament = CreatedTournament(
+        id: 'settings',
+        name: 'Einstellungstest',
+        players: players,
+        stages: const [
+          TournamentStage(
+            name: 'Gruppenphase',
+            type: 'groups',
+            groupSizes: [2],
+          ),
+        ],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppenphase',
+            groupPlayType: 'round_robin',
+            groups: [group],
+            tieBreakers: const ['points', 'legDifference', 'legsFor'],
+            qualificationPlan: const QualificationPlan(
+              totalQualifiers: 1,
+              fixedPerGroup: 1,
+              extraCount: 0,
+              extraRank: 2,
+              eligibleGroupSize: null,
+              extraGroups: [],
+              fixedByGroup: [1],
+            ),
+          ),
+        ],
+        directorModeEnabled: true,
+      );
+      storage.tournaments.add(tournament);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentRunPage(
+              tournament: tournament,
+              tournamentStorage: storage,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Einstellungen'));
+      await tester.pumpAndSettle();
+
+      final openButton = find.byKey(const ValueKey('second-screen-open'));
+      expect(openButton, findsOneWidget);
+      final infoToggle = find.byKey(
+        const ValueKey('second-screen-info-toggle'),
+      );
+      expect(infoToggle, findsOneWidget);
+      expect(tester.widget<FilledButton>(infoToggle).onPressed, isNull);
+      expect(
+        find.text('Turnierinfos auf Zweitbildschirm anzeigen'),
+        findsOneWidget,
+      );
+
+      final directorSettings = find.byKey(const ValueKey('director-settings'));
+      expect(directorSettings, findsOneWidget);
+      expect(
+        tester.widget<ExpansionTile>(directorSettings).initiallyExpanded,
+        isFalse,
+      );
+      expect(find.text('Spielplanmodus'), findsNothing);
+
+      await tester.tap(directorSettings);
+      await tester.pumpAndSettle();
+      expect(find.text('Spielplanmodus'), findsOneWidget);
+      expect(find.text('Player Insights anzeigen'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('completed tournament end date can be updated from overview', (
     tester,

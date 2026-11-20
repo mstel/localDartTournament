@@ -400,9 +400,7 @@ Widget _eloRatingText(
   TextAlign align, {
   bool hypothetical = false,
 }) {
-  final color = hypothetical
-      ? const Color(0xFF7A8894)
-      : delta == null || delta == 0
+  final color = delta == null || delta == 0
       ? const Color(0xFFB0BEC5)
       : delta > 0
       ? const Color(0xFF4ED9A4)
@@ -416,7 +414,7 @@ Widget _eloRatingText(
   final suffix = hypothetical ? ' (hypothetisch)' : '';
   return Tooltip(
     message: hypothetical
-        ? 'Unter der Teilnahme-Schwelle – Wert hypothetisch.'
+        ? 'Hypothetische Projektion unter der Teilnahme-Schwelle.'
         : '',
     child: Text(
       '$change Elo$rating$suffix',

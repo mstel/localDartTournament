@@ -118,6 +118,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Einstellungen'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('director-settings')));
+    await tester.pumpAndSettle();
 
     final perBoardButton = find.byKey(
       const ValueKey('edit-fixed-schedule-per-board'),
@@ -194,6 +196,8 @@ void main() {
     await tester.ensureVisible(directorSwitch);
     await tester.tap(directorSwitch);
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('director-settings')));
+    await tester.pumpAndSettle();
 
     final playOrderDropdown = labeledDropdown('Spielplanmodus');
     await tester.scrollUntilVisible(
@@ -235,6 +239,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('director-settings')));
     await tester.pumpAndSettle();
 
     final restoredSwitch = find.widgetWithText(
@@ -291,6 +297,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('director-settings')));
     await tester.pumpAndSettle();
 
     final suggestionDropdown = labeledDropdown('Partievorschläge');

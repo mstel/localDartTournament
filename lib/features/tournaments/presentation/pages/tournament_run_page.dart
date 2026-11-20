@@ -48,6 +48,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   bool _tieBreakEloRatingsLoaded = false;
   Map<String, int> _tieBreakEloRatings = const {};
   bool _savingKratzerHandicapSettings = false;
+  Process? _secondScreenProcess;
+  bool _secondScreenFallbackActive = false;
+  Timer? _secondScreenInfoPollTimer;
+  bool _secondScreenInfoVisible = false;
   int? _tieBreakerDraftStageIndex;
   List<String> _tieBreakerDraft = const [];
   Future<void> _checkpoint() {
@@ -1355,6 +1359,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _secondScreenInfoPollTimer?.cancel();
     _tournamentNameController.dispose();
     _tournamentNotesController.dispose();
     _simulationSeedController.dispose();
@@ -1378,6 +1383,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         : StageViewMode.dashboard;
     _tournamentNameController.text = widget.tournament.name;
     _tournamentNotesController.text = widget.tournament.tournamentNotes;
+    _secondScreenInfoVisible =
+        widget.tournament.secondScreenTournamentInfo?.visible ?? false;
     WidgetsBinding.instance.addObserver(this);
     if (widget.tournament.leagueMatch != null) {
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
@@ -1404,6 +1411,102 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (!mounted) return;
       await _saveTournamentProgress();
     });
+  }
+
+  bool get _isSecondScreenActive =>
+      _secondScreenProcess != null || _secondScreenFallbackActive;
+
+  Future<void> _openSecondScreen() async {
+    try {
+      final process = await Process.start(Platform.resolvedExecutable, [
+        '--second-screen',
+        widget.tournament.id,
+        '--parent-pid=$pid',
+      ], mode: ProcessStartMode.detached);
+      if (!mounted) return;
+      setState(() {
+        _secondScreenProcess = process;
+      });
+      _startSecondScreenInfoPolling();
+      unawaited(process.exitCode.then((_) => _handleSecondScreenClosed()));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'TV-Anzeige im separaten Fenster geöffnet. Ziehe das Fenster auf den 2. Monitor und maximiere es.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _secondScreenFallbackActive = true);
+      _startSecondScreenInfoPolling();
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog.fullscreen(
+          child: TournamentSecondScreenView(
+            tournament: widget.tournament,
+            isStandaloneWindow: true,
+          ),
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _secondScreenFallbackActive = false);
+      await _handleSecondScreenClosed();
+    }
+  }
+
+  void _startSecondScreenInfoPolling() {
+    _secondScreenInfoPollTimer?.cancel();
+    _secondScreenInfoPollTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => unawaited(_pollSecondScreenInfoState()),
+    );
+  }
+
+  Future<void> _pollSecondScreenInfoState() async {
+    if (!_isSecondScreenActive) {
+      _secondScreenInfoPollTimer?.cancel();
+      return;
+    }
+    try {
+      final stored = (await _tournamentStorage.loadTournaments())
+          .where((candidate) => candidate.id == widget.tournament.id)
+          .cast<CreatedTournament>()
+          .firstOrNull;
+      if (stored == null || !mounted) return;
+      final visible = stored.secondScreenTournamentInfo?.visible ?? false;
+      if (visible != _secondScreenInfoVisible) {
+        setState(() => _secondScreenInfoVisible = visible);
+      }
+    } catch (_) {
+      // Vorübergehende Lesefehler dürfen die laufende Anzeige nicht stören.
+    }
+  }
+
+  Future<void> _handleSecondScreenClosed() async {
+    _secondScreenInfoPollTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _secondScreenProcess = null;
+      _secondScreenFallbackActive = false;
+      _secondScreenInfoVisible = false;
+    });
+    final request = widget.tournament.secondScreenTournamentInfo;
+    if (request == null || !request.visible) return;
+    widget.tournament.secondScreenTournamentInfo = request.hide();
+    widget.tournament.updatedAt = DateTime.now();
+    await _saveTournamentProgress();
+  }
+
+  Future<void> _toggleSecondScreenInfo() async {
+    final show = !_secondScreenInfoVisible;
+    final previous = widget.tournament.secondScreenTournamentInfo;
+    widget.tournament.secondScreenTournamentInfo = show
+        ? SecondScreenTournamentInfoRequest.show()
+        : (previous?.hide() ?? SecondScreenTournamentInfoRequest.show().hide());
+    widget.tournament.updatedAt = DateTime.now();
+    setState(() => _secondScreenInfoVisible = show);
+    await _saveTournamentProgress();
   }
 
   Future<void> _toggleClockPause() async {
@@ -1883,37 +1986,23 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             runSpacing: 8,
             children: [
               FilledButton.icon(
-                onPressed: () async {
-                  try {
-                    await Process.start(Platform.resolvedExecutable, [
-                      '--second-screen',
-                      widget.tournament.id,
-                      '--parent-pid=$pid',
-                    ], mode: ProcessStartMode.detached);
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'TV-Anzeige im separaten Fenster geöffnet. Ziehe das Fenster auf den 2. Monitor und maximiere es.',
-                        ),
-                      ),
-                    );
-                  } catch (_) {
-                    if (!mounted) return;
-                    showDialog<void>(
-                      context: context,
-                      builder: (ctx) => Dialog.fullscreen(
-                        child: TournamentSecondScreenView(
-                          tournament: widget.tournament,
-                          isStandaloneWindow: true,
-                        ),
-                      ),
-                    );
-                  }
-                },
+                key: const ValueKey('second-screen-open'),
+                onPressed: _openSecondScreen,
                 icon: const Icon(Icons.open_in_new),
                 label: const Text(
                   'In separatem Fenster öffnen (für 2. Monitor)',
+                ),
+              ),
+              FilledButton.tonalIcon(
+                key: const ValueKey('second-screen-info-toggle'),
+                onPressed: _isSecondScreenActive
+                    ? _toggleSecondScreenInfo
+                    : null,
+                icon: const Icon(Icons.info_outline),
+                label: Text(
+                  _secondScreenInfoVisible
+                      ? 'Turnierinfos auf zweitbildschirm ausblenden'
+                      : 'Turnierinfos auf Zweitbildschirm anzeigen',
                 ),
               ),
               IconButton(
@@ -3792,6 +3881,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         result.assignments,
         playerReplacements: result.playerReplacements,
       );
+      widget.tournament.secondScreenGroupAssignment =
+          SecondScreenGroupAssignmentRequest.create(
+            modeLabel: TournamentInfoSummary.groupAssignmentModeLabel(
+              result.mode.name,
+            ),
+            groups: [
+              for (final group in stage.groups)
+                SecondScreenAssignmentGroup(
+                  name: group.name,
+                  members: [for (final player in group.players) player.name],
+                ),
+            ],
+          );
+      widget.tournament.updatedAt = DateTime.now();
       if (changed) {
         _replaceTournamentPlayerReferences(result.playerReplacements);
         widget.tournament.addActivity(
@@ -3808,7 +3911,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         _ensureGroupDeciders();
       }
     });
-    if (changed) await _saveTournamentProgress();
+    await _saveTournamentProgress();
   }
 
   void _replaceTournamentPlayerReferences(
@@ -6827,284 +6930,331 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               ),
                                             ),
                                     ),
-                                    if (widget.tournament.directorModeEnabled ||
-                                        widget.tournament.leagueMatch != null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: DropdownButtonFormField<String>(
-                                          initialValue: widget
-                                              .tournament
-                                              .directorPlayOrderMode,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Spielplanmodus',
-                                            border: OutlineInputBorder(),
-                                            helperText:
-                                                'Dynamisch ordnet offene Partien laufend neu; der feste Spielplan hält die Reihenfolge inklusive zukünftiger Begegnungen fest.',
-                                          ),
-                                          items: const [
-                                            DropdownMenuItem(
-                                              value: 'dynamic',
-                                              child: Text('Dynamisch'),
-                                            ),
-                                            DropdownMenuItem(
-                                              value: 'fixed_schedule',
-                                              child: Text('Fester Spielplan'),
-                                            ),
-                                          ],
-                                          onChanged: (mode) {
-                                            if (mode != null) {
-                                              _handleDirectorSettings(
-                                                () =>
-                                                    _saveDirectorPlayOrderMode(
-                                                      mode,
-                                                    ),
-                                              );
-                                            }
-                                          },
-                                        ),
+                                    ExpansionTile(
+                                      key: const ValueKey('director-settings'),
+                                      title: const Text(
+                                        'Spielleiter-Modus Einstellungen',
                                       ),
-                                    if (widget.tournament.leagueMatch != null &&
-                                        widget
+                                      childrenPadding: const EdgeInsets.only(
+                                        top: 8,
+                                      ),
+                                      children: [
+                                        if (widget
+                                                .tournament
+                                                .directorModeEnabled ||
+                                            widget.tournament.leagueMatch !=
+                                                null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
+                                            ),
+                                            child: DropdownButtonFormField<String>(
+                                              initialValue: widget
+                                                  .tournament
+                                                  .directorPlayOrderMode,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Spielplanmodus',
+                                                border: OutlineInputBorder(),
+                                                helperText:
+                                                    'Dynamisch ordnet offene Partien laufend neu; der feste Spielplan hält die Reihenfolge inklusive zukünftiger Begegnungen fest.',
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: 'dynamic',
+                                                  child: Text('Dynamisch'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'fixed_schedule',
+                                                  child: Text(
+                                                    'Fester Spielplan',
+                                                  ),
+                                                ),
+                                              ],
+                                              onChanged: (mode) {
+                                                if (mode != null) {
+                                                  _handleDirectorSettings(
+                                                    () =>
+                                                        _saveDirectorPlayOrderMode(
+                                                          mode,
+                                                        ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        if (widget.tournament.leagueMatch !=
+                                                null &&
+                                            widget
+                                                    .tournament
+                                                    .directorPlayOrderMode ==
+                                                'fixed_schedule')
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
+                                            ),
+                                            child: DropdownButtonFormField<String>(
+                                              key: const ValueKey(
+                                                'league-board-suggestion-mode',
+                                              ),
+                                              initialValue: widget
+                                                  .tournament
+                                                  .directorMultiBoardAssignmentBehavior,
+                                              isExpanded: true,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Partievorschläge',
+                                                border: OutlineInputBorder(),
+                                                helperText:
+                                                    'Gespiegelt zeigt auf jedem Board die nächste freie Partie; fest zugewiesen verteilt die Partien der Reihe nach auf die Boards.',
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: 'mirror',
+                                                  child: Text(
+                                                    'Flexible Boardwahl - Gespiegelte Partievorschläge',
+                                                  ),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'assigned',
+                                                  child: Text(
+                                                    'Fest zugewiesene Partien - Keine Doppelungen',
+                                                  ),
+                                                ),
+                                              ],
+                                              onChanged: (behavior) {
+                                                if (behavior != null) {
+                                                  _handleDirectorSettings(
+                                                    () =>
+                                                        _setMultiBoardAssignmentBehavior(
+                                                          behavior,
+                                                        ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        if (widget
                                                 .tournament
                                                 .directorPlayOrderMode ==
                                             'fixed_schedule')
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: DropdownButtonFormField<String>(
-                                          key: const ValueKey(
-                                            'league-board-suggestion-mode',
-                                          ),
-                                          initialValue: widget
-                                              .tournament
-                                              .directorMultiBoardAssignmentBehavior,
-                                          isExpanded: true,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Partievorschläge',
-                                            border: OutlineInputBorder(),
-                                            helperText:
-                                                'Gespiegelt zeigt auf jedem Board die nächste freie Partie; fest zugewiesen verteilt die Partien der Reihe nach auf die Boards.',
-                                          ),
-                                          items: const [
-                                            DropdownMenuItem(
-                                              value: 'mirror',
-                                              child: Text(
-                                                'Flexible Boardwahl - Gespiegelte Partievorschläge',
-                                              ),
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
                                             ),
-                                            DropdownMenuItem(
-                                              value: 'assigned',
-                                              child: Text(
-                                                'Fest zugewiesene Partien - Keine Doppelungen',
-                                              ),
-                                            ),
-                                          ],
-                                          onChanged: (behavior) {
-                                            if (behavior != null) {
-                                              _handleDirectorSettings(
-                                                () =>
-                                                    _setMultiBoardAssignmentBehavior(
-                                                      behavior,
-                                                    ),
-                                              );
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                    if (widget
-                                            .tournament
-                                            .directorPlayOrderMode ==
-                                        'fixed_schedule')
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: [
-                                            OutlinedButton.icon(
-                                              onPressed:
-                                                  _recomputeFixedSchedule,
-                                              icon: const Icon(
-                                                Icons.replay_outlined,
-                                              ),
-                                              label: const Text(
-                                                'Spielplan neu berechnen',
-                                              ),
-                                            ),
-                                            OutlinedButton.icon(
-                                              key: const ValueKey(
-                                                'edit-fixed-schedule-per-board',
-                                              ),
-                                              onPressed: () =>
-                                                  _openFixedScheduleEditor(
-                                                    FixedScheduleEditorScope
-                                                        .perBoard,
-                                                  ),
-                                              icon: const Icon(
-                                                Icons.grid_view_outlined,
-                                              ),
-                                              label: const Text(
-                                                'Spielplan je Board bearbeiten',
-                                              ),
-                                            ),
-                                            OutlinedButton.icon(
-                                              key: const ValueKey(
-                                                'edit-fixed-schedule-overall',
-                                              ),
-                                              onPressed: () =>
-                                                  _openFixedScheduleEditor(
-                                                    FixedScheduleEditorScope
-                                                        .overall,
-                                                  ),
-                                              icon: const Icon(Icons.list_alt),
-                                              label: const Text(
-                                                'Gesamten Spielplan bearbeiten',
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    if (widget.tournament.directorModeEnabled &&
-                                        widget.tournament.leagueMatch == null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: DropdownButtonFormField<String>(
-                                          initialValue: widget
-                                              .tournament
-                                              .directorSchedulingStrategy,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Board Zuweisung',
-                                            border: OutlineInputBorder(),
-                                            suffixIcon: Tooltip(
-                                              message:
-                                                  'Gruppenbasiert: Jede Gruppe '
-                                                  'spielt nur auf den ihr '
-                                                  'zugewiesenen Boards. Global '
-                                                  'optimiert: Alle offenen '
-                                                  'Partien werden gemeinsam '
-                                                  'auf die Boards verteilt.',
-                                              child: Icon(Icons.help_outline),
-                                            ),
-                                          ),
-                                          items: const [
-                                            DropdownMenuItem(
-                                              value: 'group',
-                                              child: Text('Gruppenbasiert'),
-                                            ),
-                                            DropdownMenuItem(
-                                              value: 'global',
-                                              child: Text(
-                                                'Turnierweit optimiert',
-                                              ),
-                                            ),
-                                          ],
-                                          onChanged: (value) {
-                                            if (value != null) {
-                                              _handleDirectorSettings(
-                                                () =>
-                                                    _setDirectorSchedulingStrategy(
-                                                      value,
-                                                    ),
-                                              );
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                    if (widget.tournament.directorModeEnabled &&
-                                        widget.tournament.leagueMatch == null &&
-                                        widget
-                                                .tournament
-                                                .directorSchedulingStrategy ==
-                                            'group')
-                                      _groupBoardAssignmentsSettings(),
-                                    if (widget.tournament.directorModeEnabled)
-                                      TournamentRunSettingsPanel(
-                                        tournament: widget.tournament,
-                                        onChanged: _saveTournamentSettings,
-                                        showAudioSettings: true,
-                                        showPrioritySettings: false,
-                                        showHintAudioSettings: false,
-                                      ),
-                                    if (widget.tournament.leagueMatch == null &&
-                                        widget.tournament.directorModeEnabled)
-                                      SwitchListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: const Text(
-                                          'Player Insights anzeigen',
-                                        ),
-                                        subtitle: const Text(
-                                          'Zeigt kompakte Merkmale neben Teilnehmernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
-                                        ),
-                                        value: widget
-                                            .tournament
-                                            .showPlayerInsights,
-                                        onChanged: _savePlayerInsightsSetting,
-                                      ),
-                                    if (widget.tournament.directorModeEnabled)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 12),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            Text(
-                                              'Boards: ${widget.tournament.boardCount}',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.titleMedium,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Wrap(
+                                            child: Wrap(
                                               spacing: 8,
                                               runSpacing: 8,
                                               children: [
                                                 OutlinedButton.icon(
                                                   onPressed:
-                                                      widget
-                                                              .tournament
-                                                              .boardCount <=
-                                                          1
-                                                      ? null
-                                                      : () => _handleDirectorSettings(
-                                                          () => _changeDirectorBoardCount(
-                                                            widget
-                                                                    .tournament
-                                                                    .boardCount -
-                                                                1,
-                                                          ),
-                                                        ),
+                                                      _recomputeFixedSchedule,
                                                   icon: const Icon(
-                                                    Icons.remove,
+                                                    Icons.replay_outlined,
                                                   ),
                                                   label: const Text(
-                                                    'Board entfernen',
+                                                    'Spielplan neu berechnen',
                                                   ),
                                                 ),
                                                 OutlinedButton.icon(
-                                                  onPressed:
-                                                      widget
-                                                              .tournament
-                                                              .boardCount >=
-                                                          64
-                                                      ? null
-                                                      : () => _handleDirectorSettings(
-                                                          () => _changeDirectorBoardCount(
-                                                            widget
-                                                                    .tournament
-                                                                    .boardCount +
-                                                                1,
-                                                          ),
-                                                        ),
-                                                  icon: const Icon(Icons.add),
+                                                  key: const ValueKey(
+                                                    'edit-fixed-schedule-per-board',
+                                                  ),
+                                                  onPressed: () =>
+                                                      _openFixedScheduleEditor(
+                                                        FixedScheduleEditorScope
+                                                            .perBoard,
+                                                      ),
+                                                  icon: const Icon(
+                                                    Icons.grid_view_outlined,
+                                                  ),
                                                   label: const Text(
-                                                    'Board hinzufügen',
+                                                    'Spielplan je Board bearbeiten',
+                                                  ),
+                                                ),
+                                                OutlinedButton.icon(
+                                                  key: const ValueKey(
+                                                    'edit-fixed-schedule-overall',
+                                                  ),
+                                                  onPressed: () =>
+                                                      _openFixedScheduleEditor(
+                                                        FixedScheduleEditorScope
+                                                            .overall,
+                                                      ),
+                                                  icon: const Icon(
+                                                    Icons.list_alt,
+                                                  ),
+                                                  label: const Text(
+                                                    'Gesamten Spielplan bearbeiten',
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                            const SizedBox(height: 8),
-                                          ],
-                                        ),
-                                      ),
+                                          ),
+                                        if (widget
+                                                .tournament
+                                                .directorModeEnabled &&
+                                            widget.tournament.leagueMatch ==
+                                                null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
+                                            ),
+                                            child: DropdownButtonFormField<String>(
+                                              initialValue: widget
+                                                  .tournament
+                                                  .directorSchedulingStrategy,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Board Zuweisung',
+                                                border: OutlineInputBorder(),
+                                                suffixIcon: Tooltip(
+                                                  message:
+                                                      'Gruppenbasiert: Jede Gruppe '
+                                                      'spielt nur auf den ihr '
+                                                      'zugewiesenen Boards. Global '
+                                                      'optimiert: Alle offenen '
+                                                      'Partien werden gemeinsam '
+                                                      'auf die Boards verteilt.',
+                                                  child: Icon(
+                                                    Icons.help_outline,
+                                                  ),
+                                                ),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: 'group',
+                                                  child: Text('Gruppenbasiert'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'global',
+                                                  child: Text(
+                                                    'Turnierweit optimiert',
+                                                  ),
+                                                ),
+                                              ],
+                                              onChanged: (value) {
+                                                if (value != null) {
+                                                  _handleDirectorSettings(
+                                                    () =>
+                                                        _setDirectorSchedulingStrategy(
+                                                          value,
+                                                        ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        if (widget
+                                                .tournament
+                                                .directorModeEnabled &&
+                                            widget.tournament.leagueMatch ==
+                                                null &&
+                                            widget
+                                                    .tournament
+                                                    .directorSchedulingStrategy ==
+                                                'group')
+                                          _groupBoardAssignmentsSettings(),
+                                        if (widget
+                                            .tournament
+                                            .directorModeEnabled)
+                                          TournamentRunSettingsPanel(
+                                            tournament: widget.tournament,
+                                            onChanged: _saveTournamentSettings,
+                                            showAudioSettings: true,
+                                            showPrioritySettings: false,
+                                            showHintAudioSettings: false,
+                                          ),
+                                        if (widget.tournament.leagueMatch ==
+                                                null &&
+                                            widget
+                                                .tournament
+                                                .directorModeEnabled)
+                                          SwitchListTile(
+                                            contentPadding: EdgeInsets.zero,
+                                            title: const Text(
+                                              'Player Insights anzeigen',
+                                            ),
+                                            subtitle: const Text(
+                                              'Zeigt kompakte Merkmale neben Teilnehmernamen auf dem Zweitmonitor; die Erklärung steht im Tooltip.',
+                                            ),
+                                            value: widget
+                                                .tournament
+                                                .showPlayerInsights,
+                                            onChanged:
+                                                _savePlayerInsightsSetting,
+                                          ),
+                                        if (widget
+                                            .tournament
+                                            .directorModeEnabled)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 12,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                Text(
+                                                  'Boards: ${widget.tournament.boardCount}',
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleMedium,
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 8,
+                                                  children: [
+                                                    OutlinedButton.icon(
+                                                      onPressed:
+                                                          widget
+                                                                  .tournament
+                                                                  .boardCount <=
+                                                              1
+                                                          ? null
+                                                          : () => _handleDirectorSettings(
+                                                              () => _changeDirectorBoardCount(
+                                                                widget
+                                                                        .tournament
+                                                                        .boardCount -
+                                                                    1,
+                                                              ),
+                                                            ),
+                                                      icon: const Icon(
+                                                        Icons.remove,
+                                                      ),
+                                                      label: const Text(
+                                                        'Board entfernen',
+                                                      ),
+                                                    ),
+                                                    OutlinedButton.icon(
+                                                      onPressed:
+                                                          widget
+                                                                  .tournament
+                                                                  .boardCount >=
+                                                              64
+                                                          ? null
+                                                          : () => _handleDirectorSettings(
+                                                              () => _changeDirectorBoardCount(
+                                                                widget
+                                                                        .tournament
+                                                                        .boardCount +
+                                                                    1,
+                                                              ),
+                                                            ),
+                                                      icon: const Icon(
+                                                        Icons.add,
+                                                      ),
+                                                      label: const Text(
+                                                        'Board hinzufügen',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ],
                                 ),
                               ),
@@ -7632,6 +7782,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         canEditResults: canEditResults,
                                         isEditMode: isEditMode,
                                         onSwapSlot: onSwapSlot,
+                                        drawMethodLabel:
+                                            knockoutSeedingModeLabelForStage(
+                                              displayedTournament,
+                                              stage,
+                                            ),
                                       ),
                                     );
                                   },

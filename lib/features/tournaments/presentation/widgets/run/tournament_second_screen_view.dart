@@ -13,6 +13,7 @@ import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/tournament_models.dart';
 import '../../../domain/engines/placement_engine.dart';
+import 'brackets/knockout_seeding_mode_label.dart';
 import '../../utils/match_display_label.dart';
 import '../../../domain/player_insight.dart';
 import '../../../domain/second_screen_widget_placement.dart';
@@ -22,7 +23,11 @@ import '../../../domain/tournament_flow_priority_settings.dart';
 import '../../../domain/engines/qualification_certainty.dart';
 import '../../../application/group_stage_preview_service.dart';
 import '../../../application/group_end_review_service.dart';
+import '../../../application/tournament_info_summary.dart';
+import 'best_of_comparison_table.dart';
 import 'group_end_review_dialog.dart';
+import 'second_screen_group_assignment_dialog.dart';
+import 'tournament_info_second_screen_dialog.dart';
 import '../../../application/tournament_flow_priority.dart';
 import '../../../application/tournament_timing.dart';
 import '../../../application/group_advancement_forecast_service.dart';
@@ -176,6 +181,9 @@ class _TournamentSecondScreenViewState
   DateTime? _completionObservedAt;
   Timer? _completionWatchTimer;
   String? _groupEndReviewShownKey;
+  String? _shownGroupAssignmentRequestId;
+  String? _shownTournamentInfoRequestId;
+  bool _tournamentInfoDialogOpen = false;
   bool _showGroupAssignmentSuccess = false;
   bool _lastGroupAssignmentPending = false;
   Timer? _groupAssignmentMessageTimer;
@@ -215,6 +223,7 @@ class _TournamentSecondScreenViewState
     _refreshAdvancementForecast();
     _checkTournamentCompletion();
     _checkGroupEndReview();
+    _checkSecondScreenDialogRequests();
     if (_completionObservedAt == null) {
       _completionWatchTimer = Timer.periodic(
         const Duration(seconds: 1),
@@ -336,6 +345,7 @@ class _TournamentSecondScreenViewState
     _updateGroupAssignmentNotice();
     _checkTournamentCompletion();
     _checkGroupEndReview();
+    _checkSecondScreenDialogRequests();
     _monitorPlacements = _monitorPlacements
         .where(_isMonitorWidgetAvailable)
         .toList();
@@ -856,6 +866,83 @@ class _TournamentSecondScreenViewState
       // vorübergehend fehlschlägt.
     }
     if (mounted) setState(() {});
+  }
+
+  /// Dialoge, die aus dem Hauptfenster über das Turnier-JSON angestoßen werden.
+  void _checkSecondScreenDialogRequests() {
+    if (!widget.isStandaloneWindow) return;
+    _checkGroupAssignmentRequest();
+    _checkTournamentInfoRequest();
+  }
+
+  void _checkGroupAssignmentRequest() {
+    final request = widget.tournament.secondScreenGroupAssignment;
+    if (request == null ||
+        request.id.isEmpty ||
+        request.id == _shownGroupAssignmentRequestId) {
+      return;
+    }
+    _shownGroupAssignmentRequestId = request.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        SecondScreenGroupAssignmentDialog.show(
+          context: context,
+          request: request,
+        ),
+      );
+    });
+  }
+
+  void _checkTournamentInfoRequest() {
+    final request = widget.tournament.secondScreenTournamentInfo;
+    if (request == null || !request.visible) {
+      _closeTournamentInfoDialogIfOpen();
+      return;
+    }
+    if (request.id.isEmpty || request.id == _shownTournamentInfoRequestId) {
+      return;
+    }
+    _shownTournamentInfoRequestId = request.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _tournamentInfoDialogOpen = true;
+      unawaited(
+        TournamentInfoSecondScreenDialog.show(
+          context: context,
+          tournament: widget.tournament,
+          onClosed: () {
+            _tournamentInfoDialogOpen = false;
+            unawaited(_hideTournamentInfoOnMonitor(request.id));
+          },
+        ),
+      );
+    });
+  }
+
+  void _closeTournamentInfoDialogIfOpen() {
+    if (!_tournamentInfoDialogOpen) return;
+    _tournamentInfoDialogOpen = false;
+    _shownTournamentInfoRequestId = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (navigator.canPop()) navigator.pop();
+    });
+  }
+
+  Future<void> _hideTournamentInfoOnMonitor(String requestId) async {
+    final current = widget.tournament.secondScreenTournamentInfo;
+    if (current == null || current.id != requestId || !current.visible) return;
+    widget.tournament.secondScreenTournamentInfo = current.hide();
+    widget.tournament.updatedAt = DateTime.now();
+    try {
+      await _storage.saveTournament(widget.tournament);
+    } catch (_) {
+      // Der lokale Zustand bleibt auch bei einem vorübergehenden
+      // Speicherfehler konsistent; der Hauptmonitor liest beim nächsten Poll
+      // erneut.
+    }
   }
 
   bool _groupAssignmentPending(CreatedTournament tournament) {
@@ -1720,6 +1807,10 @@ class _TournamentSecondScreenViewState
                   qualifyingRank: 1,
                   onEditResult: (_) {},
                   canEditResults: false,
+                  drawMethodLabel: knockoutSeedingModeLabelForStage(
+                    t,
+                    activeStage,
+                  ),
                 )
               : _buildBracketPreview(
                   context,
@@ -2581,6 +2672,24 @@ class _TournamentSecondScreenViewState
     }
   }
 
+  /// Anzahl der Ergebniszeilen, die in die aktuelle Kachelhöhe passen.
+  ///
+  /// Die Höhe wird in Layout-Einheiten gespeichert. Die interne Liste darf
+  /// nicht weiterhin hart auf zwei Zeilen begrenzt sein, sonst bleibt ein
+  /// vergrößertes „Zuletzt beendete Matches“-Widget trotzdem leer.
+  int _recentResultsVisibleItemCount(BuildContext context) {
+    final index = _monitorPlacements.indexWhere(
+      (placement) => placement.widgetId == 'recent',
+    );
+    final units = index < 0 ? 1.0 : _monitorPlacements[index].heightUnits;
+    final unitHeight = _monitorUnitHeight > 0 ? _monitorUnitHeight : 220.0;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final rowHeight = 66 * textScale;
+    final chrome = 120 + 56 * textScale;
+    final available = units * unitHeight - chrome;
+    return max(2, (available / rowHeight).floor());
+  }
+
   /// Rastet die Kachelhöhe auf den tatsächlich gerenderten Inhalt ein, damit
   /// das nächste Widget direkt unter diesem beginnt.
   void _snapMonitorWidgetHeight(int index) {
@@ -2684,6 +2793,10 @@ class _TournamentSecondScreenViewState
               placementMatches: stage.placementMatches,
               onEditResult: (_) {},
               canEditResults: false,
+              drawMethodLabel: knockoutSeedingModeLabelForStage(
+                tournament,
+                stage,
+              ),
             ),
           ),
         );
@@ -3748,10 +3861,7 @@ class _TournamentSecondScreenViewState
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) =>
-              _buildStandingsDisplaySelector(context, constraints.maxWidth),
-        ),
+        _buildStandingsHeaderRow(context, tournament, activeIndex, stage),
         const Divider(height: 8),
         SingleChildScrollView(
           child: _buildStandingsDisplayPanel(
@@ -3759,6 +3869,69 @@ class _TournamentSecondScreenViewState
             tournament,
             activeIndex,
             stage,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStandingsHeaderRow(
+    BuildContext context,
+    CreatedTournament tournament,
+    int activeIndex,
+    TournamentRunStage? stage,
+  ) {
+    final planningStage =
+        activeIndex >= 0 && activeIndex < tournament.stages.length
+        ? tournament.stages[activeIndex]
+        : null;
+    final formatText = stage is GroupTournamentRunStage && planningStage != null
+        ? TournamentInfoSummary.compactFormat(planningStage)
+        : null;
+    final tieBreakers = stage is GroupTournamentRunStage
+        ? (stage.tieBreakers.isEmpty
+              ? defaultGroupTieBreakers
+              : stage.tieBreakers)
+        : planningStage?.groupTieBreakers ?? defaultGroupTieBreakers;
+    final helpText =
+        'Tie-Breaker: ${TournamentInfoSummary.tieBreakers(tieBreakers)}';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          flex: 3,
+          child: LayoutBuilder(
+            builder: (context, constraints) =>
+                _buildStandingsDisplaySelector(context, constraints.maxWidth),
+          ),
+        ),
+        if (formatText != null) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            flex: 2,
+            child: Text(
+              '($formatText)',
+              key: const ValueKey('standings-format-hint'),
+              style: TextStyle(
+                fontSize: 12,
+                color: _displayColors(context).mutedText,
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(width: 8),
+        Tooltip(
+          message: helpText,
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: OutlinedButton(
+              key: const ValueKey('standings-tie-breaker-help'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: () {},
+              child: const Text('?'),
+            ),
           ),
         ),
       ],
@@ -4023,6 +4196,10 @@ class _TournamentSecondScreenViewState
                   placementMatches: displayStage.placementMatches,
                   onEditResult: (_) {},
                   canEditResults: false,
+                  drawMethodLabel: knockoutSeedingModeLabelForStage(
+                    widget.tournament,
+                    displayStage,
+                  ),
                 ),
         ),
       ],
@@ -4054,6 +4231,20 @@ class _TournamentSecondScreenViewState
           runStageIndex < 0 ||
           runStageIndex >= t.stages.length ||
           t.stages[runStageIndex].gameFormat.allowsDraws;
+      final planningStage =
+          runStageIndex >= 0 && runStageIndex < t.stages.length
+          ? t.stages[runStageIndex]
+          : null;
+      final advancementPolicy =
+          planningStage?.qualificationAdvancementPolicy ?? 'larger_group';
+      final formatText = planningStage == null
+          ? null
+          : TournamentInfoSummary.compactFormat(planningStage);
+      final tieBreakers = stage.tieBreakers.isEmpty
+          ? defaultGroupTieBreakers
+          : stage.tieBreakers;
+      final helpText =
+          'Tie-Breaker: ${TournamentInfoSummary.tieBreakers(tieBreakers)}';
       final cards = [
         for (var i = 0; i < stage.groups.length; i++)
           _buildGroupStandingsCard(
@@ -4062,6 +4253,7 @@ class _TournamentSecondScreenViewState
             groupNumber: i + 1,
             qualificationPlan: stage.qualificationPlan,
             tieBreakers: stage.tieBreakers,
+            advancementPolicy: advancementPolicy,
             full: full,
             showDraws: showDraws,
           ),
@@ -4092,13 +4284,42 @@ class _TournamentSecondScreenViewState
             children: [
               const Icon(Icons.leaderboard, size: 20, color: Color(0xFF70E0BA)),
               const SizedBox(width: 8),
-              Flexible(
+              Expanded(
                 child: Text(
                   'Tabellen & Zwischenstände',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                     color: _displayColors(context).text,
+                  ),
+                ),
+              ),
+              if (formatText != null) ...[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    '($formatText)',
+                    key: const ValueKey('standings-format-hint'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _displayColors(context).mutedText,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 8),
+              Tooltip(
+                message: helpText,
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: OutlinedButton(
+                    key: const ValueKey('standings-tie-breaker-help'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    onPressed: () {},
+                    child: const Text('?'),
                   ),
                 ),
               ),
@@ -4139,23 +4360,36 @@ class _TournamentSecondScreenViewState
     );
   }
 
+  /// Qualifikationshinweis für eine Gruppe inklusive Vergleichsplätzen und
+  /// Vorrang größeren Gruppen.
+  String _qualificationLabel(
+    QualificationPlan? plan,
+    String advancementPolicy,
+    int groupNumber,
+  ) {
+    final fixed = plan?.fixedForGroup(groupNumber) ?? 2;
+    final largerGroupPriority =
+        plan != null &&
+        advancementPolicy == 'larger_group' &&
+        plan.fixedPerGroup > 0 &&
+        fixed > plan.fixedPerGroup;
+    final base = groupAdvancementLabel(plan, groupNumber);
+    return '$base${largerGroupPriority ? ' (größere Gruppe)' : ''}';
+  }
+
   Widget _buildGroupStandingsCard(
     BuildContext context,
     TournamentGroup group, {
     required int groupNumber,
     required QualificationPlan? qualificationPlan,
     required List<String> tieBreakers,
+    String advancementPolicy = 'larger_group',
     bool full = false,
     bool showDraws = true,
   }) {
     final colors = _displayColors(context);
     final isLight = Theme.of(context).brightness == Brightness.light;
     final standings = _calculateGroupStandings(group, tieBreakers);
-    final fixedPlaces = qualificationPlan == null
-        ? 2
-        : groupNumber - 1 < qualificationPlan.fixedByGroup.length
-        ? qualificationPlan.fixedByGroup[groupNumber - 1]
-        : qualificationPlan.fixedPerGroup;
     final playedMatches = group.matches
         .where((match) => match.hasPlayers && match.hasResult)
         .length;
@@ -4205,7 +4439,11 @@ class _TournamentSecondScreenViewState
                 ),
               ),
               Text(
-                'Top $fixedPlaces weiter',
+                _qualificationLabel(
+                  qualificationPlan,
+                  advancementPolicy,
+                  groupNumber,
+                ),
                 style: TextStyle(fontSize: 11, color: colors.mutedText),
               ),
             ],
@@ -4345,6 +4583,14 @@ class _TournamentSecondScreenViewState
         }
         final forecast = snapshot.data!;
         final plan = groupStage.qualificationPlan;
+        final stageIndex = widget.tournament.runStages.indexOf(groupStage);
+        final advancementPolicy =
+            stageIndex >= 0 && stageIndex < widget.tournament.stages.length
+            ? widget
+                  .tournament
+                  .stages[stageIndex]
+                  .qualificationAdvancementPolicy
+            : 'larger_group';
         final cards = [
           for (
             var groupIndex = 0;
@@ -4362,6 +4608,8 @@ class _TournamentSecondScreenViewState
                   ? plan.fixedByGroup[groupIndex]
                   : plan.fixedPerGroup,
               tieBreakers: groupStage.tieBreakers,
+              qualificationPlan: plan,
+              advancementPolicy: advancementPolicy,
             ),
         ];
         // Same two-column behavior as the standings view: on wide monitors the
@@ -4392,6 +4640,8 @@ class _TournamentSecondScreenViewState
     required Map<String, AdvancementChance> forecast,
     required int fixedPlaces,
     required List<String> tieBreakers,
+    QualificationPlan? qualificationPlan,
+    String advancementPolicy = 'larger_group',
   }) {
     final colors = _displayColors(context);
     final isLight = Theme.of(context).brightness == Brightness.light;
@@ -4447,9 +4697,13 @@ class _TournamentSecondScreenViewState
                   fontSize: 15,
                 ),
               ),
-              if (fixedPlaces > 0)
+              if (fixedPlaces > 0 || qualificationPlan != null)
                 Text(
-                  'Top $fixedPlaces weiter',
+                  _qualificationLabel(
+                    qualificationPlan,
+                    advancementPolicy,
+                    groupNumber,
+                  ),
                   style: TextStyle(fontSize: 12, color: colors.mutedText),
                 ),
             ],
@@ -4573,6 +4827,10 @@ class _TournamentSecondScreenViewState
       placementMatches: koStage.placementMatches,
       onEditResult: (_) {},
       canEditResults: false,
+      drawMethodLabel: knockoutSeedingModeLabelForStage(
+        widget.tournament,
+        koStage,
+      ),
     );
   }
 
@@ -5564,7 +5822,10 @@ class _TournamentSecondScreenViewState
     CreatedTournament t,
     List<GroupMatch> playedMatches, {
     bool expand = true,
+    int? visibleItemCount,
   }) {
+    final visibleRows =
+        visibleItemCount ?? _recentResultsVisibleItemCount(context);
     final colors = _displayColors(context);
     final enteredOrder = {
       for (var index = 0; index < playedMatches.length; index++)
@@ -5612,7 +5873,6 @@ class _TournamentSecondScreenViewState
                 FutureBuilder<Map<String, List<TournamentMatchEloChange>>>(
                   future: _eloChanges,
                   builder: (context, snapshot) {
-                    const visibleItemCount = 2;
                     final itemExtent =
                         66 * MediaQuery.textScalerOf(context).scale(1);
                     final recentContent = snapshot.hasError
@@ -5631,7 +5891,7 @@ class _TournamentSecondScreenViewState
                           )
                         : Scrollbar(
                             controller: _recentResultsController,
-                            thumbVisibility: recent.length > visibleItemCount,
+                            thumbVisibility: recent.length > visibleRows,
                             child: ListView.separated(
                               controller: _recentResultsController,
                               padding: EdgeInsets.zero,
@@ -5682,7 +5942,7 @@ class _TournamentSecondScreenViewState
                             height: recent.isEmpty
                                 ? itemExtent
                                 : itemExtent *
-                                      recent.length.clamp(1, visibleItemCount),
+                                      recent.length.clamp(1, visibleRows),
                             child: recentContent,
                           ),
                       ],
@@ -5853,6 +6113,9 @@ class _BoardStatusBadge extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     decoration: BoxDecoration(
       color: color.withAlpha(28),
+      // Feste Border auch im ruhenden Zustand: der Wechsel zu einer animierten
+      // Statuskachel darf die Abmessungen nicht verändern.
+      border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
       borderRadius: BorderRadius.circular(20),
     ),
     child: Text(
@@ -5862,9 +6125,13 @@ class _BoardStatusBadge extends StatelessWidget {
   );
 }
 
-/// Status-Badge mit zwei sichtbaren Glow-Impulsen innerhalb von zehn
-/// Sekunden. Der Impuls startet sofort und wiederholt sich alle fünf
-/// Sekunden; die Animation endet automatisch mit dem Entfernen des Badges.
+/// dezentes Status-Badge mit einem einmaligen Border-Impuls.
+///
+/// Es werden bewusst nur die Randfarbe und keine Geometrie animiert: dadurch
+/// bleibt die Kachel während der Animation exakt gleich groß und andere
+/// Steuerelemente auf dem Zweitmonitor werden nicht verschoben. Der zehn
+/// Sekunden lange Status selbst wird weiterhin außerhalb dieses Widgets
+/// verwaltet.
 class _GlowBadge extends StatefulWidget {
   const _GlowBadge({super.key, required this.label, required this.color});
 
@@ -5877,15 +6144,17 @@ class _GlowBadge extends StatefulWidget {
 
 class _GlowBadgeState extends State<_GlowBadge>
     with SingleTickerProviderStateMixin {
+  static const _pulseDuration = Duration(milliseconds: 700);
+
   late final AnimationController _controller;
+  late final Animation<double> _pulse;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 5),
-    )..repeat();
+    _controller = AnimationController(vsync: this, duration: _pulseDuration)
+      ..forward();
+    _pulse = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
   }
 
   @override
@@ -5896,25 +6165,16 @@ class _GlowBadgeState extends State<_GlowBadge>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _controller,
+    animation: _pulse,
     builder: (context, _) {
-      final glow = (1 - _controller.value * 8).clamp(0.0, 1.0).toDouble();
-      final glowColor = widget.color.withValues(alpha: 0.25 + 0.65 * glow);
+      final pulse = 1 - _pulse.value;
+      final borderColor = widget.color.withValues(alpha: 0.3 + 0.6 * pulse);
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
           color: widget.color.withAlpha(28),
-          border: Border.all(color: glowColor, width: 1 + 2 * glow),
+          border: Border.all(color: borderColor, width: 1),
           borderRadius: BorderRadius.circular(20),
-          boxShadow: glow <= 0.01
-              ? null
-              : [
-                  BoxShadow(
-                    color: widget.color.withValues(alpha: 0.25 + 0.5 * glow),
-                    blurRadius: 4 + 12 * glow,
-                    spreadRadius: 1 + 3 * glow,
-                  ),
-                ],
         ),
         child: Text(
           widget.label,

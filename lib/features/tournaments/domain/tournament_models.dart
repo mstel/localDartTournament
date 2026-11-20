@@ -5,6 +5,7 @@ import 'player_withdrawal.dart';
 import 'imported_tournament_archive.dart';
 import '../../statistics/domain/best_performance.dart';
 import '../../league/domain/league_match.dart';
+import 'second_screen_dialog_requests.dart';
 import 'second_screen_widget_placement.dart';
 import 'tournament_activity_entry.dart';
 import 'tournament_settings.dart';
@@ -901,6 +902,8 @@ class CreatedTournament {
     Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts =
         const {},
     this.secondScreenActiveLayout,
+    this.secondScreenGroupAssignment,
+    this.secondScreenTournamentInfo,
     this.syncRevision = 0,
     DateTime? tournamentDate,
     List<TournamentActivityEntry>? activityLog,
@@ -1050,6 +1053,12 @@ class CreatedTournament {
             ],
       },
       secondScreenActiveLayout: json['secondScreenActiveLayout'] as String?,
+      secondScreenGroupAssignment: SecondScreenGroupAssignmentRequest.fromJson(
+        json['secondScreenGroupAssignment'],
+      ),
+      secondScreenTournamentInfo: SecondScreenTournamentInfoRequest.fromJson(
+        json['secondScreenTournamentInfo'],
+      ),
       syncRevision: json['syncRevision'] as int? ?? 0,
       activityLog: [
         for (final item in json['activityLog'] as List? ?? const [])
@@ -1128,6 +1137,8 @@ class CreatedTournament {
   final Map<String, List<int>> directorGroupBoardAssignments;
   final Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts;
   String? secondScreenActiveLayout;
+  SecondScreenGroupAssignmentRequest? secondScreenGroupAssignment;
+  SecondScreenTournamentInfoRequest? secondScreenTournamentInfo;
   int syncRevision;
   final List<PlayerWithdrawal> withdrawals;
   final List<TournamentActivityEntry> activityLog;
@@ -1223,6 +1234,10 @@ class CreatedTournament {
         },
       if (secondScreenActiveLayout != null)
         'secondScreenActiveLayout': secondScreenActiveLayout,
+      if (secondScreenGroupAssignment != null)
+        'secondScreenGroupAssignment': secondScreenGroupAssignment!.toJson(),
+      if (secondScreenTournamentInfo != null)
+        'secondScreenTournamentInfo': secondScreenTournamentInfo!.toJson(),
       if (syncRevision != 0) 'syncRevision': syncRevision,
       if (blockedBoards.isNotEmpty)
         'blockedBoards': blockedBoards.toList()..sort(),

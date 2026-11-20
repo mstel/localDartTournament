@@ -2544,7 +2544,7 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
         ),
         subtitle: Text(
           hypothetical
-              ? 'Hypothetischer Startwert · unter der Teilnahme-Schwelle'
+              ? 'Hypothetischer Wert · unter der Teilnahme-Schwelle'
               : '${player.matches} gewertete Matches · ${player.wins} Siege · ${player.losses} Niederlagen',
           style: TextStyle(color: muted),
         ),
@@ -2568,7 +2568,11 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
               builder: (_) => PlayerEloHistoryPage(
                 player: player,
                 rankingName: widget.ranking.name,
-                history: snapshot.history[player.id] ?? const [],
+                history:
+                    (hypothetical
+                        ? snapshot.hypotheticalHistory[player.id]
+                        : snapshot.history[player.id]) ??
+                    const [],
                 enableTiers: widget.ranking.enableTiers,
                 tierBands: widget.ranking.effectiveTierBands,
                 onOpenTournament: widget.onOpenTournament,

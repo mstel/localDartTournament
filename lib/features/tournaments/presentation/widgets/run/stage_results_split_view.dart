@@ -10,6 +10,7 @@ import '../../../domain/knockout_round_names.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../application/result_entry_performance_trace.dart';
 import 'best_of_comparison_table.dart';
+import 'brackets/knockout_seeding_mode_label.dart';
 import 'knockout_run_section.dart';
 import 'result_entry.dart';
 import 'recent_match_result_card.dart';
@@ -836,11 +837,29 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                       vertical: 8,
                     ),
                     color: theme.colorScheme.surfaceContainerHigh,
-                    child: Text(
-                      stage.groups[index].name,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          stage.groups[index].name,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          groupMatchProgressLabel(stage.groups[index]),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        Text(
+                          groupAdvancementLabel(
+                            stage.qualificationPlan,
+                            index + 1,
+                          ),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
                     ),
                   ),
                   if (query.isNotEmpty &&
@@ -905,6 +924,9 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
         index >= tournament.stages.length ||
         tournament.stages[index].gameFormat.allowsDraws;
   }
+
+  String? get _drawMethodLabel =>
+      knockoutSeedingModeLabelForStage(widget.tournament, widget.stage);
 
   Widget _buildKnockoutStageResults(
     BuildContext context,
@@ -999,6 +1021,19 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
                         icon: const Icon(Icons.open_in_full),
                         label: const Text('KO Baum öffnen'),
                       ),
+                      if (_drawMethodLabel case final label?) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Auslosungsmethode: $label',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -96,6 +96,26 @@ class GroupEndReviewDialog extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(height: 2),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 2,
+                    children: [
+                      Text(
+                        groupMatchProgressLabel(stage.groups[groupIndex]),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        groupAdvancementLabel(plan, groupIndex + 1),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 4),
                   Card(
                     margin: EdgeInsets.zero,

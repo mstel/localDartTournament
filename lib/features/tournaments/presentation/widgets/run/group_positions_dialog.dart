@@ -502,6 +502,7 @@ class _GroupPositionsDialogState extends State<GroupPositionsDialog> {
                             List<TournamentPlayer>.of(group),
                         ],
                         playerReplacements: Map.of(_playerReplacements),
+                        mode: _mode,
                       ),
                     ),
                     child: const Text('Übernehmen'),
@@ -608,10 +609,12 @@ class GroupPositionsResult {
   const GroupPositionsResult({
     required this.assignments,
     this.playerReplacements = const {},
+    this.mode = GroupPlayerAllocationMode.manual,
   });
 
   final List<List<TournamentPlayer>> assignments;
   final Map<TournamentPlayer, TournamentPlayer> playerReplacements;
+  final GroupPlayerAllocationMode mode;
 }
 
 class _GroupPlayerPosition {

@@ -538,7 +538,7 @@ void main() {
     },
   );
 
-  test('keeps a below-threshold ranked player as hypothetical member', () {
+  test('projects real values for a below-threshold hypothetical member', () {
     final players = {
       for (var index = 1; index <= 16; index++) 'p$index': 'Spieler $index',
     };
@@ -588,10 +588,30 @@ void main() {
     expect(snapshot.isHypothetical('p16'), isTrue);
     expect(snapshot.hypotheticalPlayerIds, contains('p16'));
     expect(snapshot.hypotheticalPlayerIds, isNot(contains('p1')));
+
+    final p16Match = (first.runStages.single as KnockoutTournamentRunStage)
+        .rounds
+        .single
+        .last;
+    final p16Key = calculator.matchKey(first, p16Match);
+    expect(snapshot.matchDeltas[p16Key], isNull);
+    expect(snapshot.hypotheticalMatchDeltas[p16Key]?.away, lessThan(0));
+    final projectedHistory = snapshot.hypotheticalHistory['p16'];
+    expect(projectedHistory, hasLength(1));
+    expect(projectedHistory!.single.delta, lessThan(0));
+    expect(projectedHistory.single.ratingBefore, 1000);
+    expect(
+      projectedHistory.single.ratingAfter,
+      isNot(projectedHistory.single.ratingBefore),
+    );
+    expect(snapshot.history['p16'], isNull);
+
     final hypothetical = snapshot.allMembers.firstWhere(
       (player) => player.id == 'p16',
     );
-    expect(hypothetical.matches, 0);
+    expect(hypothetical.matches, 1);
+    expect(hypothetical.rating, lessThan(1000));
+    expect(hypothetical.rating, projectedHistory.single.ratingAfter);
   });
 
   test('applies ranking assignment and date range before replay', () {

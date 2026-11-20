@@ -385,7 +385,7 @@ void main() {
     expect(find.byKey(const ValueKey('director-board-1')), findsNothing);
     expect(find.byKey(const ValueKey('director-player-search')), findsNothing);
     expect(find.textContaining('Schnellstart · Board'), findsNothing);
-    expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
+    expect(find.text('Uhr & Zeiteinstellungen'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -863,10 +863,7 @@ void main() {
       ThemeData.light().colorScheme,
     );
     expect(decoration.color, expectedPalette.card);
-    expect(
-      (decoration.border! as Border).top.color,
-      expectedPalette.border,
-    );
+    expect((decoration.border! as Border).top.color, expectedPalette.border);
     expect(tester.takeException(), isNull);
   });
   testWidgets('dashboard has a direct next-stage preview action', (
@@ -1347,12 +1344,10 @@ void main() {
     expect(find.text('Ergebnis erfassen'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets('player search offers matching startable matches', (
+  testWidgets('director mode no longer shows participant match search', (
     tester,
   ) async {
     final tournament = fixture();
-    GroupMatch? startedMatch;
-    var startedBoard = -1;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1365,10 +1360,7 @@ void main() {
               onChange: () async {},
               onResult: (_) async {},
               onBlock: (_) async {},
-              onStartOnBoard: (board, {match}) async {
-                startedBoard = board;
-                startedMatch = match;
-              },
+              onStartOnBoard: (board, {match}) async {},
             ),
           ),
         ),
@@ -1376,33 +1368,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const ValueKey('director-player-search')),
-      tournament.players.first.name,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Startbar · Board'), findsWidgets);
-    final firstResult = find.byType(ListTile).first;
-    final startButton = find.descendant(
-      of: firstResult,
-      matching: find.byType(FilledButton),
-    );
-    expect(startButton, findsOneWidget);
-    await tester.ensureVisible(startButton);
-    await tester.tap(startButton);
-    await tester.pumpAndSettle();
-
-    expect(startedBoard, 1);
-    expect(startedMatch, isNotNull);
-    expect(
-      (tournament.runStages.single as GroupTournamentRunStage)
-          .groups
-          .single
-          .matches
-          .any((match) => identical(match, startedMatch)),
-      isTrue,
-    );
+    expect(find.byKey(const ValueKey('director-player-search')), findsNothing);
+    expect(find.text('Partien eines Teilnehmers finden'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets('director board queue starts a match on its assigned board', (
