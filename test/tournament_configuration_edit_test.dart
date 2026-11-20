@@ -189,14 +189,14 @@ void main() {
     await tester.tap(find.text('Einstellungen'));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('director-settings')));
+    await tester.pumpAndSettle();
     final directorSwitch = find.widgetWithText(
       SwitchListTile,
       'Spielleiter-Modus aktivieren',
     );
     await tester.ensureVisible(directorSwitch);
     await tester.tap(directorSwitch);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('director-settings')));
     await tester.pumpAndSettle();
 
     final playOrderDropdown = labeledDropdown('Spielplanmodus');

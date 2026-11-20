@@ -6125,13 +6125,13 @@ class _BoardStatusBadge extends StatelessWidget {
   );
 }
 
-/// dezentes Status-Badge mit einem einmaligen Border-Impuls.
+/// Status-Badge mit einem deutlich sichtbaren, einmaligen Impuls.
 ///
-/// Es werden bewusst nur die Randfarbe und keine Geometrie animiert: dadurch
-/// bleibt die Kachel während der Animation exakt gleich groß und andere
-/// Steuerelemente auf dem Zweitmonitor werden nicht verschoben. Der zehn
-/// Sekunden lange Status selbst wird weiterhin außerhalb dieses Widgets
-/// verwaltet.
+/// Animiert werden nur Rand- und Hintergrundfarbe. Die Borderstärke ist fest,
+/// es gibt keinen Schatten und keine Geometrieänderung: dadurch bleibt die
+/// Kachel exakt gleich groß und andere Steuerelemente werden nicht verschoben.
+/// Der zehn Sekunden lange Status selbst wird weiterhin außerhalb dieses
+/// Widgets verwaltet.
 class _GlowBadge extends StatefulWidget {
   const _GlowBadge({super.key, required this.label, required this.color});
 
@@ -6144,7 +6144,7 @@ class _GlowBadge extends StatefulWidget {
 
 class _GlowBadgeState extends State<_GlowBadge>
     with SingleTickerProviderStateMixin {
-  static const _pulseDuration = Duration(milliseconds: 700);
+  static const _pulseDuration = Duration(milliseconds: 900);
 
   late final AnimationController _controller;
   late final Animation<double> _pulse;
@@ -6168,12 +6168,13 @@ class _GlowBadgeState extends State<_GlowBadge>
     animation: _pulse,
     builder: (context, _) {
       final pulse = 1 - _pulse.value;
-      final borderColor = widget.color.withValues(alpha: 0.3 + 0.6 * pulse);
+      final borderColor = widget.color.withValues(alpha: 0.35 + 0.65 * pulse);
+      final fillColor = widget.color.withValues(alpha: 0.12 + 0.32 * pulse);
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
-          color: widget.color.withAlpha(28),
-          border: Border.all(color: borderColor, width: 1),
+          color: fillColor,
+          border: Border.all(color: borderColor, width: 3),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(

@@ -137,14 +137,12 @@ void main() {
     expect(find.text('Leitung'), findsOneWidget);
     await tester.tap(find.text('Einstellungen'));
     await tester.pumpAndSettle();
-    expect(find.text('Spielleiter-Modus aktivieren'), findsOneWidget);
+    expect(find.text('Spielleiter-Modus aktivieren'), findsNothing);
     expect(find.text('Zweitbildschirm-Modus (TV-Anzeige)'), findsOneWidget);
-    await tester.tap(find.text('Spielleiter-Modus aktivieren'));
-    await tester.pumpAndSettle();
-    expect(find.text('Boards: 1'), findsNothing);
-    expect(find.text('Board Zuweisung'), findsNothing);
-    expect(find.text('Player Insights anzeigen'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('director-settings')));
+    await tester.pumpAndSettle();
+    expect(find.text('Spielleiter-Modus aktivieren'), findsOneWidget);
+    await tester.tap(find.text('Spielleiter-Modus aktivieren'));
     await tester.pumpAndSettle();
     expect(find.text('Boards: 1'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -233,9 +231,11 @@ void main() {
         isFalse,
       );
       expect(find.text('Spielplanmodus'), findsNothing);
+      expect(find.text('Spielleiter-Modus aktivieren'), findsNothing);
 
       await tester.tap(directorSettings);
       await tester.pumpAndSettle();
+      expect(find.text('Spielleiter-Modus aktivieren'), findsOneWidget);
       expect(find.text('Spielplanmodus'), findsOneWidget);
       expect(find.text('Player Insights anzeigen'), findsOneWidget);
       expect(tester.takeException(), isNull);

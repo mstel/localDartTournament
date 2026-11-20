@@ -318,7 +318,7 @@ void main() {
 
       expect(
         position('Zweitbildschirm-Modus (TV-Anzeige)'),
-        lessThan(position('Spielleiter-Modus aktivieren')),
+        lessThan(position('Spielleiter-Modus Einstellungen')),
       );
       expect(
         position('Errungenschaften'),

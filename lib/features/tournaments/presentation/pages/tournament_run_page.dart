@@ -1418,11 +1418,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _openSecondScreen() async {
     try {
+      // `ProcessStartMode.detached` stellt keinen `exitCode` bereit; der
+      // Zugriff darauf wirft eine StateError und lässt den Fallback fälschlich
+      // im Hauptfenster erscheinen. Mit dem normalen Modus und explizit
+      // geleerten Pipes bleibt der Zweitmonitor eigenständig und das Schließen
+      // lässt sich zuverlässig erkennen.
       final process = await Process.start(Platform.resolvedExecutable, [
         '--second-screen',
         widget.tournament.id,
         '--parent-pid=$pid',
-      ], mode: ProcessStartMode.detached);
+      ]);
+      unawaited(process.stdin.close());
+      unawaited(process.stdout.drain<void>());
+      unawaited(process.stderr.drain<void>());
       if (!mounted) return;
       setState(() {
         _secondScreenProcess = process;
@@ -6904,32 +6912,6 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text(
-                                        'Spielleiter-Modus aktivieren',
-                                      ),
-                                      subtitle: Text(
-                                        widget.tournament.leagueMatch == null
-                                            ? 'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.'
-                                            : 'Manuelle Aktiv-Markierung von Spielen und Board-Anzahl für die Leitungsansicht.',
-                                      ),
-                                      value:
-                                          widget.tournament.directorModeEnabled,
-                                      onChanged:
-                                          widget.tournament.leagueMatch != null
-                                          ? null
-                                          : (
-                                              enabled,
-                                            ) => _handleDirectorSettings(
-                                              () => _saveDirectorMode(
-                                                enabled: enabled,
-                                                strategy: widget
-                                                    .tournament
-                                                    .directorSchedulingStrategy,
-                                              ),
-                                            ),
-                                    ),
                                     ExpansionTile(
                                       key: const ValueKey('director-settings'),
                                       title: const Text(
@@ -6939,6 +6921,35 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                         top: 8,
                                       ),
                                       children: [
+                                        SwitchListTile(
+                                          contentPadding: EdgeInsets.zero,
+                                          title: const Text(
+                                            'Spielleiter-Modus aktivieren',
+                                          ),
+                                          subtitle: Text(
+                                            widget.tournament.leagueMatch ==
+                                                    null
+                                                ? 'Board-Management, Priorisierung und Leitungsansicht für den laufenden Spielbetrieb.'
+                                                : 'Manuelle Aktiv-Markierung von Spielen und Board-Anzahl für die Leitungsansicht.',
+                                          ),
+                                          value: widget
+                                              .tournament
+                                              .directorModeEnabled,
+                                          onChanged:
+                                              widget.tournament.leagueMatch !=
+                                                  null
+                                              ? null
+                                              : (
+                                                  enabled,
+                                                ) => _handleDirectorSettings(
+                                                  () => _saveDirectorMode(
+                                                    enabled: enabled,
+                                                    strategy: widget
+                                                        .tournament
+                                                        .directorSchedulingStrategy,
+                                                  ),
+                                                ),
+                                        ),
                                         if (widget
                                                 .tournament
                                                 .directorModeEnabled ||

@@ -959,13 +959,14 @@ void main() {
       final laterDecoration = badgeDecoration(tester, badge);
       final laterRect = tester.getRect(badge);
 
-      expect(startDecoration.border!.top.width, 1);
+      expect(startDecoration.border!.top.width, 3);
       expect(startDecoration.boxShadow, isNull);
       expect(laterDecoration.boxShadow, isNull);
       expect(
         startDecoration.border!.top.color,
         isNot(laterDecoration.border!.top.color),
       );
+      expect(startDecoration.color, isNot(laterDecoration.color));
       expect(laterRect.width, closeTo(startRect.width, 0.5));
       expect(laterRect.height, closeTo(startRect.height, 0.5));
       expect(tester.takeException(), isNull);
