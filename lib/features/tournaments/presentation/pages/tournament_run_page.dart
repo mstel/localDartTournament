@@ -53,6 +53,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   Timer? _secondScreenInfoPollTimer;
   bool _secondScreenInfoVisible = false;
   bool _secondScreenDetected = false;
+  bool _groupEndReviewDialogOpen = false;
+  String? _groupEndReviewRequestId;
+  bool _groupEndReviewCancelledRemotely = false;
+  bool _groupEndReviewConfirmedRemotely = false;
   int? _tieBreakerDraftStageIndex;
   List<String> _tieBreakerDraft = const [];
   Future<void> _checkpoint() {
@@ -1497,6 +1501,25 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       final visible = stored.secondScreenTournamentInfo?.visible ?? false;
       if (visible != _secondScreenInfoVisible) {
         setState(() => _secondScreenInfoVisible = visible);
+      }
+
+      // Wird der Abschluss-Dialog auf dem Monitor abgebrochen, verschwindet
+      // der Request dort. Dann muss auch der noch offene Hauptdialog geschlossen
+      // und der Phasenabschluss zurückgenommen werden.
+      final reviewRequest = stored.secondScreenGroupEndReview;
+      if (_groupEndReviewDialogOpen &&
+          _groupEndReviewRequestId != null &&
+          reviewRequest?.id == _groupEndReviewRequestId &&
+          reviewRequest?.visible == false) {
+        if (stored.acknowledgedGroupEndReviews.contains(
+          reviewRequest!.reviewKey,
+        )) {
+          _groupEndReviewConfirmedRemotely = true;
+        } else {
+          _groupEndReviewCancelledRemotely = true;
+        }
+        final navigator = Navigator.of(context, rootNavigator: true);
+        if (navigator.canPop()) navigator.pop();
       }
     } catch (_) {
       // Vorübergehende Lesefehler dürfen die laufende Anzeige nicht stören.
@@ -6280,9 +6303,20 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           knockoutDrawOnStart: false,
         );
 
-  Future<void> _completeCurrentStage() async {
+  Future<void> _completeCurrentStage({bool annulOpenMatches = false}) async {
     if (_simulation != null) return;
     final activeStage = widget.tournament.runStages[_activeStageIndex];
+    List<
+      ({
+        GroupMatch match,
+        bool isAnnulled,
+        int? homeLegs,
+        int? homeSets,
+        int? awayLegs,
+        int? awaySets,
+      })
+    >?
+    annulledSnapshot;
     if (activeStage is GroupTournamentRunStage &&
         GroupEndReviewService.hasTieOrComparison(
           widget.tournament,
@@ -6293,18 +6327,84 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           _activeStageIndex,
           activeStage,
         )) {
+      if (annulOpenMatches) {
+        annulledSnapshot = [];
+        setState(() {
+          for (final match in _matchesForStage(activeStage)) {
+            if (!match.hasPlayers || match.isResolved) continue;
+            annulledSnapshot!.add((
+              match: match,
+              isAnnulled: match.isAnnulled,
+              homeLegs: match.homeLegs,
+              homeSets: match.homeSets,
+              awayLegs: match.awayLegs,
+              awaySets: match.awaySets,
+            ));
+            match.isAnnulled = true;
+            match.homeLegs = null;
+            match.homeSets = null;
+            match.awaySets = null;
+            match.awayLegs = null;
+          }
+          _advanceKnockoutWinners();
+        });
+      }
+
+      final request = SecondScreenGroupEndReviewRequest.create(
+        stageIndex: _activeStageIndex,
+        reviewKey: GroupEndReviewService.key(_activeStageIndex, activeStage),
+      );
+      widget.tournament.secondScreenGroupEndReview = request;
+      widget.tournament.updatedAt = DateTime.now();
+      _groupEndReviewDialogOpen = true;
+      _groupEndReviewRequestId = request.id;
+      _groupEndReviewCancelledRemotely = false;
+      _groupEndReviewConfirmedRemotely = false;
+      await _saveTournamentProgress();
+      if (!mounted) return;
+
       final confirmed = await GroupEndReviewDialog.show(
         context: context,
         tournament: widget.tournament,
         stageIndex: _activeStageIndex,
         stage: activeStage,
       );
-      if (confirmed != true || !mounted) return;
+      _groupEndReviewDialogOpen = false;
+      _groupEndReviewRequestId = null;
+      final remoteConfirmed = _groupEndReviewConfirmedRemotely;
+      final cancelled = _groupEndReviewCancelledRemotely;
+      _groupEndReviewConfirmedRemotely = false;
+      _groupEndReviewCancelledRemotely = false;
+      final proceed = confirmed == true || remoteConfirmed;
+      if (!proceed || cancelled || !mounted) {
+        if (annulledSnapshot != null) {
+          setState(() {
+            for (final snapshot in annulledSnapshot!) {
+              snapshot.match
+                ..isAnnulled = snapshot.isAnnulled
+                ..homeLegs = snapshot.homeLegs
+                ..homeSets = snapshot.homeSets
+                ..awayLegs = snapshot.awayLegs
+                ..awaySets = snapshot.awaySets;
+            }
+            _advanceKnockoutWinners();
+          });
+        }
+        if (widget.tournament.secondScreenGroupEndReview?.id == request.id) {
+          widget.tournament.secondScreenGroupEndReview = request.hide();
+          widget.tournament.updatedAt = DateTime.now();
+          await _saveTournamentProgress();
+        }
+        if (!mounted) return;
+        setState(() {});
+        return;
+      }
       GroupEndReviewService.acknowledge(
         widget.tournament,
         _activeStageIndex,
         activeStage,
       );
+      widget.tournament.secondScreenGroupEndReview = request.hide();
       widget.tournament.updatedAt = DateTime.now();
       await _saveTournamentProgress();
       if (!mounted) return;
@@ -6337,8 +6437,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         'stage_completed',
         'Phase beendet: $completedStageName',
       );
+      // Nach einem erfolgreichen Abschluss ist die Korrekturphase wieder
+      // beendet - auch bei einer Zwischenphase. Andernfalls bliebe der
+      // abgeleitete Monitor-Fallback dauerhaft deaktiviert.
+      widget.tournament.reopenedForCorrections = false;
       if (!hasNextStage) {
-        widget.tournament.reopenedForCorrections = false;
         widget.tournament.finishedAt ??= DateTime.now();
         widget.tournament.addActivity(
           'tournament_completed',
@@ -6385,21 +6488,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   void _finishCurrentStageEarly() {
     if (_simulation != null) return;
-    setState(() {
-      for (final match in _matchesForStage(
-        widget.tournament.runStages[_activeStageIndex],
-      )) {
-        if (match.hasPlayers && !match.isResolved) {
-          match.isAnnulled = true;
-          match.homeLegs = null;
-          match.homeSets = null;
-          match.awaySets = null;
-          match.awayLegs = null;
-        }
-      }
-      _advanceKnockoutWinners();
-    });
-    _completeCurrentStage();
+    // Das Annullieren offener Partien erst nach der Bestätigung vornehmen,
+    // damit „Abbrechen“ den ursprünglichen Zustand exakt wiederherstellt.
+    unawaited(_completeCurrentStage(annulOpenMatches: true));
   }
 
   bool get _canReopenPreviousStage {
@@ -6422,6 +6513,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _completedStageIndexes.removeWhere((i) => i >= previousStageIndex);
       widget.tournament.completedStageIndexes.removeWhere(
         (i) => i >= previousStageIndex,
+      );
+      GroupEndReviewService.clearAcknowledgementsFrom(
+        widget.tournament,
+        previousStageIndex,
       );
       widget.tournament.reopenedForCorrections = true;
       widget.tournament.finishedAt = null;
@@ -6513,6 +6608,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       }
       _completedStageIndexes.remove(resetStageIndex);
       widget.tournament.completedStageIndexes.remove(resetStageIndex);
+      GroupEndReviewService.clearAcknowledgementsFrom(
+        widget.tournament,
+        resetStageIndex,
+      );
       widget.tournament.addActivity(
         'stage_reset',
         'Phase zurückgesetzt: $resetStageName',

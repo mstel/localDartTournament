@@ -312,7 +312,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                         children: [
                           const SizedBox(height: 8),
                           Text(
-                            '${review.tournaments} Turniere · ${review.totalLegs} Legs · ${review.totalBestPerformances} Bestleistungen · ${review.total180} × 180+ · ${review.total170} × Big Fish · ${review.total171Plus} × 171+ · ${review.totalShortLegs} Shortlegs · ${review.totalHighFinishes} High Finishes · ${review.totalBullseyeFinishes} Bullseye Finishes',
+                            '${review.tournaments} Turniere · ${review.totalLegs} Legs · ${review.totalBestPerformances} Bestleistungen · ${review.total180} × 180 · ${review.total170} × Big Fish · ${review.total171Plus} × 171+ · ${review.totalShortLegs} Shortlegs · ${review.totalHighFinishes} High Finishes · ${review.totalBullseyeFinishes} Bullseye Finishes',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 12),
@@ -436,7 +436,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                             year: _year,
                           ),
                           _ReviewLeaders(
-                            title: 'Meiste 180+',
+                            title: 'Meiste 180',
                             rows: rows,
                             metric: (s) => s.scores180,
                             profileIds: review.profileIds,
@@ -619,7 +619,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                     '${stats.legWinRate.toStringAsFixed(1)} %',
                               ),
                               _StatMiniCard(
-                                label: '180+ Aufnahmen',
+                                label: '180 Aufnahmen',
                                 value:
                                     '${performanceCounts[BestPerformanceType.score180]}',
                               ),

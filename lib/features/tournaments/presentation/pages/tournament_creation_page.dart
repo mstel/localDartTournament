@@ -19,6 +19,8 @@ class TournamentCreationPage extends StatefulWidget {
 }
 
 class _TournamentCreationPageState extends State<TournamentCreationPage> {
+  bool _hasChanges = false;
+  bool _exitDialogOpen = false;
   bool _showEntryChoices = true;
   bool _countsForRanking = false;
   bool _rankingSetupTouched = false;
@@ -64,6 +66,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           : null,
   ];
   void _setGroupGameLimit(int index, int? limit) => setState(() {
+    _markDirty();
     while (_groupMaxGamesPerPlayer.length <= index) {
       _groupMaxGamesPerPlayer.add(null);
     }
@@ -78,6 +81,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           : 'elo',
   ];
   void _setGroupMatchmakingStrategy(int index, String strategy) => setState(() {
+    _markDirty();
     while (_groupMatchmakingStrategies.length <= index) {
       _groupMatchmakingStrategies.add('elo');
     }
@@ -231,6 +235,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   Future<void> _configureRankingSelection(bool enabled) async {
+    _markDirty();
     if (!enabled) {
       setState(() {
         _rankingSetupTouched = true;
@@ -415,6 +420,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ),
       );
       if (selected == null || !mounted) return;
+      _markDirty();
       _tournamentNameController.text = selected.name;
     } catch (error) {
       if (!mounted) return;
@@ -474,6 +480,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         ),
       );
       if (selected == null || !mounted) return;
+      _markDirty();
       setState(() {
         _players
           ..clear()
@@ -558,6 +565,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     GroupPlayerAllocationMode mode,
   ) async {
     if (mode != GroupPlayerAllocationMode.manual) {
+      _markDirty();
       setState(() {
         _groupAllocationMode = mode;
         _groupDrawOnStart = false;
@@ -581,6 +589,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       );
       return;
     }
+    _markDirty();
 
     List<List<TournamentPlayer>> initialGroups;
     final savedOrder = _manualGroupSlotOrder;
@@ -669,6 +678,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _changeGroupRoundRobinRepeats(int groupIndex, int delta) {
+    _markDirty();
     final groupSizes = _calculateGroupSizes();
     if (groupIndex < 0 || groupIndex >= groupSizes.length) {
       return;
@@ -1292,6 +1302,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _swapKnockoutSlots(int fromIndex, int toIndex) {
+    _markDirty();
     final slots = _knockoutSlotOrder();
     if (fromIndex < 0 ||
         toIndex < 0 ||
@@ -1309,6 +1320,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _resetKnockoutSlots() {
+    _markDirty();
     setState(() {
       if (_effectiveKnockoutSeedingMode() == 'random_cross') {
         final participantCount = _knockoutParticipantCount();
@@ -1327,6 +1339,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _setKnockoutSeedingMode(String mode) {
+    _markDirty();
     setState(() {
       _knockoutSeedingMode = mode;
       final participantCount = _knockoutParticipantCount();
@@ -1489,6 +1502,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _addPlayer() {
+    _markDirty();
     final playerName = _playerNameController.text.trim();
     if (playerName.isEmpty) {
       return;
@@ -1523,6 +1537,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _generatePlayers() {
+    _markDirty();
     final requestedCount = int.tryParse(_playerCountController.text);
     if (requestedCount == null || requestedCount < 1) {
       return;
@@ -1574,6 +1589,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       if (selectedProfiles == null || !mounted) {
         return;
       }
+      _markDirty();
       setState(() {
         final guestPlayers = _players
             .where((player) => player.profileId == null)
@@ -1617,6 +1633,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _removePlayer(int index) {
+    _markDirty();
     setState(() {
       _players.removeAt(index);
       _syncParticipantCountToPlayers();
@@ -1624,6 +1641,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _reorderPlayer(int oldIndex, int newIndex) {
+    _markDirty();
     setState(() {
       final player = _players.removeAt(oldIndex);
       _players.insert(newIndex, player);
@@ -1631,6 +1649,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _setKratzerStartingScratches(int index, int scratches) {
+    _markDirty();
     setState(() {
       _players[index] = _players[index].copyWith(
         kratzerStartingScratches: scratches,
@@ -1639,6 +1658,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _setKratzerLives(int lives) {
+    _markDirty();
     setState(() {
       _kratzerLives = lives;
       for (var index = 0; index < _players.length; index++) {
@@ -1652,6 +1672,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _mergePlayers(int source, int target) {
+    _markDirty();
     try {
       final team = TournamentPlayer.team([_players[target], _players[source]]);
       setState(() {
@@ -1666,6 +1687,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _splitTeam(int index) {
+    _markDirty();
     setState(() {
       final members = _players.removeAt(index).individuals;
       _players.insertAll(index, members);
@@ -1688,6 +1710,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       return;
     }
 
+    _markDirty();
     setState(() {
       _players[index] = _players[index].copyWith(
         name: newName.trim(),
@@ -1716,6 +1739,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 label: Text('Platz $place'),
                 selected: _placementPlaces.contains(place),
                 onSelected: (selected) => setState(() {
+                  _markDirty();
                   if (selected) {
                     _placementPlaces.add(place);
                   } else {
@@ -1732,6 +1756,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _saveStage() {
+    _markDirty();
     final otherStages = [
       for (var index = 0; index < _stages.length; index++)
         if (index != _editingStageIndex) _stages[index],
@@ -2121,6 +2146,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _removeStage(int index) {
+    _markDirty();
     setState(() {
       _stages.removeAt(index);
       if (_editingStageIndex == index) {
@@ -2156,6 +2182,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         );
         return;
       }
+      _markDirty();
       setState(() {
         if (_players.isEmpty) {
           _players.addAll(
@@ -2217,6 +2244,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
       0,
       (sum, value) => sum + value,
     );
+    _markDirty();
     setState(() {
       if (_players.isEmpty) {
         _players.addAll(
@@ -2492,6 +2520,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         );
       }
       if (!mounted) return;
+      _hasChanges = false;
       setState(() => _isCreatingTournament = false);
       if (existing != null) {
         Navigator.of(context).pop(tournament);
@@ -2967,6 +2996,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     bool selected,
     List<int> currentGroups,
   ) {
+    _markDirty();
     final plan = _groupQualificationPlan();
     setState(() {
       if (_selectedExtraGroups.isEmpty && currentGroups.isNotEmpty) {
@@ -2990,6 +3020,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _setQualificationAutoAdjust(bool enabled) {
+    _markDirty();
     final groupSizes = _calculateGroupSizes();
     final plan = _groupQualificationPlan();
     setState(() {
@@ -3017,6 +3048,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _setQualificationAdvancementPolicy(String policy) => setState(() {
+    _markDirty();
     _qualificationAdvancementPolicy = policy;
     _fixedQualifiersByGroup.clear();
     _selectedExtraGroups.clear();
@@ -3024,6 +3056,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   });
 
   void _setBestOfQualifierCount(String value) {
+    _markDirty();
     final parsed = int.tryParse(value);
     setState(() {
       _manualExtraCount = parsed == null || parsed < 0 ? 0 : parsed;
@@ -3031,6 +3064,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   void _cycleQualificationPlace(int groupNumber, int place) {
+    _markDirty();
     final groupSizes = _calculateGroupSizes();
     final plan = _groupQualificationPlan();
     if (groupNumber < 1 ||
@@ -3085,6 +3119,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   }
 
   Future<void> _moveGroupTieBreaker(int index, int direction) async {
+    _markDirty();
     final targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= _groupTieBreakers.length) {
       return;
@@ -3099,9 +3134,60 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     await _groupTieBreakerSaveQueue;
   }
 
+  /// Eine echte Eingabe oder Konfigurationsänderung wurde vorgenommen.
+  /// Reine UI-Zustände (Section aufgeklappt, Dialog geöffnet) zählen nicht.
+  void _markDirty() {
+    if (_hasChanges) return;
+    _hasChanges = true;
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _confirmLeave() async {
+    if (_exitDialogOpen) return;
+    if (!_hasChanges) {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+    _exitDialogOpen = true;
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Seite verlassen?'),
+        content: const Text(
+          'Möchten Sie wirklich die Seite verlassen? '
+          'Vorgenommene Änderungen gehen verloren',
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('leave-creation-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Nein'),
+          ),
+          FilledButton(
+            key: const ValueKey('leave-creation-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Ja'),
+          ),
+        ],
+      ),
+    );
+    _exitDialogOpen = false;
+    if (leave == true && mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _buildAuthorized(context);
+    return PopScope(
+      canPop: !_hasChanges,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_confirmLeave());
+      },
+      child: _buildAuthorized(context),
+    );
   }
 
   Widget _buildAuthorized(BuildContext context) {
@@ -3205,7 +3291,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         counterText: '',
                       ),
                       onSubmitted: (_) => _saveTournamentNameDraft(),
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (_) {
+                        _markDirty();
+                        setState(() {});
+                      },
                     );
                     final pickNameButton = OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
@@ -3225,8 +3314,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     );
                     final datePicker = TournamentDatePickerField(
                       value: _tournamentDate,
-                      onChanged: (date) =>
-                          setState(() => _tournamentDate = date),
+                      onChanged: (date) => setState(() {
+                        _markDirty();
+                        _tournamentDate = date;
+                      }),
                     );
                     final settingsButton = OutlinedButton.icon(
                       onPressed: _isCreatingTournament
@@ -3343,12 +3434,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 _responsiveFormRow(
                   alignTrailingEndOnNarrow: true,
                   leading: TextField(
+                    key: const ValueKey('player-name-field'),
                     controller: _playerNameController,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       labelText: 'Teilnehmername',
                       prefixIcon: Icon(Icons.person_add_alt_1_outlined),
                     ),
+                    onChanged: (_) => _markDirty(),
                     onSubmitted: (_) => _addPlayer(),
                   ),
                   trailing: Wrap(
@@ -3382,12 +3475,14 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                 const SizedBox(height: 16),
                 _responsiveFormRow(
                   leading: TextField(
+                    key: const ValueKey('player-count-field'),
                     controller: _playerCountController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       labelText: 'Anzahl Teilnehmende',
                     ),
+                    onChanged: (_) => _markDirty(),
                   ),
                   trailing: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -3511,6 +3606,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           }
 
                           setState(() {
+                            _markDirty();
                             _selectedStageType = value;
                             if (value == 'kratzer') {
                               _countsForRanking = false;
@@ -3569,9 +3665,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           child: Text('$count Teilnehmer'),
                         ),
                     ],
-                    onChanged: (value) => setState(
-                      () => _kratzerBoardDistribution = value ?? 'balanced',
-                    ),
+                    onChanged: (value) => setState(() {
+                      _markDirty();
+                      _kratzerBoardDistribution = value ?? 'balanced';
+                    }),
                   ),
                   SwitchListTile(
                     key: const ValueKey('kratzer-prefer-same-scratches'),
@@ -3583,8 +3680,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       'Gleicht zuerst absolvierte Partien aus, vermeidet frühere Begegnungen wenn möglich und bevorzugt danach gleiche Kratzerstände.',
                     ),
                     value: _kratzerPreferSameScratchCount,
-                    onChanged: (value) =>
-                        setState(() => _kratzerPreferSameScratchCount = value),
+                    onChanged: (value) => setState(() {
+                      _markDirty();
+                      _kratzerPreferSameScratchCount = value;
+                    }),
                   ),
                   SwitchListTile(
                     key: const ValueKey('kratzer-play-until-elimination'),
@@ -3596,8 +3695,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       'Die Boards behalten ihre Gruppen, bis in einer Runde mindestens ein Teilnehmer ausscheidet.',
                     ),
                     value: _kratzerPlayUntilElimination,
-                    onChanged: (value) =>
-                        setState(() => _kratzerPlayUntilElimination = value),
+                    onChanged: (value) => setState(() {
+                      _markDirty();
+                      _kratzerPlayUntilElimination = value;
+                    }),
                   ),
                   ExpansionTile(
                     key: const ValueKey('kratzer-special-rules'),
@@ -3612,8 +3713,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           'Die Turnierleitung kann im Ergebnisdialog für eine 180 ein zusätzliches Leben vergeben.',
                         ),
                         value: _kratzerBonusLifeFor180,
-                        onChanged: (value) =>
-                            setState(() => _kratzerBonusLifeFor180 = value),
+                        onChanged: (value) => setState(() {
+                          _markDirty();
+                          _kratzerBonusLifeFor180 = value;
+                        }),
                       ),
                       SwitchListTile(
                         key: const ValueKey('kratzer-bonus-life-high-finish'),
@@ -3623,9 +3726,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           'Die Turnierleitung kann im Ergebnisdialog für ein High Finish ein zusätzliches Leben vergeben.',
                         ),
                         value: _kratzerBonusLifeForHighFinish,
-                        onChanged: (value) => setState(
-                          () => _kratzerBonusLifeForHighFinish = value,
-                        ),
+                        onChanged: (value) => setState(() {
+                          _markDirty();
+                          _kratzerBonusLifeForHighFinish = value;
+                        }),
                       ),
                       SwitchListTile(
                         key: const ValueKey('kratzer-handicaps-enabled'),
@@ -3635,8 +3739,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           'Im Turnier lassen sich Handicaps verwalten und einzelnen Teilnehmern zuweisen.',
                         ),
                         value: _kratzerHandicapsEnabled,
-                        onChanged: (value) =>
-                            setState(() => _kratzerHandicapsEnabled = value),
+                        onChanged: (value) => setState(() {
+                          _markDirty();
+                          _kratzerHandicapsEnabled = value;
+                        }),
                       ),
                       ExpansionTile(
                         key: const ValueKey('kratzer-starting-scratches'),
@@ -3720,8 +3826,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                   children: [
                     _StageGameFormatSetup(
                       value: _stageGameFormat,
-                      onChanged: (value) =>
-                          setState(() => _stageGameFormat = value),
+                      onChanged: (value) => setState(() {
+                        _markDirty();
+                        _stageGameFormat = value;
+                      }),
                     ),
                   ],
                 ),
@@ -3737,7 +3845,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           border: OutlineInputBorder(),
                           labelText: 'Gruppen',
                         ),
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (_) {
+                          _markDirty();
+                          setState(() {});
+                        },
                       ),
                       trailing: Padding(
                         padding: const EdgeInsets.only(top: 8),
@@ -3872,6 +3983,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         labelText: 'Weiterkommende',
                       ),
                       onChanged: (_) {
+                        _markDirty();
                         _groupQualifierCountEdited = true;
                         setState(() {});
                       },
@@ -3918,8 +4030,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           'Entscheidungsspiele werden nur bei einem Gleichstand an einer Weiterkommensgrenze angelegt.',
                         ),
                         value: _allowGroupTieBreakDeciders,
-                        onChanged: (value) =>
-                            setState(() => _allowGroupTieBreakDeciders = value),
+                        onChanged: (value) => setState(() {
+                          _markDirty();
+                          _allowGroupTieBreakDeciders = value;
+                        }),
                       ),
                       if (_allowGroupTieBreakDeciders) ...[
                         Text(
@@ -3944,6 +4058,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                               .toList(),
                           onChanged: (legs) {
                             if (legs == null) return;
+                            _markDirty();
                             setState(
                               () => _tieBreakGameFormat = TournamentGameFormat(
                                 gameType: 'x01',
@@ -3970,6 +4085,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                         ? null
                         : (value) {
                             setState(() {
+                              _markDirty();
                               _playKnockoutFully = value;
                               if (!value) {
                                 _finalEndsTournament = false;
@@ -4016,9 +4132,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           }
                           return null;
                         },
-                        onChanged: (value) => setState(
-                          () => _knockoutAdvancingCount = int.tryParse(value),
-                        ),
+                        onChanged: (value) => setState(() {
+                          _markDirty();
+                          _knockoutAdvancingCount = int.tryParse(value);
+                        }),
                       ),
                     ),
                   if (_playKnockoutFully &&
@@ -4029,8 +4146,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Großes Finale ausspielen'),
                       value: _finalEndsTournament,
-                      onChanged: (value) =>
-                          setState(() => _finalEndsTournament = value),
+                      onChanged: (value) => setState(() {
+                        _markDirty();
+                        _finalEndsTournament = value;
+                      }),
                     ),
                   if (_playKnockoutFully) _placementSelection(),
                   const SizedBox(height: 12),
@@ -4112,8 +4231,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     ],
                     participantCount: _players.length,
                     boards: _plannedBoardCount,
-                    onBoardsChanged: (boards) =>
-                        setState(() => _plannedBoardCount = boards),
+                    onBoardsChanged: (boards) => setState(() {
+                      _markDirty();
+                      _plannedBoardCount = boards;
+                    }),
                     onEstimateChanged: (estimate) {
                       _configurationEstimate = estimate;
                     },
@@ -4129,8 +4250,10 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                     ],
                     editing: _editingStageIndex != null || _stages.isEmpty,
                     boards: _plannedBoardCount,
-                    onBoardsChanged: (boards) =>
-                        setState(() => _plannedBoardCount = boards),
+                    onBoardsChanged: (boards) => setState(() {
+                      _markDirty();
+                      _plannedBoardCount = boards;
+                    }),
                     onEstimateChanged: (estimate) {
                       _configurationEstimate = estimate;
                     },

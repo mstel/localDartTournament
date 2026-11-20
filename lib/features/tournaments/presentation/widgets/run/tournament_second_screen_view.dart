@@ -185,6 +185,8 @@ class _TournamentSecondScreenViewState
   Timer? _completionWatchTimer;
   String? _groupEndReviewShownKey;
   bool _groupEndReviewDialogOpen = false;
+  String? _shownGroupEndReviewRequestId;
+  bool _groupEndReviewRequestOpen = false;
   String? _shownGroupAssignmentRequestId;
   bool _groupAssignmentDialogOpen = false;
   String? _shownTournamentInfoRequestId;
@@ -814,7 +816,12 @@ class _TournamentSecondScreenViewState
   ({int index, GroupTournamentRunStage stage, String key})?
   _pendingGroupEndReview() {
     final tournament = widget.tournament;
-    if (tournament.finishedAt != null || tournament.reopenedForCorrections) {
+    // Sobald das Hauptfenster einen expliziten Request verschickt, ist dieser
+    // die einzige Grundlage. Der abgeleitete Fallback gilt nur für alte
+    // Turnierdateien ohne Request-Feld.
+    if (tournament.secondScreenGroupEndReview != null ||
+        tournament.finishedAt != null ||
+        tournament.reopenedForCorrections) {
       return null;
     }
     const preview = GroupStagePreviewService();
@@ -839,6 +846,10 @@ class _TournamentSecondScreenViewState
   }
 
   void _checkGroupEndReview() {
+    if (!widget.isStandaloneWindow ||
+        widget.tournament.secondScreenGroupEndReview != null) {
+      return;
+    }
     final review = _pendingGroupEndReview();
     // Wurde die Bestätigung im Hauptfenster erteilt (oder die Phase inzwischen
     // abgeschlossen), verschwindet der bereits geöffnete Dialog auch auf dem
@@ -896,14 +907,82 @@ class _TournamentSecondScreenViewState
   /// Dialoge, die aus dem Hauptfenster über das Turnier-JSON angestoßen werden.
   void _checkSecondScreenDialogRequests() {
     if (!widget.isStandaloneWindow) return;
+    _checkGroupEndReviewRequest();
     _checkGroupAssignmentRequest();
     _checkTournamentInfoRequest();
+  }
+
+  void _checkGroupEndReviewRequest() {
+    final request = widget.tournament.secondScreenGroupEndReview;
+    if (request == null || !request.visible || request.id.isEmpty) {
+      _closeGroupEndReviewRequestDialogIfOpen();
+      return;
+    }
+    if (request.id == _shownGroupEndReviewRequestId) return;
+    final stage =
+        request.stageIndex >= 0 &&
+            request.stageIndex < widget.tournament.runStages.length
+        ? widget.tournament.runStages[request.stageIndex]
+        : null;
+    if (stage is! GroupTournamentRunStage || request.reviewKey.isEmpty) return;
+    _shownGroupEndReviewRequestId = request.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _groupEndReviewRequestOpen = true;
+      unawaited(_showGroupEndReviewRequest(request, stage));
+    });
+  }
+
+  void _closeGroupEndReviewRequestDialogIfOpen() {
+    if (!_groupEndReviewRequestOpen) return;
+    _groupEndReviewRequestOpen = false;
+    _shownGroupEndReviewRequestId = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (navigator.canPop()) navigator.pop();
+    });
+  }
+
+  Future<void> _showGroupEndReviewRequest(
+    SecondScreenGroupEndReviewRequest request,
+    GroupTournamentRunStage stage,
+  ) async {
+    final confirmed = await GroupEndReviewDialog.show(
+      context: context,
+      tournament: widget.tournament,
+      stageIndex: request.stageIndex,
+      stage: stage,
+    );
+    _groupEndReviewRequestOpen = false;
+    if (!mounted) return;
+    final current = widget.tournament.secondScreenGroupEndReview;
+    // Das Hauptfenster kann den Request inzwischen geschlossen haben. Dann
+    // darf der Monitor weder erneut bestätigen noch einen Ack schreiben.
+    if (current == null || current.id != request.id || !current.visible) return;
+    if (confirmed == true) {
+      GroupEndReviewService.acknowledge(
+        widget.tournament,
+        request.stageIndex,
+        stage,
+      );
+    }
+    widget.tournament.secondScreenGroupEndReview = current.hide();
+    widget.tournament.updatedAt = DateTime.now();
+    try {
+      await _storage.saveTournament(widget.tournament);
+    } catch (_) {
+      // Der lokale Zustand bleibt auch bei einem vorübergehenden
+      // Speicherfehler konsistent.
+    }
+    if (mounted) setState(() {});
   }
 
   void _checkGroupAssignmentRequest() {
     final request = widget.tournament.secondScreenGroupAssignment;
     if (request == null ||
         request.id.isEmpty ||
+        request.consumed ||
         request.id == _shownGroupAssignmentRequestId) {
       return;
     }
@@ -924,8 +1003,25 @@ class _TournamentSecondScreenViewState
       context: context,
       request: request,
     );
+    // Auch beim Schließen des Monitors während des Dialogs darf ein erneutes
+    // Öffnen nicht wieder dieselbe Zuweisung anzeigen.
+    await _consumeGroupAssignmentOnMonitor(request.id);
     if (!mounted) return;
     setState(() => _groupAssignmentDialogOpen = false);
+  }
+
+  Future<void> _consumeGroupAssignmentOnMonitor(String requestId) async {
+    final current = widget.tournament.secondScreenGroupAssignment;
+    if (current == null || current.id != requestId || current.consumed) return;
+    widget.tournament.secondScreenGroupAssignment = current.consume();
+    widget.tournament.updatedAt = DateTime.now();
+    try {
+      await _storage.saveTournament(widget.tournament);
+    } catch (_) {
+      // Der lokale Zustand bleibt auch bei einem vorübergehenden
+      // Speicherfehler konsistent; der Hauptmonitor liest beim nächsten Poll
+      // erneut.
+    }
   }
 
   void _checkTournamentInfoRequest() {
@@ -6179,13 +6275,16 @@ class _BoardStatusBadge extends StatelessWidget {
   );
 }
 
-/// Status-Badge mit einem deutlich sichtbaren, zweimaligen Impuls.
+/// Status-Badge mit einem deutlich sichtbaren, zweimaligen Impuls und einem
+/// anschließenden Ausklang bis in den Ruhezustand.
 ///
 /// Animiert werden nur Rand- und Hintergrundfarbe. Die Borderstärke entspricht
 /// exakt der des ruhenden [_BoardStatusBadge] (1 px), es gibt keinen Schatten
 /// und keine Geometrieänderung: dadurch bleibt die Kachel beim Wechsel und
-/// während der Animation exakt gleich groß. Der zehn Sekunden lange Status
-/// selbst wird weiterhin außerhalb dieses Widgets verwaltet.
+/// während der Animation exakt gleich groß. Nach dem Ausklang werden die
+/// Ruhefarben des [_BoardStatusBadge] erreicht, statt den hellen Peak stehen
+/// zu lassen. Der zehn Sekunden lange Status selbst wird weiterhin außerhalb
+/// dieses Widgets verwaltet.
 class _GlowBadge extends StatefulWidget {
   const _GlowBadge({super.key, required this.label, required this.color});
 
@@ -6198,15 +6297,18 @@ class _GlowBadge extends StatefulWidget {
 
 class _GlowBadgeState extends State<_GlowBadge>
     with SingleTickerProviderStateMixin {
-  static const _pulseDuration = Duration(milliseconds: 1200);
+  static const _blinkDuration = Duration(milliseconds: 1200);
+  static const _fadeDuration = Duration(milliseconds: 400);
 
   late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: _pulseDuration)
-      ..forward();
+    _controller = AnimationController(
+      vsync: this,
+      duration: _blinkDuration + _fadeDuration,
+    )..forward();
   }
 
   @override
@@ -6220,10 +6322,30 @@ class _GlowBadgeState extends State<_GlowBadge>
     animation: _controller,
     builder: (context, _) {
       // Eine Cosinuswelle über vier Halbperioden = zwei vollständige Blinks.
-      // cos(0) = 1 (hell), cos(pi) = -1 (dunkel), ... am Ende wieder hell.
-      final pulse = (1 + cos(4 * pi * _controller.value)) / 2;
-      final borderColor = widget.color.withValues(alpha: 0.35 + 0.65 * pulse);
-      final fillColor = widget.color.withValues(alpha: 0.1 + 0.4 * pulse);
+      // Danach nimmt eine kurze Hüllkurve die Intensität auf null zurück,
+      // damit der Badge wieder dem ruhenden [_BoardStatusBadge] entspricht.
+      final elapsed =
+          _controller.value * (_blinkDuration + _fadeDuration).inMilliseconds;
+      final blinkProgress = (elapsed / _blinkDuration.inMilliseconds)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      final pulse = (1 + cos(4 * pi * blinkProgress)) / 2;
+      final fadeProgress =
+          ((elapsed - _blinkDuration.inMilliseconds) /
+                  _fadeDuration.inMilliseconds)
+              .clamp(0.0, 1.0)
+              .toDouble();
+      final intensity = pulse * (1 - Curves.easeOut.transform(fadeProgress));
+
+      // Exakt die Werte des ruhenden [_BoardStatusBadge].
+      const restBorderAlpha = 0.25;
+      const restFillAlpha = 28 / 255;
+      final borderColor = widget.color.withValues(
+        alpha: restBorderAlpha + (1 - restBorderAlpha) * intensity,
+      );
+      final fillColor = widget.color.withValues(
+        alpha: restFillAlpha + (0.5 - restFillAlpha) * intensity,
+      );
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(

@@ -187,7 +187,7 @@ class PlayerStatisticsImageGenerator {
     BestPerformanceType.bigFish170 => '170 (Big Fish)',
     BestPerformanceType.score171Plus ||
     BestPerformanceType.score170 => '171+ Aufnahme',
-    BestPerformanceType.score180 => '180+ Aufnahme',
+    BestPerformanceType.score180 => '180 Aufnahme',
     BestPerformanceType.highFinish => 'High Finish',
     BestPerformanceType.bullseyeFinish => 'Bullseye Finish',
     BestPerformanceType.shortLeg => 'Shortleg',

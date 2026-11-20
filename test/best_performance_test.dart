@@ -21,6 +21,22 @@ void main() {
     expect(migrated.toJson()['type'], 'score171Plus');
   });
 
+  test('180 is shown as an exact score without a plus', () {
+    const performance = BestPerformance(
+      type: BestPerformanceType.score180,
+      playerName: 'Teilnehmer 1',
+    );
+
+    expect(performance.label, '180');
+    expect(
+      BestPerformance(
+        type: BestPerformanceType.score171Plus,
+        playerName: 'Teilnehmer 1',
+      ).label,
+      '171+',
+    );
+  });
+
   test('new best performance categories preserve bullseye text', () {
     const performance = BestPerformance(
       type: BestPerformanceType.bullseyeFinish,
@@ -146,7 +162,7 @@ void main() {
 
       final upgradedDocument =
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      expect(upgradedDocument['schemaVersion'], 48);
+      expect(upgradedDocument['schemaVersion'], 49);
       final upgradedTournament =
           (upgradedDocument['tournaments'] as List).single
               as Map<String, dynamic>;

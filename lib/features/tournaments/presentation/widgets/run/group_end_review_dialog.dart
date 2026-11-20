@@ -11,7 +11,8 @@ import 'standings_table.dart';
 /// Zeigt Abschlusstabellen, die angewandten Tie-Breaker inklusive Formel und –
 /// falls vorhanden – Entscheidungsspiele sowie den Vergleich um Zusatzplätze.
 /// Der Dialog muss ausdrücklich bestätigt werden, bevor die nächste Phase
-/// gestartet werden kann.
+/// gestartet werden kann. „Abbrechen“ beendet den Vorgang ohne Bestätigung und
+/// ohne Phasenwechsel.
 class GroupEndReviewDialog extends StatelessWidget {
   const GroupEndReviewDialog({
     super.key,
@@ -191,6 +192,11 @@ class GroupEndReviewDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        TextButton(
+          key: const ValueKey('group-end-review-cancel'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Abbrechen'),
+        ),
         FilledButton(
           key: const ValueKey('group-end-review-acknowledge'),
           onPressed: () => Navigator.of(context).pop(true),

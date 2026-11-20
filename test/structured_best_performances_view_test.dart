@@ -29,9 +29,9 @@ void main() {
       ),
     );
 
-    expect(find.text('180+ Aufnahmen (1)'), findsOneWidget);
+    expect(find.text('180 Aufnahmen (1)'), findsOneWidget);
     expect(find.text('Vereinsturnier September'), findsNothing);
-    await tester.tap(find.text('180+ Aufnahmen (1)'));
+    await tester.tap(find.text('180 Aufnahmen (1)'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('180 ·'), findsOneWidget);

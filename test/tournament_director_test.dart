@@ -633,7 +633,7 @@ void main() {
       await storage.saveTournament(loaded);
       expect((await storage.loadTournaments()).single.blockedBoards, {2});
       expect(await File('${file.path}.v17.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 48);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 49);
     },
   );
   test('director mode and strategy persist in tournament JSON', () {
@@ -1012,7 +1012,7 @@ void main() {
       findsNothing,
     );
     expect(find.text('Bestleistungen'), findsNothing);
-    expect(find.text('Teilnehmer 3 · 180+ 180'), findsNothing);
+    expect(find.text('Teilnehmer 3 · 180 · 180'), findsNothing);
     expect(find.byTooltip('Ergebnis eintragen'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });

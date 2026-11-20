@@ -1,5 +1,6 @@
 import 'package:dart_tournament_manager/features/tournaments/application/group_end_review_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/second_screen_dialog_requests.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_second_screen_view.dart';
 import 'package:flutter/material.dart';
@@ -158,6 +159,56 @@ void main() {
         isTrue,
       );
     });
+
+    test('clearing acknowledgements makes the review appear again', () {
+      final tournament = _tiedGroupTournament();
+      final stage = tournament.runStages.first as GroupTournamentRunStage;
+      GroupEndReviewService.acknowledge(tournament, 0, stage);
+      tournament.acknowledgedGroupEndReviews.add('stage:1|later-stage');
+      final restored = CreatedTournament.fromJson(tournament.toJson());
+
+      GroupEndReviewService.clearAcknowledgementsFrom(restored, 0);
+
+      expect(restored.acknowledgedGroupEndReviews, {'stage:1|later-stage'});
+      expect(
+        GroupEndReviewService.isAcknowledged(
+          restored,
+          0,
+          restored.runStages.first as GroupTournamentRunStage,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('SecondScreenGroupEndReviewRequest', () {
+    test('hide keeps identity and round-trips through tournament JSON', () {
+      final tournament = _tiedGroupTournament();
+      final stage = tournament.runStages.first as GroupTournamentRunStage;
+      final request = SecondScreenGroupEndReviewRequest.create(
+        stageIndex: 0,
+        reviewKey: GroupEndReviewService.key(0, stage),
+      );
+      tournament.secondScreenGroupEndReview = request;
+
+      final hidden = request.hide();
+      expect(hidden.id, request.id);
+      expect(hidden.reviewKey, request.reviewKey);
+      expect(hidden.visible, isFalse);
+
+      tournament.secondScreenGroupEndReview = hidden;
+      final restored = CreatedTournament.fromJson(tournament.toJson());
+      expect(restored.secondScreenGroupEndReview, isNotNull);
+      expect(restored.secondScreenGroupEndReview!.id, request.id);
+      expect(restored.secondScreenGroupEndReview!.visible, isFalse);
+      expect(
+        restored.secondScreenGroupEndReview!.reviewKey,
+        GroupEndReviewService.key(
+          0,
+          restored.runStages.first as GroupTournamentRunStage,
+        ),
+      );
+    });
   });
 
   testWidgets('second monitor shows and persists the group end review', (
@@ -256,4 +307,114 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'second monitor shows request dialog and cancel aborts without ack',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final tournament = _tiedGroupTournament();
+      final stage = tournament.runStages.first as GroupTournamentRunStage;
+      tournament.secondScreenGroupEndReview =
+          SecondScreenGroupEndReviewRequest.create(
+            stageIndex: 0,
+            reviewKey: GroupEndReviewService.key(0, stage),
+          );
+      final storage = _RecordingStorage([tournament]);
+
+      Widget buildView(CreatedTournament current) => MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: current,
+            isStandaloneWindow: true,
+            storage: storage,
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildView(tournament));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('group-end-review-dialog')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('group-end-review-cancel')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('group-end-review-dialog')),
+        findsNothing,
+      );
+      expect(tournament.secondScreenGroupEndReview!.visible, isFalse);
+      expect(tournament.acknowledgedGroupEndReviews, isEmpty);
+      expect(storage.saveCount, 1);
+
+      // Der verdeckte Request bleibt auch nach einem Reopen verschwunden.
+      final reopened = CreatedTournament.fromJson(tournament.toJson());
+      await tester.pumpWidget(buildView(reopened));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('group-end-review-dialog')),
+        findsNothing,
+      );
+
+      // Ein echter neuer Abschluss erzeugt eine neue ID und zeigt den Dialog.
+      final nextRequest = SecondScreenGroupEndReviewRequest.create(
+        stageIndex: 0,
+        reviewKey: GroupEndReviewService.key(0, stage),
+      );
+      final next = CreatedTournament.fromJson(tournament.toJson())
+        ..secondScreenGroupEndReview = nextRequest;
+      await tester.pumpWidget(buildView(next));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('group-end-review-dialog')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('second monitor acknowledges request and hides it', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final tournament = _tiedGroupTournament();
+    final stage = tournament.runStages.first as GroupTournamentRunStage;
+    final request = SecondScreenGroupEndReviewRequest.create(
+      stageIndex: 0,
+      reviewKey: GroupEndReviewService.key(0, stage),
+    );
+    tournament.secondScreenGroupEndReview = request;
+    final storage = _RecordingStorage([tournament]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: storage,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('group-end-review-acknowledge')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(GroupEndReviewService.isAcknowledged(tournament, 0, stage), isTrue);
+    expect(tournament.secondScreenGroupEndReview!.visible, isFalse);
+    expect(storage.saveCount, 1);
+    expect(tester.takeException(), isNull);
+  });
 }

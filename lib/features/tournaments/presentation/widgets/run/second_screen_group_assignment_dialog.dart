@@ -5,8 +5,9 @@ import '../../../domain/second_screen_dialog_requests.dart';
 
 /// Hinweisdialog nach „Neu einteilen“ auf dem Zweitmonitor.
 ///
-/// „Übernehmen“ schließt nur den Dialog. Es wird bewusst keine dauerhafte
-/// Bestätigung im Turnier gespeichert.
+/// „Übernehmen“ schließt nur den Dialog. Die Anzeige selbst wird vom Monitor
+/// als erledigt markiert, damit ein erneutes Öffnen denselben Request nicht
+/// wiederholt anzeigt. Eine inhaltliche Bestätigung wird nicht gespeichert.
 class SecondScreenGroupAssignmentDialog extends StatelessWidget {
   const SecondScreenGroupAssignmentDialog({super.key, required this.request});
 

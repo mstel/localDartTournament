@@ -34,6 +34,7 @@ class SecondScreenGroupAssignmentRequest {
     required this.modeLabel,
     required this.groups,
     required this.createdAt,
+    this.consumed = false,
   });
 
   factory SecondScreenGroupAssignmentRequest.create({
@@ -53,6 +54,22 @@ class SecondScreenGroupAssignmentRequest {
   final List<SecondScreenAssignmentGroup> groups;
   final DateTime createdAt;
 
+  /// Ob der Dialog auf dem Zweitmonitor bereits angezeigt wurde.
+  ///
+  /// Alte Turnierdateien ohne dieses Feld bleiben lesbar und zeigen den
+  /// Dialog einmalig. Ein echter neuer „Neu einteilen“-Vorgang erzeugt eine
+  /// neue ID und wird dadurch wieder angezeigt.
+  final bool consumed;
+
+  SecondScreenGroupAssignmentRequest consume() =>
+      SecondScreenGroupAssignmentRequest(
+        id: id,
+        modeLabel: modeLabel,
+        groups: groups,
+        createdAt: createdAt,
+        consumed: true,
+      );
+
   static SecondScreenGroupAssignmentRequest? fromJson(Object? value) {
     if (value is! Map) return null;
     final groups = value['groups'];
@@ -67,6 +84,7 @@ class SecondScreenGroupAssignmentRequest {
       createdAt:
           _dateTimeFromJson(value['createdAt']) ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      consumed: value['consumed'] as bool? ?? false,
     );
   }
 
@@ -75,6 +93,65 @@ class SecondScreenGroupAssignmentRequest {
     'modeLabel': modeLabel,
     'groups': groups.map((group) => group.toJson()).toList(),
     'createdAt': createdAt.toUtc().toIso8601String(),
+    'consumed': consumed,
+  };
+}
+
+class SecondScreenGroupEndReviewRequest {
+  const SecondScreenGroupEndReviewRequest({
+    required this.id,
+    required this.stageIndex,
+    required this.reviewKey,
+    required this.visible,
+    required this.updatedAt,
+  });
+
+  factory SecondScreenGroupEndReviewRequest.create({
+    required int stageIndex,
+    required String reviewKey,
+  }) {
+    return SecondScreenGroupEndReviewRequest(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      stageIndex: stageIndex,
+      reviewKey: reviewKey,
+      visible: true,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  final String id;
+  final int stageIndex;
+  final String reviewKey;
+  final bool visible;
+  final DateTime updatedAt;
+
+  SecondScreenGroupEndReviewRequest hide() => SecondScreenGroupEndReviewRequest(
+    id: id,
+    stageIndex: stageIndex,
+    reviewKey: reviewKey,
+    visible: false,
+    updatedAt: DateTime.now(),
+  );
+
+  static SecondScreenGroupEndReviewRequest? fromJson(Object? value) {
+    if (value is! Map) return null;
+    return SecondScreenGroupEndReviewRequest(
+      id: value['id']?.toString() ?? '',
+      stageIndex: value['stageIndex'] as int? ?? 0,
+      reviewKey: value['reviewKey']?.toString() ?? '',
+      visible: value['visible'] as bool? ?? false,
+      updatedAt:
+          _dateTimeFromJson(value['updatedAt']) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'stageIndex': stageIndex,
+    'reviewKey': reviewKey,
+    'visible': visible,
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
   };
 }
 

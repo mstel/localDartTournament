@@ -398,7 +398,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                           '${performanceCounts[BestPerformanceType.score171Plus]}',
                     ),
                     _StatCard(
-                      label: '180+ Aufnahmen',
+                      label: '180 Aufnahmen',
                       value:
                           '${performanceCounts[BestPerformanceType.score180]}',
                     ),

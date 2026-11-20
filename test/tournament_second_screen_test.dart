@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:dart_tournament_manager/app/theme_controller.dart';
@@ -606,7 +605,7 @@ void main() {
       );
       expect(find.text('Lena'), findsOneWidget);
       expect(find.text('Sp'), findsNWidgets(2));
-      expect(find.textContaining('Lena · 180+'), findsOneWidget);
+      expect(find.textContaining('Lena · 180'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -906,7 +905,7 @@ void main() {
   );
 
   testWidgets(
-    'board status animation pulses only the border and keeps badge geometry',
+    'board status animation blinks, fades to rest and keeps badge geometry',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
@@ -980,8 +979,25 @@ void main() {
       );
       expect(secondBlinkDecoration.color, startDecoration.color);
 
+      // Nach dem Ausklang bleibt nicht der helle Peak stehen, sondern der
+      // Badge erreicht wieder exakt die Farben des ruhenden Status-Badge.
+      await tester.pump(const Duration(milliseconds: 1000));
+      final restDecoration = badgeDecoration(tester, badge);
+      final restRect = tester.getRect(badge);
+      const finishedColor = Color(0xFF4ED9A4);
+      expect(
+        restDecoration.border!.top.color,
+        finishedColor.withValues(alpha: 0.25),
+      );
+      expect(restDecoration.color, finishedColor.withValues(alpha: 28 / 255));
+      expect(restDecoration.border!.top.width, 1);
+      expect(restDecoration.boxShadow, isNull);
+      expect(restDecoration, isNot(startDecoration));
+
       expect(laterRect.width, closeTo(startRect.width, 0.5));
       expect(laterRect.height, closeTo(startRect.height, 0.5));
+      expect(restRect.width, closeTo(startRect.width, 0.5));
+      expect(restRect.height, closeTo(startRect.height, 0.5));
       expect(tester.takeException(), isNull);
     },
   );
@@ -4054,7 +4070,7 @@ void main() {
   });
 
   testWidgets(
-    'group assignment dialog shows mode and groups and confirm only closes',
+    'group assignment dialog shows mode and groups and is consumed once',
     (tester) async {
       final request = SecondScreenGroupAssignmentRequest.create(
         modeLabel: 'Nach Spielstärke gruppieren',
@@ -4064,7 +4080,7 @@ void main() {
         ],
       );
       final tournament = _tournament()..secondScreenGroupAssignment = request;
-      final before = jsonEncode(request.toJson());
+      expect(request.consumed, isFalse);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -4110,8 +4126,79 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(title, findsNothing);
-      expect(jsonEncode(request.toJson()), before);
+      expect(request.consumed, isFalse);
+      expect(tournament.secondScreenGroupAssignment!.consumed, isTrue);
+      expect(
+        CreatedTournament.fromJson(
+          tournament.toJson(),
+        ).secondScreenGroupAssignment!.consumed,
+        isTrue,
+      );
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('consumed group assignment is not shown after reopening', (
+    tester,
+  ) async {
+    final request = SecondScreenGroupAssignmentRequest.create(
+      modeLabel: 'Nach Spielstärke gruppieren',
+      groups: const [
+        SecondScreenAssignmentGroup(name: 'Gruppe A', members: ['A', 'B']),
+      ],
+    );
+    final tournament = _tournament()
+      ..secondScreenGroupAssignment = request.consume();
+    final storage = _MemoryTournamentStorage([tournament]);
+
+    Widget buildView(CreatedTournament current) => MaterialApp(
+      home: Scaffold(
+        body: TournamentSecondScreenView(
+          tournament: current,
+          isStandaloneWindow: true,
+          storage: storage,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(buildView(tournament));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('group-assignment-dialog-title')),
+      findsNothing,
+    );
+
+    // Ein echter neuer „Neu einteilen“-Vorgang erhält eine neue ID und wird
+    // weiterhin genau einmal angezeigt.
+    tournament.secondScreenGroupAssignment =
+        SecondScreenGroupAssignmentRequest.create(
+          modeLabel: 'Neu einteilen',
+          groups: const [
+            SecondScreenAssignmentGroup(name: 'Gruppe A', members: ['A', 'B']),
+          ],
+        );
+    await tester.pumpWidget(buildView(tournament));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('group-assignment-dialog-title')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  test(
+    'legacy group assignment requests without consumed flag stay readable',
+    () {
+      final request = SecondScreenGroupAssignmentRequest.fromJson({
+        'id': 'legacy-request',
+        'modeLabel': 'Alte Zuweisung',
+        'groups': [],
+        'createdAt': DateTime(2026).toUtc().toIso8601String(),
+      });
+
+      expect(request, isNotNull);
+      expect(request!.consumed, isFalse);
+      expect(request.toJson()['consumed'], isFalse);
     },
   );
 

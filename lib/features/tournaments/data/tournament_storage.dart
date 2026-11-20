@@ -36,7 +36,7 @@ class TournamentStorage {
   final File? _file;
   final LocalAppDatabase _activeDatabase;
   // Schema 24 is accepted only after exact verification against its v22 backup.
-  static const schemaVersion = 48;
+  static const schemaVersion = 49;
   static const _schemaVersion = schemaVersion;
   static const _maximumDocumentBytes = 128 * 1024 * 1024;
 

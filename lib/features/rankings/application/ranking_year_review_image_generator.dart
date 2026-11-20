@@ -84,11 +84,7 @@ class RankingYearReviewImageGenerator {
             format: (value) => '$value',
           ),
           if (top180.isNotEmpty)
-            (
-              title: 'Meiste 180+',
-              entries: top180,
-              format: (value) => '$value',
-            ),
+            (title: 'Meiste 180', entries: top180, format: (value) => '$value'),
           if (top170.isNotEmpty)
             (
               title: 'Meiste 170 (Big Fish)',
@@ -199,7 +195,7 @@ class RankingYearReviewImageGenerator {
       ('Turniere', '${review.tournaments}'),
       ('Gewonnene Legs', '${review.totalLegs}'),
       ('Bestleistungen', '${review.totalBestPerformances}'),
-      ('180+ Aufnahmen', '${review.total180}'),
+      ('180 Aufnahmen', '${review.total180}'),
       ('170 (Big Fish)', '${review.total170}'),
       ('171+ Aufnahmen', '${review.total171Plus}'),
       ('Shortlegs', '${review.totalShortLegs}'),

@@ -49,7 +49,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('180+'));
+      await tester.tap(find.text('180'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Bullseye Finish').last);
       await tester.pumpAndSettle();

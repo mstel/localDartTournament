@@ -903,6 +903,7 @@ class CreatedTournament {
         const {},
     this.secondScreenActiveLayout,
     this.secondScreenGroupAssignment,
+    this.secondScreenGroupEndReview,
     this.secondScreenTournamentInfo,
     this.syncRevision = 0,
     DateTime? tournamentDate,
@@ -1056,6 +1057,9 @@ class CreatedTournament {
       secondScreenGroupAssignment: SecondScreenGroupAssignmentRequest.fromJson(
         json['secondScreenGroupAssignment'],
       ),
+      secondScreenGroupEndReview: SecondScreenGroupEndReviewRequest.fromJson(
+        json['secondScreenGroupEndReview'],
+      ),
       secondScreenTournamentInfo: SecondScreenTournamentInfoRequest.fromJson(
         json['secondScreenTournamentInfo'],
       ),
@@ -1138,6 +1142,7 @@ class CreatedTournament {
   final Map<String, List<SecondScreenWidgetPlacement>> secondScreenLayouts;
   String? secondScreenActiveLayout;
   SecondScreenGroupAssignmentRequest? secondScreenGroupAssignment;
+  SecondScreenGroupEndReviewRequest? secondScreenGroupEndReview;
   SecondScreenTournamentInfoRequest? secondScreenTournamentInfo;
   int syncRevision;
   final List<PlayerWithdrawal> withdrawals;
@@ -1236,6 +1241,8 @@ class CreatedTournament {
         'secondScreenActiveLayout': secondScreenActiveLayout,
       if (secondScreenGroupAssignment != null)
         'secondScreenGroupAssignment': secondScreenGroupAssignment!.toJson(),
+      if (secondScreenGroupEndReview != null)
+        'secondScreenGroupEndReview': secondScreenGroupEndReview!.toJson(),
       if (secondScreenTournamentInfo != null)
         'secondScreenTournamentInfo': secondScreenTournamentInfo!.toJson(),
       if (syncRevision != 0) 'syncRevision': syncRevision,

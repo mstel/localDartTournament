@@ -10,6 +10,7 @@ import '../../tournaments/application/order_of_play/order_of_play_controller.dar
 import '../application/league_board_runtime.dart';
 import '../application/league_duration_estimator.dart';
 import 'league_overview.dart';
+import 'league_schedule_preview.dart';
 import 'league_game_format_setup.dart';
 import 'league_player_picker.dart';
 import '../../tournaments/data/app_database.dart';
@@ -872,13 +873,11 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       final roster = homeSide
           ? next.leagueMatch!.homePlayers
           : next.leagueMatch!.awayPlayers;
-      final remainingAfter = next.leagueMatch!.substitutionsRemaining(
-        teamSide,
-      );
+      final remainingAfter = next.leagueMatch!.substitutionsRemaining(teamSide);
       next.addActivity(
         'substitution',
         '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
-        'ausgewechselt. Übrige Auswechselungen: $remainingAfter',
+            'ausgewechselt. Übrige Auswechselungen: $remainingAfter',
       );
       await _save(next, rethrowError: true);
     } catch (error) {
@@ -1069,7 +1068,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                     controller: _singlesPerPlayerInput,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: 'Einzel je Teilnehmer',
+                      labelText: 'Einzelspiele pro Spieler',
                     ),
                     validator: (value) {
                       final count = int.tryParse(value ?? '');
@@ -1088,7 +1087,7 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                     controller: _doublesCountInput,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: 'Doppel je Mannschaft',
+                      labelText: 'Doppelspiele',
                     ),
                     validator: (value) {
                       final count = int.tryParse(value ?? '');
@@ -1171,7 +1170,8 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                   final matches =
                       _starterCount * _singlesPerPlayer + _doublesCount;
                   return Card(
-                    child: ListTile(
+                    child: ExpansionTile(
+                      key: const ValueKey('league-schedule-preview'),
                       leading: const Icon(Icons.schedule_outlined),
                       title: Text(
                         '$matches Begegnungen · $_starterCount Stammspieler je Team',
@@ -1181,6 +1181,20 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                             ? 'Dauer wird berechnet, sobald beide Teams genügend Stammspieler haben.'
                             : 'Voraussichtliche Dauer: ${_formatDuration(duration)} · ${_gameFormat.lengthLabel} · $_boards ${_boards == 1 ? 'Board' : 'Boards'}',
                       ),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      children: [
+                        AdjustedLeagueSchedulePreview(
+                          homePlayers: _rosters[0]
+                              .map((controller) => controller.text)
+                              .toList(),
+                          awayPlayers: _rosters[1]
+                              .map((controller) => controller.text)
+                              .toList(),
+                          starterCount: _starterCount,
+                          singlesPerPlayer: _singlesPerPlayer,
+                          doublesCount: _doublesCount,
+                        ),
+                      ],
                     ),
                   );
                 },

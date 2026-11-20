@@ -83,4 +83,18 @@ class GroupEndReviewService {
   ) {
     tournament.acknowledgedGroupEndReviews.add(key(stageIndex, stage));
   }
+
+  /// Entfernt gespeicherte Bestätigungen ab [stageIndex].
+  ///
+  /// Wird eine Phase erneut geöffnet oder zurückgesetzt, muss der
+  /// Abschluss-Dialog beim nächsten Abschließen wieder erscheinen.
+  static void clearAcknowledgementsFrom(
+    CreatedTournament tournament,
+    int stageIndex,
+  ) {
+    final prefix = 'stage:$stageIndex|';
+    tournament.acknowledgedGroupEndReviews.removeWhere(
+      (key) => key.startsWith(prefix),
+    );
+  }
 }

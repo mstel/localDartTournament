@@ -77,7 +77,7 @@ class _PerformanceGroup extends StatelessWidget {
       BestPerformanceType.bigFish170 => '170 (Big Fish)',
       BestPerformanceType.score171Plus ||
       BestPerformanceType.score170 => '171+ Aufnahmen',
-      BestPerformanceType.score180 => '180+ Aufnahmen',
+      BestPerformanceType.score180 => '180 Aufnahmen',
       BestPerformanceType.highFinish => 'High Finishes',
       BestPerformanceType.bullseyeFinish => 'Bullseye Finishes',
       BestPerformanceType.shortLeg => 'Shortlegs',

@@ -41,8 +41,7 @@ class _LimitedGroupSetupPreviewState extends State<LimitedGroupSetupPreview> {
             limits: [limit],
             onChanged: (_, value) => setState(() => limit = value),
             strategies: [strategy],
-            onStrategyChanged: (_, value) =>
-                setState(() => strategy = value),
+            onStrategyChanged: (_, value) => setState(() => strategy = value),
           ),
         ),
       ),
@@ -151,7 +150,7 @@ void main() {
         [5],
       );
       expect(await File('${file.path}.v21.bak').exists(), isTrue);
-      expect(jsonDecode(await file.readAsString())['schemaVersion'], 48);
+      expect(jsonDecode(await file.readAsString())['schemaVersion'], 49);
       expect(
         TournamentStage.fromJson({
           'name': 'Alt',
@@ -161,61 +160,75 @@ void main() {
       );
     },
   );
-  test('limited round robin strategies create distinct deterministic schedules', () {
-    final players = [
-      for (var index = 1; index <= 8; index++)
-        TournamentPlayer(
-          profileId: 'p$index',
-          name: 'P$index',
-          isGenerated: true,
-        ),
-    ];
-    final ratings = {
-      for (var index = 1; index <= 8; index++) 'p$index': 2000 - index * 100,
-    };
-    List<String> pairsFor(String strategy, {int? seed}) {
-      final matches = LimitedRoundRobinEngine.build(
+  test(
+    'limited round robin strategies create distinct deterministic schedules',
+    () {
+      final players = [
+        for (var index = 1; index <= 8; index++)
+          TournamentPlayer(
+            profileId: 'p$index',
+            name: 'P$index',
+            isGenerated: true,
+          ),
+      ];
+      final ratings = {
+        for (var index = 1; index <= 8; index++) 'p$index': 2000 - index * 100,
+      };
+      List<String> pairsFor(String strategy, {int? seed}) {
+        final matches = LimitedRoundRobinEngine.build(
+          players,
+          maxGamesPerPlayer: 3,
+          matchmakingStrategy: strategy,
+          ratings: ratings,
+          seed: seed,
+        );
+        return matches
+            .map(
+              (match) => ([
+                match.homePlayer!.profileId!,
+                match.awayPlayer!.profileId!,
+              ]..sort()).join('/'),
+            )
+            .toList()
+          ..sort();
+      }
+
+      expect(limitedRoundRobinMatchmakingLabel('elo'), 'Nach Elo');
+      expect(limitedRoundRobinMatchmakingLabel('random'), 'Zufällig');
+      expect(
+        limitedRoundRobinMatchmakingLabel('similar'),
+        'Etwa gleichstarke Gegner',
+      );
+      expect(
+        limitedRoundRobinMatchmakingLabel('mixed'),
+        'Ausgewogene Mischung aus starken und schwachen Gegnern',
+      );
+
+      final elo = pairsFor('elo');
+      final similar = pairsFor('similar');
+      final mixed = pairsFor('mixed');
+      final random = pairsFor('random', seed: 7);
+      expect(random, pairsFor('random', seed: 7));
+      expect(
+        {
+          elo.join(','),
+          similar.join(','),
+          mixed.join(','),
+          random.join(','),
+        }.length,
+        4,
+      );
+
+      final mixedMatches = LimitedRoundRobinEngine.build(
         players,
         maxGamesPerPlayer: 3,
-        matchmakingStrategy: strategy,
+        matchmakingStrategy: 'mixed',
         ratings: ratings,
-        seed: seed,
       );
-      return matches
-          .map(
-            (match) =>
-                ([match.homePlayer!.profileId!, match.awayPlayer!.profileId!]
-                      ..sort())
-                    .join('/'),
-          )
-          .toList()
-        ..sort();
-    }
-
-    expect(limitedRoundRobinMatchmakingLabel('elo'), 'Nach Elo');
-    expect(limitedRoundRobinMatchmakingLabel('random'), 'Zufällig');
-    expect(limitedRoundRobinMatchmakingLabel('similar'), 'Etwa gleichstarke Gegner');
-    expect(
-      limitedRoundRobinMatchmakingLabel('mixed'),
-      'Ausgewogene Mischung aus starken und schwachen Gegnern',
-    );
-
-    final elo = pairsFor('elo');
-    final similar = pairsFor('similar');
-    final mixed = pairsFor('mixed');
-    final random = pairsFor('random', seed: 7);
-    expect(random, pairsFor('random', seed: 7));
-    expect({elo.join(','), similar.join(','), mixed.join(','), random.join(',')}.length, 4);
-
-    final mixedMatches = LimitedRoundRobinEngine.build(
-      players,
-      maxGamesPerPlayer: 3,
-      matchmakingStrategy: 'mixed',
-      ratings: ratings,
-    );
-    expect(mixedMatches.first.homePlayer!.profileId, 'p1');
-    expect(mixedMatches.first.awayPlayer!.profileId, 'p8');
-  });
+      expect(mixedMatches.first.homePlayer!.profileId, 'p1');
+      expect(mixedMatches.first.awayPlayer!.profileId, 'p8');
+    },
+  );
 
   test('stage JSON persists matchmaking strategies and ratings', () {
     final stage = TournamentStage(
@@ -232,8 +245,10 @@ void main() {
     expect(restored.matchmakingStrategyForGroup(0), 'random');
     expect(restored.matchmakingStrategyForGroup(1), 'mixed');
     expect(
-      TournamentStage.fromJson({'name': 'Alt', 'type': 'groups'})
-          .groupMatchmakingRatings,
+      TournamentStage.fromJson({
+        'name': 'Alt',
+        'type': 'groups',
+      }).groupMatchmakingRatings,
       isEmpty,
     );
   });

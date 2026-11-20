@@ -119,12 +119,12 @@ void main() {
       find.text('Name des angepassten Liga-/Freundschaftsspiels'),
       findsOneWidget,
     );
-    expect(find.text('Einzel je Teilnehmer'), findsOneWidget);
+    expect(find.text('Einzelspiele pro Spieler'), findsOneWidget);
     final singlesField = tester.widget<TextFormField>(
-      find.widgetWithText(TextFormField, 'Einzel je Teilnehmer'),
+      find.widgetWithText(TextFormField, 'Einzelspiele pro Spieler'),
     );
     expect(singlesField.controller!.text, '4');
-    expect(find.text('Doppel je Mannschaft'), findsOneWidget);
+    expect(find.text('Doppelspiele'), findsOneWidget);
     expect(find.text('X01-Punktzahl'), findsOneWidget);
     expect(
       find.text('Angepasstes Liga-/Freundschaftsspiel anlegen'),
@@ -135,6 +135,39 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('Voraussichtliche Dauer:'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('adjusted schedule card opens a fixture preview', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(home: LeagueMatchPage(storage: _MemoryStorage())),
+    );
+    await tester.tap(find.text('Angepasst'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Angepasster Spielplan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spielplan-Vorschau'), findsNothing);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('league-schedule-preview')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('league-schedule-preview')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spielplan-Vorschau'), findsOneWidget);
+    expect(
+      find.textContaining('Runde 1 · Heim 1 gegen Gast 1'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Runde 4 · Heim 4 gegen Gast 3'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Doppel 1 · Heim 1 / Heim 2 gegen Gast 1 / Gast 2'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -456,4 +489,74 @@ void main() {
     expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final size in [
+    const Size(360, 800),
+    const Size(800, 600),
+    const Size(1440, 900),
+  ]) {
+    testWidgets('schedule preview stays usable at $size with large text', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: LeagueMatchPage(storage: _MemoryStorage()),
+        ),
+      );
+      for (
+        var scroll = 0;
+        scroll < 12 && find.text('Angepasst').hitTestable().evaluate().isEmpty;
+        scroll++
+      ) {
+        await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('Angepasst'));
+      await tester.pumpAndSettle();
+      for (
+        var scroll = 0;
+        scroll < 12 &&
+            find.text('Angepasster Spielplan').hitTestable().evaluate().isEmpty;
+        scroll++
+      ) {
+        await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('Angepasster Spielplan'));
+      await tester.pumpAndSettle();
+      for (
+        var scroll = 0;
+        scroll < 12 &&
+            find
+                .byKey(const ValueKey('league-schedule-preview'))
+                .hitTestable()
+                .evaluate()
+                .isEmpty;
+        scroll++
+      ) {
+        await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byKey(const ValueKey('league-schedule-preview')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Spielplan-Vorschau'), findsOneWidget);
+      expect(
+        find.textContaining('Runde 1 · Heim 1 gegen Gast 1'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

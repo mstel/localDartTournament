@@ -70,7 +70,7 @@ void main() {
     expect(find.text('Bestleistungen'), findsOneWidget);
     expect(find.text('170 (Big Fish)'), findsOneWidget);
     expect(find.text('171+'), findsOneWidget);
-    expect(find.text('180+'), findsOneWidget);
+    expect(find.text('180'), findsOneWidget);
     expect(find.text('Bullseye Finishes'), findsOneWidget);
     expect(find.text('High Finishes'), findsOneWidget);
     expect(find.text('Shortlegs'), findsOneWidget);

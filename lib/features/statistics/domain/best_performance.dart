@@ -37,7 +37,7 @@ class BestPerformance {
   String get label => switch (normalizedType) {
     BestPerformanceType.bigFish170 => '170 (Big Fish)',
     BestPerformanceType.score171Plus => '171+',
-    BestPerformanceType.score180 => '180+',
+    BestPerformanceType.score180 => '180',
     BestPerformanceType.highFinish => 'High Finish',
     BestPerformanceType.bullseyeFinish => 'Bullseye Finish',
     BestPerformanceType.shortLeg => 'Shortleg',
