@@ -1,6 +1,7 @@
 import 'package:dart_tournament_manager/features/settings/presentation/priority_notice_settings_panel.dart';
 import 'package:dart_tournament_manager/features/settings/presentation/tie_breaker_defaults_panel.dart';
 import 'package:dart_tournament_manager/features/settings/presentation/settings_page.dart';
+import 'package:dart_tournament_manager/features/team_game/presentation/team_game_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,10 +17,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sonstige Einstellungen'), findsNWidgets(2));
 
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -900));
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Tie Breaker Standardwerte'),
-      300,
-      scrollable: find.byType(Scrollable).first,
+      200,
     );
     await tester.tap(find.text('Tie Breaker Standardwerte'));
     await tester.pumpAndSettle();
@@ -27,6 +29,29 @@ void main() {
     expect(find.textContaining('Diese Reihenfolge wird'), findsOneWidget);
 
     expect(find.text('Ton Modus Einstellungen'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Team Game is listed below the drawing wheel and opens', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+    await tester.tap(find.byType(ChoiceChip).last);
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -900));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Auslosungsrad'), findsOneWidget);
+    expect(find.text('Team Game'), findsOneWidget);
+
+    final wheel = tester.getCenter(find.text('Auslosungsrad'));
+    final teamGame = tester.getCenter(find.text('Team Game'));
+    expect(teamGame.dy, greaterThan(wheel.dy));
+
+    await tester.tap(find.text('Team Game'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TeamGamePage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

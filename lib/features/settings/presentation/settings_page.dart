@@ -8,6 +8,7 @@ import '../data/planning_settings_storage.dart';
 import '../../notifications/presentation/push_sender_menu.dart';
 import '../../notifications/presentation/push_device_menu.dart';
 import '../../random_draw/presentation/random_draw_tool_page.dart';
+import '../../team_game/presentation/team_game_page.dart';
 import 'tie_breaker_defaults_panel.dart';
 import 'player_insight_defaults_panel.dart';
 import 'app_presentation_settings.dart';
@@ -137,6 +138,18 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
           ),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const RandomDrawToolPage()),
+          ),
+        ),
+      ),
+      Card(
+        child: ListTile(
+          leading: const Icon(Icons.sports_score_outlined),
+          title: const Text('Team Game'),
+          subtitle: const Text(
+            'Casual Mannschaftsmodus mit Wechsel-Anzeige auf dem Zweitmonitor.',
+          ),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const TeamGamePage()),
           ),
         ),
       ),

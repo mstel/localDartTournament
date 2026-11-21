@@ -63,11 +63,19 @@ class AppBootstrap {
         '${transactionPath == null ? '' : '\nWiederherstellungsordner: $transactionPath'}';
   }
 
-  static Future<void> initializeSecondScreen({
+  /// Gemeinsamer Bootstrap für alle zusätzlichen Anzeigeprozesse. Es wird
+  /// bewusst keine App-Instanz-Lock erstellt, damit Haupt- und Monitorfenster
+  /// parallel laufen können.
+  static Future<void> initializeSecondaryDisplay({
     List<String> args = const [],
   }) async {
     WidgetsFlutterBinding.ensureInitialized();
     PerformanceDiagnostics.start();
     await SupabaseAccountBootstrap.initialize();
   }
+
+  static Future<void> initializeSecondScreen({
+    List<String> args = const [],
+  }) =>
+      initializeSecondaryDisplay(args: args);
 }

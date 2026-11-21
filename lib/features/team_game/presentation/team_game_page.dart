@@ -1,0 +1,240 @@
+import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/adaptive_content.dart';
+import '../application/team_game_display_launcher.dart';
+import '../data/team_game_signal_repository.dart';
+import '../domain/team_game_state.dart';
+import 'team_game_display_view.dart';
+import 'team_game_run_page.dart';
+import 'team_roster_editor.dart';
+
+/// Setup für den casual Team-Game-Modus: zwei Mannschaftsnamen und deren
+/// Spieler. Punkte werden nicht erfasst, sondern über Scolia eingetragen.
+class TeamGamePage extends StatefulWidget {
+  const TeamGamePage({
+    super.key,
+    TeamGameSignalRepository? repository,
+    TeamGameDisplayLauncher? displayLauncher,
+  }) : _repository = repository,
+       _displayLauncher = displayLauncher;
+
+  final TeamGameSignalRepository? _repository;
+  final TeamGameDisplayLauncher? _displayLauncher;
+
+  @override
+  State<TeamGamePage> createState() => _TeamGamePageState();
+}
+
+class _TeamGamePageState extends State<TeamGamePage> {
+  late final TeamGameSignalRepository _repository;
+  late final TeamGameDisplayLauncher _displayLauncher;
+
+  final _teamNames = [
+    TextEditingController(text: 'Heim'),
+    TextEditingController(text: 'Gast'),
+  ];
+  final _players = [
+    <TextEditingController>[TextEditingController()],
+    <TextEditingController>[TextEditingController()],
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget._repository ?? TeamGameSignalRepository();
+    _displayLauncher =
+        widget._displayLauncher ?? ProcessTeamGameDisplayLauncher();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _teamNames) {
+      controller.dispose();
+    }
+    for (final team in _players) {
+      for (final controller in team) {
+        controller.dispose();
+      }
+    }
+    super.dispose();
+  }
+
+  void _addPlayer(int team) => setState(() {
+    _players[team].add(TextEditingController());
+  });
+
+  void _removePlayer(int team, int index) => setState(() {
+    if (_players[team].length <= 1) {
+      _players[team][index].clear();
+      return;
+    }
+    _players[team].removeAt(index).dispose();
+  });
+
+  String? _validate() {
+    if (_teamNames[0].text.trim().isEmpty ||
+        _teamNames[1].text.trim().isEmpty) {
+      return 'Bitte beide Mannschaftsnamen eingeben.';
+    }
+    if (_players[0].every((c) => c.text.trim().isEmpty) ||
+        _players[1].every((c) => c.text.trim().isEmpty)) {
+      return 'Bitte mindestens einen Spieler je Mannschaft eingeben.';
+    }
+    return null;
+  }
+
+  TeamGameState _buildState() {
+    return TeamGameState.create(
+      homeTeam: _teamNames[0].text,
+      homePlayers: _players[0].map((c) => c.text).toList(),
+      awayTeam: _teamNames[1].text,
+      awayPlayers: _players[1].map((c) => c.text).toList(),
+    );
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(key: const ValueKey('team-game-validation'), content: Text(message)),
+    );
+  }
+
+  Future<void> _openDisplay() async {
+    final error = _validate();
+    if (error != null) {
+      _showError(error);
+      return;
+    }
+    final state = _buildState();
+    await _repository.save(state);
+    final opened = await _displayLauncher.open();
+    if (!mounted) return;
+    if (opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Zweitmonitoransicht geöffnet.')),
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: TeamGameDisplayView(
+          state: state,
+          onClose: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _startGame() async {
+    final error = _validate();
+    if (error != null) {
+      _showError(error);
+      return;
+    }
+    final state = _buildState().started();
+    await _repository.save(state);
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TeamGameRunPage(
+          initialState: state,
+          repository: _repository,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Team Game')),
+      body: AdaptiveContentList(
+        children: [
+          Text(
+            'Team Game',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Ein Leg 1001 Double out. Die Punkteingabe erfolgt über Scolia; '
+            'hier werden nur die Mannschaften und die Reihenfolge der Spieler '
+            'verwaltet.',
+          ),
+          const SizedBox(height: 16),
+          AdaptiveTileLayout(
+            minTileWidth: 330,
+            children: [
+              TeamRosterEditor(
+                side: 'home',
+                title: 'Heimteam',
+                icon: Icons.home_outlined,
+                teamNameController: _teamNames[0],
+                playerControllers: _players[0],
+                onAddPlayer: () => _addPlayer(0),
+                onRemovePlayer: (index) => _removePlayer(0, index),
+              ),
+              TeamRosterEditor(
+                side: 'away',
+                title: 'Gastteam',
+                icon: Icons.sports_outlined,
+                teamNameController: _teamNames[1],
+                playerControllers: _players[1],
+                onAddPlayer: () => _addPlayer(1),
+                onRemovePlayer: (index) => _removePlayer(1, index),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Reihenfolge: Heim 1, Gast 1, Heim 2, Gast 2, ... Das Heimteam '
+            'beginnt. Bei unterschiedlichen Kadergrößen kommen die übrigen '
+            'Spieler anschließend weiter.',
+          ),
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 680;
+              final openButton = OutlinedButton.icon(
+                key: const ValueKey('team-game-open-display'),
+                onPressed: _openDisplay,
+                icon: const Icon(Icons.tv_outlined),
+                label: const Text('Zweitmonitor ansicht öffnen'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+              );
+              final startButton = FilledButton.icon(
+                key: const ValueKey('team-game-start'),
+                onPressed: _startGame,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Team Game Starten'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+              );
+              if (wide) {
+                return Row(
+                  children: [
+                    Expanded(child: openButton),
+                    const SizedBox(width: 12),
+                    Expanded(child: startButton),
+                  ],
+                );
+              }
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  openButton,
+                  const SizedBox(height: 12),
+                  startButton,
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
