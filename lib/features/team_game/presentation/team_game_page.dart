@@ -188,8 +188,9 @@ class _TeamGamePageState extends State<TeamGamePage> {
           const SizedBox(height: 12),
           const Text(
             'Reihenfolge: Heim 1, Gast 1, Heim 2, Gast 2, ... Das Heimteam '
-            'beginnt. Bei unterschiedlichen Kadergrößen kommen die übrigen '
-            'Spieler anschließend weiter.',
+            'beginnt. Jedes Team rotiert durch sein eigenes Kader; nach dem '
+            'letzten Spieler geht es beim ersten Spieler dieses Teams weiter. '
+            'Die Anzahl der Wechsel ist nicht vorgegeben.',
           ),
           const SizedBox(height: 20),
           LayoutBuilder(

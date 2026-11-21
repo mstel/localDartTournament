@@ -1,6 +1,7 @@
 import 'package:dart_tournament_manager/features/team_game/application/team_game_display_launcher.dart';
 import 'package:dart_tournament_manager/features/team_game/data/team_game_signal_repository.dart';
 import 'package:dart_tournament_manager/features/team_game/domain/team_game_state.dart';
+import 'package:dart_tournament_manager/features/team_game/presentation/team_game_display_view.dart';
 import 'package:dart_tournament_manager/features/team_game/presentation/team_game_page.dart';
 import 'package:dart_tournament_manager/features/team_game/presentation/team_game_run_page.dart';
 import 'package:flutter/material.dart';
@@ -90,11 +91,18 @@ void main() {
     expect(repository.state!.home.teamName, 'Heim Adler');
     expect(repository.state!.home.players, ['Johannes Rau']);
     expect(repository.state!.away.players, ['Mira Kern', 'Lena Vogt']);
-    expect(repository.state!.turns.map((turn) => turn.player).toList(), [
-      'Johannes Rau',
-      'Mira Kern',
-      'Lena Vogt',
-    ]);
+    expect(
+      [
+        for (var i = 0; i < 4; i++)
+          repository.state!.turnAt(i)?.player,
+      ],
+      [
+        'Johannes Rau',
+        'Mira Kern',
+        'Johannes Rau',
+        'Lena Vogt',
+      ],
+    );
 
     // Die Snackbar von "Zweitmonitor geöffnet" darf den Startbutton nicht verdecken.
     await tester.pump(const Duration(seconds: 4));
@@ -127,6 +135,10 @@ void main() {
       find.byKey(const ValueKey('team-game-home-name')),
       '',
     );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('team-game-open-display')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('team-game-open-display')));
     await tester.pumpAndSettle();
 
@@ -170,5 +182,29 @@ void main() {
     expect(find.byKey(const ValueKey('team-game-display-player')), findsOneWidget);
     expect(find.text('Johannes Rau'), findsWidgets);
     expect(launcher.openCount, 1);
+  });
+
+  testWidgets('second screen animation settles and reruns on player change', (
+    tester,
+  ) async {
+    final initial = TeamGameState.create(
+      homeTeam: 'Heim',
+      homePlayers: const ['Johannes Rau'],
+      awayTeam: 'Gast',
+      awayPlayers: const ['Mira Kern'],
+    ).started();
+
+    await tester.pumpWidget(
+      MaterialApp(home: TeamGameDisplayView(state: initial)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Johannes Rau'), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(home: TeamGameDisplayView(state: initial.next())),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Mira Kern'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

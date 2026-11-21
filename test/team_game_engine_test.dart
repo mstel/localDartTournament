@@ -19,14 +19,63 @@ void main() {
     ).started();
   }
 
-  test('turns alternate home and away and continue with the longer roster', () {
+  List<String> sequence(TeamGameState state, int count) => [
+    for (var i = 0; i < count; i++)
+      '${state.turnAt(i)!.teamName}:${state.turnAt(i)!.player}',
+  ];
+
+  test('each team rotates through its own roster without a fixed end', () {
     final state = stateWith();
 
     expect(
-      state.turns.map((turn) => '${turn.teamName}:${turn.player}').toList(),
-      ['Heim:H1', 'Gast:G1', 'Heim:H2', 'Gast:G2', 'Gast:G3'],
+      sequence(state, 10),
+      [
+        'Heim:H1',
+        'Gast:G1',
+        'Heim:H2',
+        'Gast:G2',
+        'Heim:H1',
+        'Gast:G3',
+        'Heim:H2',
+        'Gast:G1',
+        'Heim:H1',
+        'Gast:G2',
+      ],
     );
     expect(state.currentTurn?.player, 'H1');
+    expect(state.canGoNext, isTrue);
+  });
+
+  test('a five against four roster keeps both teams cycling independently', () {
+    final state = stateWith(
+      homePlayers: const ['H1', 'H2', 'H3', 'H4', 'H5'],
+      awayPlayers: const ['G1', 'G2', 'G3', 'G4'],
+    );
+
+    expect(
+      sequence(state, 12),
+      [
+        'Heim:H1',
+        'Gast:G1',
+        'Heim:H2',
+        'Gast:G2',
+        'Heim:H3',
+        'Gast:G3',
+        'Heim:H4',
+        'Gast:G4',
+        'Heim:H5',
+        'Gast:G1',
+        'Heim:H1',
+        'Gast:G2',
+      ],
+    );
+
+    var advanced = state;
+    for (var i = 0; i < 40; i++) {
+      advanced = advanced.next();
+      expect(advanced.canGoNext, isTrue);
+      expect(advanced.currentTurn, isNotNull);
+    }
   });
 
   test('empty roster entries and surrounding spaces are normalized', () {
@@ -40,31 +89,38 @@ void main() {
     expect(state.home.teamName, 'Heim');
     expect(state.home.players, ['Johannes Rau', 'Nina']);
     expect(
-      state.turns.map((turn) => '${turn.teamName}:${turn.player}').toList(),
+      sequence(state, 10),
       [
         'Heim:Johannes Rau',
         'Gast:Alex',
         'Heim:Nina',
         'Gast:Sam',
+        'Heim:Johannes Rau',
         'Gast:Tom',
+        'Heim:Nina',
         'Gast:Lea',
+        'Heim:Johannes Rau',
+        'Gast:Alex',
       ],
     );
   });
 
-  test('next and previous clamp at both ends', () {
+  test('next never ends and previous clamps at the first turn', () {
     var state = stateWith(homePlayers: const ['H1'], awayPlayers: const ['G1']);
 
     expect(state.canGoBack, isFalse);
-    expect(state.previous().currentIndex, 0);
+    expect(state.previous(), same(state));
 
-    state = state.next();
+    state = state.next().next().next();
+    expect(state.currentIndex, 3);
     expect(state.currentTurn?.player, 'G1');
-    expect(state.canGoNext, isFalse);
-    expect(state.next().currentIndex, 1);
+    expect(state.canGoNext, isTrue);
+    expect(state.next().currentIndex, 4);
 
-    state = state.previous();
+    state = state.previous().previous().previous().previous().previous();
+    expect(state.currentIndex, 0);
     expect(state.currentTurn?.player, 'H1');
+    expect(state.previous(), same(state));
   });
 
   test('empty rosters stay safe for navigation', () {
@@ -79,6 +135,7 @@ void main() {
     expect(state.currentTurn, isNull);
     expect(state.canGoNext, isFalse);
     expect(state.canGoBack, isFalse);
+    expect(state.turnAt(5), isNull);
     expect(state.next(), same(state));
     expect(state.previous(), same(state));
   });
@@ -101,9 +158,11 @@ void main() {
     expect(prepared.currentIndex, 0);
     expect(prepared.winner, isNull);
     expect(prepared.home.teamName, 'Heim');
+    expect(prepared.home.players, finished.home.players);
+    expect(prepared.away.players, finished.away.players);
     expect(
-      prepared.turns.map((turn) => turn.identity).toList(),
-      finished.turns.map((turn) => turn.identity).toList(),
+      prepared.currentTurn?.identity,
+      finished.turnAt(0)?.identity,
     );
   });
 

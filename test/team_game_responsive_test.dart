@@ -138,8 +138,8 @@ void main() {
           home: TeamGameDisplayView(state: runningState()),
         ),
       );
-      // Die Anzeige animiert dauerhaft; pumpAndSettle würde nicht terminieren.
-      await tester.pump();
+      // Die Wechsel-Animation läuft nur einmal und muss wieder terminieren.
+      await tester.pumpAndSettle();
 
       expect(
         find.byKey(const ValueKey('team-game-display-player')),

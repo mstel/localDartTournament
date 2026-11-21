@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../domain/team_game_state.dart';
 
-/// Große, animierte Anzeige für den Zweitmonitor.
+/// Große Anzeige für den Zweitmonitor.
 ///
 /// Es gibt bewusst keine Punkt- oder Score-Anzeige: Scolia übernimmt die
 /// Punkteeingabe, dieses Widget zeigt ausschließlich den am Zug befindlichen
-/// Spieler beziehungsweise das Ergebnis.
-class TeamGameDisplayView extends StatefulWidget {
+/// Spieler beziehungsweise das Ergebnis. Die Animation läuft nur einmal kurz
+/// beim Spielerwechsel, nicht dauerhaft.
+class TeamGameDisplayView extends StatelessWidget {
   const TeamGameDisplayView({
     super.key,
     required this.state,
@@ -18,31 +19,7 @@ class TeamGameDisplayView extends StatefulWidget {
   final VoidCallback? onClose;
 
   @override
-  State<TeamGameDisplayView> createState() => _TeamGameDisplayViewState();
-}
-
-class _TeamGameDisplayViewState extends State<TeamGameDisplayView>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final state = widget.state;
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -60,13 +37,13 @@ class _TeamGameDisplayViewState extends State<TeamGameDisplayView>
                 ),
               ),
             ),
-            if (widget.onClose != null)
+            if (onClose != null)
               Positioned(
                 top: 8,
                 right: 8,
                 child: IconButton(
                   key: const ValueKey('team-game-display-close'),
-                  onPressed: widget.onClose,
+                  onPressed: onClose,
                   icon: const Icon(Icons.close),
                   color: Colors.white70,
                   tooltip: 'Zweitmonitoransicht schließen',
@@ -132,10 +109,6 @@ class _TeamGameDisplayViewState extends State<TeamGameDisplayView>
     }
 
     final turn = state.currentTurn!;
-    final scale = Tween<double>(begin: 0.97, end: 1.03).animate(
-      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-    );
-
     return Semantics(
       liveRegion: true,
       child: Column(
@@ -144,7 +117,7 @@ class _TeamGameDisplayViewState extends State<TeamGameDisplayView>
           Text(
             state.status == TeamGameStatus.setup
                 ? 'TEAM GAME · VORSCHAU'
-                : 'TEAM GAME · RUNDE ${turn.index + 1} / ${state.turns.length}',
+                : 'TEAM GAME',
             textAlign: TextAlign.center,
             style: textTheme.titleMedium?.copyWith(
               color: Colors.tealAccent.shade200,
@@ -154,57 +127,65 @@ class _TeamGameDisplayViewState extends State<TeamGameDisplayView>
           ),
           const SizedBox(height: 24),
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 350),
+            duration: const Duration(milliseconds: 550),
             switchInCurve: Curves.easeOutCubic,
-            child: ScaleTransition(
-              key: ValueKey(turn.identity),
-              scale: scale,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final shortest = constraints.constrainWidth(
-                    constraints.maxWidth < constraints.maxHeight
-                        ? constraints.maxWidth
-                        : constraints.maxHeight,
-                  );
-                  final fontSize = (shortest / 9).clamp(38.0, 148.0);
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        turn.teamName,
-                        key: const ValueKey('team-game-display-team'),
-                        textAlign: TextAlign.center,
-                        style: textTheme.headlineSmall?.copyWith(
-                          color: Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        turn.player,
-                        key: const ValueKey('team-game-display-player'),
-                        textAlign: TextAlign.center,
-                        style: textTheme.displayLarge?.copyWith(
-                          color: Colors.white,
-                          fontSize: fontSize,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'ist am Zug',
-                        textAlign: TextAlign.center,
-                        style: textTheme.headlineMedium?.copyWith(
-                          color: Colors.tealAccent.shade200,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final scale = Tween<double>(begin: 0.92, end: 1.0)
+                  .animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: scale, child: child),
+              );
+            },
+            child: _buildTurn(turn, textTheme),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTurn(TeamGameTurn turn, TextTheme textTheme) {
+    return LayoutBuilder(
+      key: ValueKey(turn.identity),
+      builder: (context, constraints) {
+        final shortest = constraints.constrainWidth(
+          constraints.maxWidth < constraints.maxHeight
+              ? constraints.maxWidth
+              : constraints.maxHeight,
+        );
+        final fontSize = (shortest / 9).clamp(38.0, 148.0);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              turn.teamName,
+              key: const ValueKey('team-game-display-team'),
+              textAlign: TextAlign.center,
+              style: textTheme.headlineSmall?.copyWith(color: Colors.white70),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              turn.player,
+              key: const ValueKey('team-game-display-player'),
+              textAlign: TextAlign.center,
+              style: textTheme.displayLarge?.copyWith(
+                color: Colors.white,
+                fontSize: fontSize,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'ist am Zug',
+              textAlign: TextAlign.center,
+              style: textTheme.headlineMedium?.copyWith(
+                color: Colors.tealAccent.shade200,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

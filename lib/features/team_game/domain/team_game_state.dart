@@ -121,51 +121,35 @@ class TeamGameState {
   bool get isFinished => status == TeamGameStatus.finished;
   bool get hasPlayers => home.players.isNotEmpty && away.players.isNotEmpty;
 
-  List<TeamGameTurn> get turns {
-    final result = <TeamGameTurn>[];
-    final longest = math.max(home.players.length, away.players.length);
-    for (var position = 0; position < longest; position++) {
-      if (position < home.players.length) {
-        result.add(
-          TeamGameTurn(
-            index: result.length,
-            player: home.players[position],
-            teamName: home.teamName,
-            isHome: true,
-          ),
-        );
-      }
-      if (position < away.players.length) {
-        result.add(
-          TeamGameTurn(
-            index: result.length,
-            player: away.players[position],
-            teamName: away.teamName,
-            isHome: false,
-          ),
-        );
-      }
-    }
-    return result;
+  /// Berechnet den Spieler für einen beliebigen Wechsel, ohne eine feste
+  /// Rundenzahl anzunehmen. Heim und Gast rotieren unabhängig voneinander
+  /// durch ihre Kader: nach dem letzten Spieler eines Teams beginnt dieses
+  /// Team wieder beim ersten Spieler.
+  TeamGameTurn? turnAt(int index) {
+    final homePlayers = home.players;
+    final awayPlayers = away.players;
+    if (homePlayers.isEmpty || awayPlayers.isEmpty) return null;
+
+    final step = index < 0 ? 0 : index;
+    final isHome = step.isEven;
+    final players = isHome ? homePlayers : awayPlayers;
+    final rotations = step ~/ 2;
+
+    return TeamGameTurn(
+      index: step,
+      player: players[rotations % players.length],
+      teamName: isHome ? home.teamName : away.teamName,
+      isHome: isHome,
+    );
   }
 
-  TeamGameTurn? get currentTurn {
-    final turns = this.turns;
-    if (turns.isEmpty) return null;
-    return turns[currentIndex.clamp(0, turns.length - 1).toInt()];
-  }
+  TeamGameTurn? get currentTurn => turnAt(currentIndex);
 
   String? get winningTeamName => winner?.labelFor(this);
 
-  bool get canGoNext {
-    final turn = currentTurn;
-    return turn != null && turn.index < turns.length - 1;
-  }
+  bool get canGoNext => currentTurn != null;
 
-  bool get canGoBack {
-    final turn = currentTurn;
-    return turn != null && turn.index > 0;
-  }
+  bool get canGoBack => currentTurn != null && currentIndex > 0;
 
   TeamGameState prepared() => TeamGameState(
     id: id,
@@ -188,13 +172,12 @@ class TeamGameState {
   );
 
   TeamGameState next() {
-    final turn = currentTurn;
-    if (turn == null) return this;
+    if (currentTurn == null) return this;
     return TeamGameState(
       id: id,
       home: home,
       away: away,
-      currentIndex: math.min(turn.index + 1, turns.length - 1),
+      currentIndex: currentIndex + 1,
       status: status,
       winner: winner,
       updatedAt: DateTime.now(),
@@ -202,13 +185,12 @@ class TeamGameState {
   }
 
   TeamGameState previous() {
-    final turn = currentTurn;
-    if (turn == null) return this;
+    if (currentTurn == null || currentIndex <= 0) return this;
     return TeamGameState(
       id: id,
       home: home,
       away: away,
-      currentIndex: math.max(turn.index - 1, 0),
+      currentIndex: math.max(0, currentIndex - 1),
       status: status,
       winner: winner,
       updatedAt: DateTime.now(),

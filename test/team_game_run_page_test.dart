@@ -38,6 +38,7 @@ void main() {
 
     expect(find.text('Johannes Rau'), findsOneWidget);
     expect(find.text('ist am Zug'), findsOneWidget);
+    expect(find.textContaining('RUNDE'), findsNothing);
     expect(find.byKey(const ValueKey('team-game-run-next')), findsOneWidget);
     expect(find.byKey(const ValueKey('team-game-run-end')), findsOneWidget);
     expect(find.byKey(const ValueKey('team-game-run-back')), findsOneWidget);
@@ -89,7 +90,49 @@ void main() {
     expect(find.text('Team Gast hat gewonnen'), findsOneWidget);
   });
 
-  testWidgets('leaving resets the signal to setup and pops the page', (
+  testWidgets('leaving asks for confirmation and "Nein" keeps the game', (
+    tester,
+  ) async {
+    final repository = _MemorySignalRepository();
+    repository.state = runningState();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            key: const ValueKey('open-run'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => TeamGameRunPage(
+                  initialState: repository.state!,
+                  repository: repository,
+                ),
+              ),
+            ),
+            child: const Text('Run öffnen'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-run')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('team-game-run-leave')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('team-game-leave-dialog')), findsOneWidget);
+    expect(find.text('Sind sie sicher ?'), findsOneWidget);
+    expect(find.text('Ja'), findsOneWidget);
+    expect(find.text('Nein'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('team-game-leave-no')));
+    await tester.pumpAndSettle();
+
+    expect(repository.state!.status, TeamGameStatus.running);
+    expect(find.byType(TeamGameRunPage), findsOneWidget);
+  });
+
+  testWidgets('confirming the leave dialog resets the signal and pops', (
     tester,
   ) async {
     final repository = _MemorySignalRepository();
@@ -117,6 +160,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('team-game-run-leave')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('team-game-leave-yes')));
     await tester.pumpAndSettle();
 
     expect(repository.state!.status, TeamGameStatus.setup);

@@ -97,6 +97,31 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
     if (winner != null) await _persist(_state.finished(winner));
   }
 
+  Future<void> _confirmLeave() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('team-game-leave-dialog'),
+        title: const Text('Spiel verlassen'),
+        content: const Text('Sind sie sicher ?'),
+        actions: [
+          TextButton(
+            key: const ValueKey('team-game-leave-no'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Nein'),
+          ),
+          FilledButton(
+            key: const ValueKey('team-game-leave-yes'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Ja'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _leave();
+  }
+
   Future<void> _leave() async {
     if (_leaving) return;
     _leaving = true;
@@ -116,7 +141,7 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) unawaited(_leave());
+        if (!didPop) unawaited(_confirmLeave());
       },
       child: Scaffold(
         appBar: AppBar(
@@ -176,7 +201,7 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
                               label: 'Spiel verlassen',
                               icon: Icons.exit_to_app_outlined,
                               filled: false,
-                              onPressed: _leave,
+                              onPressed: _confirmLeave,
                             ),
                           ],
                         ),
@@ -257,16 +282,17 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
         width: double.infinity,
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
-          color: scheme.primaryContainer,
+          color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: scheme.outlineVariant),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'RUNDE ${turn.index + 1} / ${_state.turns.length}',
+              'TEAM GAME · AM ZUG',
               style: textTheme.titleMedium?.copyWith(
-                color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                color: scheme.onSurfaceVariant,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.2,
               ),
@@ -277,7 +303,7 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
               key: const ValueKey('team-game-run-team'),
               textAlign: TextAlign.center,
               style: textTheme.titleLarge?.copyWith(
-                color: scheme.onPrimaryContainer.withValues(alpha: 0.8),
+                color: scheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
@@ -286,7 +312,7 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
               key: const ValueKey('team-game-run-player'),
               textAlign: TextAlign.center,
               style: textTheme.displayMedium?.copyWith(
-                color: scheme.onPrimaryContainer,
+                color: scheme.onSurface,
                 fontSize: fontSize,
                 fontWeight: FontWeight.bold,
               ),
@@ -296,7 +322,7 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
               'ist am Zug',
               textAlign: TextAlign.center,
               style: textTheme.titleLarge?.copyWith(
-                color: scheme.onPrimaryContainer.withValues(alpha: 0.85),
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ],
