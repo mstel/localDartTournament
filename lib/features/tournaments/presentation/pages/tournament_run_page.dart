@@ -481,6 +481,40 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         : 'Doppelpartner zuweisen Gastteam',
                   ),
                 ),
+                if (league.variant == LeagueMatchVariant.adjusted) ...[
+                  OutlinedButton.icon(
+                    key: ValueKey(
+                      teamSide == 0
+                          ? 'league-add-reserve-home'
+                          : 'league-add-reserve-away',
+                    ),
+                    onPressed: _savingLeagueSettings
+                        ? null
+                        : () => _addLeagueReservePlayer(teamSide),
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    label: Text(
+                      teamSide == 0
+                          ? 'Ersatzspieler Heimteam hinzufügen'
+                          : 'Ersatzspieler Gastteam hinzufügen',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    key: ValueKey(
+                      teamSide == 0
+                          ? 'league-add-substitution-home'
+                          : 'league-add-substitution-away',
+                    ),
+                    onPressed: _savingLeagueSettings
+                        ? null
+                        : () => _addLeagueSubstitution(teamSide),
+                    icon: const Icon(Icons.swap_vert_outlined),
+                    label: Text(
+                      teamSide == 0
+                          ? 'Auswechslung Heimteam hinzufügen'
+                          : 'Auswechslung Gastteam hinzufügen',
+                    ),
+                  ),
+                ],
               ],
             ),
             if (teamSide == 0) const Divider(height: 24),
@@ -543,10 +577,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         }
         _ensureGroupDeciders();
       });
-      await _runController.saveProgress(
+      await _runController.saveProgressWithIntent(
         tournament: widget.tournament,
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
+        allowUnfinishingCompleted: rule.retroactive,
+        trashReason: rule.retroactive
+            ? TournamentTrashReason.reopened
+            : null,
       );
       _queueAchievementRefresh(null, forceHistoricalUnlockRefresh: true);
     } catch (_) {
@@ -1346,7 +1384,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   LeagueBoardRuntime? _leagueRuntime;
   TournamentAudioAnnouncementService? _audioAnnouncementService;
   TournamentRunController get _runController =>
-      widget.runController ?? const TournamentRunController();
+      widget.runController ?? TournamentRunController();
   final _tournamentNameController = TextEditingController();
   final _tournamentNotesController = TextEditingController();
   final _simulationSeedController = TextEditingController(text: '42');
@@ -2386,15 +2424,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     GroupMatch? achievementMatch,
     bool checkAchievementInputs = false,
     bool forceHistoricalAchievementRefresh = false,
+    bool allowUnfinishingCompleted = false,
+    TournamentTrashReason? trashReason,
   }) async {
     _standingsCache.clear();
     var achievementInputsChanged = false;
     try {
       _leagueRuntime?.writeTo(widget.tournament);
-      await _runController.saveProgress(
+      await _runController.saveProgressWithIntent(
         tournament: widget.tournament,
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
+        allowUnfinishingCompleted: allowUnfinishingCompleted,
+        trashReason: trashReason,
       );
       if (checkAchievementInputs) {
         final signature = _achievementResultSignature();
@@ -2531,6 +2573,95 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Doppelaufstellung fehlgeschlagen: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingLeagueSettings = false);
+    }
+  }
+
+  Future<void> _addLeagueReservePlayer(int teamSide) async {
+    final league = widget.tournament.leagueMatch;
+    if (league == null ||
+        league.variant != LeagueMatchVariant.adjusted ||
+        _savingLeagueSettings) {
+      return;
+    }
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const _ParticipantNameDialog(),
+    );
+    if (name == null || name.trim().isEmpty || !mounted) return;
+    _leagueRuntime?.writeTo(widget.tournament);
+    setState(() => _savingLeagueSettings = true);
+    try {
+      final oldHomeCount = league.homePlayers.length;
+      league.addReservePlayers(teamSide: teamSide, names: [name]);
+      final player = TournamentPlayer(name: name.trim(), isGenerated: false);
+      final insertAt = teamSide == 0
+          ? min(oldHomeCount, widget.tournament.players.length)
+          : widget.tournament.players.length;
+      widget.tournament.players.insert(insertAt, player);
+      final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
+      widget.tournament.addActivity(
+        'reserve_added',
+        '$teamName hat ${player.name} als Ersatzspieler hinzugefügt.',
+      );
+      _leagueRuntime = LeagueBoardRuntime(widget.tournament)
+        ..installOn(widget.tournament);
+      setState(() {});
+      await _saveTournamentProgress(propagateError: true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ersatzspieler fehlgeschlagen: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingLeagueSettings = false);
+    }
+  }
+
+  Future<void> _addLeagueSubstitution(int teamSide) async {
+    final league = widget.tournament.leagueMatch;
+    if (league == null ||
+        league.variant != LeagueMatchVariant.adjusted ||
+        _savingLeagueSettings) {
+      return;
+    }
+    final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
+    final roster = teamSide == 0 ? league.homePlayers : league.awayPlayers;
+    final choice = await showDialog<(int, int)>(
+      context: context,
+      builder: (context) => LeagueSubstitutionDialog(
+        league: league,
+        teamSide: teamSide,
+        teamName: teamName,
+      ),
+    );
+    if (choice == null || !mounted || _savingLeagueSettings) return;
+    _leagueRuntime?.writeTo(widget.tournament);
+    setState(() => _savingLeagueSettings = true);
+    try {
+      league.addSubstitution(
+        teamSide: teamSide,
+        outPlayerIndex: choice.$1,
+        inPlayerIndex: choice.$2,
+      );
+      widget.tournament.addActivity(
+        'substitution',
+        '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
+            'zusätzlich ausgewechselt. '
+            'Übrige Auswechselungen: ${league.substitutionsRemaining(teamSide)}',
+      );
+      _leagueRuntime = LeagueBoardRuntime(widget.tournament)
+        ..installOn(widget.tournament);
+      setState(() {});
+      await _saveTournamentProgress(propagateError: true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Zusätzliche Auswechslung fehlgeschlagen: $error')),
         );
       }
     } finally {
@@ -3917,6 +4048,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return;
     }
     var changed = false;
+    var clearsCompletion = false;
     setState(() {
       changed = GroupPositionEditor.reassign(
         stage,
@@ -3946,6 +4078,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         _completedStageIndexes.remove(_activeStageIndex);
         widget.tournament.completedStageIndexes.remove(_activeStageIndex);
         if (_activeStageIndex == widget.tournament.runStages.length - 1) {
+          clearsCompletion = true;
           widget.tournament.finishedAt = null;
         }
         _persistGroupArrangementInDrawOrder(stage);
@@ -3953,7 +4086,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         _ensureGroupDeciders();
       }
     });
-    await _saveTournamentProgress();
+    await _saveTournamentProgress(
+      allowUnfinishingCompleted: clearsCompletion,
+      trashReason: clearsCompletion
+          ? TournamentTrashReason.reopened
+          : null,
+    );
   }
 
   void _replaceTournamentPlayerReferences(
@@ -6531,7 +6669,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     });
     _advanceKnockoutWinners(startStageIndex: previousStageIndex);
     _ensureGroupDeciders(startStageIndex: previousStageIndex);
-    await _saveTournamentProgress(checkAchievementInputs: true);
+    await _saveTournamentProgress(
+      checkAchievementInputs: true,
+      allowUnfinishingCompleted: true,
+      trashReason: TournamentTrashReason.reopened,
+    );
   }
 
   bool get _canResetCurrentStage {
@@ -6573,6 +6715,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
     final resetStageIndex = _activeStageIndex;
     final resetStageName = widget.tournament.runStages[resetStageIndex].name;
+    // Die zu sichernde Fassung wird vor der Veränderung kopiert. Das eigentliche
+    // Schreiben darf erst danach erfolgen, damit die UI sofort reagiert.
+    final preResetTournament = CreatedTournament.fromJson(
+      widget.tournament.toJson(),
+    );
     setState(() {
       final currentStage = widget.tournament.runStages[resetStageIndex];
       for (final match in _matchesForStage(currentStage)) {
@@ -6619,7 +6766,33 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     });
     _advanceKnockoutWinners(startStageIndex: resetStageIndex);
     _ensureGroupDeciders(startStageIndex: resetStageIndex);
-    await _saveTournamentProgress(checkAchievementInputs: true);
+    try {
+      await _tournamentStorage.snapshotTournament(
+        preResetTournament,
+        reason: TournamentTrashReason.reset,
+        note: 'Vor dem Zurücksetzen von „$resetStageName“.',
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Sicherung vor dem Zurücksetzen fehlgeschlagen: $error',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    // Ein Frame nach dem Storage-Durchlauf stellt sicher, dass Widget-Tests
+    // und die UI die abgeschlossene Sicherung sehen, bevor weitergearbeitet
+    // wird.
+    if (mounted) setState(() {});
+    await _saveTournamentProgress(
+      checkAchievementInputs: true,
+      allowUnfinishingCompleted: true,
+      trashReason: TournamentTrashReason.reset,
+    );
   }
 
   @override

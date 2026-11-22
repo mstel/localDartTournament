@@ -5008,13 +5008,18 @@ class _TournamentSecondScreenViewState
       prioritizedMatches: flowPriority.prioritizedMatches,
       deprioritizedMatches: flowPriority.deprioritizedMatches,
     );
+    final previewGate = TournamentDirectorSnapshot(t, activeIndex);
+    final previewableEntries =
+        orderedEntries
+            .where((entry) => previewGate.isPreviewableMatch(entry.match))
+            .toList();
     final recommendedGroups = stage is GroupTournamentRunStage
         ? [
             for (final group in stage.groups)
               RecommendedMatchGroup(
                 name: group.name,
                 matches: [
-                  for (final entry in orderedEntries)
+                  for (final entry in previewableEntries)
                     if (entry.groupKey ==
                         tournamentGroupBoardKey(activeIndex, group.name))
                       entry.match,
@@ -5032,7 +5037,9 @@ class _TournamentSecondScreenViewState
             if (stage != null)
               RecommendedMatchGroup(
                 name: stage.name,
-                matches: [for (final entry in orderedEntries) entry.match],
+                matches: [
+                  for (final entry in previewableEntries) entry.match,
+                ],
                 playedMatches: _matchesOf(
                   stage,
                 ).where((match) => match.hasResult).length,

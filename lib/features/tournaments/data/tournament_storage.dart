@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../../shared/persistence/app_data_directory.dart';
 import '../../../shared/persistence/storage_access.dart';
 import 'app_database.dart';
+import 'tournament_trash.dart';
 import '../domain/second_screen_widget_placement.dart';
 import '../domain/tournament_models.dart';
 import '../application/result_entry_performance_trace.dart';
@@ -22,19 +24,34 @@ class _TournamentStorageCacheEntry {
   final Map<String, dynamic> document;
 }
 
+class _TournamentSaveIntent {
+  const _TournamentSaveIntent({
+    this.allowUnfinishingCompleted = false,
+    this.trashReason,
+  });
+
+  final bool allowUnfinishingCompleted;
+  final TournamentTrashReason? trashReason;
+}
+
 /// Local, account-scoped tournament archive. Supabase synchronization is
 /// handled as a complete workspace backup by SupabaseWorkspaceSyncService.
 class TournamentStorage {
-  TournamentStorage({File? file, LocalAppDatabase? activeDatabase})
-    : _file = file,
-      _activeDatabase =
-          activeDatabase ??
-          (file == null
-              ? LocalAppDatabase()
-              : LocalAppDatabase(baseDirectory: file.parent));
+  TournamentStorage({
+    File? file,
+    LocalAppDatabase? activeDatabase,
+    TournamentTrash? trash,
+  }) : _file = file,
+       _activeDatabase =
+           activeDatabase ??
+           (file == null
+               ? LocalAppDatabase()
+               : LocalAppDatabase(baseDirectory: file.parent)),
+       _trash = trash;
 
   final File? _file;
   final LocalAppDatabase _activeDatabase;
+  final TournamentTrash? _trash;
   // Schema 24 is accepted only after exact verification against its v22 backup.
   static const schemaVersion = 49;
   static const _schemaVersion = schemaVersion;
@@ -53,6 +70,32 @@ class TournamentStorage {
 
   Future<T> _locked<T>(Future<T> Function() action) =>
       StorageAccess.run(action);
+
+  Future<TournamentTrash> _trashForCurrentFile() async {
+    final supplied = _trash;
+    if (supplied != null) return supplied;
+    final file = await _storageFile();
+    return TournamentTrash(
+      file: File(
+        '${file.parent.path}${Platform.pathSeparator}tournament_trash.json',
+      ),
+    );
+  }
+
+  /// Erzeugt eine wiederherstellbare Kopie, bevor eine Oberfläche Ergebnisse
+  /// oder eine Phase destruktiv verändert.
+  Future<void> snapshotTournament(
+    CreatedTournament tournament, {
+    required TournamentTrashReason reason,
+    String? note,
+  }) => _locked(() async {
+    await (await _trashForCurrentFile()).putUnlocked(
+      tournament,
+      reason: reason,
+      note: note,
+    );
+  });
+
 
   Map<String, dynamic> _cloneDocument(Map<String, dynamic> source) {
     final copy = Map<String, dynamic>.from(source);
@@ -191,17 +234,26 @@ class TournamentStorage {
     return left == right;
   }
 
+  bool _sameTournamentContent(CreatedTournament left, CreatedTournament right) {
+    final leftJson = left.toJson()..remove('updatedAt');
+    final rightJson = right.toJson()..remove('updatedAt');
+    return _sameJsonValue(leftJson, rightJson);
+  }
+
   Future<void> _writeDocument(Map<String, dynamic> document) async {
     final file = await _storageFile();
     await file.parent.create(recursive: true);
+    final Map<String, dynamic> previous;
     if (await file.exists()) {
-      final previous = _cache[file.path]?.document ?? await _readDocument();
+      previous = _cache[file.path]?.document ?? await _readDocument();
       await file.copy('${file.path}.bak');
       final version = previous['schemaVersion'] ?? 1;
       final migrationBackup = File('${file.path}.v$version.bak');
       if (version != _schemaVersion && !await migrationBackup.exists()) {
         await file.copy(migrationBackup.path);
       }
+    } else {
+      previous = const <String, dynamic>{};
     }
     document['schemaVersion'] = _schemaVersion;
     final temporary = File('${file.path}.tmp');
@@ -217,6 +269,77 @@ class TournamentStorage {
       fileLength: stat.size,
       document: document,
     );
+
+    // Der Papierkorb liegt außerhalb der einen .bak-Generation. Ein leerer
+    // oder rekonstruierter Turnierspeicher darf vorhandene abgeschlossene
+    // Turniere nicht dauerhaft verdrängen.
+    unawaited(_mirrorCompletedToTrash(file, previous, document));
+  }
+
+  Future<void> _mirrorCompletedToTrash(
+    File file,
+    Map<String, dynamic> previous,
+    Map<String, dynamic> next,
+  ) async {
+    final previousCompleted = _completedRecords(previous);
+    final nextCompleted = _completedRecords(next);
+    final missing = previousCompleted.keys.where(
+      (id) => !nextCompleted.containsKey(id),
+    );
+    if (missing.isEmpty) return;
+
+    final current = nextCompleted.isNotEmpty
+        ? nextCompleted
+        : _completedRecordsFromBackup(file);
+    final trash = await _trashForCurrentFile();
+    for (final id in missing) {
+      final record = previousCompleted[id]!;
+      if (current.containsKey(id)) continue;
+      final tournament = _recordToTournament(record);
+      if (tournament == null) continue;
+      await trash.putUnlocked(
+        tournament,
+        reason: TournamentTrashReason.deleted,
+        note: 'Automatisch gesichert, weil der Eintrag aus dem Archiv '
+            'verschwand.',
+      );
+    }
+  }
+
+  Map<String, Map<String, dynamic>> _completedRecords(
+    Map<String, dynamic> document,
+  ) {
+    final result = <String, Map<String, dynamic>>{};
+    final tournaments = document['tournaments'];
+    if (tournaments is! List) return result;
+    for (final item in tournaments) {
+      if (item is! Map<String, dynamic>) continue;
+      final id = item['id']?.toString();
+      final finishedAt = item['finishedAt'];
+      if (id == null || id.isEmpty || finishedAt == null) continue;
+      result[id] = item;
+    }
+    return result;
+  }
+
+  Map<String, Map<String, dynamic>> _completedRecordsFromBackup(File file) {
+    try {
+      final backup = File('${file.path}.bak');
+      if (!backup.existsSync()) return const {};
+      final decoded = jsonDecode(backup.readAsStringSync());
+      if (decoded is! Map<String, dynamic>) return const {};
+      return _completedRecords(decoded);
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  CreatedTournament? _recordToTournament(Map<String, dynamic> record) {
+    try {
+      return CreatedTournament.fromJson(Map<String, dynamic>.from(record));
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<List<CreatedTournament>> loadTournaments() =>
@@ -263,6 +386,12 @@ class TournamentStorage {
         await _activeDatabase.deleteActiveTournamentCopy(tournament.id);
         continue;
       }
+      if (tournament.finishedAt == null &&
+          archived?.finishedAt != null &&
+          !tournament.reopenedForCorrections) {
+        await _protectCompletedArchiveFromStaleCopy(archived!, tournament);
+        continue;
+      }
       if (archived == null ||
           !archived.updatedAt.isAfter(tournament.updatedAt)) {
         merged[tournament.id] = tournament;
@@ -296,12 +425,36 @@ class TournamentStorage {
         await _activeDatabase.deleteActiveTournamentCopy(active.id);
         continue;
       }
+      if (active.finishedAt == null &&
+          archived?.finishedAt != null &&
+          !active.reopenedForCorrections) {
+        await _protectCompletedArchiveFromStaleCopy(archived!, active);
+        continue;
+      }
       if (archived == null || !archived.updatedAt.isAfter(active.updatedAt)) {
         merged[active.id] = active;
       }
     }
     return merged.values.toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  /// Ein unvollständiger aktiver Zwischenstand darf ein abgeschlossenes
+  /// Turnier nie verdrängen. Die abgeschlossene Fassung geht zusätzlich in den
+  /// Papierkorb, damit sie auch nach einer beschädigten Archivdatei
+  /// wiederhergestellt werden kann.
+  Future<void> _protectCompletedArchiveFromStaleCopy(
+    CreatedTournament archived,
+    CreatedTournament stale,
+  ) async {
+    await (await _trashForCurrentFile()).putUnlocked(
+      archived,
+      reason: TournamentTrashReason.staleActiveCopy,
+      note:
+          'Verdrängter Zwischenstand vom '
+          '${stale.updatedAt.toIso8601String()}',
+    );
+    await _activeDatabase.deleteActiveTournamentCopy(stale.id);
   }
 
   Future<List<CreatedTournament>> _ensureRankingYearArchives(
@@ -524,23 +677,37 @@ class TournamentStorage {
   }
 
   Future<void> _writeArchiveSnapshot(
-    List<CreatedTournament> tournaments,
-  ) async {
+    List<CreatedTournament> tournaments, {
+    Set<String> removedCompletedIds = const {},
+  }) async {
     final generation = DateTime.now().microsecondsSinceEpoch.toString();
     final document = await _readDocument();
+    final completed = {
+      for (final tournament in tournaments.where(
+        (item) => item.finishedAt != null,
+      ))
+        tournament.id: tournament,
+    };
+    // Nie still und leise abgeschlossene Turniere aus dem Archiv entfernen.
+    // Nur ein ausdrücklich erlaubter Löschvorgang darf eine abgeschlossene
+    // Fassung aus dem Master entfernen.
+    for (final item in document['tournaments'] as List? ?? const []) {
+      if (item is! Map<String, dynamic>) continue;
+      final previous = CreatedTournament.fromJson(item);
+      if (previous.finishedAt != null &&
+          !completed.containsKey(previous.id) &&
+          !removedCompletedIds.contains(previous.id)) {
+        completed[previous.id] = previous;
+      }
+    }
+    final completedList = completed.values.toList();
     document
       ..['archiveGeneration'] = generation
       ..['tournaments'] = [
-        for (final tournament in tournaments.where(
-          (item) => item.finishedAt != null,
-        ))
-          tournament.toJson(),
+        for (final tournament in completedList) tournament.toJson(),
       ];
     await _writeDocument(document);
-    await _writeRankingYearArchives(
-      tournaments.where((item) => item.finishedAt != null).toList(),
-      generation,
-    );
+    await _writeRankingYearArchives(completedList, generation);
   }
 
   Future<void> _ensureArchiveLayout() => _locked(() async {
@@ -594,7 +761,47 @@ class TournamentStorage {
     return changed;
   }
 
-  Future<void> saveTournament(CreatedTournament tournament) async {
+  Future<CreatedTournament?> _archivedTournamentById(String id) async {
+    final document = await _readDocument();
+    for (final item in document['tournaments'] as List? ?? const []) {
+      if (item is! Map<String, dynamic>) continue;
+      final candidate = CreatedTournament.fromJson(item);
+      if (candidate.id == id) return candidate;
+    }
+    return null;
+  }
+
+  _TournamentSaveIntent _activeSaveIntent = const _TournamentSaveIntent();
+
+  Future<void> saveTournament(CreatedTournament tournament) =>
+      _saveTournamentImpl(tournament);
+
+  /// Speichert mit expliziter Absicht. [allowUnfinishingCompleted] wird nur
+  /// von bewussten Korrektur- und Wiederherstellungswegen gesetzt.
+  ///
+  /// Die Absicht wird über [saveTournament] gereicht, damit Injections und
+  /// Test-Doubles ihre bestehende Überschreibung behalten können.
+  Future<void> saveTournamentWithIntent(
+    CreatedTournament tournament, {
+    bool allowUnfinishingCompleted = false,
+    TournamentTrashReason? trashReason,
+  }) async {
+    final previous = _activeSaveIntent;
+    _activeSaveIntent = _TournamentSaveIntent(
+      allowUnfinishingCompleted: allowUnfinishingCompleted,
+      trashReason: trashReason,
+    );
+    try {
+      await saveTournament(tournament);
+    } finally {
+      _activeSaveIntent = previous;
+    }
+  }
+
+  Future<void> _saveTournamentImpl(CreatedTournament tournament) async {
+    final intent = _activeSaveIntent;
+    final allowUnfinishingCompleted = intent.allowUnfinishingCompleted;
+    final trashReason = intent.trashReason;
     if (tournament.rankingIds.length > 1) {
       tournament.rankingIds.removeRange(1, tournament.rankingIds.length);
     }
@@ -607,6 +814,25 @@ class TournamentStorage {
           'archive_layout_check',
           _ensureArchiveLayout,
         );
+        final archived = await _archivedTournamentById(tournament.id);
+        if (archived?.finishedAt != null &&
+            !tournament.reopenedForCorrections) {
+          await (await _trashForCurrentFile()).putUnlocked(
+            archived!,
+            reason:
+                trashReason ?? TournamentTrashReason.staleActiveCopy,
+            note:
+                'Ein unvollständiger Zwischenstand sollte ein abgeschlossenes '
+                'Turnier überschreiben.',
+          );
+          if (!allowUnfinishingCompleted) {
+            throw StateError(
+              'Ein abgeschlossenes Turnier darf nicht durch einen '
+              'unvollständigen Zwischenstand überschrieben werden. '
+              'Die abgeschlossene Fassung liegt im Papierkorb.',
+            );
+          }
+        }
         final stored = await ResultEntryPerformanceTrace.measureAsync(
           'active_copy_read',
           () => _activeDatabase.loadActiveTournamentCopy(tournament.id),
@@ -641,6 +867,21 @@ class TournamentStorage {
       final incomingUpdatedAt = tournament.updatedAt;
       tournament.updatedAt = DateTime.now();
       final index = tournaments.indexWhere((item) => item.id == tournament.id);
+      final trash = await _trashForCurrentFile();
+      final previous = index < 0 ? null : tournaments[index];
+      if (previous != null &&
+          previous.finishedAt != null &&
+          !_sameTournamentContent(previous, tournament)) {
+        await trash.putUnlocked(
+          previous,
+          reason: TournamentTrashReason.replaced,
+          note: 'Vorherige abgeschlossene Fassung.',
+        );
+      }
+      await trash.putUnlocked(
+        tournament,
+        reason: TournamentTrashReason.completion,
+      );
       if (index < 0) {
         tournaments.insert(0, tournament);
       } else {
@@ -730,8 +971,18 @@ class TournamentStorage {
     await _locked(() async {
       await _ensureArchiveLayout();
       final tournaments = await _loadTournamentsUnlocked();
+      final deleted = tournaments.where((item) => item.id == id).toList();
+      for (final tournament in deleted) {
+        await (await _trashForCurrentFile()).putUnlocked(
+          tournament,
+          reason: TournamentTrashReason.deleted,
+        );
+      }
       tournaments.removeWhere((item) => item.id == id);
-      await _writeArchiveSnapshot(tournaments);
+      await _writeArchiveSnapshot(
+        tournaments,
+        removedCompletedIds: {id},
+      );
     });
     await _activeDatabase.deleteActiveTournamentCopy(id);
     StorageAccess.markLocalDataChanged();

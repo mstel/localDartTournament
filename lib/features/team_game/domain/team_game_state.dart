@@ -151,6 +151,24 @@ class TeamGameState {
 
   bool get canGoBack => currentTurn != null && currentIndex > 0;
 
+  /// Ersetzt nur die Mannschaftsnamen und Kader und behält den laufenden
+  /// Spielstand (Status, Wechsel und Sieger) unverändert.
+  TeamGameState withRoster({
+    required String homeTeam,
+    required List<String> homePlayers,
+    required String awayTeam,
+    required List<String> awayPlayers,
+  }) =>
+      TeamGameState(
+        id: id,
+        home: TeamGameSide(teamName: homeTeam, players: homePlayers).normalized(),
+        away: TeamGameSide(teamName: awayTeam, players: awayPlayers).normalized(),
+        currentIndex: currentIndex,
+        status: status,
+        winner: winner,
+        updatedAt: DateTime.now(),
+      );
+
   TeamGameState prepared() => TeamGameState(
     id: id,
     home: home,

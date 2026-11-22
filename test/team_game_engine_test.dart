@@ -166,6 +166,25 @@ void main() {
     );
   });
 
+  test('withRoster replaces names only and keeps the running state', () {
+    final running = stateWith().next().next();
+    final edited = running.withRoster(
+      homeTeam: 'Neues Heim',
+      homePlayers: const ['Hannes Baur', 'Johannes Rau'],
+      awayTeam: 'Neuer Gast',
+      awayPlayers: const ['Mira Kern'],
+    );
+
+    expect(edited.id, running.id);
+    expect(edited.status, TeamGameStatus.running);
+    expect(edited.currentIndex, running.currentIndex);
+    expect(edited.winner, isNull);
+    expect(edited.home.teamName, 'Neues Heim');
+    expect(edited.home.players, ['Hannes Baur', 'Johannes Rau']);
+    expect(edited.away.teamName, 'Neuer Gast');
+    expect(edited.away.players, ['Mira Kern']);
+  });
+
   test('JSON roundtrip preserves status, turn and winner', () {
     final state = stateWith().next().finished(TeamGameWinner.home);
     final restored = TeamGameState.fromJsonString(state.toJsonString());

@@ -213,4 +213,39 @@ void main() {
     expect(longFormat.matches, shortFormat.matches);
     expect(longFormat.minutes, greaterThan(shortFormat.minutes));
   });
+
+  test('late reserves and extra substitutions extend the counters', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: home,
+      awayPlayers: away,
+      singlesPerPlayer: 1,
+      doublesCount: 1,
+      starterCount: 6,
+      maxReservePlayers: 1,
+      substitutionLimit: 1,
+    );
+
+    expect(league.homePlayers, hasLength(7));
+    expect(league.maxReservePlayers, 1);
+    expect(league.substitutionLimit, 1);
+
+    league.addReservePlayers(teamSide: 0, names: const ['Heim 8']);
+    expect(league.homePlayers, hasLength(8));
+    expect(league.maxReservePlayers, 2);
+    expect(league.reservePlayers(0), contains(7));
+
+    league.addSubstitution(teamSide: 0, outPlayerIndex: 0, inPlayerIndex: 6);
+    expect(league.substitutionLimit, 2);
+    expect(league.substitutionsUsed(0), 1);
+    expect(league.substitutionsRemaining(0), 1);
+    expect(league.activePlayers(0), contains(6));
+    expect(league.activePlayers(0), isNot(contains(0)));
+
+    final restored = LeagueMatch.fromJson(league.toJson());
+    expect(restored.maxReservePlayers, 2);
+    expect(restored.substitutionLimit, 2);
+    expect(restored.substitutionsUsed(0), 1);
+  });
 }

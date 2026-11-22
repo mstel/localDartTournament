@@ -18,6 +18,7 @@ import 'tournament_timing_panel.dart';
 import 'tournament_second_screen_view.dart';
 import 'recommended_matches_table.dart';
 import 'recent_match_result_card.dart';
+import '../../../../league/domain/league_match.dart';
 import '../../../../league/presentation/league_overview.dart';
 
 /// Embedded tournament controls for match scheduling and result entry.
@@ -867,6 +868,8 @@ class _TournamentDirectorDashboardState
 
   Widget _build(BuildContext context) {
     final t = widget.tournament;
+    final isCustomLeague =
+        t.leagueMatch?.variant == LeagueMatchVariant.adjusted;
     final state = TournamentDirectorSnapshot(t, widget.activeStage);
     final activeStageEntries = state.entries
         .where((entry) => entry.stageIndex == widget.activeStage)
@@ -896,7 +899,11 @@ class _TournamentDirectorDashboardState
     final runningMatches = state.schedule.running
         .map((entry) => entry.match)
         .toSet();
-    final pendingMatches = directorPlan.map((entry) => entry.match).toList();
+    final pendingMatches =
+        directorPlan
+            .map((entry) => entry.match)
+            .where(state.isPreviewableMatch)
+            .toList();
     final pendingOrder = {
       for (var index = 0; index < activeStageEntries.length; index++)
         activeStageEntries[index].match:
@@ -1635,12 +1642,13 @@ class _TournamentDirectorDashboardState
         if (widget.directorModeEnabled) ...[
           boardOverview,
           const SizedBox(height: 12),
-          if (t.leagueMatch case final league?) ...[
-            LeagueOverview(league: league),
-            const SizedBox(height: 12),
-            clock,
-            const SizedBox(height: 12),
-          ],
+          if (!isCustomLeague)
+            if (t.leagueMatch case final league?) ...[
+              LeagueOverview(league: league),
+              const SizedBox(height: 12),
+              clock,
+              const SizedBox(height: 12),
+            ],
           _matchQueue(
             'Spielplan',
             directorPlan,
@@ -1680,13 +1688,14 @@ class _TournamentDirectorDashboardState
           ]),
         ],
         const SizedBox(height: 12),
-        _matchQueue(
-          'Letzte Ergebnisse',
-          latestResults,
-          emptyMessage: 'Noch keine Ergebnisse in dieser Phase.',
-          showResult: true,
-          maxColumns: 4,
-        ),
+        if (!(widget.directorModeEnabled && isCustomLeague))
+          _matchQueue(
+            'Letzte Ergebnisse',
+            latestResults,
+            emptyMessage: 'Noch keine Ergebnisse in dieser Phase.',
+            showResult: true,
+            maxColumns: 4,
+          ),
       ],
     );
   }

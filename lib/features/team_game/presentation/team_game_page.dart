@@ -15,11 +15,14 @@ class TeamGamePage extends StatefulWidget {
     super.key,
     TeamGameSignalRepository? repository,
     TeamGameDisplayLauncher? displayLauncher,
+    TeamGameState? initialState,
   }) : _repository = repository,
-       _displayLauncher = displayLauncher;
+       _displayLauncher = displayLauncher,
+       _initialState = initialState;
 
   final TeamGameSignalRepository? _repository;
   final TeamGameDisplayLauncher? _displayLauncher;
+  final TeamGameState? _initialState;
 
   @override
   State<TeamGamePage> createState() => _TeamGamePageState();
@@ -29,14 +32,8 @@ class _TeamGamePageState extends State<TeamGamePage> {
   late final TeamGameSignalRepository _repository;
   late final TeamGameDisplayLauncher _displayLauncher;
 
-  final _teamNames = [
-    TextEditingController(text: 'Heim'),
-    TextEditingController(text: 'Gast'),
-  ];
-  final _players = [
-    <TextEditingController>[TextEditingController()],
-    <TextEditingController>[TextEditingController()],
-  ];
+  late final List<TextEditingController> _teamNames;
+  late final List<List<TextEditingController>> _players;
 
   @override
   void initState() {
@@ -44,6 +41,23 @@ class _TeamGamePageState extends State<TeamGamePage> {
     _repository = widget._repository ?? TeamGameSignalRepository();
     _displayLauncher =
         widget._displayLauncher ?? ProcessTeamGameDisplayLauncher();
+
+    final initial = widget._initialState;
+    _teamNames = [
+      TextEditingController(text: initial?.home.teamName ?? 'Heim'),
+      TextEditingController(text: initial?.away.teamName ?? 'Gast'),
+    ];
+    _players = [
+      _controllersFor(initial?.home.players),
+      _controllersFor(initial?.away.players),
+    ];
+  }
+
+  List<TextEditingController> _controllersFor(List<String>? players) {
+    final names = players == null || players.isEmpty
+        ? const <String>['']
+        : players;
+    return names.map((name) => TextEditingController(text: name)).toList();
   }
 
   @override
@@ -84,6 +98,15 @@ class _TeamGamePageState extends State<TeamGamePage> {
   }
 
   TeamGameState _buildState() {
+    final initial = widget._initialState;
+    if (initial != null) {
+      return initial.withRoster(
+        homeTeam: _teamNames[0].text,
+        homePlayers: _players[0].map((c) => c.text).toList(),
+        awayTeam: _teamNames[1].text,
+        awayPlayers: _players[1].map((c) => c.text).toList(),
+      );
+    }
     return TeamGameState.create(
       homeTeam: _teamNames[0].text,
       homePlayers: _players[0].map((c) => c.text).toList(),
@@ -145,10 +168,24 @@ class _TeamGamePageState extends State<TeamGamePage> {
     );
   }
 
+  Future<void> _saveAndReturn() async {
+    final error = _validate();
+    if (error != null) {
+      _showError(error);
+      return;
+    }
+    await _repository.save(_buildState());
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final editing = widget._initialState != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Team Game')),
+      appBar: AppBar(
+        title: Text(editing ? 'Namen bearbeiten' : 'Team Game'),
+      ),
       body: AdaptiveContentList(
         children: [
           Text(
@@ -205,21 +242,31 @@ class _TeamGamePageState extends State<TeamGamePage> {
                   minimumSize: const Size.fromHeight(48),
                 ),
               );
-              final startButton = FilledButton.icon(
-                key: const ValueKey('team-game-start'),
-                onPressed: _startGame,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Team Game Starten'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                ),
-              );
+              final primaryButton = editing
+                  ? FilledButton.icon(
+                      key: const ValueKey('team-game-save-setup'),
+                      onPressed: _saveAndReturn,
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text('Namen speichern'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                    )
+                  : FilledButton.icon(
+                      key: const ValueKey('team-game-start'),
+                      onPressed: _startGame,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Team Game Starten'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                    );
               if (wide) {
                 return Row(
                   children: [
                     Expanded(child: openButton),
                     const SizedBox(width: 12),
-                    Expanded(child: startButton),
+                    Expanded(child: primaryButton),
                   ],
                 );
               }
@@ -229,7 +276,7 @@ class _TeamGamePageState extends State<TeamGamePage> {
                 children: [
                   openButton,
                   const SizedBox(height: 12),
-                  startButton,
+                  primaryButton,
                 ],
               );
             },

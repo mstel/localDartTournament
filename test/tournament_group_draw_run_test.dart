@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_run_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/engines/group_draw_assignment.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/tournament_trash.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show TournamentRunPage;
@@ -94,6 +95,7 @@ void main() {
           home: TournamentRunPage(
             tournament: tournament,
             runController: _RecordingRunController(storage),
+            tournamentStorage: storage,
           ),
         ),
       );
@@ -677,6 +679,16 @@ CreatedTournament _tournament() {
 
 class _MemoryTournamentStorage extends TournamentStorage {
   Map<String, dynamic>? savedTournament;
+  final List<CreatedTournament> snapshots = [];
+
+  @override
+  Future<void> snapshotTournament(
+    CreatedTournament tournament, {
+    required TournamentTrashReason reason,
+    String? note,
+  }) async {
+    snapshots.add(CreatedTournament.fromJson(tournament.toJson()));
+  }
 
   @override
   Future<void> saveTournament(CreatedTournament tournament) async {

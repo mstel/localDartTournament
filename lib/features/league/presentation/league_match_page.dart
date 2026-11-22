@@ -887,6 +887,115 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
     }
   }
 
+  Future<void> _addReservePlayer(int teamSide) async {
+    final tournament = _tournament;
+    if (tournament == null ||
+        tournament.leagueMatch?.variant != LeagueMatchVariant.adjusted ||
+        _busy) {
+      return;
+    }
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ersatzspieler hinzufügen'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 80,
+          decoration: const InputDecoration(
+            labelText: 'Name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Hinzufügen'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || !mounted) return;
+
+    final next = CreatedTournament.fromJson(tournament.toJson());
+    final league = next.leagueMatch!;
+    try {
+      final oldHomeCount = league.homePlayers.length;
+      league.addReservePlayers(teamSide: teamSide, names: [name]);
+      final insertAt = teamSide == 0
+          ? min(oldHomeCount, next.players.length)
+          : next.players.length;
+      next.players.insert(
+        insertAt,
+        TournamentPlayer(name: name, isGenerated: false),
+      );
+      final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
+      next.addActivity(
+        'reserve_added',
+        '$teamName hat $name als Ersatzspieler hinzugefügt.',
+      );
+      await _save(next, rethrowError: true);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = 'Ersatzspieler fehlgeschlagen: $error');
+      }
+    }
+  }
+
+  Future<void> _addSubstitution(int teamSide) async {
+    final tournament = _tournament;
+    if (tournament == null ||
+        tournament.leagueMatch?.variant != LeagueMatchVariant.adjusted ||
+        _busy) {
+      return;
+    }
+    final league = tournament.leagueMatch!;
+    final choice = await showDialog<(int, int)>(
+      context: context,
+      builder: (context) => LeagueSubstitutionDialog(
+        league: league,
+        teamSide: teamSide,
+        teamName: teamSide == 0 ? league.homeTeam : league.awayTeam,
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final next = CreatedTournament.fromJson(tournament.toJson());
+    final nextLeague = next.leagueMatch!;
+    final roster = teamSide == 0
+        ? nextLeague.homePlayers
+        : nextLeague.awayPlayers;
+    try {
+      nextLeague.addSubstitution(
+        teamSide: teamSide,
+        outPlayerIndex: choice.$1,
+        inPlayerIndex: choice.$2,
+      );
+      final teamName = teamSide == 0
+          ? nextLeague.homeTeam
+          : nextLeague.awayTeam;
+      next.addActivity(
+        'substitution',
+        '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
+            'zusätzlich ausgewechselt. '
+            'Übrige Auswechselungen: '
+            '${nextLeague.substitutionsRemaining(teamSide)}',
+      );
+      await _save(next, rethrowError: true);
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = 'Zusätzliche Auswechslung fehlgeschlagen: $error',
+        );
+      }
+    }
+  }
+
   Future<void> _showTeamRoster(int teamSide) async {
     final league = _tournament?.leagueMatch;
     if (league == null) return;
@@ -1452,6 +1561,38 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                             : 'Doppelpartner zuweisen Gastteam',
                       ),
                     ),
+                    if (league.variant == LeagueMatchVariant.adjusted) ...[
+                      OutlinedButton.icon(
+                        key: ValueKey(
+                          teamSide == 0
+                              ? 'league-add-reserve-home'
+                              : 'league-add-reserve-away',
+                        ),
+                        onPressed:
+                            _busy ? null : () => _addReservePlayer(teamSide),
+                        icon: const Icon(Icons.person_add_alt_1_outlined),
+                        label: Text(
+                          teamSide == 0
+                              ? 'Ersatzspieler Heimteam hinzufügen'
+                              : 'Ersatzspieler Gastteam hinzufügen',
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        key: ValueKey(
+                          teamSide == 0
+                              ? 'league-add-substitution-home'
+                              : 'league-add-substitution-away',
+                        ),
+                        onPressed:
+                            _busy ? null : () => _addSubstitution(teamSide),
+                        icon: const Icon(Icons.swap_vert_outlined),
+                        label: Text(
+                          teamSide == 0
+                              ? 'Auswechslung Heimteam hinzufügen'
+                              : 'Auswechslung Gastteam hinzufügen',
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],

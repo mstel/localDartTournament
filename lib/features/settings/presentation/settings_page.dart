@@ -11,6 +11,7 @@ import '../../random_draw/presentation/random_draw_tool_page.dart';
 import '../../team_game/presentation/team_game_page.dart';
 import 'tie_breaker_defaults_panel.dart';
 import 'player_insight_defaults_panel.dart';
+import 'tournament_trash_panel.dart';
 import 'app_presentation_settings.dart';
 import 'director_mode_defaults_dialog.dart';
 
@@ -83,15 +84,22 @@ class _DataPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BackupPanel(
-    trailing: Card(
-      child: ListTile(
-        leading: const Icon(Icons.restart_alt),
-        title: const Text('Lokale App-Daten zurücksetzen'),
-        subtitle: const Text(
-          'Sichert lokale Dateien bytegetreu; Cloud und andere Geräte bleiben unberührt.',
+    trailing: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const TournamentTrashPanel(),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.restart_alt),
+            title: const Text('Lokale App-Daten zurücksetzen'),
+            subtitle: const Text(
+              'Sichert lokale Dateien bytegetreu; Cloud und andere Geräte bleiben unberührt.',
+            ),
+            onTap: onReset,
+          ),
         ),
-        onTap: onReset,
-      ),
+      ],
     ),
   );
 }

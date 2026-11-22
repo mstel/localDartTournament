@@ -10,20 +10,31 @@ class TournamentDirectorSnapshot {
   TournamentDirectorSnapshot(this.tournament, this.stage)
     : schedule = const OrderOfPlayController().plan(tournament, stage) {
     entries = const OrderOfPlayController().entries(tournament);
+    _openSinglesRemain = entries.any(
+      (e) =>
+          e.stageIndex == stage &&
+          e.match.hasPlayers &&
+          !e.match.isResolved &&
+          !e.match.hasTeamParticipant,
+    );
     ready = entries
         .where(
           (e) =>
               e.stageIndex == stage &&
               e.match.hasPlayers &&
               !e.match.isResolved &&
+              isPreviewableMatch(e.match) &&
               !schedule.running.any((r) => identical(r.match, e.match)),
         )
         .toList();
+    _assignedQueueByBoard = _buildAssignedQueueByBoard();
   }
   final CreatedTournament tournament;
   final int stage;
   final BoardSchedule schedule;
   late final List<PlayEntry> entries, ready;
+  late final bool _openSinglesRemain;
+  late final Map<int, List<BoardAssignment>> _assignedQueueByBoard;
   late final TournamentFlowPriority _flowPriority =
       TournamentFlowPriority.forStage(
         tournament.runStages[stage],
@@ -41,14 +52,82 @@ class TournamentDirectorSnapshot {
   late final Set<GroupMatch> _deprioritizedMatches =
       _flowPriority.deprioritizedMatches;
 
+  /// Doppel werden in Vorschauen erst gezeigt, wenn alle Einzel beendet sind.
+  bool isPreviewableMatch(GroupMatch match) =>
+      !match.hasTeamParticipant || !_openSinglesRemain;
+
+  /// Feste,Board-lokale Warteschlange für den Modus "Fest zugewiesene Partien".
+  /// Die Reihenfolge wird ausschließlich aus den persistierten
+  /// `fixedScheduleOrder`-Werten und der Gruppen-/Board-Zuordnung gebildet.
+  /// Ein Ergebnis verändert daher nur die Warteschlange des betroffenen Boards.
+  Map<int, List<BoardAssignment>> _buildAssignedQueueByBoard() {
+    final queue = <int, List<BoardAssignment>>{};
+    if (tournament.directorPlayOrderMode != 'fixed_schedule' ||
+        tournament.directorMultiBoardAssignmentBehavior != 'assigned') {
+      return queue;
+    }
+
+    final stageEntries =
+        entries
+            .where(
+              (entry) => entry.stageIndex == stage && entry.match.hasPlayers,
+            )
+            .toList();
+    final originalOrder = {
+      for (var index = 0; index < stageEntries.length; index++)
+        stageEntries[index]: index,
+    };
+    stageEntries.sort((a, b) {
+      final order = (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+        b.match.fixedScheduleOrder ?? 1 << 30,
+      );
+      return order != 0 ? order : originalOrder[a]!.compareTo(originalOrder[b]!);
+    });
+
+    final groupsByBoard = configuredBoardsByGroup();
+    final fallbackBoards = [
+      for (var board = 1; board <= tournament.boardCount; board++)
+        if (!tournament.blockedBoards.contains(board)) board,
+    ];
+    final counters = <String, int>{};
+    final running = schedule.running.map((entry) => entry.match).toSet();
+
+    for (final entry in stageEntries) {
+      final key = entry.groupKey ?? '';
+      final configured = groupsByBoard[key]?.toList() ?? fallbackBoards;
+      final boards = [...configured]..sort();
+      if (boards.isEmpty) continue;
+      // Der Index wird für jeden Eintrag der festen Reihenfolge vergeben –
+      // auch für bereits gespielte Partien. Nur so bleibt die Board-Zuordnung
+      // nach einem Ergebnis stabil.
+      final index = counters[key] ?? 0;
+      counters[key] = index + 1;
+      final board = boards[index % boards.length];
+      if (!isPreviewableMatch(entry.match) ||
+          entry.match.isResolved ||
+          running.any((match) => identical(match, entry.match))) {
+        continue;
+      }
+      queue
+          .putIfAbsent(board, () => <BoardAssignment>[])
+          .add(BoardAssignment(entry, index ~/ boards.length, board));
+    }
+    return queue;
+  }
+
   List<BoardAssignment> upcomingForBoard(int board) {
+    final assignedQueue = _assignedQueueByBoard[board];
+    if (assignedQueue != null) {
+      return assignedQueue.take(4).toList();
+    }
     final assignments = schedule.planned
         .where(
           (assignment) =>
               assignment.entry.stageIndex == stage &&
               assignment.board == board &&
               assignment.entry.match.hasPlayers &&
-              !assignment.entry.match.isResolved,
+              !assignment.entry.match.isResolved &&
+              isPreviewableMatch(assignment.entry.match),
         )
         .toList();
     late final List<BoardAssignment> result;
@@ -62,7 +141,8 @@ class TournamentDirectorSnapshot {
               (assignment) =>
                   assignment.entry.stageIndex == stage &&
                   assignment.entry.groupKey == groupKey &&
-                  assignment.entry.match.hasPlayers,
+                  assignment.entry.match.hasPlayers &&
+                  isPreviewableMatch(assignment.entry.match),
             )
             .take(4)
             .map(
@@ -305,6 +385,7 @@ class TournamentDirectorSnapshot {
               assignment.entry.stageIndex == stage &&
               assignment.entry.match.hasPlayers &&
               !assignment.entry.match.isResolved &&
+              isPreviewableMatch(assignment.entry.match) &&
               !assignment.entry.players.any(busy.contains),
         )
         .toList();
@@ -370,7 +451,8 @@ class TournamentDirectorSnapshot {
         .where(
           (assignment) =>
               assignment.entry.stageIndex == stage &&
-              assignment.entry.match.hasPlayers,
+              assignment.entry.match.hasPlayers &&
+              isPreviewableMatch(assignment.entry.match),
         )
         .toList();
     final originalOrder = {

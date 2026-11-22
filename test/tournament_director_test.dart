@@ -12,6 +12,7 @@ import 'package:dart_tournament_manager/features/tournaments/application/order_o
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_timing.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
 import 'package:dart_tournament_manager/features/tournaments/presentation/widgets/run/recommended_matches_table.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
@@ -1447,5 +1448,44 @@ void main() {
     await tester.pumpAndSettle();
     expect(retried, isTrue);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('custom league Leitung hides comparison, timing and results', (
+    tester,
+  ) async {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: const ['H1'],
+      awayPlayers: const ['G1'],
+      singlesPerPlayer: 1,
+      doublesCount: 0,
+    );
+    final tournament = CreatedTournament.fromJson({
+      ...fixture(boards: 2).toJson(),
+      'leagueMatch': league.toJson(),
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              directorModeEnabled: true,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mannschaftsvergleich'), findsNothing);
+    expect(find.text('Uhr & Zeiteinstellungen'), findsNothing);
+    expect(find.text('Letzte Ergebnisse'), findsNothing);
   });
 }

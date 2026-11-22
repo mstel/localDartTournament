@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../application/team_game_display_launcher.dart';
 import '../data/team_game_signal_repository.dart';
 import '../domain/team_game_state.dart';
+import 'team_game_display_view.dart';
+import 'team_game_page.dart';
 
 /// Hauptmonitor während eines laufenden Team Games.
 ///
@@ -14,10 +17,13 @@ class TeamGameRunPage extends StatefulWidget {
     super.key,
     required this.initialState,
     TeamGameSignalRepository? repository,
-  }) : _repository = repository;
+    TeamGameDisplayLauncher? displayLauncher,
+  }) : _repository = repository,
+       _displayLauncher = displayLauncher;
 
   final TeamGameState initialState;
   final TeamGameSignalRepository? _repository;
+  final TeamGameDisplayLauncher? _displayLauncher;
 
   @override
   State<TeamGameRunPage> createState() => _TeamGameRunPageState();
@@ -25,6 +31,7 @@ class TeamGameRunPage extends StatefulWidget {
 
 class _TeamGameRunPageState extends State<TeamGameRunPage> {
   late final TeamGameSignalRepository _repository;
+  late final TeamGameDisplayLauncher _displayLauncher;
   late TeamGameState _state;
   bool _busy = false;
   bool _leaving = false;
@@ -33,6 +40,8 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
   void initState() {
     super.initState();
     _repository = widget._repository ?? TeamGameSignalRepository();
+    _displayLauncher =
+        widget._displayLauncher ?? ProcessTeamGameDisplayLauncher();
     _state = widget.initialState;
   }
 
@@ -95,6 +104,58 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
       ),
     );
     if (winner != null) await _persist(_state.finished(winner));
+  }
+
+  /// Der Zweitmonitor bleibt auch während eines laufenden Spiels erreichbar.
+  /// Er liest den aktuellen Zustand aus der Signaturdatei und zeigt daher
+  /// unmittelbar den laufenden Spieler an.
+  Future<void> _openDisplay() async {
+    try {
+      await _repository.save(_state);
+    } catch (_) {
+      // Der Zweitmonitor kann auch mit dem zuletzt gespeicherten Zustand
+      // geöffnet werden; eine fehlgeschlagene Speicherung blockiert nicht.
+    }
+    final opened = await _displayLauncher.open();
+    if (!mounted) return;
+    if (opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Zweitmonitoransicht geöffnet.')),
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: TeamGameDisplayView(
+          state: _state,
+          onClose: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
+    );
+  }
+
+  /// Öffnet die Namenseinstellungen, ohne den laufenden Spielstand
+  /// zurückzusetzen. Nach dem Speichern wird der geänderte Zustand wieder
+  /// geladen, damit die Anzeige sofort aktualisiert wird.
+  Future<void> _editNames() async {
+    if (_busy) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => TeamGamePage(
+          repository: _repository,
+          displayLauncher: _displayLauncher,
+          initialState: _state,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    try {
+      final saved = await _repository.load();
+      if (saved != null && mounted) setState(() => _state = saved);
+    } catch (_) {
+      // Bei einem Lesefehler bleibt der letzte lokale Zustand bestehen.
+    }
   }
 
   Future<void> _confirmLeave() async {
@@ -202,6 +263,20 @@ class _TeamGameRunPageState extends State<TeamGameRunPage> {
                               icon: Icons.exit_to_app_outlined,
                               filled: false,
                               onPressed: _confirmLeave,
+                            ),
+                            _buildButton(
+                              key: const ValueKey('team-game-run-open-display'),
+                              label: 'Zweitmonitor ansicht öffnen',
+                              icon: Icons.tv_outlined,
+                              filled: false,
+                              onPressed: _busy ? null : _openDisplay,
+                            ),
+                            _buildButton(
+                              key: const ValueKey('team-game-run-edit-names'),
+                              label: 'Namen bearbeiten',
+                              icon: Icons.edit_outlined,
+                              filled: false,
+                              onPressed: _busy ? null : _editNames,
                             ),
                           ],
                         ),

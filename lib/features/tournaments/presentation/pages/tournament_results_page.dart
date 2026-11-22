@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import '../../domain/tournament_models.dart';
 import '../../data/app_database.dart';
 import '../../data/tournament_storage.dart';
+import '../../data/tournament_trash.dart';
 import '../../../league/domain/league_match.dart';
 import '../../../league/presentation/league_overview.dart';
 import '../../../rankings/application/tournament_match_elo_service.dart';
@@ -63,10 +64,14 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
     try {
       await TournamentRunController(
         storage: widget.storage ?? TournamentStorage(),
-      ).saveProgress(
+      ).saveProgressWithIntent(
         tournament: tournament,
         activeStageIndex: tournament.activeStageIndex,
         completedStageIndexes: tournament.completedStageIndexes,
+        allowUnfinishingCompleted: finishedAt == null,
+        trashReason: finishedAt == null
+            ? TournamentTrashReason.replaced
+            : null,
       );
       if (mounted) setState(() {});
     } catch (_) {
@@ -409,11 +414,13 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
       ..reopenedForCorrections = true;
 
     try {
-      await controller.saveProgress(
+      await controller.saveProgressWithIntent(
         tournament: tournament,
         activeStageIndex: lastStageIndex,
         completedStageIndexes: {...previousCompletedStages}
           ..remove(lastStageIndex),
+        allowUnfinishingCompleted: true,
+        trashReason: TournamentTrashReason.reopened,
       );
     } catch (error) {
       tournament

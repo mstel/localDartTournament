@@ -110,6 +110,8 @@ void main() {
         'team-game-run-end',
         'team-game-run-back',
         'team-game-run-leave',
+        'team-game-run-open-display',
+        'team-game-run-edit-names',
       ]) {
         final finder = find.byKey(ValueKey(key));
         await tester.ensureVisible(finder);

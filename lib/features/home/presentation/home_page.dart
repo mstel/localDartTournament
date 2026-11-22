@@ -573,7 +573,8 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Turnier löschen?'),
         content: Text(
-          '„${tournament.name}“ wird dauerhaft gelöscht. Möchtest du fortfahren?',
+          '„${tournament.name}“ wird in den Papierkorb verschoben und kann '
+          'später wiederhergestellt werden. Möchtest du fortfahren?',
         ),
         actions: [
           TextButton(
@@ -607,7 +608,9 @@ class _TournamentHomePageState extends State<TournamentHomePage> {
     }
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('${tournament.name} gelöscht.')));
+    ).showSnackBar(
+      SnackBar(content: Text('${tournament.name} in den Papierkorb verschoben.')),
+    );
     _reloadTournaments();
   }
 

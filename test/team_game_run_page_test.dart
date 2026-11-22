@@ -1,3 +1,4 @@
+import 'package:dart_tournament_manager/features/team_game/application/team_game_display_launcher.dart';
 import 'package:dart_tournament_manager/features/team_game/data/team_game_signal_repository.dart';
 import 'package:dart_tournament_manager/features/team_game/domain/team_game_state.dart';
 import 'package:dart_tournament_manager/features/team_game/presentation/team_game_run_page.dart';
@@ -14,6 +15,22 @@ class _MemorySignalRepository extends TeamGameSignalRepository {
   Future<void> save(TeamGameState value) async => state = value;
 }
 
+class _FakeDisplayLauncher implements TeamGameDisplayLauncher {
+  int openCount = 0;
+
+  @override
+  bool get supportsSeparateWindow => true;
+
+  @override
+  Future<bool> open() async {
+    openCount++;
+    return true;
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
 void main() {
   TeamGameState runningState() => TeamGameState.create(
     homeTeam: 'Heim',
@@ -22,7 +39,7 @@ void main() {
     awayPlayers: const ['Mira Kern'],
   ).started();
 
-  testWidgets('run page exposes exactly the four main controls', (tester) async {
+  testWidgets('run page exposes all six main controls', (tester) async {
     final repository = _MemorySignalRepository();
     repository.state = runningState();
 
@@ -43,7 +60,15 @@ void main() {
     expect(find.byKey(const ValueKey('team-game-run-end')), findsOneWidget);
     expect(find.byKey(const ValueKey('team-game-run-back')), findsOneWidget);
     expect(find.byKey(const ValueKey('team-game-run-leave')), findsOneWidget);
-    expect(find.text('Zweitmonitor ansicht öffnen'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('team-game-run-open-display')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('team-game-run-edit-names')),
+      findsOneWidget,
+    );
+    expect(find.text('Zweitmonitor ansicht öffnen'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
   });
 
@@ -168,5 +193,73 @@ void main() {
     expect(repository.state!.winner, isNull);
     expect(repository.state!.currentIndex, 0);
     expect(find.byType(TeamGameRunPage), findsNothing);
+  });
+
+  testWidgets('second monitor stays reachable while the game is running', (
+    tester,
+  ) async {
+    final repository = _MemorySignalRepository();
+    repository.state = runningState();
+    final launcher = _FakeDisplayLauncher();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TeamGameRunPage(
+          initialState: repository.state!,
+          repository: repository,
+          displayLauncher: launcher,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('team-game-run-open-display')));
+    await tester.pumpAndSettle();
+
+    expect(launcher.openCount, 1);
+    expect(repository.state!.status, TeamGameStatus.running);
+    expect(find.text('Zweitmonitoransicht geöffnet.'), findsOneWidget);
+  });
+
+  testWidgets('editing names keeps the running turn and winner', (tester) async {
+    final repository = _MemorySignalRepository();
+    repository.state = runningState().next().finished(TeamGameWinner.away);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TeamGameRunPage(
+          initialState: repository.state!,
+          repository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('team-game-run-edit-names')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('team-game-home-name')), findsOneWidget);
+    expect(find.text('Heim'), findsWidgets);
+    await tester.enterText(
+      find.byKey(const ValueKey('team-game-home-name')),
+      'Neues Heim',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    final saveButton = find.byKey(const ValueKey('team-game-save-setup'));
+    await tester.scrollUntilVisible(
+      saveButton,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TeamGameRunPage), findsOneWidget);
+    expect(repository.state!.home.teamName, 'Neues Heim');
+    expect(repository.state!.status, TeamGameStatus.finished);
+    expect(repository.state!.winner, TeamGameWinner.away);
+    expect(repository.state!.currentIndex, 1);
   });
 }

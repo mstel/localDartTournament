@@ -90,6 +90,7 @@ import 'features/tournaments/presentation/widgets/run/tournament_simulation_cont
 import 'features/tournaments/domain/engines/group_board_assignment.dart';
 import 'features/tournaments/data/app_database.dart';
 import 'features/tournaments/data/tournament_storage.dart';
+import 'features/tournaments/data/tournament_trash.dart';
 import 'features/tournaments/domain/engines/tournament_engine.dart';
 import 'features/tournaments/domain/engines/group_standings_engine.dart';
 import 'features/tournaments/domain/engines/group_bye_seeding.dart';

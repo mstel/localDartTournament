@@ -173,8 +173,8 @@ class LeagueMatch {
   final int singlesPerPlayer;
   final int doublesCount;
   final int starterCount;
-  final int maxReservePlayers;
-  final int substitutionLimit;
+  int maxReservePlayers;
+  int substitutionLimit;
   final bool allowReentry;
   final List<LeagueSubstitution> substitutions;
 
@@ -242,6 +242,47 @@ class LeagueMatch {
       0,
       availableReserveCount,
     );
+  }
+
+  /// Ergänzt weitere Ersatzspieler nachträglich. Der Index-Bereich der
+  /// Stammspieler bleibt dadurch unverändert; alle Spielpläne bleiben gültig.
+  void addReservePlayers({
+    required int teamSide,
+    required List<String> names,
+  }) {
+    _validateTeamSide(teamSide);
+    final clean = names.map((name) => name.trim()).where((name) => name.isNotEmpty).toList();
+    if (clean.isEmpty) {
+      throw const FormatException('Bitte einen Namen eingeben.');
+    }
+    final roster = teamSide == 0 ? homePlayers : awayPlayers;
+    roster.addAll(clean);
+    maxReservePlayers += clean.length;
+    validate(validateSinglesDistribution: false);
+  }
+
+  /// Erhöht das Wechselkontingent um einen Wechsel und trägt den Wechsel
+  /// unmittelbar ein. Der Zähler für ursprünglich verfügbare Wechsel steigt
+  /// damit genauso wie der Zähler für bereits genutzte Wechsel.
+  void addSubstitution({
+    required int teamSide,
+    required int outPlayerIndex,
+    required int inPlayerIndex,
+    DateTime? occurredAt,
+  }) {
+    _validateTeamSide(teamSide);
+    substitutionLimit += 1;
+    try {
+      substitute(
+        teamSide: teamSide,
+        outPlayerIndex: outPlayerIndex,
+        inPlayerIndex: inPlayerIndex,
+        occurredAt: occurredAt,
+      );
+    } catch (_) {
+      substitutionLimit -= 1;
+      rethrow;
+    }
   }
 
   void substitute({
