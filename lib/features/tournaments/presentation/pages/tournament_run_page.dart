@@ -427,6 +427,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         leagueMatch: league,
         players: widget.tournament.players,
         playerTileBuilder: (player) => _playerManagementTile(player),
+        onAddReservePlayer: _savingLeagueSettings
+            ? null
+            : (teamSide) => _addLeagueReservePlayer(teamSide),
       ),
     ];
   }
@@ -460,44 +463,25 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
               runSpacing: 8,
               children: [
                 OutlinedButton.icon(
+                  key: ValueKey(
+                    teamSide == 0
+                        ? 'league-substitutions-home'
+                        : 'league-substitutions-away',
+                  ),
                   onPressed: _savingLeagueSettings
                       ? null
                       : () => _substituteLeagueTeam(teamSide),
                   icon: const Icon(Icons.swap_horiz),
-                  label: Text(
-                    teamSide == 0
-                        ? 'Auswechselungen Heimteam'
-                        : 'Auswechselungen Gastteam',
-                  ),
+                  label: const Text('Auswechselungen'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _savingLeagueSettings
                       ? null
                       : () => _assignLeagueDoublePartners(teamSide),
                   icon: const Icon(Icons.group_add_outlined),
-                  label: Text(
-                    teamSide == 0
-                        ? 'Doppelpartner zuweisen Heimteam'
-                        : 'Doppelpartner zuweisen Gastteam',
-                  ),
+                  label: const Text('Doppelpartner zuweisen'),
                 ),
                 if (league.variant == LeagueMatchVariant.adjusted) ...[
-                  OutlinedButton.icon(
-                    key: ValueKey(
-                      teamSide == 0
-                          ? 'league-add-reserve-home'
-                          : 'league-add-reserve-away',
-                    ),
-                    onPressed: _savingLeagueSettings
-                        ? null
-                        : () => _addLeagueReservePlayer(teamSide),
-                    icon: const Icon(Icons.person_add_alt_1_outlined),
-                    label: Text(
-                      teamSide == 0
-                          ? 'Ersatzspieler Heimteam hinzufügen'
-                          : 'Ersatzspieler Gastteam hinzufügen',
-                    ),
-                  ),
                   OutlinedButton.icon(
                     key: ValueKey(
                       teamSide == 0
@@ -508,11 +492,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                         ? null
                         : () => _addLeagueSubstitution(teamSide),
                     icon: const Icon(Icons.swap_vert_outlined),
-                    label: Text(
-                      teamSide == 0
-                          ? 'Auswechslung Heimteam hinzufügen'
-                          : 'Auswechslung Gastteam hinzufügen',
-                    ),
+                    label: const Text('Auswechselung hinzufügen'),
                   ),
                 ],
               ],
@@ -1207,6 +1187,131 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (mounted) setState(() {});
       rethrow;
     }
+  }
+
+  /// Letzte manuell eingetragene Partie der aktiven Phase.
+  ///
+  /// Kampflos entschiedene Partien werden übersprungen: ihr Ergebnis stammt
+  /// aus der Ausstiegsregel und kann nicht über die Ergebniseingabe geändert
+  /// werden.
+  GroupMatch? _lastUndoableMatch() {
+    if (_simulation != null ||
+        _activeStageIndex >= widget.tournament.runStages.length) {
+      return null;
+    }
+    final stage = widget.tournament.runStages[_activeStageIndex];
+    final candidates =
+        _matchesForStage(stage)
+            .where(
+              (match) =>
+                  match.hasResult &&
+                  match.hasPlayers &&
+                  match.withdrawalSignature == null,
+            )
+            .toList();
+    if (candidates.isEmpty) return null;
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+    candidates.sort((a, b) {
+      final timeComparison = (b.finishedAt ?? b.startedAt ?? epoch).compareTo(
+        a.finishedAt ?? a.startedAt ?? epoch,
+      );
+      if (timeComparison != 0) return timeComparison;
+      return b.round.compareTo(a.round);
+    });
+    return candidates.first;
+  }
+
+  bool get _canUndoLastMatch => _lastUndoableMatch() != null;
+
+  Future<void> _undoLastMatch() async {
+    if (_simulation != null) return;
+    final match = _lastUndoableMatch();
+    if (match == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Letzte Partie rückgängig?'),
+        content: const Text(
+          'Das Ergebnis der zuletzt eingetragenen Partie wird entfernt. '
+          'Board, Bestleistungen und Ergebnis können danach erneut erfasst '
+          'und gespeichert werden.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Rückgängig'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final preUndo = CreatedTournament.fromJson(widget.tournament.toJson());
+    final stage = widget.tournament.runStages[_activeStageIndex];
+    setState(() {
+      match
+        ..homeLegs = null
+        ..awayLegs = null
+        ..homeSets = null
+        ..awaySets = null
+        ..isAnnulled = false
+        ..scratchedPlayer = null
+        ..kratzerBonusLives = const []
+        ..finishedAt = null
+        ..startedAt = null
+        ..startedPlayers = null
+        ..boardNumber = null
+        ..bestPerformances = const []
+        ..achievementNotifications = const [];
+      if (match.isDecider && stage is GroupTournamentRunStage) {
+        for (final group in stage.groups) {
+          group.matches.removeWhere((item) => identical(item, match));
+        }
+      }
+      _completedStageIndexes.remove(_activeStageIndex);
+      widget.tournament.completedStageIndexes.remove(_activeStageIndex);
+      GroupEndReviewService.clearAcknowledgementsFrom(
+        widget.tournament,
+        _activeStageIndex,
+      );
+      widget.tournament.addActivity(
+        'result_undone',
+        'Letzte Partie rückgängig: ${match.participantLabel}',
+      );
+      widget.tournament.updatedAt = DateTime.now();
+    });
+    _advanceKnockoutWinners(startStageIndex: _activeStageIndex);
+    _ensureGroupDeciders(startStageIndex: _activeStageIndex);
+    try {
+      await _tournamentStorage.snapshotTournament(
+        preUndo,
+        reason: TournamentTrashReason.reset,
+        note: 'Vor dem Rückgängigmachen der letzten Partie.',
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sicherung vor dem Rückgängigmachen fehlgeschlagen: $error'),
+          ),
+        );
+      }
+      return;
+    }
+    if (mounted) setState(() {});
+    await _saveTournamentProgress(
+      checkAchievementInputs: true,
+      allowUnfinishingCompleted: true,
+      trashReason: TournamentTrashReason.reset,
+    );
   }
 
   Future<void> _changeDirectorBoardCount(int boardCount) async {
@@ -2565,6 +2670,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         }
       }
       league.validate();
+      widget.tournament.addActivity(
+        'doubles_pairings_confirmed',
+        '${teamSide == 0 ? league.homeTeam : league.awayTeam} hat die Doppelpartner festgelegt.',
+      );
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
         ..installOn(widget.tournament);
       setState(() {});
@@ -2630,29 +2739,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return;
     }
     final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
-    final roster = teamSide == 0 ? league.homePlayers : league.awayPlayers;
-    final choice = await showDialog<(int, int)>(
-      context: context,
-      builder: (context) => LeagueSubstitutionDialog(
-        league: league,
-        teamSide: teamSide,
-        teamName: teamName,
-      ),
-    );
-    if (choice == null || !mounted || _savingLeagueSettings) return;
     _leagueRuntime?.writeTo(widget.tournament);
     setState(() => _savingLeagueSettings = true);
     try {
-      league.addSubstitution(
-        teamSide: teamSide,
-        outPlayerIndex: choice.$1,
-        inPlayerIndex: choice.$2,
-      );
+      league.addSubstitutionBudget(teamSide: teamSide);
       widget.tournament.addActivity(
-        'substitution',
-        '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
-            'zusätzlich ausgewechselt. '
-            'Übrige Auswechselungen: ${league.substitutionsRemaining(teamSide)}',
+        'substitution_budget',
+        '$teamName hat eine zusätzliche Auswechselung erhalten. '
+            'Verfügbar: ${league.substitutionsRemaining(teamSide)}',
       );
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
         ..installOn(widget.tournament);
@@ -2661,7 +2755,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Zusätzliche Auswechslung fehlgeschlagen: $error')),
+          SnackBar(
+            content: Text('Zusätzliche Auswechselung fehlgeschlagen: $error'),
+          ),
         );
       }
     } finally {
@@ -7012,6 +7108,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               : null,
                           canResetCurrentStage:
                               _simulation == null && _canResetCurrentStage,
+                          onUndoLastMatch: _simulation == null
+                              ? _undoLastMatch
+                              : null,
+                          canUndoLastMatch:
+                              _simulation == null && _canUndoLastMatch,
                           canCompleteStage: canCompleteStage,
                           isLastStage: isLastStage,
                           simulationControls:
@@ -8040,6 +8141,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     ),
                               standingsFor: _standingsFor,
                               onEditResult: _editResult,
+                              onUndoLastMatch: _simulation == null
+                                  ? _undoLastMatch
+                                  : null,
                               onEditBracketResult: (match, onUpdated) =>
                                   _editResult(match, onLocalUpdate: onUpdated),
                               canEditResults: canEditResults,

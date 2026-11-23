@@ -42,6 +42,10 @@ class PlayerPerformanceSection extends StatelessWidget {
                   ? '–'
                   : '${overall.checkoutRate!.toStringAsFixed(1)} %',
             ),
+            _PerformanceStatCard(
+              label: 'Siegesrate',
+              value: '${overall.winRate.toStringAsFixed(1)} %',
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -71,6 +75,10 @@ class PlayerPerformanceSection extends StatelessWidget {
               value: currentForm.checkoutRate == null
                   ? '–'
                   : '${currentForm.checkoutRate!.toStringAsFixed(1)} %',
+            ),
+            _PerformanceStatCard(
+              label: 'Siegesrate',
+              value: '${currentForm.winRate.toStringAsFixed(1)} %',
             ),
           ],
         ),

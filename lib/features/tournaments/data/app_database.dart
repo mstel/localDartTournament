@@ -19,7 +19,7 @@ import '../application/result_entry_performance_trace.dart';
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 16;
+  static const schemaVersion = 17;
 
   final Directory? _baseDirectory;
 
@@ -282,7 +282,7 @@ class LocalAppDatabase {
     final database = await _openDatabase();
     try {
       final rows = database.select(
-        '''SELECT player_profile_id, year, month, weighted_legs,
+        '''SELECT player_profile_id, year, month, weighted_legs, matches, wins, losses,
                   scoring, average, checkout_rate
            FROM player_monthly_performance
            WHERE player_profile_id = ?${year == null ? '' : ' AND year = ?'}
@@ -310,7 +310,7 @@ class LocalAppDatabase {
       for (var start = 0; start < ids.length; start += 900) {
         final batch = ids.skip(start).take(900).toList();
         final rows = database.select(
-          '''SELECT player_profile_id, year, month, weighted_legs,
+          '''SELECT player_profile_id, year, month, weighted_legs, matches, wins, losses,
                     scoring, average, checkout_rate
              FROM player_monthly_performance
              WHERE player_profile_id IN (${List.filled(batch.length, '?').join(',')})
@@ -338,6 +338,9 @@ class LocalAppDatabase {
     if (performance.month < 1 ||
         performance.month > 12 ||
         performance.weightedLegs < 0 ||
+        performance.matches < 0 ||
+        performance.wins < 0 ||
+        performance.losses < 0 ||
         performance.scoring != null &&
             (!performance.scoring!.isFinite || performance.scoring! < 0) ||
         performance.average != null &&
@@ -352,11 +355,14 @@ class LocalAppDatabase {
     try {
       database.execute(
         '''INSERT INTO player_monthly_performance(
-             player_profile_id, year, month, weighted_legs,
+             player_profile_id, year, month, weighted_legs, matches, wins, losses,
              scoring, average, checkout_rate
-           ) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(player_profile_id, year, month) DO UPDATE SET
              weighted_legs = excluded.weighted_legs,
+             matches = excluded.matches,
+             wins = excluded.wins,
+             losses = excluded.losses,
              scoring = excluded.scoring,
              average = excluded.average,
              checkout_rate = excluded.checkout_rate''',
@@ -365,6 +371,9 @@ class LocalAppDatabase {
           performance.year,
           performance.month,
           performance.weightedLegs,
+          performance.matches,
+          performance.wins,
+          performance.losses,
           performance.scoring,
           performance.average,
           performance.checkoutRate,
@@ -863,16 +872,62 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion == 15) {
+      if (currentVersion == 16) {
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN matches INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN wins INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN losses INTEGER NOT NULL DEFAULT 0',
+        );
+      } else if (currentVersion == 15) {
         _createActiveTournamentCopiesTable(database);
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN matches INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN wins INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN losses INTEGER NOT NULL DEFAULT 0',
+        );
       } else if (currentVersion == 14) {
         _createRankingAchievementProgressTable(database);
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN matches INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN wins INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN losses INTEGER NOT NULL DEFAULT 0',
+        );
       } else if (currentVersion == 13) {
         _createRankingAchievementProgressTable(database);
         _createMonthlyPlayerStatisticsTable(database);
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN matches INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN wins INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN losses INTEGER NOT NULL DEFAULT 0',
+        );
       } else if (currentVersion == 12) {
         _createRankingAchievementProgressTable(database);
         _createMonthlyPlayerStatisticsTable(database);
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN matches INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN wins INTEGER NOT NULL DEFAULT 0',
+        );
+        database.execute(
+          'ALTER TABLE player_monthly_performance ADD COLUMN losses INTEGER NOT NULL DEFAULT 0',
+        );
       } else if (currentVersion == 11) {
         _createPlayerMonthlyPerformanceTable(database);
         _createRankingAchievementProgressTable(database);
@@ -1025,6 +1080,9 @@ class LocalAppDatabase {
         year INTEGER NOT NULL,
         month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
         weighted_legs INTEGER NOT NULL CHECK (weighted_legs >= 0),
+        matches INTEGER NOT NULL DEFAULT 0 CHECK (matches >= 0),
+        wins INTEGER NOT NULL DEFAULT 0 CHECK (wins >= 0),
+        losses INTEGER NOT NULL DEFAULT 0 CHECK (losses >= 0),
         scoring REAL,
         average REAL,
         checkout_rate REAL CHECK (

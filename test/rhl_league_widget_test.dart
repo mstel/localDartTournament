@@ -351,12 +351,15 @@ void main() {
         home: LeagueMatchPage(tournament: tournament, storage: storage),
       ),
     );
+    final substitutions = find.byKey(
+      const ValueKey('league-substitutions-home'),
+    );
     await tester.scrollUntilVisible(
-      find.text('Auswechselungen Heimteam'),
+      substitutions,
       250,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Auswechselungen Heimteam'));
+    await tester.tap(substitutions);
     await tester.pumpAndSettle();
 
     final dialog = find.byType(AlertDialog).last;
@@ -414,11 +417,16 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final storage = _MemoryStorage();
-    final league = LeagueMatch.rhl(
+    final league = LeagueMatch.adjusted(
       homeTeam: 'Heim',
       awayTeam: 'Gast',
       homePlayers: ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'],
       awayPlayers: ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'],
+      starterCount: 4,
+      maxReservePlayers: 2,
+      singlesPerPlayer: 1,
+      doublesCount: 1,
+      substitutionLimit: 1,
     );
     final tournament = CreatedTournament(
       name: 'Liga',
@@ -464,13 +472,31 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Teamoptionen'));
     await tester.pumpAndSettle();
+    final addBudget = find.byKey(const ValueKey('league-add-substitution-home'));
     await tester.scrollUntilVisible(
-      find.text('Auswechselungen Heimteam'),
+      addBudget,
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Auswechselungen Heimteam'));
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.tap(addBudget);
+    await tester.pumpAndSettle();
+
+    expect(storage.saved!.leagueMatch!.substitutionLimit, 2);
+    expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 2);
+    expect(storage.saved!.activityLog.last.type, 'substitution_budget');
+    expect(find.text('2 Auswechselungen verfügbar'), findsNWidgets(2));
+
+    final substitutions = find.byKey(
+      const ValueKey('league-substitutions-home'),
+    );
+    await tester.scrollUntilVisible(
+      substitutions,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(substitutions);
     await tester.pumpAndSettle();
 
     final dialog = find.byType(AlertDialog).last;

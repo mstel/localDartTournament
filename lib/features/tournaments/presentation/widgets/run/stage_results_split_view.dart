@@ -25,6 +25,7 @@ class StageResultsSplitView extends StatefulWidget {
     required this.stage,
     required this.standingsFor,
     required this.onEditResult,
+    this.onUndoLastMatch,
     required this.canEditResults,
     this.tournament,
     this.bracketBuilder,
@@ -48,6 +49,7 @@ class StageResultsSplitView extends StatefulWidget {
   )
   standingsFor;
   final FutureOr<void> Function(GroupMatch match) onEditResult;
+  final VoidCallback? onUndoLastMatch;
   final bool canEditResults;
   final CreatedTournament? tournament;
   final KnockoutBracketBuilder? bracketBuilder;
@@ -497,11 +499,24 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Letzte Ergebnisse',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Letzte Ergebnisse',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            if (widget.onUndoLastMatch != null && recent.isNotEmpty)
+              TextButton.icon(
+                key: const ValueKey('recent-results-undo-last-match'),
+                onPressed: widget.onUndoLastMatch,
+                icon: const Icon(Icons.undo, size: 18),
+                label: const Text('Letzte Partie rückgängig'),
+              ),
+          ],
         ),
         const SizedBox(height: 8),
         if (recent.isEmpty)

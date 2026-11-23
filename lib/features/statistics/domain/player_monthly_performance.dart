@@ -7,6 +7,8 @@ class PlayerMonthlyPerformance {
     required this.month,
     required this.weightedLegs,
     this.matches = 0,
+    this.wins = 0,
+    this.losses = 0,
     this.scoring,
     this.average,
     this.checkoutRate,
@@ -18,6 +20,9 @@ class PlayerMonthlyPerformance {
         year: row['year']! as int,
         month: row['month']! as int,
         weightedLegs: row['weighted_legs']! as int,
+        matches: (row['matches'] as num?)?.toInt() ?? 0,
+        wins: (row['wins'] as num?)?.toInt() ?? 0,
+        losses: (row['losses'] as num?)?.toInt() ?? 0,
         scoring: (row['scoring'] as num?)?.toDouble(),
         average: (row['average'] as num?)?.toDouble(),
         checkoutRate: (row['checkout_rate'] as num?)?.toDouble(),
@@ -28,9 +33,13 @@ class PlayerMonthlyPerformance {
   final int month;
   final int weightedLegs;
   final int matches;
+  final int wins;
+  final int losses;
   final double? scoring;
   final double? average;
   final double? checkoutRate;
+
+  double get winRate => matches == 0 ? 0 : wins * 100 / matches;
 
   String get periodKey => '$year-${month.toString().padLeft(2, '0')}';
 }
@@ -72,6 +81,8 @@ List<PlayerMonthlyPerformance> aggregateMonthlyPlayerPerformances(
 ) {
   final byPeriod = <(int, int), _MonthlyPerformanceTotals>{};
   final matches = <(int, int), int>{};
+  final wins = <(int, int), int>{};
+  final losses = <(int, int), int>{};
   final firstPlayer = <(int, int), String>{};
   for (final entry in entries) {
     final period = (entry.year, entry.month);
@@ -80,6 +91,16 @@ List<PlayerMonthlyPerformance> aggregateMonthlyPlayerPerformances(
       period,
       (count) => count + entry.matches,
       ifAbsent: () => entry.matches,
+    );
+    wins.update(
+      period,
+      (count) => count + entry.wins,
+      ifAbsent: () => entry.wins,
+    );
+    losses.update(
+      period,
+      (count) => count + entry.losses,
+      ifAbsent: () => entry.losses,
     );
     firstPlayer.putIfAbsent(period, () => entry.playerId);
   }
@@ -95,6 +116,8 @@ List<PlayerMonthlyPerformance> aggregateMonthlyPlayerPerformances(
         year: period.$1,
         month: period.$2,
         matches: matches[period]!,
+        wins: wins[period]!,
+        losses: losses[period]!,
         weightedLegs: byPeriod[period]!.weightedLegs,
         scoring: byPeriod[period]!.scoring.value,
         average: byPeriod[period]!.average.value,
@@ -106,18 +129,30 @@ List<PlayerMonthlyPerformance> aggregateMonthlyPlayerPerformances(
 class CurrentFormPerformance {
   const CurrentFormPerformance({
     required this.weightedLegs,
+    required this.matches,
+    required this.wins,
+    required this.losses,
     required this.scoring,
     required this.average,
     required this.checkoutRate,
   });
 
   final int weightedLegs;
+  final int matches;
+  final int wins;
+  final int losses;
   final double? scoring;
   final double? average;
   final double? checkoutRate;
 
+  double get winRate => matches == 0 ? 0 : wins * 100 / matches;
+
   Map<String, dynamic> toJson() => {
     'weightedLegs': weightedLegs,
+    'matches': matches,
+    'wins': wins,
+    'losses': losses,
+    'winRate': winRate,
     'scoring': scoring,
     'average': average,
     'checkoutQuote': checkoutRate,
@@ -132,6 +167,9 @@ CurrentFormPerformance calculateCurrentFormPerformance(
   if (targetLegs <= 0) {
     return const CurrentFormPerformance(
       weightedLegs: 0,
+      matches: 0,
+      wins: 0,
+      losses: 0,
       scoring: null,
       average: null,
       checkoutRate: null,
@@ -159,6 +197,9 @@ CurrentFormPerformance calculateCurrentFormPerformance(
     });
   var remainingLegs = targetLegs;
   var weightedLegs = 0;
+  var matches = 0;
+  var wins = 0;
+  var losses = 0;
   final scoring = _WeightedMetric();
   final average = _WeightedMetric();
   final checkoutRate = _WeightedMetric();
@@ -168,6 +209,9 @@ CurrentFormPerformance calculateCurrentFormPerformance(
     final legsTaken = remainingLegs.clamp(0, totals.weightedLegs).toInt();
     final fraction = legsTaken / totals.weightedLegs;
     weightedLegs += legsTaken;
+    matches += (totals.matches * fraction).round();
+    wins += (totals.wins * fraction).round();
+    losses += (totals.losses * fraction).round();
     remainingLegs -= legsTaken;
     scoring.addTotals(totals.scoring, fraction);
     average.addTotals(totals.average, fraction);
@@ -175,6 +219,9 @@ CurrentFormPerformance calculateCurrentFormPerformance(
   }
   return CurrentFormPerformance(
     weightedLegs: weightedLegs,
+    matches: matches,
+    wins: wins,
+    losses: losses,
     scoring: scoring.value,
     average: average.value,
     checkoutRate: checkoutRate.value,
@@ -193,6 +240,9 @@ CurrentFormPerformance summarizeMonthlyPerformance(
   }
   return CurrentFormPerformance(
     weightedLegs: totals.weightedLegs,
+    matches: totals.matches,
+    wins: totals.wins,
+    losses: totals.losses,
     scoring: totals.scoring.value,
     average: totals.average.value,
     checkoutRate: totals.checkoutRate.value,
@@ -201,12 +251,18 @@ CurrentFormPerformance summarizeMonthlyPerformance(
 
 class _MonthlyPerformanceTotals {
   int weightedLegs = 0;
+  int matches = 0;
+  int wins = 0;
+  int losses = 0;
   final _WeightedMetric scoring = _WeightedMetric();
   final _WeightedMetric average = _WeightedMetric();
   final _WeightedMetric checkoutRate = _WeightedMetric();
 
   void add(PlayerMonthlyPerformance entry) {
     weightedLegs += entry.weightedLegs;
+    matches += entry.matches;
+    wins += entry.wins;
+    losses += entry.losses;
     scoring.addMetric(entry.scoring, entry.weightedLegs.toDouble());
     average.addMetric(entry.average, entry.weightedLegs.toDouble());
     checkoutRate.addMetric(entry.checkoutRate, entry.weightedLegs.toDouble());

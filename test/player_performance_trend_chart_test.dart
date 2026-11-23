@@ -19,6 +19,8 @@ void main() {
                   year: 2026,
                   month: 2,
                   matches: 4,
+                  wins: 3,
+                  losses: 1,
                   weightedLegs: 12,
                   scoring: 50,
                   average: 80,
@@ -29,6 +31,8 @@ void main() {
                   year: 2026,
                   month: 4,
                   matches: 7,
+                  wins: 5,
+                  losses: 2,
                   weightedLegs: 20,
                   scoring: 60,
                   average: 90,
@@ -45,6 +49,7 @@ void main() {
     expect(find.text('Scoring · 2026'), findsOneWidget);
     expect(find.text('Average · 2026'), findsOneWidget);
     expect(find.text('Checkout Quote · 2026'), findsOneWidget);
+    expect(find.text('Siegesrate · 2026'), findsOneWidget);
     final chart = find.byWidgetPredicate(
       (widget) => widget is SizedBox && widget.height == 180,
     );
@@ -60,7 +65,13 @@ void main() {
     expect(find.text('Scoring: 60.0'), findsNothing);
     expect(
       tester.widget<Tooltip>(find.byType(Tooltip).first).message,
-      allOf(contains('April 2026'), contains('Partien: 7')),
+      allOf(
+        contains('April 2026'),
+        contains('Partien: 7'),
+        contains('Gewonnen: 5'),
+        contains('Verloren: 2'),
+        contains('Siegesrate: 71.4 %'),
+      ),
     );
     expect(tester.takeException(), isNull);
 

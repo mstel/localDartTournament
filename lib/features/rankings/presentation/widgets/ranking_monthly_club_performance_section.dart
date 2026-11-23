@@ -38,6 +38,8 @@ class RankingMonthlyClubPerformanceSection extends StatelessWidget {
             month: item.month,
             weightedLegs: item.weightedLegs,
             matches: item.matches,
+            wins: item.wins,
+            losses: item.losses,
             scoring: item.scoring,
             average: item.average,
             checkoutRate: item.checkoutRate,

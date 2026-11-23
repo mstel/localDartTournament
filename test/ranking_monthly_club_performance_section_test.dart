@@ -1,4 +1,5 @@
 import 'package:dart_tournament_manager/features/rankings/application/ranking_year_review_service.dart';
+import 'package:dart_tournament_manager/features/statistics/presentation/widgets/player_performance_trend_chart.dart';
 import 'package:dart_tournament_manager/features/rankings/presentation/widgets/ranking_monthly_club_performance_section.dart';
 import 'package:dart_tournament_manager/shared/widgets/adaptive_content.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,9 @@ void main() {
         year: 2026,
         month: 1,
         weightedLegs: 40,
+        matches: 10,
+        wins: 7,
+        losses: 3,
         scoring: 49,
         average: 87.1,
         checkoutRate: 43.4,
@@ -21,6 +25,9 @@ void main() {
         year: 2026,
         month: 2,
         weightedLegs: 100,
+        matches: 20,
+        wins: 12,
+        losses: 8,
         scoring: 60,
         average: 95,
         checkoutRate: 50,
@@ -56,7 +63,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Gesamt-Performance pro Monat'), findsOneWidget);
-      expect(find.textContaining('2026'), findsNWidgets(3));
+      expect(find.textContaining('2026'), findsNWidgets(4));
+      expect(find.text('Siegesrate · 2026'), findsOneWidget);
+      final chart = tester.widget<PlayerPerformanceTrendChart>(
+        find.byType(PlayerPerformanceTrendChart),
+      );
+      expect(chart.entries.map((entry) => entry.wins), [7, 12]);
+      expect(chart.entries.map((entry) => entry.losses), [3, 8]);
       expect(tester.takeException(), isNull);
     }
 

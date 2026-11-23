@@ -105,6 +105,8 @@ void main() {
                   year: year,
                   month: 9,
                   matches: 5,
+                  wins: 3,
+                  losses: 2,
                   weightedLegs: 16,
                   scoring: 60,
                   average: 45,
@@ -136,6 +138,9 @@ void main() {
     expect(find.text('September'), findsOneWidget);
     expect(find.text('Jahresschnitt und Summen'), findsOneWidget);
     expect(find.text('Partien: 5'), findsOneWidget);
+    expect(find.text('Gewonnen: 3'), findsOneWidget);
+    expect(find.text('Verloren: 2'), findsOneWidget);
+    expect(find.text('Siegesrate: 60.0 %'), findsOneWidget);
     expect(find.text('Gewertete Legs: 16'), findsOneWidget);
     expect(find.byType(DataTable), findsOneWidget);
     expect(

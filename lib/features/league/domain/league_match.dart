@@ -261,6 +261,25 @@ class LeagueMatch {
     validate(validateSinglesDistribution: false);
   }
 
+  /// Erhöht nur das Wechselkontingent. Es wird bewusst kein Wechsel eingetragen:
+  /// „Auswechselung hinzufügen“ soll lediglich einen zusätzlich verfügbaren
+  /// Wechsel bereitstellen, den das Team später selbst nutzen kann.
+  void addSubstitutionBudget({required int teamSide}) {
+    _validateTeamSide(teamSide);
+    substitutionLimit += 1;
+  }
+
+  /// Ein Wechsel darf nicht durchgeführt werden, solange der betroffene
+  /// Teilnehmer in einer bereits gestarteten Partie eingesetzt ist. Sonst
+  /// würde ein laufendes Board seinen Spieler verlieren.
+  bool isPlayerInStartedGame(int teamSide, int playerIndex) {
+    _validateTeamSide(teamSide);
+    return games.any((game) {
+      final side = teamSide == 0 ? game.home : game.away;
+      return game.runtime?['startedAt'] != null && side.contains(playerIndex);
+    });
+  }
+
   /// Erhöht das Wechselkontingent um einen Wechsel und trägt den Wechsel
   /// unmittelbar ein. Der Zähler für ursprünglich verfügbare Wechsel steigt
   /// damit genauso wie der Zähler für bereits genutzte Wechsel.
@@ -303,6 +322,11 @@ class LeagueMatch {
         !reserves.contains(inPlayerIndex) ||
         active.contains(inPlayerIndex)) {
       throw const FormatException('Ungültiger Teilnehmerwechsel.');
+    }
+    if (isPlayerInStartedGame(teamSide, outPlayerIndex)) {
+      throw const FormatException(
+        'Dieser Teilnehmer ist gerade in einer laufenden Partie eingesetzt.',
+      );
     }
     if (substitutionsRemaining(teamSide) < 1) {
       throw const FormatException('Keine Auswechselungen mehr verfügbar.');

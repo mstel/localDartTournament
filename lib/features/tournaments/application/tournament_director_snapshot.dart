@@ -3,6 +3,7 @@ import '../domain/tournament_settings.dart';
 import 'tournament_flow_priority.dart';
 import '../domain/tournament_flow_priority_settings.dart';
 import 'order_of_play/order_of_play_controller.dart';
+import 'order_of_play/global_order_of_play_service.dart';
 import '../domain/engines/group_board_assignment.dart';
 
 /// A read-only view of the production queue. Does not predict future winners.
@@ -56,6 +57,215 @@ class TournamentDirectorSnapshot {
   bool isPreviewableMatch(GroupMatch match) =>
       !match.hasTeamParticipant || !_openSinglesRemain;
 
+  bool get isNormalRanking => tournament.leagueMatch == null;
+
+  bool get isDirectorManagedNormalRanking =>
+      isNormalRanking && tournament.directorModeEnabled;
+
+  bool get isGlobalStrategy =>
+      tournament.directorSchedulingStrategy == 'global';
+
+  bool get isFixedSchedule =>
+      tournament.directorPlayOrderMode == 'fixed_schedule';
+
+  bool get isDynamicSchedule => tournament.directorPlayOrderMode == 'dynamic';
+
+  /// Fixed + global: the board is freely selectable, so fixed schedule tiles
+  /// must not show a board label.
+  bool get hideScheduleBoardLabels =>
+      isDirectorManagedNormalRanking && isFixedSchedule && isGlobalStrategy;
+
+  /// Flat, tournament-wide fixed suggestions for the free boards. The engine's
+  /// first block is collision free; a colliding follow-up is deferred into the
+  /// remaining queue instead of being fixed on a second board.
+  List<BoardAssignment> flatGlobalFixedSuggestions({int limit = 16}) {
+    if (!isDirectorManagedNormalRanking ||
+        !isFixedSchedule ||
+        !isGlobalStrategy) {
+      return const [];
+    }
+    final runningBoards = {
+      for (final entry in schedule.running) entry.match.boardNumber,
+    };
+    final used = <String>{
+      for (final entry in schedule.running) ...entry.players,
+    };
+    final result = <BoardAssignment>[];
+    for (final assignment in schedule.planned) {
+      if (assignment.entry.stageIndex != stage || assignment.block != 0) {
+        continue;
+      }
+      if (runningBoards.contains(assignment.board)) continue;
+      if (assignment.entry.match.isResolved ||
+          !assignment.entry.match.hasPlayers ||
+          !isPreviewableMatch(assignment.entry.match)) {
+        continue;
+      }
+      if (assignment.entry.players.any(used.contains)) continue;
+      result.add(assignment);
+      used.addAll(assignment.entry.players);
+      if (result.length >= limit) break;
+    }
+    return result;
+  }
+
+  /// Stable per-board suggestions of the dynamic global mode. They only change
+  /// after a result was entered; starting a match keeps them intact.
+  Map<int, BoardAssignment> globalBoardAssignments() {
+    if (!isDirectorManagedNormalRanking ||
+        !isDynamicSchedule ||
+        !isGlobalStrategy) {
+      return const {};
+    }
+    final cached = GlobalOrderOfPlayService.instance.boardAssignments(
+      tournament,
+      stage,
+    );
+    final runningBoards = {
+      for (final entry in schedule.running) entry.match.boardNumber,
+    };
+    final used = <String>{
+      for (final entry in schedule.running) ...entry.players,
+    };
+    final result = <int, BoardAssignment>{};
+    final boards = cached.keys.toList()..sort();
+    for (final board in boards) {
+      final assignment = cached[board]!;
+      if (runningBoards.contains(board) ||
+          tournament.blockedBoards.contains(board) ||
+          assignment.entry.match.isResolved ||
+          !isPreviewableMatch(assignment.entry.match)) {
+        continue;
+      }
+      if (assignment.entry.players.any(used.contains)) continue;
+      result[board] = assignment;
+      used.addAll(assignment.entry.players);
+    }
+    return result;
+  }
+
+  /// Board -> match view of [globalBoardAssignments].
+  Map<int, GroupMatch> globalBoardSuggestions() => {
+    for (final entry in globalBoardAssignments().entries)
+      entry.key: entry.value.entry.match,
+  };
+
+  /// Recalculated open/follow-up order behind the stable global suggestions.
+  List<GroupMatch> remainingGlobalQueue() {
+    if (!isDirectorManagedNormalRanking ||
+        !isDynamicSchedule ||
+        !isGlobalStrategy) {
+      return const [];
+    }
+    return GlobalOrderOfPlayService.instance.remainingQueue(tournament, stage);
+  }
+
+  /// Names of the players with the fewest completed matches once [entry] and
+  /// the currently running matches are counted (dynamic board hint).
+  List<String> fewestMatchesPlayerNames(PlayEntry entry) {
+    final counts = <String, int>{};
+    final names = <String, String>{};
+    for (final candidate in entries.where(
+      (candidate) => candidate.stageIndex == stage,
+    )) {
+      for (final player in [
+        candidate.match.homePlayer,
+        candidate.match.awayPlayer,
+        ...candidate.match.players,
+      ]) {
+        if (player == null) continue;
+        final id = player.profileId ?? player.name;
+        counts.putIfAbsent(id, () => 0);
+        names.putIfAbsent(id, () => player.name);
+      }
+    }
+    for (final played in [...schedule.finished, ...schedule.running]) {
+      if (played.stageIndex != stage) continue;
+      for (final player in played.players) {
+        counts[player] = (counts[player] ?? 0) + 1;
+      }
+    }
+    for (final player in entry.players) {
+      counts[player] = (counts[player] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return const [];
+    final lowest = counts.values.reduce((a, b) => a < b ? a : b);
+    return counts.entries
+        .where((item) => item.value == lowest)
+        .map((item) => names[item.key] ?? item.key)
+        .toList()
+      ..sort();
+  }
+
+  String fewestMatchesLabel(PlayEntry entry) =>
+      fewestMatchesPlayerNames(entry).join(', ');
+
+  /// What the schedule overview (second monitor / Leitung) should show.
+  DirectorScheduleOverview get scheduleOverview {
+    if (!isDirectorManagedNormalRanking) {
+      return const DirectorScheduleOverview(
+        presentation: DirectorSchedulePresentation.unchanged,
+      );
+    }
+    if (isFixedSchedule && isGlobalStrategy) {
+      return DirectorScheduleOverview(
+        presentation: DirectorSchedulePresentation.globalFlat,
+        suggestions: flatGlobalFixedSuggestions(),
+        note: 'Freie Board-Wahl',
+        showBoardLabels: false,
+      );
+    }
+    if (isDynamicSchedule && isGlobalStrategy) {
+      final assignments = globalBoardAssignments();
+      final boards = assignments.keys.toList()..sort();
+      return DirectorScheduleOverview(
+        presentation: DirectorSchedulePresentation.globalPerBoard,
+        suggestions: [for (final board in boards) assignments[board]!],
+        note: 'Feste Vorschläge je Board · Rest wird dynamisch berechnet',
+        showBoardLabels: false,
+      );
+    }
+    final boardsByGroup = configuredBoardsByGroup();
+    final groups = <String, List<BoardAssignment>>{
+      for (final key in boardsByGroup.keys) key: <BoardAssignment>[],
+    };
+    final seen = <GroupMatch>{};
+    for (final group in boardsByGroup.entries) {
+      for (final board in group.value) {
+        final candidates = upcomingForBoard(board);
+        if (isDynamicSchedule) {
+          if (candidates.isEmpty || !seen.add(candidates.first.entry.match)) {
+            continue;
+          }
+          groups[group.key]!.add(candidates.first);
+          continue;
+        }
+        for (final assignment in candidates) {
+          groups[group.key]!.add(assignment);
+        }
+      }
+      if (!isDynamicSchedule) {
+        groups[group.key]!.sort((a, b) {
+          final order = (a.entry.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+            b.entry.match.fixedScheduleOrder ?? 1 << 30,
+          );
+          return order != 0 ? order : a.board.compareTo(b.board);
+        });
+      }
+    }
+    if (isDynamicSchedule) {
+      return DirectorScheduleOverview(
+        presentation: DirectorSchedulePresentation.groupFirstOnly,
+        groups: groups,
+        note: 'Rest wird dynamisch berechnet',
+      );
+    }
+    return DirectorScheduleOverview(
+      presentation: DirectorSchedulePresentation.groupFull,
+      groups: groups,
+    );
+  }
+
   /// Feste,Board-lokale Warteschlange für den Modus "Fest zugewiesene Partien".
   /// Die Reihenfolge wird ausschließlich aus den persistierten
   /// `fixedScheduleOrder`-Werten und der Gruppen-/Board-Zuordnung gebildet.
@@ -67,12 +277,9 @@ class TournamentDirectorSnapshot {
       return queue;
     }
 
-    final stageEntries =
-        entries
-            .where(
-              (entry) => entry.stageIndex == stage && entry.match.hasPlayers,
-            )
-            .toList();
+    final stageEntries = entries
+        .where((entry) => entry.stageIndex == stage && entry.match.hasPlayers)
+        .toList();
     final originalOrder = {
       for (var index = 0; index < stageEntries.length; index++)
         stageEntries[index]: index,
@@ -81,7 +288,9 @@ class TournamentDirectorSnapshot {
       final order = (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
         b.match.fixedScheduleOrder ?? 1 << 30,
       );
-      return order != 0 ? order : originalOrder[a]!.compareTo(originalOrder[b]!);
+      return order != 0
+          ? order
+          : originalOrder[a]!.compareTo(originalOrder[b]!);
     });
 
     final groupsByBoard = configuredBoardsByGroup();
@@ -176,18 +385,19 @@ class TournamentDirectorSnapshot {
   }
 
   List<BoardAssignment> _orderedForPlay(List<BoardAssignment> assignments) {
-    if (tournament.directorPlayOrderMode != 'fixed_schedule') return assignments;
+    if (tournament.directorPlayOrderMode != 'fixed_schedule') {
+      return assignments;
+    }
     final fixedOrder = {
       for (var index = 0; index < assignments.length; index++)
         assignments[index]: index,
     };
-    return assignments.toList()
-      ..sort((a, b) {
-        final order = (a.entry.match.fixedScheduleOrder ?? 1 << 30).compareTo(
-          b.entry.match.fixedScheduleOrder ?? 1 << 30,
-        );
-        return order != 0 ? order : fixedOrder[a]!.compareTo(fixedOrder[b]!);
-      });
+    return assignments.toList()..sort((a, b) {
+      final order = (a.entry.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+        b.entry.match.fixedScheduleOrder ?? 1 << 30,
+      );
+      return order != 0 ? order : fixedOrder[a]!.compareTo(fixedOrder[b]!);
+    });
   }
 
   /// The configured board membership, independent of the currently computed
@@ -210,15 +420,14 @@ class TournamentDirectorSnapshot {
           tournament.groupBoardAssignments[key]?.toSet() ??
           defaults[key] ??
           const <int>{};
-      result[key] =
-          configured
-              .where(
-                (board) =>
-                    board >= 1 &&
-                    board <= tournament.boardCount &&
-                    !tournament.blockedBoards.contains(board),
-              )
-              .toSet();
+      result[key] = configured
+          .where(
+            (board) =>
+                board >= 1 &&
+                board <= tournament.boardCount &&
+                !tournament.blockedBoards.contains(board),
+          )
+          .toSet();
     }
     return result;
   }
@@ -250,7 +459,21 @@ class TournamentDirectorSnapshot {
   /// the globally best playable matches as suggestions for every board.
   List<BoardAssignment> suggestionsForBoard(int board, {int limit = 3}) {
     if (tournament.blockedBoards.contains(board)) return const [];
-    final assignments = tournament.directorPlayOrderMode == 'fixed_schedule'
+    if (isDirectorManagedNormalRanking && isGlobalStrategy) {
+      if (isFixedSchedule) {
+        return flatGlobalFixedSuggestions()
+            .where((assignment) => assignment.board == board)
+            .take(limit)
+            .toList();
+      }
+      final stable = globalBoardAssignments()[board];
+      return stable == null ? const [] : [stable];
+    }
+    if (isDirectorManagedNormalRanking && isDynamicSchedule) {
+      // Gruppenmodus: nur die nächste feste Empfehlung, keine 2./3. Variante.
+      return _selectableAssignments().take(limit > 0 ? 1 : 0).toList();
+    }
+    final assignments = isFixedSchedule
         ? upcomingForBoard(board)
         : _selectableAssignments();
     return assignments.take(limit).toList();
@@ -283,13 +506,13 @@ class TournamentDirectorSnapshot {
               assignment.entry.groupKey == key &&
               assignment.entry.match.hasPlayers &&
               !assignment.entry.match.isResolved)
-          assignment.entry.match,
+            assignment.entry.match,
         for (final entry in schedule.running)
           if (entry.stageIndex == stage &&
               entry.groupKey == key &&
               entry.match.hasPlayers &&
               !entry.match.isResolved)
-          entry.match,
+            entry.match,
       };
       // Release boards the group no longer needs: one remaining match cannot
       // occupy two boards at the same time.
@@ -300,14 +523,14 @@ class TournamentDirectorSnapshot {
               assignment.entry.groupKey == key &&
               assignment.entry.match.hasPlayers &&
               !assignment.entry.match.isResolved)
-          assignment.board,
+            assignment.board,
         for (final entry in schedule.running)
           if (entry.stageIndex == stage &&
               entry.groupKey == key &&
               entry.match.hasPlayers &&
               !entry.match.isResolved &&
               entry.match.boardNumber != null)
-          entry.match.boardNumber!,
+            entry.match.boardNumber!,
       };
       // With several groups the configured pair stays merged even if the
       // engine currently queues the matches on one of the boards. A single
@@ -333,12 +556,11 @@ class TournamentDirectorSnapshot {
       stage,
       groupName,
     );
-    final assignedBoards =
-        directorAssigned.isNotEmpty
-            ? directorAssigned
-            : legacyAssigned.isNotEmpty
-            ? legacyAssigned
-            : GroupBoardAssignment.lookup(defaults, stage, groupName);
+    final assignedBoards = directorAssigned.isNotEmpty
+        ? directorAssigned
+        : legacyAssigned.isNotEmpty
+        ? legacyAssigned
+        : GroupBoardAssignment.lookup(defaults, stage, groupName);
     final eligibleBoards = assignedBoards
         .where(
           (board) =>
@@ -376,9 +598,9 @@ class TournamentDirectorSnapshot {
   }
 
   List<BoardAssignment> _selectableAssignments({Set<String>? busyPlayers}) {
-    final busy = busyPlayers ?? <String>{
-      for (final running in schedule.running) ...running.players,
-    };
+    final busy =
+        busyPlayers ??
+        <String>{for (final running in schedule.running) ...running.players};
     final assignments = schedule.planned
         .where(
           (assignment) =>
@@ -416,7 +638,11 @@ class TournamentDirectorSnapshot {
     final suggestions = suggestionsForBoard(board, limit: 2);
     if (suggestions.isEmpty) return null;
     return TournamentDirectorBoardRecommendation(
-      next: BoardAssignment(suggestions.first.entry, suggestions.first.block, board),
+      next: BoardAssignment(
+        suggestions.first.entry,
+        suggestions.first.block,
+        board,
+      ),
       alternative: suggestions.length > 1
           ? BoardAssignment(suggestions[1].entry, suggestions[1].block, board)
           : null,
@@ -533,4 +759,51 @@ class TournamentDirectorBoardRecommendation {
 
   final BoardAssignment next;
   final BoardAssignment? alternative;
+}
+
+/// Which schedule the second monitor / the Leitung should render for a normal
+/// ranking tournament.
+enum DirectorSchedulePresentation {
+  /// Fixed order + group strategy: complete group-wise schedule.
+  groupFull,
+
+  /// Dynamic order + group strategy: group view with the first fixed
+  /// suggestion only; the rest is recalculated.
+  groupFirstOnly,
+
+  /// Fixed order + global strategy: one flat fixed list, free board choice.
+  globalFlat,
+
+  /// Dynamic order + global strategy: one stable fixed item per board.
+  globalPerBoard,
+
+  /// League/friendly or director mode off: keep the existing presentation.
+  unchanged,
+}
+
+/// Read model for the schedule overview. [groups] is keyed by the internal
+/// group key (`stageIndex:groupName`), [suggestions] is the flat list for the
+/// global modes. Board labels must be hidden when [showBoardLabels] is false.
+class DirectorScheduleOverview {
+  const DirectorScheduleOverview({
+    required this.presentation,
+    this.groups = const {},
+    this.suggestions = const [],
+    this.note,
+    this.showBoardLabels = true,
+  });
+
+  final DirectorSchedulePresentation presentation;
+  final Map<String, List<BoardAssignment>> groups;
+  final List<BoardAssignment> suggestions;
+  final String? note;
+  final bool showBoardLabels;
+
+  bool get isFlat =>
+      presentation == DirectorSchedulePresentation.globalFlat ||
+      presentation == DirectorSchedulePresentation.globalPerBoard;
+
+  List<BoardAssignment> get visibleSuggestions => isFlat
+      ? suggestions
+      : groups.values.expand((items) => items).toList(growable: false);
 }

@@ -20,6 +20,7 @@ class PlayerPerformanceTrendChart extends StatefulWidget {
     (label: 'Scoring', color: Color(0xFF4FC3F7)),
     (label: 'Average', color: Color(0xFFFFB74D)),
     (label: 'Checkout Quote', color: Color(0xFF81C784)),
+    (label: 'Siegesrate', color: Color(0xFFBA68C8)),
   ];
 
   @override
@@ -198,6 +199,9 @@ String _performanceTooltipText(PlayerMonthlyPerformance entry) {
   return [
     '$month ${entry.year}',
     'Partien: ${entry.matches}',
+    'Gewonnen: ${entry.wins}',
+    'Verloren: ${entry.losses}',
+    'Siegesrate: ${format(entry.winRate)} %',
     'Gewertete Legs: ${entry.weightedLegs}',
     'Scoring: ${format(entry.scoring)}',
     'Average: ${format(entry.average)}',
@@ -323,7 +327,8 @@ class _PerformanceChartPainter extends CustomPainter {
   double? _value(PlayerMonthlyPerformance? entry) => switch (series) {
     0 => entry?.scoring,
     1 => entry?.average,
-    _ => entry?.checkoutRate,
+    2 => entry?.checkoutRate,
+    _ => entry?.winRate,
   };
 
   static String _monthName(int month) => const [

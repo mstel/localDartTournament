@@ -40,6 +40,9 @@ class _PlayerPerformanceEntryPageState
   late int _year = DateTime.now().year;
   late int _month = DateTime.now().month;
   final _legsController = TextEditingController();
+  final _matchesController = TextEditingController();
+  final _winsController = TextEditingController();
+  final _lossesController = TextEditingController();
   final _scoringController = TextEditingController();
   final _averageController = TextEditingController();
   final _checkoutController = TextEditingController();
@@ -78,6 +81,9 @@ class _PlayerPerformanceEntryPageState
 
   void _populate(PlayerMonthlyPerformance? entry) {
     _legsController.text = '${entry?.weightedLegs ?? 0}';
+    _matchesController.text = '${entry?.matches ?? 0}';
+    _winsController.text = '${entry?.wins ?? 0}';
+    _lossesController.text = '${entry?.losses ?? 0}';
     _scoringController.text = entry?.scoring?.toString() ?? '';
     _averageController.text = entry?.average?.toString() ?? '';
     _checkoutController.text = entry?.checkoutRate?.toString() ?? '';
@@ -89,13 +95,42 @@ class _PlayerPerformanceEntryPageState
     return double.tryParse(value.replaceAll(',', '.'));
   }
 
+  int? _nonNegativeInt(TextEditingController controller) {
+    final value = int.tryParse(controller.text.trim());
+    return value == null || value < 0 ? null : value;
+  }
+
+  Widget _numberField({
+    required String fieldKey,
+    required String label,
+    required TextEditingController controller,
+    bool decimal = false,
+    String? suffixText,
+  }) => TextField(
+    key: ValueKey(fieldKey),
+    controller: controller,
+    decoration: InputDecoration(
+      labelText: label,
+      suffixText: suffixText,
+      border: const OutlineInputBorder(),
+    ),
+    keyboardType: decimal
+        ? const TextInputType.numberWithOptions(decimal: true)
+        : TextInputType.number,
+  );
+
   Future<void> _save() async {
-    final legs = int.tryParse(_legsController.text.trim());
+    final legs = _nonNegativeInt(_legsController);
+    final matches = _nonNegativeInt(_matchesController);
+    final wins = _nonNegativeInt(_winsController);
+    final losses = _nonNegativeInt(_lossesController);
     final scoring = _optionalNumber(_scoringController);
     final average = _optionalNumber(_averageController);
     final checkout = _optionalNumber(_checkoutController);
     if (legs == null ||
-        legs < 0 ||
+        matches == null ||
+        wins == null ||
+        losses == null ||
         _scoringController.text.trim().isNotEmpty && scoring == null ||
         _averageController.text.trim().isNotEmpty && average == null ||
         _checkoutController.text.trim().isNotEmpty && checkout == null ||
@@ -105,7 +140,9 @@ class _PlayerPerformanceEntryPageState
             (!checkout.isFinite || checkout < 0 || checkout > 100)) {
       setState(
         () => _error =
-            'Bitte gültige Werte eingeben. Die Checkout-Quote muss zwischen 0 und 100 liegen.',
+            'Bitte gültige, nicht negative ganze Zahlen für Legs, Partien, '
+            'Gewonnen und Verloren eingeben. Die Checkout-Quote muss zwischen '
+            '0 und 100 liegen.',
       );
       return;
     }
@@ -121,6 +158,9 @@ class _PlayerPerformanceEntryPageState
           year: _year,
           month: _month,
           weightedLegs: legs,
+          matches: matches,
+          wins: wins,
+          losses: losses,
           scoring: scoring,
           average: average,
           checkoutRate: checkout,
@@ -145,6 +185,9 @@ class _PlayerPerformanceEntryPageState
   @override
   void dispose() {
     _legsController.dispose();
+    _matchesController.dispose();
+    _winsController.dispose();
+    _lossesController.dispose();
     _scoringController.dispose();
     _averageController.dispose();
     _checkoutController.dispose();
@@ -243,51 +286,83 @@ class _PlayerPerformanceEntryPageState
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('performance-weighted-legs'),
-              controller: _legsController,
-              decoration: const InputDecoration(
-                labelText: 'Gewertete Legs',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('performance-scoring'),
-              controller: _scoringController,
-              decoration: const InputDecoration(
-                labelText: 'Scoring',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('performance-average'),
-              controller: _averageController,
-              decoration: const InputDecoration(
-                labelText: 'Average',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('performance-checkout'),
-              controller: _checkoutController,
-              decoration: const InputDecoration(
-                labelText: 'Checkout%',
-                suffixText: '%',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 900
+                    ? 4
+                    : constraints.maxWidth >= 600
+                    ? 2
+                    : 1;
+                const gap = 12.0;
+                final fieldWidth =
+                    (constraints.maxWidth - gap * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    SizedBox(
+                      width: fieldWidth,
+                      child: _numberField(
+                        fieldKey: 'performance-weighted-legs',
+                        label: 'Gewertete Legs',
+                        controller: _legsController,
+                      ),
+                    ),
+                    SizedBox(
+                      width: fieldWidth,
+                      child: _numberField(
+                        fieldKey: 'performance-matches',
+                        label: 'Partien',
+                        controller: _matchesController,
+                      ),
+                    ),
+                    SizedBox(
+                      width: fieldWidth,
+                      child: _numberField(
+                        fieldKey: 'performance-wins',
+                        label: 'Gewonnen',
+                        controller: _winsController,
+                      ),
+                    ),
+                    SizedBox(
+                      width: fieldWidth,
+                      child: _numberField(
+                        fieldKey: 'performance-losses',
+                        label: 'Verloren',
+                        controller: _lossesController,
+                      ),
+                    ),
+                    SizedBox(
+                      width: fieldWidth,
+                      child: _numberField(
+                        fieldKey: 'performance-scoring',
+                        label: 'Scoring',
+                        controller: _scoringController,
+                        decimal: true,
+                      ),
+                    ),
+                    SizedBox(
+                      width: fieldWidth,
+                      child: _numberField(
+                        fieldKey: 'performance-average',
+                        label: 'Average',
+                        controller: _averageController,
+                        decimal: true,
+                      ),
+                    ),
+                    SizedBox(
+                      width: fieldWidth,
+                      child: _numberField(
+                        fieldKey: 'performance-checkout',
+                        label: 'Checkout%',
+                        controller: _checkoutController,
+                        decimal: true,
+                        suffixText: '%',
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
@@ -301,6 +376,9 @@ class _PlayerPerformanceEntryPageState
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
                 onPressed: _saving ? null : _save,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(48, 48),
+                ),
                 icon: _saving
                     ? const SizedBox.square(
                         dimension: 18,

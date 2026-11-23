@@ -18,6 +18,8 @@ class RecentMatchResultLogEntry extends StatelessWidget {
     this.eloError,
     this.showBoardNumber = true,
     this.onTap,
+    this.onUndo,
+    this.undoTooltip = 'Letzte Partie rückgängig',
   });
 
   final CreatedTournament tournament;
@@ -26,6 +28,8 @@ class RecentMatchResultLogEntry extends StatelessWidget {
   final String? eloError;
   final bool showBoardNumber;
   final VoidCallback? onTap;
+  final VoidCallback? onUndo;
+  final String undoTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +170,25 @@ class RecentMatchResultLogEntry extends StatelessWidget {
                   '${time.hour.toString().padLeft(2, '0')}:'
                   '${time.minute.toString().padLeft(2, '0')}',
                   style: TextStyle(color: palette.mutedText, fontSize: 11),
+                ),
+              ],
+              if (onUndo != null) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: undoTooltip,
+                  child: IconButton(
+                    key: ValueKey(
+                      'recent-result-undo-${match.round}-${match.homePlayer?.profileId ?? match.homePlayer?.name}-${match.awayPlayer?.profileId ?? match.awayPlayer?.name}',
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 48,
+                      height: 48,
+                    ),
+                    onPressed: onUndo,
+                    icon: const Icon(Icons.undo, size: 20),
+                  ),
                 ),
               ],
             ],

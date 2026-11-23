@@ -93,8 +93,12 @@ class _LeagueSubstitutionDialogState extends State<LeagueSubstitutionDialog> {
     required bool lineup,
   }) {
     final status = _status(player, active);
+    final startsRunningGame =
+        lineup &&
+        widget.league.isPlayerInStartedGame(widget.teamSide, player);
     final canSelect =
-        lineup || widget.league.allowReentry || !_wasSubstitutedOut(player);
+        !startsRunningGame &&
+        (lineup || widget.league.allowReentry || !_wasSubstitutedOut(player));
     final selected = lineup ? _outPlayer == player : _inPlayer == player;
     final content = ListTile(
       dense: true,
@@ -955,36 +959,17 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         _busy) {
       return;
     }
-    final league = tournament.leagueMatch!;
-    final choice = await showDialog<(int, int)>(
-      context: context,
-      builder: (context) => LeagueSubstitutionDialog(
-        league: league,
-        teamSide: teamSide,
-        teamName: teamSide == 0 ? league.homeTeam : league.awayTeam,
-      ),
-    );
-    if (choice == null || !mounted) return;
     final next = CreatedTournament.fromJson(tournament.toJson());
     final nextLeague = next.leagueMatch!;
-    final roster = teamSide == 0
-        ? nextLeague.homePlayers
-        : nextLeague.awayPlayers;
+    final teamName = teamSide == 0
+        ? nextLeague.homeTeam
+        : nextLeague.awayTeam;
     try {
-      nextLeague.addSubstitution(
-        teamSide: teamSide,
-        outPlayerIndex: choice.$1,
-        inPlayerIndex: choice.$2,
-      );
-      final teamName = teamSide == 0
-          ? nextLeague.homeTeam
-          : nextLeague.awayTeam;
+      nextLeague.addSubstitutionBudget(teamSide: teamSide);
       next.addActivity(
-        'substitution',
-        '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
-            'zusätzlich ausgewechselt. '
-            'Übrige Auswechselungen: '
-            '${nextLeague.substitutionsRemaining(teamSide)}',
+        'substitution_budget',
+        '$teamName hat eine zusätzliche Auswechselung erhalten. '
+            'Verfügbar: ${nextLeague.substitutionsRemaining(teamSide)}',
       );
       await _save(next, rethrowError: true);
     } catch (error) {
@@ -1027,6 +1012,13 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         game.away = entry.value;
       }
     }
+    final teamName = teamSide == 0
+        ? next.leagueMatch!.homeTeam
+        : next.leagueMatch!.awayTeam;
+    next.addActivity(
+      'doubles_pairings_confirmed',
+      '$teamName hat die Doppelpartner festgelegt.',
+    );
     try {
       await _save(next, rethrowError: true);
     } catch (error) {
@@ -1531,6 +1523,22 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                if (league.variant == LeagueMatchVariant.adjusted)
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      key: ValueKey(
+                        teamSide == 0
+                            ? 'league-add-reserve-home'
+                            : 'league-add-reserve-away',
+                      ),
+                      onPressed:
+                          _busy ? null : () => _addReservePlayer(teamSide),
+                      icon: const Icon(Icons.person_add_alt_1_outlined),
+                      label: const Text('Ersatzspieler hinzufügen'),
+                    ),
+                  ),
+                const SizedBox(height: 8),
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: 12,
@@ -1540,43 +1548,25 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                       '${league.substitutionsRemaining(teamSide)} Auswechselungen verfügbar',
                     ),
                     OutlinedButton.icon(
+                      key: ValueKey(
+                        teamSide == 0
+                            ? 'league-substitutions-home'
+                            : 'league-substitutions-away',
+                      ),
                       onPressed: _busy
                           ? null
                           : () => _substitutePlayers(teamSide),
                       icon: const Icon(Icons.swap_horiz),
-                      label: Text(
-                        teamSide == 0
-                            ? 'Auswechselungen Heimteam'
-                            : 'Auswechselungen Gastteam',
-                      ),
+                      label: const Text('Auswechselungen'),
                     ),
                     OutlinedButton.icon(
                       onPressed: _busy
                           ? null
                           : () => _assignDoublePartners(teamSide),
                       icon: const Icon(Icons.group_add_outlined),
-                      label: Text(
-                        teamSide == 0
-                            ? 'Doppelpartner zuweisen Heimteam'
-                            : 'Doppelpartner zuweisen Gastteam',
-                      ),
+                      label: const Text('Doppelpartner zuweisen'),
                     ),
-                    if (league.variant == LeagueMatchVariant.adjusted) ...[
-                      OutlinedButton.icon(
-                        key: ValueKey(
-                          teamSide == 0
-                              ? 'league-add-reserve-home'
-                              : 'league-add-reserve-away',
-                        ),
-                        onPressed:
-                            _busy ? null : () => _addReservePlayer(teamSide),
-                        icon: const Icon(Icons.person_add_alt_1_outlined),
-                        label: Text(
-                          teamSide == 0
-                              ? 'Ersatzspieler Heimteam hinzufügen'
-                              : 'Ersatzspieler Gastteam hinzufügen',
-                        ),
-                      ),
+                    if (league.variant == LeagueMatchVariant.adjusted)
                       OutlinedButton.icon(
                         key: ValueKey(
                           teamSide == 0
@@ -1586,13 +1576,8 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                         onPressed:
                             _busy ? null : () => _addSubstitution(teamSide),
                         icon: const Icon(Icons.swap_vert_outlined),
-                        label: Text(
-                          teamSide == 0
-                              ? 'Auswechslung Heimteam hinzufügen'
-                              : 'Auswechslung Gastteam hinzufügen',
-                        ),
+                        label: const Text('Auswechselung hinzufügen'),
                       ),
-                    ],
                   ],
                 ),
               ],

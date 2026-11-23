@@ -248,4 +248,33 @@ void main() {
     expect(restored.substitutionLimit, 2);
     expect(restored.substitutionsUsed(0), 1);
   });
+
+  test('adding substitution budget only raises the available counter', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: home,
+      awayPlayers: away,
+      singlesPerPlayer: 1,
+      doublesCount: 1,
+      starterCount: 5,
+      maxReservePlayers: 2,
+      substitutionLimit: 1,
+    );
+
+    expect(league.substitutionLimit, 1);
+    expect(league.substitutionsRemaining(0), 1);
+    expect(league.substitutionsUsed(0), 0);
+
+    league.addSubstitutionBudget(teamSide: 0);
+
+    expect(league.substitutionLimit, 2);
+    expect(league.substitutionsRemaining(0), 2);
+    expect(league.substitutionsUsed(0), 0);
+    expect(league.substitutions, isEmpty);
+
+    final restored = LeagueMatch.fromJson(league.toJson());
+    expect(restored.substitutionLimit, 2);
+    expect(restored.substitutionsRemaining(0), 2);
+  });
 }

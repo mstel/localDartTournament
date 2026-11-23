@@ -98,6 +98,12 @@ class _PerformanceStatisticsDetailSectionState
               runSpacing: 8,
               children: [
                 _AnnualValue(label: 'Partien', value: '$matches'),
+                _AnnualValue(label: 'Gewonnen', value: '${summary.wins}'),
+                _AnnualValue(label: 'Verloren', value: '${summary.losses}'),
+                _AnnualValue(
+                  label: 'Siegesrate',
+                  value: '${_format(summary.winRate)} %',
+                ),
                 _AnnualValue(
                   label: 'Gewertete Legs',
                   value: '${summary.weightedLegs}',
@@ -129,6 +135,9 @@ class _PerformanceStatisticsDetailSectionState
                   DataColumn(label: Text('Average'), numeric: true),
                   DataColumn(label: Text('Checkout'), numeric: true),
                   DataColumn(label: Text('Partien'), numeric: true),
+                  DataColumn(label: Text('Gewonnen'), numeric: true),
+                  DataColumn(label: Text('Verloren'), numeric: true),
+                  DataColumn(label: Text('Siegesrate %'), numeric: true),
                   DataColumn(label: Text('Legs'), numeric: true),
                 ],
                 rows: [
@@ -146,6 +155,9 @@ class _PerformanceStatisticsDetailSectionState
                           ),
                         ),
                         DataCell(Text('${entry.matches}')),
+                        DataCell(Text('${entry.wins}')),
+                        DataCell(Text('${entry.losses}')),
+                        DataCell(Text('${_format(entry.winRate)} %')),
                         DataCell(Text('${entry.weightedLegs}')),
                       ],
                     ),

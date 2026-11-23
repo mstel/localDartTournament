@@ -139,9 +139,11 @@ class MatchResultTile extends StatelessWidget {
                       color: const Color(0xFF123D2D),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text(
-                      'Läuft',
-                      style: TextStyle(
+                    child: Text(
+                      match.boardNumber != null
+                          ? 'Läuft an ${tournament?.boardDisplayName(match.boardNumber!) ?? 'Board ${match.boardNumber}'}'
+                          : 'Läuft',
+                      style: const TextStyle(
                         color: Color(0xFF4ED9A4),
                         fontWeight: FontWeight.bold,
                         fontSize: 11,

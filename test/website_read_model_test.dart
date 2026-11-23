@@ -6,6 +6,8 @@ import 'package:dart_tournament_manager/features/statistics/domain/player_monthl
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/tournament_storage.dart';
+import 'package:dart_tournament_manager/features/tournaments/data/tournament_trash.dart'
+    show TournamentTrash, TournamentTrashReason;
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/website/application/website_read_model_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -212,6 +214,10 @@ void main() {
           'setsLost': 0,
           'currentForm': {
             'weightedLegs': 18,
+            'matches': 0,
+            'wins': 0,
+            'losses': 0,
+            'winRate': 0.0,
             'scoring': 72.5,
             'average': 51.2,
             'checkoutQuote': 38.5,
@@ -222,6 +228,10 @@ void main() {
         {
           'playerId': player.id,
           'weightedLegs': 18,
+          'matches': 0,
+          'wins': 0,
+          'losses': 0,
+          'winRate': 0.0,
           'scoring': 72.5,
           'average': 51.2,
           'checkoutQuote': 38.5,
@@ -276,6 +286,10 @@ void main() {
       expect((resources['statistics']!['currentForm'] as List).single, {
         'playerId': player.id,
         'weightedLegs': 18,
+        'matches': 0,
+        'wins': 0,
+        'losses': 0,
+        'winRate': 0.0,
         'scoring': 72.5,
         'average': 51.2,
         'checkoutQuote': 38.5,
@@ -291,6 +305,9 @@ void main() {
             'year': 2026,
             'month': 10,
             'matches': 0,
+            'wins': 0,
+            'losses': 0,
+            'winRate': 0.0,
             'weightedLegs': 18,
             'scoring': 72.5,
             'average': 51.2,
@@ -303,6 +320,9 @@ void main() {
             'month': 10,
             'period': '2026-10',
             'matches': 0,
+            'wins': 0,
+            'losses': 0,
+            'winRate': 0.0,
             'weightedLegs': 9,
             'scoring': 72.5,
             'average': 51.2,
@@ -314,6 +334,10 @@ void main() {
           {
             'playerId': player.id,
             'weightedLegs': 18,
+            'matches': 0,
+            'wins': 0,
+            'losses': 0,
+            'winRate': 0.0,
             'scoring': 72.5,
             'average': 51.2,
             'checkoutQuote': 38.5,
@@ -476,6 +500,9 @@ void main() {
         'year': 2026,
         'month': 9,
         'matches': 12,
+        'wins': 0,
+        'losses': 0,
+        'winRate': 0.0,
         'weightedLegs': 36,
         'scoring': 62.7,
         'average': 54.2,
@@ -504,6 +531,9 @@ void main() {
     expect(clubMonth['month'], 9);
     expect(clubMonth['period'], '2026-09');
     expect(clubMonth['matches'], 6);
+    expect(clubMonth['wins'], 0);
+    expect(clubMonth['losses'], 0);
+    expect(clubMonth['winRate'], 0.0);
     expect(clubMonth['weightedLegs'], 18);
     expect(clubMonth['scoring'], closeTo(62.7, 0.0001));
     expect(clubMonth['average'], 54.2);
@@ -739,5 +769,99 @@ void main() {
     );
     expect(achievements['schemaVersion'], 2);
     expect(achievements['resource'], 'achievements');
+  });
+
+  test('performance API publishes recorded win/loss counts and win rates',
+      () async {
+    final player = await database.createPlayerProfile(
+      firstName: 'Ada',
+      lastName: 'Dart',
+    );
+    await database.savePlayerMonthlyPerformance(
+      PlayerMonthlyPerformance(
+        playerId: player.id,
+        year: 2026,
+        month: 10,
+        weightedLegs: 20,
+        matches: 10,
+        wins: 7,
+        losses: 3,
+        average: 50,
+      ),
+    );
+    final service = WebsiteReadModelService(
+      database: database,
+      tournamentStorage: tournamentStorage,
+      clock: () => DateTime(2026, 11, 3),
+    );
+
+    final model = await service.create();
+    final currentForm = (model['currentForm'] as List).single
+        as Map<String, dynamic>;
+    expect(currentForm, containsPair('matches', 10));
+    expect(currentForm, containsPair('wins', 7));
+    expect(currentForm, containsPair('losses', 3));
+    expect(currentForm, containsPair('winRate', 70.0));
+
+    final resources = await service.createVersion2Resources(model);
+    final monthly = (resources['performance']!['monthlyPerformance'] as List)
+        .single as Map<String, dynamic>;
+    expect(monthly, containsPair('matches', 10));
+    expect(monthly, containsPair('wins', 7));
+    expect(monthly, containsPair('losses', 3));
+    expect(monthly, containsPair('winRate', 70.0));
+
+    final club = (resources['performance']!['monthlyClubPerformance'] as List)
+        .single as Map<String, dynamic>;
+    expect(club, containsPair('matches', 5));
+    expect(club, containsPair('wins', 3));
+    expect(club, containsPair('losses', 1));
+    expect(club['winRate'], closeTo(60, 0.001));
+  });
+
+  test('trashed completed tournaments stay out of the API until restored',
+      () async {
+    final completed = CreatedTournament(
+      id: 'trashed-completed',
+      name: 'Papierkorb Turnier',
+      players: const [],
+      stages: const [],
+      runStages: const [],
+      finishedAt: DateTime.utc(2026, 10, 20),
+    );
+    await tournamentStorage.saveTournament(completed);
+    await tournamentStorage.deleteTournament(completed.id);
+
+    final trash = TournamentTrash(
+      file: File(
+        '${directory.path}${Platform.pathSeparator}tournament_trash.json',
+      ),
+    );
+    final entry = (await trash.list()).singleWhere(
+      (item) =>
+          item.tournamentId == completed.id &&
+          item.reason == TournamentTrashReason.deleted,
+    );
+    final service = WebsiteReadModelService(
+      database: database,
+      tournamentStorage: tournamentStorage,
+    );
+
+    final trashedModel = await service.create();
+    expect(trashedModel['completedTournaments'], isEmpty);
+    final trashedResources = await service.createVersion2Resources(trashedModel);
+    expect(trashedResources['tournaments:1']!['completedTournaments'], isEmpty);
+
+    await tournamentStorage.saveTournamentWithIntent(
+      entry.toTournament(),
+      allowUnfinishingCompleted: true,
+    );
+    await trash.remove(entry.entryId);
+
+    final restoredModel = await service.create();
+    expect(
+      (restoredModel['completedTournaments'] as List).single['id'],
+      completed.id,
+    );
   });
 }

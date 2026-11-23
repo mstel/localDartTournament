@@ -3314,9 +3314,15 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('ranking-position-arrow-player-robin')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('ranking-hypothetical-player-other')),
       findsOneWidget,
     );
-    expect(find.text('Platz 3'), findsOneWidget);
+    expect(find.textContaining('-. Dora Mitglied – 1000 Elo'), findsOneWidget);
+    expect(find.textContaining('2. Robin Muster –'), findsOneWidget);
+    expect(find.textContaining('3. Robin Muster –'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('ranking-participants-toggle')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Dora Mitglied –'), findsNothing);

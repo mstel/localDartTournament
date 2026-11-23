@@ -55,6 +55,10 @@ class TournamentDirectorDashboard extends StatefulWidget {
     this.canReopenPreviousStage = false,
     this.onResetCurrentStage,
     this.canResetCurrentStage = false,
+    // Callback plumbing for the parent session's undo feature. No undo UI is
+    // rendered here; the "Letzte Ergebnisse" area is owned by that session.
+    this.onUndoLastMatch,
+    this.canUndoLastMatch = false,
     this.simulationControls,
     this.onRecomputeSchedule,
     this.onEditFixedSchedulePerBoard,
@@ -94,6 +98,8 @@ class TournamentDirectorDashboard extends StatefulWidget {
   final bool canReopenPreviousStage;
   final VoidCallback? onResetCurrentStage;
   final bool canResetCurrentStage;
+  final Future<void> Function()? onUndoLastMatch;
+  final bool canUndoLastMatch;
   final Widget? simulationControls;
   final VoidCallback? onRecomputeSchedule;
   final VoidCallback? onEditFixedSchedulePerBoard;
@@ -418,6 +424,16 @@ class _TournamentDirectorDashboardState
   bool get _showBoardNumber =>
       widget.showBoardNumber ?? widget.directorModeEnabled;
 
+  /// Fixed + global: the board is freely selectable, so schedule tiles must
+  /// not claim a board by showing a board label.
+  bool get _hideScheduleBoardLabels {
+    final t = widget.tournament;
+    return t.leagueMatch == null &&
+        t.directorModeEnabled &&
+        t.directorPlayOrderMode == 'fixed_schedule' &&
+        t.directorSchedulingStrategy == 'global';
+  }
+
   int? _quickStartBoard(PlayEntry entry) {
     if ((!widget.canOperate && !widget.isSimulationMode) ||
         widget.tournament.completedStageIndexes.contains(widget.activeStage)) {
@@ -531,6 +547,8 @@ class _TournamentDirectorDashboardState
     Set<GroupMatch> prioritizedMatches = const {},
     Set<GroupMatch> lockedMatches = const {},
     Map<GroupMatch, int> plannedBoards = const {},
+    bool hideBoardLabels = false,
+    VoidCallback? onUndoLastMatch,
   }) => _box([
     Wrap(
       alignment: WrapAlignment.spaceBetween,
@@ -542,6 +560,16 @@ class _TournamentDirectorDashboardState
         if (title == 'Spielplan' &&
             (_canRecomputeSchedule || _canEditFixedSchedule))
           _fixedScheduleActions('queue'),
+        if (onUndoLastMatch != null && entries.isNotEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const ValueKey('director-recent-results-undo-last-match'),
+              onPressed: onUndoLastMatch,
+              icon: const Icon(Icons.undo, size: 18),
+              label: const Text('Letzte Partie rückgängig'),
+            ),
+          ),
       ],
     ),
     const SizedBox(height: 8),
@@ -615,6 +643,7 @@ class _TournamentDirectorDashboardState
                       isPriority: prioritizedMatches.contains(entry.match),
                       plannedBoard: plannedBoards[entry.match],
                       showDragHandle: true,
+                      hideBoardLabel: hideBoardLabels,
                     ),
                   )
                 else
@@ -625,6 +654,7 @@ class _TournamentDirectorDashboardState
                     isPriority: prioritizedMatches.contains(entry.match),
                     plannedBoard: plannedBoards[entry.match],
                     isRunning: lockedMatches.contains(entry.match),
+                    hideBoardLabel: hideBoardLabels,
                   ),
             ],
           );
@@ -666,6 +696,7 @@ class _TournamentDirectorDashboardState
     int? plannedBoard,
     bool showDragHandle = false,
     bool isRunning = false,
+    bool hideBoardLabel = false,
   }) {
     final match = entry.match;
     final startOnBoard = widget.onStartOnBoard;
@@ -741,6 +772,10 @@ class _TournamentDirectorDashboardState
                 child: Text(
                   showResult
                       ? entry.origin
+                      : hideBoardLabel
+                      ? isRunning
+                            ? 'Läuft'
+                            : 'Nächste Partie'
                       : _showBoardNumber
                       ? plannedBoard != null
                             ? widget.tournament.boardDisplayName(plannedBoard)
@@ -899,11 +934,10 @@ class _TournamentDirectorDashboardState
     final runningMatches = state.schedule.running
         .map((entry) => entry.match)
         .toSet();
-    final pendingMatches =
-        directorPlan
-            .map((entry) => entry.match)
-            .where(state.isPreviewableMatch)
-            .toList();
+    final pendingMatches = directorPlan
+        .map((entry) => entry.match)
+        .where(state.isPreviewableMatch)
+        .toList();
     final pendingOrder = {
       for (var index = 0; index < activeStageEntries.length; index++)
         activeStageEntries[index].match:
@@ -1171,6 +1205,20 @@ class _TournamentDirectorDashboardState
                                       context,
                                     ).textTheme.bodySmall,
                                   ),
+                                  if (t.directorPlayOrderMode == 'dynamic' &&
+                                      t.leagueMatch == null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        'Wenigste Spiele: ${state.fewestMatchesLabel(assignment.entry)}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelSmall
+                                            ?.copyWith(
+                                              color: _palette.mutedText,
+                                            ),
+                                      ),
+                                    ),
                                   if (widget.onStartOnBoard != null)
                                     Tooltip(
                                       message:
@@ -1360,6 +1408,14 @@ class _TournamentDirectorDashboardState
                   onPressed: widget.onReopenPreviousStage,
                   icon: const Icon(Icons.undo),
                   label: const Text('Vorherige Phase wieder öffnen'),
+                ),
+              if (widget.onUndoLastMatch != null &&
+                  widget.canUndoLastMatch)
+                OutlinedButton.icon(
+                  key: const ValueKey('director-undo-last-match'),
+                  onPressed: widget.onUndoLastMatch,
+                  icon: const Icon(Icons.undo),
+                  label: const Text('Letzte Partie rückgängig'),
                 ),
               if (widget.onResetCurrentStage != null &&
                   widget.canResetCurrentStage)
@@ -1655,10 +1711,13 @@ class _TournamentDirectorDashboardState
             emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
             prioritizedMatches: flowPriority.prioritizedMatches,
             lockedMatches: runningMatches,
-            plannedBoards: {
-              for (final assignment in upcoming)
-                assignment.entry.match: assignment.board,
-            },
+            plannedBoards: _hideScheduleBoardLabels
+                ? const {}
+                : {
+                    for (final assignment in upcoming)
+                      assignment.entry.match: assignment.board,
+                  },
+            hideBoardLabels: _hideScheduleBoardLabels,
           ),
         ] else ...[
           _box([
@@ -1695,6 +1754,7 @@ class _TournamentDirectorDashboardState
             emptyMessage: 'Noch keine Ergebnisse in dieser Phase.',
             showResult: true,
             maxColumns: 4,
+            onUndoLastMatch: widget.onUndoLastMatch,
           ),
       ],
     );

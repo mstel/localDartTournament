@@ -12,6 +12,7 @@ import '../../../../../app/theme_controller.dart';
 import '../../../../../shared/theme/tournament_display_palette.dart';
 
 import '../../../domain/tournament_models.dart';
+import '../../../domain/tournament_activity_entry.dart';
 import '../../../domain/engines/placement_engine.dart';
 import 'brackets/knockout_seeding_mode_label.dart';
 import '../../utils/match_display_label.dart';
@@ -286,8 +287,21 @@ class _TournamentSecondScreenViewState
               ),
       );
     }
+    final effective = widget.tournament.leagueMatch != null
+        ? [
+            for (final placement in normalized)
+              placement.widgetId == 'combined'
+                  ? SecondScreenWidgetPlacement(
+                      widgetId: 'combined',
+                      widthUnits: 4,
+                      heightUnits: placement.heightUnits,
+                      startsNewRow: true,
+                    )
+                  : placement,
+          ]
+        : normalized;
     return _withIndependentColumns(
-      normalized.where(_isMonitorWidgetAvailable).toList(),
+      effective.where(_isMonitorWidgetAvailable).toList(),
     );
   }
 
@@ -3777,15 +3791,28 @@ class _TournamentSecondScreenViewState
                 ],
               ),
               Divider(height: 12, color: colors.border),
-              for (var index = 0; index < ranking.entries.length; index++)
-                if (!_showOnlyRankingParticipants ||
-                    participantIds.contains(ranking.entries[index].id))
-                  _buildRankingEntry(
-                    context,
-                    ranking,
-                    ranking.entries[index],
-                    index + 1,
-                  ),
+              ...() {
+            var realRank = 0;
+            final widgets = <Widget>[];
+            for (var index = 0; index < ranking.entries.length; index++) {
+              final entry = ranking.entries[index];
+              final hypothetical = ranking.hypotheticalIds.contains(entry.id);
+              if (!hypothetical) realRank++;
+              if (_showOnlyRankingParticipants &&
+                  !participantIds.contains(entry.id)) {
+                continue;
+              }
+              widgets.add(
+                _buildRankingEntry(
+                  context,
+                  ranking,
+                  entry,
+                  hypothetical ? null : realRank,
+                ),
+              );
+            }
+            return widgets;
+          }(),
             ],
           ],
         );
@@ -3797,15 +3824,17 @@ class _TournamentSecondScreenViewState
     BuildContext context,
     _RankingStandings ranking,
     LocalEloPlayer entry,
-    int currentPosition,
+    int? currentPosition,
   ) {
     final colors = _displayColors(context);
     final hypothetical = ranking.hypotheticalIds.contains(entry.id);
     final delta = hypothetical ? 0 : ranking.deltas[entry.id] ?? 0;
     final previousPosition = ranking.previousPositions[entry.id];
-    final positionChange = hypothetical || previousPosition == null
+    final positionChange =
+        hypothetical || previousPosition == null || currentPosition == null
         ? null
         : previousPosition - currentPosition;
+    final positionLabel = hypothetical ? '-' : '$currentPosition';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Wrap(
@@ -3814,7 +3843,7 @@ class _TournamentSecondScreenViewState
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
-            '$currentPosition. ${entry.name} – ${entry.rating} Elo',
+            '$positionLabel. ${entry.name} – ${entry.rating} Elo',
             key: ValueKey(
               hypothetical
                   ? 'ranking-hypothetical-${entry.id}'
@@ -4368,6 +4397,16 @@ class _TournamentSecondScreenViewState
         ),
       );
     }
+    final league = t.leagueMatch;
+    if (league != null) {
+      return _buildLeagueStandingsPanel(
+        context,
+        league,
+        full: full,
+        expand: expand,
+        showHeader: showHeader,
+      );
+    }
 
     if (stage is GroupTournamentRunStage) {
       final runStageIndex = t.runStages.indexOf(stage);
@@ -4506,6 +4545,178 @@ class _TournamentSecondScreenViewState
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Ligaspezifische Ergebnisansicht für den zweiten Bildschirm.
+  ///
+  /// Der bisherige Gruppentisch hieß „Spielplan“ und zeigte die Spielerliste.
+  /// Für Liga/Freundschaft sind stattdessen die Ergebnisse je Mannschaft
+  /// interessant. Die Karten nutzen die gesamte verfügbare Breite; der
+  /// Mannschaftsvergleich zeigt sie bewusst nicht.
+  Widget _buildLeagueStandingsPanel(
+    BuildContext context,
+    LeagueMatch league, {
+    required bool full,
+    required bool expand,
+    required bool showHeader,
+  }) {
+    final colors = _displayColors(context);
+    final cards = [
+      _buildLeagueResultsCard(
+        context,
+        league,
+        side: 0,
+        title: 'Ergebnisse Heim',
+        colors: colors,
+      ),
+      _buildLeagueResultsCard(
+        context,
+        league,
+        side: 1,
+        title: 'Ergebnisse Gast',
+        colors: colors,
+      ),
+    ];
+    final content = LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 900 ? 2 : 1;
+        final cardWidth =
+            (constraints.maxWidth - 12 * (columns - 1)) / columns;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final card in cards)
+              SizedBox(width: cardWidth, child: card),
+          ],
+        );
+      },
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showHeader) ...[
+          Row(
+            children: [
+              const Icon(
+                Icons.leaderboard,
+                size: 20,
+                color: Color(0xFF70E0BA),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Tabellen & Zwischenstände',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: colors.text,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (expand)
+          Expanded(child: SingleChildScrollView(child: content))
+        else
+          content,
+      ],
+    );
+  }
+
+  Widget _buildLeagueResultsCard(
+    BuildContext context,
+    LeagueMatch league, {
+    required int side,
+    required String title,
+    required TournamentDisplayColors colors,
+  }) {
+    final players = side == 0 ? league.homePlayers : league.awayPlayers;
+    final scoreLabel = league.gameFormat.bestOfSets > 1 ? 'Sets' : 'Legs';
+    final rows = <DataRow>[
+      for (var index = 0; index < league.games.length; index++)
+        DataRow(
+          cells: [
+            DataCell(Text('${index + 1}')),
+            DataCell(Text(league.games[index].isDouble ? 'Doppel' : 'Einzel')),
+            DataCell(
+              Text(
+                (side == 0
+                        ? league.games[index].home
+                        : league.games[index].away)
+                    .map((playerIndex) => players[playerIndex])
+                    .join(' / '),
+              ),
+            ),
+            DataCell(
+              Text(
+                league.games[index].complete
+                    ? side == 0
+                        ? '${league.games[index].homeScore(league.gameFormat)}:'
+                            '${league.games[index].awayScore(league.gameFormat)}'
+                        : '${league.games[index].awayScore(league.gameFormat)}:'
+                            '${league.games[index].homeScore(league.gameFormat)}'
+                    : '– : –',
+              ),
+            ),
+          ],
+        ),
+    ];
+    return Container(
+      key: ValueKey(
+        side == 0
+            ? 'second-screen-league-results-home'
+            : 'second-screen-league-results-away',
+      ),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$title · ${side == 0 ? league.homeTeam : league.awayTeam}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: colors.text,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            players.join(' · '),
+            style: TextStyle(fontSize: 11, color: colors.mutedText),
+          ),
+          Divider(color: colors.border, height: 12),
+          Scrollbar(
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingTextStyle: TextStyle(
+                  color: colors.mutedText,
+                  fontWeight: FontWeight.bold,
+                ),
+                dataTextStyle: TextStyle(color: colors.text),
+                columns: [
+                  DataColumn(label: Text('#')),
+                  const DataColumn(label: Text('Art')),
+                  const DataColumn(label: Text('Spieler')),
+                  DataColumn(label: Text(scoreLabel)),
+                ],
+                rows: rows,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -5009,11 +5220,12 @@ class _TournamentSecondScreenViewState
       deprioritizedMatches: flowPriority.deprioritizedMatches,
     );
     final previewGate = TournamentDirectorSnapshot(t, activeIndex);
+    final scheduleOverview = previewGate.scheduleOverview;
     final previewableEntries =
         orderedEntries
             .where((entry) => previewGate.isPreviewableMatch(entry.match))
             .toList();
-    final recommendedGroups = stage is GroupTournamentRunStage
+    final legacyGroups = stage is GroupTournamentRunStage
         ? [
             for (final group in stage.groups)
               RecommendedMatchGroup(
@@ -5046,6 +5258,66 @@ class _TournamentSecondScreenViewState
                 totalMatches: _countMatchesForProgress(stage),
               ),
           ];
+    final recommendedGroups = switch (scheduleOverview.presentation) {
+      DirectorSchedulePresentation.groupFull ||
+      DirectorSchedulePresentation.groupFirstOnly => stage is GroupTournamentRunStage
+          ? [
+              for (final group in stage.groups)
+                RecommendedMatchGroup(
+                  name: group.name,
+                  matches: [
+                    for (final assignment in
+                        scheduleOverview.groups[tournamentGroupBoardKey(
+                              activeIndex,
+                              group.name,
+                            )] ??
+                        const <BoardAssignment>[])
+                      assignment.entry.match,
+                  ],
+                  isDelayed: flowPriority.delayedGroups.contains(group.name),
+                  playedMatches: _matchesOfGroup(
+                    group,
+                  ).where((match) => match.hasPlayers && match.hasResult).length,
+                  totalMatches: _matchesOfGroup(
+                    group,
+                  ).where((match) => match.hasPlayers).length,
+                ),
+            ]
+          : [
+              if (stage != null)
+                RecommendedMatchGroup(
+                  name: stage.name,
+                  matches: [
+                    for (final assignments in scheduleOverview.groups.values)
+                      for (final assignment in assignments)
+                        assignment.entry.match,
+                  ],
+                  playedMatches: _matchesOf(
+                    stage,
+                  ).where((match) => match.hasResult).length,
+                  totalMatches: _countMatchesForProgress(stage),
+                ),
+            ],
+      DirectorSchedulePresentation.globalFlat ||
+      DirectorSchedulePresentation.globalPerBoard => [
+          RecommendedMatchGroup(
+            name:
+                scheduleOverview.presentation ==
+                        DirectorSchedulePresentation.globalFlat
+                    ? 'Vorschläge für freie Boards'
+                    : 'Vorschläge je Board',
+            matches: [
+              for (final assignment in scheduleOverview.suggestions)
+                assignment.entry.match,
+            ],
+            playedMatches: stage == null
+                ? null
+                : _matchesOf(stage).where((match) => match.hasResult).length,
+            totalMatches: stage == null ? null : _countMatchesForProgress(stage),
+          ),
+        ],
+      _ => legacyGroups,
+    };
     final hasOpenMatches = recommendedGroups.any(
       (group) =>
           group.matches.any((match) => match.hasPlayers && !match.isResolved),
@@ -5108,6 +5380,38 @@ class _TournamentSecondScreenViewState
                     child: Text(
                       error,
                       style: const TextStyle(color: Colors.amber),
+                    ),
+                  ),
+                if (scheduleOverview.note case final note?)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.cardEmphasis,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 18,
+                          color: colors.accent,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            note,
+                            style: TextStyle(
+                              color: colors.text,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 FutureBuilder<Map<String, List<PlayerInsight>>>(
@@ -5261,6 +5565,32 @@ class _TournamentSecondScreenViewState
             ),
           const SizedBox(height: 16),
         ],
+        if (_leagueDoublesPairingHint(t) case final hint?)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colors.cardEmphasis,
+              border: Border.all(color: Colors.amber, width: 2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.front_hand_outlined, color: Colors.amber),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    hint,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Text(
           widget.tournament.directorModeEnabled
               ? 'Nächste Begegnungen'
@@ -5289,6 +5619,37 @@ class _TournamentSecondScreenViewState
       ],
     );
     return scrollLargeTextPanel ? SingleChildScrollView(child: panel) : panel;
+  }
+
+  /// Sichtbarer Hinweis, sobald die Einzeln durch sind und die Doppel in die
+  /// „Nächste Begegnungen“ rücken. Die Bestätigung wird beim Zuweisen der
+  /// Doppelpartner im Aktivitätsprotokoll vermerkt.
+  String? _leagueDoublesPairingHint(CreatedTournament t) {
+    final league = t.leagueMatch;
+    if (league == null) return null;
+    final singles = league.games.where((game) => !game.isDouble).toList();
+    final doubles = league.games.where((game) => game.isDouble).toList();
+    if (singles.isEmpty ||
+        doubles.isEmpty ||
+        singles.any((game) => !game.complete) ||
+        doubles.every((game) => game.complete)) {
+      return null;
+    }
+    final unconfirmed = <String>[];
+    for (var side = 0; side < 2; side++) {
+      final team = side == 0 ? league.homeTeam : league.awayTeam;
+      final confirmed = t.activityLog.any(
+        (entry) =>
+            entry.type == 'doubles_pairings_confirmed' &&
+            entry.message == '$team hat die Doppelpartner festgelegt.',
+      );
+      if (!confirmed) unconfirmed.add(team);
+    }
+    if (unconfirmed.isEmpty) return null;
+    if (unconfirmed.length == 2) {
+      return 'Beide Mannschaften haben ihre Doppelpartner noch nicht festgelegt!';
+    }
+    return 'Mannschaft ${unconfirmed.first} hat seine Doppelpartner noch nicht festgelegt!';
   }
 
   Widget _buildRunningMatchTile(
@@ -5699,11 +6060,26 @@ class _TournamentSecondScreenViewState
                                       : boardNames.join(' & ');
                                   final recommendations = mergedGroupKey == null
                                       ? snapshot.suggestionsForBoard(board)
-                                      : snapshot.upcomingForBoards(
-                                          boards,
-                                          groupKey: mergedGroupKey,
-                                          limit: boards.length * 3,
-                                        );
+                                      : snapshot.scheduleOverview.presentation ==
+                                              DirectorSchedulePresentation
+                                                  .unchanged
+                                          ? snapshot.upcomingForBoards(
+                                              boards,
+                                              groupKey: mergedGroupKey,
+                                              limit: boards.length * 3,
+                                            )
+                                          : snapshot.scheduleOverview.groups[
+                                                mergedGroupKey
+                                              ] ??
+                                              const <BoardAssignment>[];
+                                  final fewestMatchesHint =
+                                      snapshot.isDirectorManagedNormalRanking &&
+                                          snapshot.isDynamicSchedule &&
+                                          recommendations.isNotEmpty
+                                      ? snapshot.fewestMatchesLabel(
+                                          recommendations.first.entry,
+                                        )
+                                      : '';
                                   final upcoming = recommendations
                                       .where(
                                         (assignment) =>
@@ -5944,6 +6320,19 @@ class _TournamentSecondScreenViewState
                                                 ),
                                             ],
                                           ),
+                                          if (fewestMatchesHint.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 6,
+                                              ),
+                                              child: Text(
+                                                'Wenigste Spiele: $fewestMatchesHint',
+                                                style: TextStyle(
+                                                  color: colors.mutedText,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -5998,9 +6387,27 @@ class _TournamentSecondScreenViewState
         if (dateComparison != 0) return dateComparison;
         return (enteredOrder[right] ?? 0).compareTo(enteredOrder[left] ?? 0);
       });
-    final recentSubstitutions =
-        t.activityLog.where((entry) => entry.type == 'substitution').toList()
-          ..sort((left, right) => right.timestamp.compareTo(left.timestamp));
+    final recentActivity = t.activityLog
+        .where(
+          (entry) =>
+              entry.type == 'substitution' ||
+              entry.type == 'substitution_budget',
+        )
+        .toList();
+    final activityItems = <_RecentFeedItem>[
+      for (final match in recent)
+        _RecentFeedItem.match(
+          match,
+          match.finishedAt ?? match.startedAt ?? t.startedAt ?? t.createdAt,
+        ),
+      if (t.leagueMatch != null)
+        for (final entry in recentActivity)
+          _RecentFeedItem.activity(entry, entry.timestamp),
+    ]..sort((left, right) {
+      final dateComparison = right.timestamp.compareTo(left.timestamp);
+      if (dateComparison != 0) return dateComparison;
+      return right.order.compareTo(left.order);
+    });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -6039,71 +6446,81 @@ class _TournamentSecondScreenViewState
                               style: TextStyle(color: Colors.amber),
                             ),
                           )
-                        : recent.isEmpty
+                        : activityItems.isEmpty
                         ? Center(
                             child: Text(
-                              'Noch keine beendeten Partien vorhanden.',
+                              t.leagueMatch == null
+                                  ? 'Noch keine beendeten Partien vorhanden.'
+                                  : 'Noch keine aktuellen Einträge vorhanden.',
                               style: TextStyle(color: colors.mutedText),
                             ),
                           )
                         : Scrollbar(
                             controller: _recentResultsController,
-                            thumbVisibility: recent.length > visibleRows,
+                            thumbVisibility:
+                                activityItems.length > visibleRows,
                             child: ListView.separated(
                               controller: _recentResultsController,
                               padding: EdgeInsets.zero,
-                              itemCount: recent.length,
+                              itemCount: activityItems.length,
                               separatorBuilder: (context, index) =>
                                   Divider(height: 1, color: colors.border),
-                              itemBuilder: (context, index) => ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: itemExtent,
-                                ),
-                                child: _buildRecentMatchRow(
-                                  context,
-                                  t,
-                                  recent[index],
-                                  _changesForMatch(
-                                    t,
-                                    recent[index],
-                                    snapshot.data,
+                              itemBuilder: (context, index) {
+                                final item = activityItems[index];
+                                final activity = item.activity;
+                                if (activity != null) {
+                                  return ListTile(
+                                    key: ValueKey(
+                                      'recent-activity-${activity.timestamp.toIso8601String()}-${activity.type}-${activity.message.hashCode}',
+                                    ),
+                                    dense: true,
+                                    visualDensity: VisualDensity.compact,
+                                    leading: Icon(
+                                      activity.type == 'substitution'
+                                          ? Icons.swap_horiz
+                                          : Icons.playlist_add_outlined,
+                                      color: colors.accent,
+                                    ),
+                                    title: Text(
+                                      activity.message,
+                                      style: TextStyle(color: colors.text),
+                                    ),
+                                    subtitle: Text(
+                                      _formatRecentActivityTime(
+                                        activity.timestamp,
+                                      ),
+                                      style: TextStyle(
+                                        color: colors.mutedText,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                final match = item.match!;
+                                return ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: itemExtent,
                                   ),
-                                ),
-                              ),
+                                  child: _buildRecentMatchRow(
+                                    context,
+                                    t,
+                                    match,
+                                    _changesForMatch(t, match, snapshot.data),
+                                  ),
+                                );
+                              },
                             ),
                           );
-                    final activityRows = [
-                      for (final entry in recentSubstitutions.take(5))
-                        ListTile(
-                          key: ValueKey(
-                            'recent-activity-${entry.timestamp.toIso8601String()}',
-                          ),
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          leading: Icon(Icons.swap_horiz, color: colors.accent),
-                          title: Text(
-                            entry.message,
-                            style: TextStyle(color: colors.text),
-                          ),
-                        ),
-                    ];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ...activityRows,
-                        if (expand)
-                          Expanded(child: recentContent)
-                        else
-                          SizedBox(
+                    return expand
+                        ? recentContent
+                        : SizedBox(
                             key: const ValueKey('recent-results-scroll'),
-                            height: recent.isEmpty
+                            height: activityItems.isEmpty
                                 ? itemExtent
                                 : itemExtent *
-                                      recent.length.clamp(1, visibleRows),
+                                      activityItems.length.clamp(1, visibleRows),
                             child: recentContent,
-                          ),
-                      ],
-                    );
+                          );
                   },
                 );
             return expand ? Expanded(child: recentList) : recentList;
@@ -6123,6 +6540,12 @@ class _TournamentSecondScreenViewState
     }
     final key = const LocalEloCalculator().matchKey(tournament, match);
     return key == null ? const [] : changes?[key] ?? const [];
+  }
+
+  String _formatRecentActivityTime(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _buildPriorityHintsPanel(
@@ -6180,6 +6603,28 @@ class _TournamentSecondScreenViewState
     tieBreakers,
     tournament: widget.tournament,
   );
+}
+
+class _RecentFeedItem {
+  const _RecentFeedItem._({
+    required this.timestamp,
+    required this.order,
+    this.match,
+    this.activity,
+  });
+
+  factory _RecentFeedItem.match(GroupMatch match, DateTime timestamp) =>
+      _RecentFeedItem._(timestamp: timestamp, order: 1, match: match);
+
+  factory _RecentFeedItem.activity(
+    TournamentActivityEntry activity,
+    DateTime timestamp,
+  ) => _RecentFeedItem._(timestamp: timestamp, order: 0, activity: activity);
+
+  final DateTime timestamp;
+  final int order;
+  final GroupMatch? match;
+  final TournamentActivityEntry? activity;
 }
 
 class _MonitorTournamentClock extends StatefulWidget {

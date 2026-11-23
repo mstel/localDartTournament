@@ -2514,7 +2514,13 @@ class _LocalRankingStandingsPageState extends State<LocalRankingStandingsPage> {
               ? 'ranking-hypothetical-${player.id}'
               : 'ranking-member-${player.id}',
         ),
-        leading: CircleAvatar(child: Text('${index + 1}')),
+        leading: CircleAvatar(
+          child: Text(
+            hypothetical
+                ? '-'
+                : '${snapshot.allMembers.take(index + 1).where((p) => !snapshot.isHypothetical(p.id)).length}',
+          ),
+        ),
         title: Row(
           children: [
             Flexible(

@@ -9,11 +9,13 @@ class LeagueTournamentPlayerSections extends StatelessWidget {
     required this.leagueMatch,
     required this.players,
     required this.playerTileBuilder,
+    this.onAddReservePlayer,
   });
 
   final LeagueMatch leagueMatch;
   final List<TournamentPlayer> players;
   final Widget Function(TournamentPlayer player) playerTileBuilder;
+  final Future<void> Function(int teamSide)? onAddReservePlayer;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +57,9 @@ class LeagueTournamentPlayerSections extends StatelessWidget {
     final substitutions = leagueMatch.substitutions
         .where((event) => event.teamSide == teamSide)
         .toList();
+    final canAddReserve =
+        leagueMatch.variant == LeagueMatchVariant.adjusted &&
+        onAddReservePlayer != null;
     return Card(
       child: ExpansionTile(
         leading: const Icon(Icons.people_alt_outlined),
@@ -62,6 +67,25 @@ class LeagueTournamentPlayerSections extends StatelessWidget {
         subtitle: Text('${players.length} Teilnehmer'),
         childrenPadding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
+          if (canAddReserve) ...[
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: OutlinedButton.icon(
+                  key: ValueKey(
+                    teamSide == 0
+                        ? 'league-add-reserve-home-inline'
+                        : 'league-add-reserve-away-inline',
+                  ),
+                  onPressed: () => onAddReservePlayer!(teamSide),
+                  icon: const Icon(Icons.person_add_alt_1_outlined),
+                  label: const Text('Ersatzspieler hinzufügen'),
+                ),
+              ),
+            ),
+            const Divider(height: 8),
+          ],
           for (var index = 0; index < players.length; index++) ...[
             playerTileBuilder(players[index]),
             Align(

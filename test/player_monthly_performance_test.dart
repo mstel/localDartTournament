@@ -47,6 +47,9 @@ void main() {
       expect(combined.last.average, 90);
       expect(combined.last.scoring, 55);
       expect(combined.last.checkoutRate, isNull);
+      expect(combined.last.matches, 15);
+      expect(combined.last.wins, 0);
+      expect(combined.last.losses, 0);
       expect(totalWeightedLegs(combined), 110);
 
       final overall = summarizeMonthlyPerformance(combined);
@@ -64,6 +67,85 @@ void main() {
       expect(current.scoring, 49);
     },
   );
+
+  test('monthly rows, aggregation and current form keep match results', () {
+    const recent = PlayerMonthlyPerformance(
+      playerId: 'player-1',
+      year: 2026,
+      month: 10,
+      weightedLegs: 50,
+      matches: 10,
+      wins: 7,
+      losses: 3,
+    );
+    const older = PlayerMonthlyPerformance(
+      playerId: 'player-1',
+      year: 2026,
+      month: 9,
+      weightedLegs: 70,
+      matches: 14,
+      wins: 7,
+      losses: 7,
+    );
+
+    final row = PlayerMonthlyPerformance.fromRow({
+      'player_profile_id': 'player-1',
+      'year': 2026,
+      'month': 10,
+      'weighted_legs': 50,
+      'matches': 10,
+      'wins': 7,
+      'losses': 3,
+      'scoring': null,
+      'average': null,
+      'checkout_rate': null,
+    });
+    expect(row.matches, 10);
+    expect(row.wins, 7);
+    expect(row.losses, 3);
+    expect(row.winRate, 70);
+
+    final aggregated = aggregateMonthlyPlayerPerformances([
+      recent,
+      const PlayerMonthlyPerformance(
+        playerId: 'player-2',
+        year: 2026,
+        month: 10,
+        weightedLegs: 10,
+        matches: 4,
+        wins: 1,
+        losses: 3,
+      ),
+    ]);
+    expect(aggregated, hasLength(1));
+    expect(aggregated.single.matches, 14);
+    expect(aggregated.single.wins, 8);
+    expect(aggregated.single.losses, 6);
+    expect(aggregated.single.winRate, closeTo(8 * 100 / 14, 0.001));
+
+    final current = calculateCurrentFormPerformance(
+      [recent, older],
+      now: DateTime(2026, 11, 3),
+    );
+    expect(current.matches, 20);
+    expect(current.wins, 12);
+    expect(current.losses, 8);
+    expect(current.winRate, 60);
+    expect(current.toJson(), containsPair('matches', 20));
+    expect(current.toJson(), containsPair('wins', 12));
+    expect(current.toJson(), containsPair('losses', 8));
+    expect(current.toJson(), containsPair('winRate', 60.0));
+
+    final empty = calculateCurrentFormPerformance(
+      [recent],
+      now: DateTime(2026, 11, 3),
+      targetLegs: 0,
+    );
+    expect(empty.matches, 0);
+    expect(empty.wins, 0);
+    expect(empty.losses, 0);
+    expect(empty.winRate, 0);
+  });
 
   test('weighted legs are summed across recorded months', () {
     final entries = [

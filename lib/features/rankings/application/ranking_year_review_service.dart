@@ -26,6 +26,8 @@ class RankingMonthlyClubPerformance {
     required this.month,
     required this.weightedLegs,
     this.matches = 0,
+    this.wins = 0,
+    this.losses = 0,
     required this.scoring,
     required this.average,
     required this.checkoutRate,
@@ -35,9 +37,13 @@ class RankingMonthlyClubPerformance {
   final int month;
   final int weightedLegs;
   final int matches;
+  final int wins;
+  final int losses;
   final double? scoring;
   final double? average;
   final double? checkoutRate;
+
+  double get winRate => matches == 0 ? 0 : wins * 100 / matches;
 }
 
 class RankingYearReview {
@@ -304,6 +310,18 @@ class RankingYearReviewService {
                 monthEntries.fold<int>(
                   0,
                   (total, entry) => total + entry.matches,
+                ) ~/
+                2,
+            wins:
+                monthEntries.fold<int>(
+                  0,
+                  (total, entry) => total + entry.wins,
+                ) ~/
+                2,
+            losses:
+                monthEntries.fold<int>(
+                  0,
+                  (total, entry) => total + entry.losses,
                 ) ~/
                 2,
             scoring: weightedMean(monthEntries, (entry) => entry.scoring),
