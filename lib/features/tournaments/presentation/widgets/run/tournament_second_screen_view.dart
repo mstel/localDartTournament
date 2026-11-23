@@ -98,6 +98,18 @@ typedef _BoardAnimation = ({_BoardAnimationKind kind});
 
 typedef _BestPerformanceNotice = ({String key, String label});
 
+class _LeaguePlayerStanding {
+  _LeaguePlayerStanding(this.name);
+
+  final String name;
+  int played = 0;
+  int wins = 0;
+  int losses = 0;
+
+  // Jede gewonnene Begegnung gibt genau einen Matchpunkt, auch im Doppel.
+  int get points => wins;
+}
+
 const List<SecondScreenWidgetPlacement> _defaultMonitorLayout = [
   SecondScreenWidgetPlacement(
     widgetId: 'teamComparison',
@@ -201,6 +213,7 @@ class _TournamentSecondScreenViewState
   final Map<String, GlobalKey> _monitorDropTargetKeys = {};
   final Map<String, GlobalKey> _monitorCardKeys = {};
   double _monitorUnitHeight = 220;
+  final ScrollController _leagueStandingsScrollController = ScrollController();
 
   // Zweiter-Monitor-Animationen: Zuordnung und Match-Ende werden nur im
   // Standalone-Fenster gezeigt und nach zehn Sekunden wieder zurückgesetzt.
@@ -807,6 +820,7 @@ class _TournamentSecondScreenViewState
       timer.cancel();
     }
     _performancePopupTimer?.cancel();
+    _leagueStandingsScrollController.dispose();
     _recentResultsController.dispose();
     _completionTeamComparisonScrollController.dispose();
     _completionPlayerRecordScrollController.dispose();
@@ -1360,20 +1374,20 @@ class _TournamentSecondScreenViewState
             key: const ValueKey('second-screen-performance-overlay'),
             children: [
               viewWidget,
-              Positioned(
-                top: 16,
-                right: 16,
-                child: _BestPerformancePopup(
-                  key: ValueKey(
-                    'second-screen-best-performance-popup-${performanceNotice.key}',
+              Positioned.fill(
+                child: Center(
+                  child: _BestPerformancePopup(
+                    key: ValueKey(
+                      'second-screen-best-performance-popup-${performanceNotice.key}',
+                    ),
+                    label: performanceNotice.label,
+                    onDismiss: () {
+                      _performancePopupTimer?.cancel();
+                      if (mounted) {
+                        setState(() => _activePerformancePopup = null);
+                      }
+                    },
                   ),
-                  label: performanceNotice.label,
-                  onDismiss: () {
-                    _performancePopupTimer?.cancel();
-                    if (mounted) {
-                      setState(() => _activePerformancePopup = null);
-                    }
-                  },
                 ),
               ),
             ],
@@ -4389,14 +4403,8 @@ class _TournamentSecondScreenViewState
     bool expand = true,
     bool showHeader = true,
   }) {
-    if (stage == null) {
-      return const Center(
-        child: Text(
-          'Keine aktive Phase vorhanden',
-          style: TextStyle(color: Colors.white70),
-        ),
-      );
-    }
+    // Liga/Freundschaft hat keine Turnierphase, sondern die Mannschaften als
+    // Datenquelle. Die Prüfung muss deshalb vor der aktiven Phase stehen.
     final league = t.leagueMatch;
     if (league != null) {
       return _buildLeagueStandingsPanel(
@@ -4405,6 +4413,14 @@ class _TournamentSecondScreenViewState
         full: full,
         expand: expand,
         showHeader: showHeader,
+      );
+    }
+    if (stage == null) {
+      return const Center(
+        child: Text(
+          'Keine aktive Phase vorhanden',
+          style: TextStyle(color: Colors.white70),
+        ),
       );
     }
 
@@ -4549,12 +4565,9 @@ class _TournamentSecondScreenViewState
     );
   }
 
-  /// Ligaspezifische Ergebnisansicht für den zweiten Bildschirm.
-  ///
-  /// Der bisherige Gruppentisch hieß „Spielplan“ und zeigte die Spielerliste.
-  /// Für Liga/Freundschaft sind stattdessen die Ergebnisse je Mannschaft
-  /// interessant. Die Karten nutzen die gesamte verfügbare Breite; der
-  /// Mannschaftsvergleich zeigt sie bewusst nicht.
+  /// Ligaspezifische Standings für den zweiten Bildschirm: eine gemeinsame,
+  /// breite Tabelle mit den Heimspielern links und den Gastspielern rechts.
+  /// Matchpunkte statt Legs, weil Legs allein keinen Matchgewinn bedeuten.
   Widget _buildLeagueStandingsPanel(
     BuildContext context,
     LeagueMatch league, {
@@ -4563,36 +4576,123 @@ class _TournamentSecondScreenViewState
     required bool showHeader,
   }) {
     final colors = _displayColors(context);
-    final cards = [
-      _buildLeagueResultsCard(
-        context,
-        league,
-        side: 0,
-        title: 'Ergebnisse Heim',
-        colors: colors,
-      ),
-      _buildLeagueResultsCard(
-        context,
-        league,
-        side: 1,
-        title: 'Ergebnisse Gast',
-        colors: colors,
-      ),
-    ];
-    final content = LayoutBuilder(
+    final home = _leaguePlayerStandings(league, side: 0);
+    final away = _leaguePlayerStandings(league, side: 1);
+    final table = LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900 ? 2 : 1;
-        final cardWidth =
-            (constraints.maxWidth - 12 * (columns - 1)) / columns;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (final card in cards)
-              SizedBox(width: cardWidth, child: card),
+        final dataTable = DataTable(
+          headingTextStyle: TextStyle(
+            color: colors.mutedText,
+            fontWeight: FontWeight.bold,
+          ),
+          dataTextStyle: TextStyle(color: colors.text),
+          columns: const [
+            DataColumn(label: Text('Heimspieler')),
+            DataColumn(label: Text('Sp'), numeric: true),
+            DataColumn(label: Text('S'), numeric: true),
+            DataColumn(label: Text('N'), numeric: true),
+            DataColumn(label: Text('Pkt'), numeric: true),
+            DataColumn(label: Text('Gastspieler')),
+            DataColumn(label: Text('Sp'), numeric: true),
+            DataColumn(label: Text('S'), numeric: true),
+            DataColumn(label: Text('N'), numeric: true),
+            DataColumn(label: Text('Pkt'), numeric: true),
+          ],
+          rows: [
+            for (
+              var index = 0;
+              index < home.length || index < away.length;
+              index++
+            )
+              DataRow(
+                cells: [
+                  DataCell(
+                    Text(index < home.length ? home[index].name : '–'),
+                  ),
+                  ..._leagueStandingCells(
+                    index < home.length ? home[index] : null,
+                  ),
+                  DataCell(
+                    Text(index < away.length ? away[index].name : '–'),
+                  ),
+                  ..._leagueStandingCells(
+                    index < away.length ? away[index] : null,
+                  ),
+                ],
+              ),
           ],
         );
+        return Scrollbar(
+          controller: _leagueStandingsScrollController,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _leagueStandingsScrollController,
+            scrollDirection: Axis.horizontal,
+            // Die Tabelle fuellt die verfuegbare Breite, statt als schmale
+            // Inhaltsbreite die rechte Haelfte frei zu lassen.
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: dataTable,
+            ),
+          ),
+        );
       },
+    );
+    final card = Container(
+      key: const ValueKey('second-screen-league-standings-combined'),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Heim · ${league.homeTeam}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: colors.text,
+                  ),
+                ),
+              ),
+              Text(
+                '${league.homePoints} : ${league.awayPoints}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: colors.text,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  'Gast · ${league.awayTeam}',
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: colors.text,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          table,
+          const SizedBox(height: 6),
+          Text(
+            'Sp = gespielte Begegnungen · S = Siege · N = Niederlagen · '
+            'Pkt = Matchpunkte. Bei Bedarf seitlich scrollen.',
+            style: TextStyle(fontSize: 11, color: colors.mutedText),
+          ),
+        ],
+      ),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4621,104 +4721,50 @@ class _TournamentSecondScreenViewState
           const SizedBox(height: 10),
         ],
         if (expand)
-          Expanded(child: SingleChildScrollView(child: content))
+          Expanded(child: SingleChildScrollView(child: card))
         else
-          content,
+          card,
       ],
     );
   }
 
-  Widget _buildLeagueResultsCard(
-    BuildContext context,
+  List<DataCell> _leagueStandingCells(_LeaguePlayerStanding? standing) => [
+    DataCell(Text(standing == null ? '–' : '${standing.played}')),
+    DataCell(Text(standing == null ? '–' : '${standing.wins}')),
+    DataCell(Text(standing == null ? '–' : '${standing.losses}')),
+    DataCell(Text(standing == null ? '–' : '${standing.points}')),
+  ];
+
+  List<_LeaguePlayerStanding> _leaguePlayerStandings(
     LeagueMatch league, {
     required int side,
-    required String title,
-    required TournamentDisplayColors colors,
   }) {
     final players = side == 0 ? league.homePlayers : league.awayPlayers;
-    final scoreLabel = league.gameFormat.bestOfSets > 1 ? 'Sets' : 'Legs';
-    final rows = <DataRow>[
-      for (var index = 0; index < league.games.length; index++)
-        DataRow(
-          cells: [
-            DataCell(Text('${index + 1}')),
-            DataCell(Text(league.games[index].isDouble ? 'Doppel' : 'Einzel')),
-            DataCell(
-              Text(
-                (side == 0
-                        ? league.games[index].home
-                        : league.games[index].away)
-                    .map((playerIndex) => players[playerIndex])
-                    .join(' / '),
-              ),
-            ),
-            DataCell(
-              Text(
-                league.games[index].complete
-                    ? side == 0
-                        ? '${league.games[index].homeScore(league.gameFormat)}:'
-                            '${league.games[index].awayScore(league.gameFormat)}'
-                        : '${league.games[index].awayScore(league.gameFormat)}:'
-                            '${league.games[index].homeScore(league.gameFormat)}'
-                    : '– : –',
-              ),
-            ),
-          ],
-        ),
+    final standings = [
+      for (final player in players) _LeaguePlayerStanding(player),
     ];
-    return Container(
-      key: ValueKey(
-        side == 0
-            ? 'second-screen-league-results-home'
-            : 'second-screen-league-results-away',
-      ),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$title · ${side == 0 ? league.homeTeam : league.awayTeam}',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-              color: colors.text,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            players.join(' · '),
-            style: TextStyle(fontSize: 11, color: colors.mutedText),
-          ),
-          Divider(color: colors.border, height: 12),
-          Scrollbar(
-            thumbVisibility: true,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingTextStyle: TextStyle(
-                  color: colors.mutedText,
-                  fontWeight: FontWeight.bold,
-                ),
-                dataTextStyle: TextStyle(color: colors.text),
-                columns: [
-                  DataColumn(label: Text('#')),
-                  const DataColumn(label: Text('Art')),
-                  const DataColumn(label: Text('Spieler')),
-                  DataColumn(label: Text(scoreLabel)),
-                ],
-                rows: rows,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    for (final game in league.games) {
+      if (!game.complete) continue;
+      final own = side == 0
+          ? game.homeScore(league.gameFormat)
+          : game.awayScore(league.gameFormat);
+      final other = side == 0
+          ? game.awayScore(league.gameFormat)
+          : game.homeScore(league.gameFormat);
+      if (own == null || other == null) continue;
+      final indexes = side == 0 ? game.home : game.away;
+      for (final index in indexes.toSet()) {
+        if (index < 0 || index >= standings.length) continue;
+        final standing = standings[index];
+        standing.played++;
+        if (own > other) {
+          standing.wins++;
+        } else if (other > own) {
+          standing.losses++;
+        }
+      }
+    }
+    return standings;
   }
 
   /// Qualifikationshinweis für eine Gruppe inklusive Vergleichsplätzen und
@@ -6848,28 +6894,35 @@ class _BestPerformancePopupState extends State<_BestPerformancePopup>
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _controller,
-    builder: (context, _) {
-      final value = _controller.value;
-      final opacity =
-          (value < 0.1
-                  ? value * 10
-                  : value > 0.85
-                  ? (1 - value) / 0.15
-                  : 1)
-              .clamp(0.0, 1.0)
-              .toDouble();
-      return Opacity(
-        opacity: opacity,
-        child: Transform.translate(
-          offset: Offset(0, (1 - opacity) * 12),
-          child: GestureDetector(
-            onTap: widget.onDismiss,
-            child: Semantics(
-              liveRegion: true,
-              child: SizedBox(
-                height: 104,
+  Widget build(BuildContext context) {
+    final labelStyle = TextStyle(
+      color: Colors.white,
+      fontWeight: FontWeight.bold,
+      fontSize: 44,
+    );
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final value = _controller.value;
+        final opacity =
+            (value < 0.1
+                    ? value * 10
+                    : value > 0.85
+                    ? (1 - value) / 0.15
+                    : 1)
+                .clamp(0.0, 1.0)
+                .toDouble();
+        return Opacity(
+          opacity: opacity,
+          child: Transform.translate(
+            offset: Offset(0, (1 - opacity) * 18),
+            child: GestureDetector(
+              onTap: widget.onDismiss,
+              child: Semantics(
+                liveRegion: true,
+                // Natürliche Höhe: lange Namen und 200 % Schrift duerfen das
+                // Popup vergroessern, statt Text abzuschneiden.
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
@@ -6879,24 +6932,24 @@ class _BestPerformancePopupState extends State<_BestPerformancePopup>
                       ),
                     ),
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
+                      constraints: const BoxConstraints(maxWidth: 900),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                          horizontal: 40,
+                          vertical: 32,
                         ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF2C7A5B),
                           border: Border.all(
                             color: const Color(0xFF70E0BA),
-                            width: 2,
+                            width: 3,
                           ),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(28),
                           boxShadow: const [
                             BoxShadow(
                               color: Color(0x99000000),
-                              blurRadius: 18,
-                              spreadRadius: 2,
+                              blurRadius: 32,
+                              spreadRadius: 4,
                             ),
                           ],
                         ),
@@ -6906,19 +6959,10 @@ class _BestPerformancePopupState extends State<_BestPerformancePopup>
                             const Icon(
                               Icons.celebration,
                               color: Color(0xFFFFD166),
-                              size: 26,
+                              size: 64,
                             ),
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                widget.label,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
+                            const SizedBox(width: 24),
+                            Flexible(child: Text(widget.label, style: labelStyle)),
                           ],
                         ),
                       ),
@@ -6928,10 +6972,10 @@ class _BestPerformancePopupState extends State<_BestPerformancePopup>
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
 
 class _ConfettiPainter extends CustomPainter {
@@ -6948,11 +6992,11 @@ class _ConfettiPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (var index = 0; index < 28; index++) {
+    for (var index = 0; index < 44; index++) {
       final x = (((index * 37) % 100) / 100) * size.width;
-      final startY = -12 + ((index * 19) % 36).toDouble();
-      final y = startY + progress * (size.height + 32 + (index % 5) * 10);
-      if (y < -12 || y > size.height + 12) continue;
+      final startY = -20 + ((index * 19) % 48).toDouble();
+      final y = startY + progress * (size.height + 48 + (index % 5) * 16);
+      if (y < -20 || y > size.height + 20) continue;
       final paint = Paint()
         ..color = _colors[index % _colors.length].withValues(alpha: 0.9);
       canvas.save();
@@ -6961,8 +7005,8 @@ class _ConfettiPainter extends CustomPainter {
       canvas.drawRect(
         Rect.fromCenter(
           center: Offset.zero,
-          width: index % 3 == 0 ? 6 : 4,
-          height: index % 3 == 0 ? 4 : 8,
+          width: index % 3 == 0 ? 12 : 8,
+          height: index % 3 == 0 ? 8 : 16,
         ),
         paint,
       );

@@ -70,18 +70,6 @@ void main() {
       '24',
     );
     await tester.enterText(
-      find.byKey(const ValueKey('performance-matches')),
-      '12',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('performance-wins')),
-      '8',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('performance-losses')),
-      '4',
-    );
-    await tester.enterText(
       find.byKey(const ValueKey('performance-scoring')),
       '57,4',
     );
@@ -96,16 +84,16 @@ void main() {
     await tapSave(tester);
 
     expect(database.saved?.weightedLegs, 24);
-    expect(database.saved?.matches, 12);
-    expect(database.saved?.wins, 8);
-    expect(database.saved?.losses, 4);
-    expect(database.saved?.winRate, closeTo(66.666, 0.001));
     expect(database.saved?.scoring, 57.4);
     expect(database.saved?.average, 62.1);
     expect(database.saved?.checkoutRate, 31.5);
+    expect(
+      find.textContaining('aus den zugewiesenen Turnieren'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('saved match counts populate the fields for the month', (
+  testWidgets('derived match counts are not editable and survive saving', (
     tester,
   ) async {
     final now = DateTime.now();
@@ -123,34 +111,31 @@ void main() {
     );
     await pumpPage(tester, database);
 
-    expect(
-      tester.widget<TextField>(
-        find.byKey(const ValueKey('performance-matches')),
-      ).controller!.text,
-      '9',
+    expect(find.byKey(const ValueKey('performance-matches')), findsNothing);
+    expect(find.byKey(const ValueKey('performance-wins')), findsNothing);
+    expect(find.byKey(const ValueKey('performance-losses')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('performance-weighted-legs')),
+      '36',
     );
-    expect(
-      tester.widget<TextField>(
-        find.byKey(const ValueKey('performance-wins')),
-      ).controller!.text,
-      '6',
-    );
-    expect(
-      tester.widget<TextField>(
-        find.byKey(const ValueKey('performance-losses')),
-      ).controller!.text,
-      '3',
-    );
+    await tapSave(tester);
+
+    expect(database.saved?.weightedLegs, 36);
+    expect(database.saved?.matches, 9);
+    expect(database.saved?.wins, 6);
+    expect(database.saved?.losses, 3);
+    expect(database.saved?.winRate, closeTo(66.666, 0.001));
   });
 
-  testWidgets('negative or non-integer match counts are rejected', (
+  testWidgets('negative or non-integer weighted legs are rejected', (
     tester,
   ) async {
     final database = _FakeDatabase();
     await pumpPage(tester, database);
 
     await tester.enterText(
-      find.byKey(const ValueKey('performance-wins')),
+      find.byKey(const ValueKey('performance-weighted-legs')),
       '-1',
     );
     await tapSave(tester);
@@ -158,7 +143,7 @@ void main() {
     expect(find.textContaining('nicht negative ganze Zahlen'), findsOneWidget);
 
     await tester.enterText(
-      find.byKey(const ValueKey('performance-wins')),
+      find.byKey(const ValueKey('performance-weighted-legs')),
       '1.5',
     );
     await tapSave(tester);

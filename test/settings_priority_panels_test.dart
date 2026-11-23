@@ -13,9 +13,17 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
-    await tester.tap(find.byType(ChoiceChip).last);
-    await tester.pumpAndSettle();
-    expect(find.text('Sonstige Einstellungen'), findsNWidgets(2));
+    await tester.tap(find.byType(ChoiceChip).at(3));
+    for (var i = 0; i < 3; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Sonstige Einstellungen'), findsNothing);
+    expect(find.text('Standardwerte'), findsNWidgets(2));
+    expect(find.text('PDF-Spielplan Einstellungen'), findsOneWidget);
+    expect(find.text('Auslosungsrad'), findsNothing);
 
     await tester.drag(find.byType(Scrollable).last, const Offset(0, -900));
     await tester.pumpAndSettle();

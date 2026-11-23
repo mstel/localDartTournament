@@ -262,19 +262,85 @@ void main() {
       substitutionLimit: 1,
     );
 
-    expect(league.substitutionLimit, 1);
+    expect(league.substitutionLimitFor(0), 1);
+    expect(league.substitutionLimitFor(1), 1);
     expect(league.substitutionsRemaining(0), 1);
+    expect(league.substitutionsRemaining(1), 1);
     expect(league.substitutionsUsed(0), 0);
 
     league.addSubstitutionBudget(teamSide: 0);
 
-    expect(league.substitutionLimit, 2);
+    expect(league.substitutionLimitFor(0), 2);
+    expect(league.substitutionLimitFor(1), 1);
     expect(league.substitutionsRemaining(0), 2);
+    expect(league.substitutionsRemaining(1), 1);
     expect(league.substitutionsUsed(0), 0);
     expect(league.substitutions, isEmpty);
 
     final restored = LeagueMatch.fromJson(league.toJson());
-    expect(restored.substitutionLimit, 2);
+    expect(restored.substitutionLimitFor(0), 2);
+    expect(restored.substitutionLimitFor(1), 1);
     expect(restored.substitutionsRemaining(0), 2);
+    expect(restored.substitutionsRemaining(1), 1);
+  });
+
+  test('a rejected substitution leaves both team budgets untouched', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: home.take(6).toList(),
+      awayPlayers: away.take(6).toList(),
+      singlesPerPlayer: 1,
+      doublesCount: 1,
+      starterCount: 4,
+      maxReservePlayers: 2,
+      substitutionLimit: 1,
+    );
+
+    expect(
+      () => league.substitute(
+        teamSide: 1,
+        outPlayerIndex: 5,
+        inPlayerIndex: 4,
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('nicht in der aktuellen Aufstellung'),
+        ),
+      ),
+    );
+
+    expect(league.substitutionLimitFor(0), 1);
+    expect(league.substitutionLimitFor(1), 1);
+    expect(league.substitutionsRemaining(0), 1);
+    expect(league.substitutionsRemaining(1), 1);
+    expect(league.substitutions, isEmpty);
+  });
+
+  test('successful substitutions consume only the selected team budget', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: home,
+      awayPlayers: away,
+      singlesPerPlayer: 1,
+      doublesCount: 1,
+      starterCount: 5,
+      maxReservePlayers: 2,
+      substitutionLimit: 2,
+    );
+
+    league.substitute(teamSide: 0, outPlayerIndex: 3, inPlayerIndex: 6);
+
+    expect(league.substitutionsRemaining(0), 1);
+    expect(league.substitutionsRemaining(1), 2);
+    expect(league.activePlayers(0), isNot(contains(3)));
+    expect(league.activePlayers(0), contains(6));
+    expect(
+      league.substitutions.where((event) => event.outPlayerIndex == 3),
+      hasLength(1),
+    );
   });
 }

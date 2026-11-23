@@ -4,6 +4,7 @@ import '../../rankings/application/local_ranking_series_service.dart';
 import '../../rankings/domain/local_elo_calculator.dart';
 import '../../statistics/domain/best_performance.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
+import '../../statistics/domain/tournament_monthly_results.dart';
 import '../../tournaments/application/result_entry_performance_trace.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
@@ -315,6 +316,8 @@ class RankingAchievementService {
               imported: await _database.loadMonthlyPlayerPerformances({
                 playerProfileId,
               }),
+              tournamentResults: const TournamentMonthlyResultCalculator()
+                  .calculate(relevant, playerIds: {playerProfileId}),
             ),
           )
         : const <PlayerMonthlyPerformance>[];

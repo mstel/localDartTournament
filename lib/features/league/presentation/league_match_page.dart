@@ -19,6 +19,7 @@ import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../domain/league_match.dart';
 import '../../settings/data/planning_settings_storage.dart';
+import '../../settings/data/general_defaults_storage.dart';
 import '../../settings/data/director_mode_defaults.dart';
 import '../../tournaments/domain/tournament_planning_parameters.dart';
 import 'league_pairing_dialog.dart';
@@ -227,7 +228,9 @@ class _LeagueSubstitutionDialogState extends State<LeagueSubstitutionDialog> {
   Widget build(BuildContext context) {
     final league = widget.league;
     final active = league.activePlayers(widget.teamSide).toSet();
-    final reserves = league.reservePlayers(widget.teamSide);
+    final reserves = league.reservePlayers(
+      widget.teamSide,
+    ).where((player) => !active.contains(player)).toList();
     final width = MediaQuery.sizeOf(context).width;
     return AlertDialog(
       title: Text('Auswechselungen · ${widget.teamName}'),
@@ -408,6 +411,15 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       if (mounted) setState(() => _planningParameters = parameters);
     } catch (_) {
       // Fall back to the same planning defaults used by the duration engine.
+    }
+  }
+
+  Future<void> _loadBoardDefault() async {
+    try {
+      final defaults = await const GeneralDefaultsStorage().load();
+      if (mounted) setState(() => _boards = defaults.defaultBoardCount);
+    } catch (_) {
+      // Keep the built-in default when stored preferences are unavailable.
     }
   }
 
@@ -615,6 +627,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       }
     }
     _loadPlanningParameters();
+    if (!widget.editConfigurationOnly) {
+      unawaited(_loadBoardDefault());
+    }
   }
 
   @override
@@ -968,8 +983,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       nextLeague.addSubstitutionBudget(teamSide: teamSide);
       next.addActivity(
         'substitution_budget',
-        '$teamName hat eine zusätzliche Auswechselung erhalten. '
-            'Verfügbar: ${nextLeague.substitutionsRemaining(teamSide)}',
+        'Auswechselung hinzugefügt: $teamName hat eine zusätzliche '
+            'Auswechselung erhalten. Verfügbar: '
+            '${nextLeague.substitutionsRemaining(teamSide)}',
       );
       await _save(next, rethrowError: true);
     } catch (error) {

@@ -214,10 +214,10 @@ void main() {
           'setsLost': 0,
           'currentForm': {
             'weightedLegs': 18,
-            'matches': 0,
-            'wins': 0,
+            'matches': 1,
+            'wins': 1,
             'losses': 0,
-            'winRate': 0.0,
+            'winRate': 100.0,
             'scoring': 72.5,
             'average': 51.2,
             'checkoutQuote': 38.5,
@@ -228,10 +228,10 @@ void main() {
         {
           'playerId': player.id,
           'weightedLegs': 18,
-          'matches': 0,
-          'wins': 0,
+          'matches': 1,
+          'wins': 1,
           'losses': 0,
-          'winRate': 0.0,
+          'winRate': 100.0,
           'scoring': 72.5,
           'average': 51.2,
           'checkoutQuote': 38.5,
@@ -286,10 +286,10 @@ void main() {
       expect((resources['statistics']!['currentForm'] as List).single, {
         'playerId': player.id,
         'weightedLegs': 18,
-        'matches': 0,
-        'wins': 0,
+        'matches': 1,
+        'wins': 1,
         'losses': 0,
-        'winRate': 0.0,
+        'winRate': 100.0,
         'scoring': 72.5,
         'average': 51.2,
         'checkoutQuote': 38.5,
@@ -304,10 +304,10 @@ void main() {
             'period': '2026-10',
             'year': 2026,
             'month': 10,
-            'matches': 0,
-            'wins': 0,
+            'matches': 1,
+            'wins': 1,
             'losses': 0,
-            'winRate': 0.0,
+            'winRate': 100.0,
             'weightedLegs': 18,
             'scoring': 72.5,
             'average': 51.2,
@@ -334,10 +334,10 @@ void main() {
           {
             'playerId': player.id,
             'weightedLegs': 18,
-            'matches': 0,
-            'wins': 0,
+            'matches': 1,
+            'wins': 1,
             'losses': 0,
-            'winRate': 0.0,
+            'winRate': 100.0,
             'scoring': 72.5,
             'average': 51.2,
             'checkoutQuote': 38.5,
@@ -463,7 +463,8 @@ void main() {
     },
   );
 
-  test('performance API publishes imported monthly aggregates', () async {
+  test('performance API keeps imported metrics separate from derived match counts',
+      () async {
     final player = await database.createPlayerProfile(
       firstName: 'Ada',
       lastName: 'Dart',
@@ -499,7 +500,7 @@ void main() {
         'period': '2026-09',
         'year': 2026,
         'month': 9,
-        'matches': 12,
+        'matches': 0,
         'wins': 0,
         'losses': 0,
         'winRate': 0.0,
@@ -530,7 +531,7 @@ void main() {
     expect(clubMonth['year'], 2026);
     expect(clubMonth['month'], 9);
     expect(clubMonth['period'], '2026-09');
-    expect(clubMonth['matches'], 6);
+    expect(clubMonth['matches'], 0);
     expect(clubMonth['wins'], 0);
     expect(clubMonth['losses'], 0);
     expect(clubMonth['winRate'], 0.0);
@@ -771,7 +772,7 @@ void main() {
     expect(achievements['resource'], 'achievements');
   });
 
-  test('performance API publishes recorded win/loss counts and win rates',
+  test('performance API derives win/loss counts from assigned tournaments',
       () async {
     final player = await database.createPlayerProfile(
       firstName: 'Ada',
@@ -783,10 +784,68 @@ void main() {
         year: 2026,
         month: 10,
         weightedLegs: 20,
+        // Manually stored values must never reach the API.
         matches: 10,
         wins: 7,
         losses: 3,
         average: 50,
+      ),
+    );
+    final participant = TournamentPlayer(
+      profileId: player.id,
+      name: player.displayName,
+      isGenerated: false,
+    );
+    final opponent = TournamentPlayer.generated(2);
+    await tournamentStorage.saveTournament(
+      CreatedTournament(
+        id: 'performance-month',
+        name: 'Oktoberturnier',
+        players: [participant, opponent],
+        stages: const [],
+        runStages: [
+          GroupTournamentRunStage(
+            name: 'Gruppe',
+            groupPlayType: 'round_robin',
+            qualificationPlan: null,
+            tieBreakers: defaultGroupTieBreakers,
+            groups: [
+              TournamentGroup(
+                name: 'Gruppe A',
+                playType: 'round_robin',
+                players: [participant, opponent],
+                matches: [
+                  GroupMatch(
+                    homePlayer: participant,
+                    awayPlayer: opponent,
+                    round: 1,
+                    homeLegs: 3,
+                    awayLegs: 1,
+                    finishedAt: DateTime(2026, 10, 10),
+                  ),
+                  GroupMatch(
+                    homePlayer: participant,
+                    awayPlayer: opponent,
+                    round: 2,
+                    homeLegs: 3,
+                    awayLegs: 2,
+                    finishedAt: DateTime(2026, 10, 15),
+                  ),
+                  GroupMatch(
+                    homePlayer: participant,
+                    awayPlayer: opponent,
+                    round: 3,
+                    homeLegs: 1,
+                    awayLegs: 3,
+                    finishedAt: DateTime(2026, 10, 20),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+        tournamentDate: DateTime(2026, 10, 20),
+        finishedAt: DateTime(2026, 10, 20),
       ),
     );
     final service = WebsiteReadModelService(
@@ -798,25 +857,25 @@ void main() {
     final model = await service.create();
     final currentForm = (model['currentForm'] as List).single
         as Map<String, dynamic>;
-    expect(currentForm, containsPair('matches', 10));
-    expect(currentForm, containsPair('wins', 7));
-    expect(currentForm, containsPair('losses', 3));
-    expect(currentForm, containsPair('winRate', 70.0));
+    expect(currentForm, containsPair('matches', 3));
+    expect(currentForm, containsPair('wins', 2));
+    expect(currentForm, containsPair('losses', 1));
+    expect(currentForm['winRate'], closeTo(66.666, 0.001));
 
     final resources = await service.createVersion2Resources(model);
     final monthly = (resources['performance']!['monthlyPerformance'] as List)
         .single as Map<String, dynamic>;
-    expect(monthly, containsPair('matches', 10));
-    expect(monthly, containsPair('wins', 7));
-    expect(monthly, containsPair('losses', 3));
-    expect(monthly, containsPair('winRate', 70.0));
+    expect(monthly, containsPair('matches', 3));
+    expect(monthly, containsPair('wins', 2));
+    expect(monthly, containsPair('losses', 1));
+    expect(monthly['winRate'], closeTo(66.666, 0.001));
 
     final club = (resources['performance']!['monthlyClubPerformance'] as List)
         .single as Map<String, dynamic>;
-    expect(club, containsPair('matches', 5));
-    expect(club, containsPair('wins', 3));
-    expect(club, containsPair('losses', 1));
-    expect(club['winRate'], closeTo(60, 0.001));
+    expect(club, containsPair('matches', 1));
+    expect(club, containsPair('wins', 1));
+    expect(club, containsPair('losses', 0));
+    expect(club['winRate'], closeTo(100, 0.001));
   });
 
   test('trashed completed tournaments stay out of the API until restored',

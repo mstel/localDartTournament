@@ -350,6 +350,19 @@ class _TournamentFormatPlannerDialogState
         }
       });
     }
+    if (widget.initialBoardCount == null) {
+      unawaited(_loadBoardDefault());
+    }
+  }
+
+  Future<void> _loadBoardDefault() async {
+    try {
+      final defaults = await const GeneralDefaultsStorage().load();
+      if (!mounted) return;
+      _boards.text = '${defaults.defaultBoardCount}';
+    } catch (_) {
+      // Keep the built-in default when stored preferences are unavailable.
+    }
   }
 
   String get _inputSignature => [

@@ -6,6 +6,7 @@ import '../../rankings/domain/local_ranking.dart';
 import '../../achievements/application/ranking_achievement_service.dart';
 import '../../statistics/domain/local_statistics.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
+import '../../statistics/domain/tournament_monthly_results.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
@@ -64,6 +65,8 @@ class WebsiteReadModelService {
         combineMonthlyPlayerPerformances(
           recorded: await _database.loadPlayerMonthlyPerformance(profile.id),
           imported: await _database.loadMonthlyPlayerPerformances({profile.id}),
+          tournamentResults: const TournamentMonthlyResultCalculator()
+              .calculate(completed, playerIds: {profile.id}),
         ),
         now: _clock(),
       );
@@ -333,6 +336,16 @@ class WebsiteReadModelService {
     final monthlyPerformance = <Map<String, dynamic>>[];
     final importedMonthlyStatistics = <Map<String, dynamic>>[];
     final combinedMonthlyPerformance = <PlayerMonthlyPerformance>[];
+    final completed = completedTournaments(
+      await _tournamentStorage.loadTournaments(),
+    );
+    final tournamentResults = const TournamentMonthlyResultCalculator()
+        .calculate(
+          completed,
+          playerIds: {
+            for (final player in players) player['id'] as String,
+          },
+        );
     for (final player in players) {
       final playerId = player['id'] as String;
       final imported = await _database.loadMonthlyPlayerPerformances({
@@ -341,6 +354,9 @@ class WebsiteReadModelService {
       final entries = combineMonthlyPlayerPerformances(
         recorded: await _database.loadPlayerMonthlyPerformance(playerId),
         imported: imported,
+        tournamentResults: tournamentResults.where(
+          (result) => result.playerId == playerId,
+        ),
       );
       combinedMonthlyPerformance.addAll(entries);
       for (final entry in entries) {

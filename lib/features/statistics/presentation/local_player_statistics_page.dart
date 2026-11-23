@@ -15,6 +15,7 @@ import '../application/player_statistics_image_generator.dart';
 import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
 import '../domain/player_monthly_performance.dart';
+import '../domain/tournament_monthly_results.dart';
 import 'widgets/performance_statistics_detail_section.dart';
 import 'widgets/player_performance_section.dart';
 import 'widgets/structured_best_performances_view.dart';
@@ -85,10 +86,14 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
     final importedPerformance = await _database.loadMonthlyPlayerPerformances(
       widget.profileIds,
     );
+    final tournaments = await _tournamentStorage.loadTournaments();
+    final tournamentResults = const TournamentMonthlyResultCalculator()
+        .calculate(tournaments, playerIds: widget.profileIds);
     final performance = aggregateMonthlyPlayerPerformances(
       combineMonthlyPlayerPerformances(
         recorded: recordedPerformance,
         imported: importedPerformance,
+        tournamentResults: tournamentResults,
       ),
     );
     final achievementViews = <RankingAchievementView>[];
@@ -100,7 +105,6 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       database: _database,
       tournamentStorage: _tournamentStorage,
     );
-    final tournaments = await _tournamentStorage.loadTournaments();
     for (final ranking in achievementRankings) {
       final assignedIds = await _database.loadRankingPlayerIds(ranking.id);
       for (final profileId in widget.profileIds.where(assignedIds.contains)) {

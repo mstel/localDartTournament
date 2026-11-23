@@ -2745,8 +2745,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       league.addSubstitutionBudget(teamSide: teamSide);
       widget.tournament.addActivity(
         'substitution_budget',
-        '$teamName hat eine zusätzliche Auswechselung erhalten. '
-            'Verfügbar: ${league.substitutionsRemaining(teamSide)}',
+        'Auswechselung hinzugefügt: $teamName hat eine zusätzliche '
+            'Auswechselung erhalten. Verfügbar: '
+            '${league.substitutionsRemaining(teamSide)}',
       );
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
         ..installOn(widget.tournament);

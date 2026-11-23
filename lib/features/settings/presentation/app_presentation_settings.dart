@@ -109,7 +109,7 @@ class _AppPresentationSettingsState extends State<AppPresentationSettings> {
           return Card(
             child: ExpansionTile(
               leading: const Icon(Icons.picture_as_pdf_outlined),
-              title: const Text('PDF-Export-Einstellungen'),
+              title: const Text('PDF-Spielplan Einstellungen'),
               children: [
                 _switch('Datum', value.pdfShowDate, (v) => _save(date: v)),
                 _switch(

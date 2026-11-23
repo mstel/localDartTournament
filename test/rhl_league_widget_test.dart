@@ -483,10 +483,17 @@ void main() {
     await tester.tap(addBudget);
     await tester.pumpAndSettle();
 
-    expect(storage.saved!.leagueMatch!.substitutionLimit, 2);
+    expect(storage.saved!.leagueMatch!.substitutionLimitFor(0), 2);
+    expect(storage.saved!.leagueMatch!.substitutionLimitFor(1), 1);
     expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 2);
+    expect(storage.saved!.leagueMatch!.substitutionsRemaining(1), 1);
     expect(storage.saved!.activityLog.last.type, 'substitution_budget');
-    expect(find.text('2 Auswechselungen verfügbar'), findsNWidgets(2));
+    expect(
+      storage.saved!.activityLog.last.message,
+      contains('Auswechselung hinzugefügt'),
+    );
+    expect(find.text('2 Auswechselungen verfügbar'), findsOneWidget);
+    expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
 
     final substitutions = find.byKey(
       const ValueKey('league-substitutions-home'),
@@ -512,7 +519,12 @@ void main() {
 
     expect(storage.saved!.leagueMatch!.games[0].home, [4]);
     expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 1);
-    expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
+    expect(storage.saved!.leagueMatch!.substitutionsRemaining(1), 1);
+    expect(
+      storage.saved!.activityLog.last.message,
+      contains('Heim hat H1 gegen H5 ausgewechselt'),
+    );
+    expect(find.text('1 Auswechselungen verfügbar'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 

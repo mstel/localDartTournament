@@ -86,6 +86,14 @@ class _PerformanceStatisticsDetailSectionState
               title: 'Performance-Entwicklung',
             ),
             const Divider(),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Partien, Gewonnen, Verloren und Siegesrate stammen aus den '
+                'zugewiesenen Turnieren und ihren Ergebnissen.',
+              ),
+            ),
+            const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(

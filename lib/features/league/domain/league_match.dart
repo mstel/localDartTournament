@@ -154,14 +154,21 @@ class LeagueMatch {
     int? starterCount,
     this.maxReservePlayers = 4,
     int? substitutionLimit,
+    List<int>? substitutionLimits,
     this.allowReentry = false,
     List<LeagueSubstitution>? substitutions,
   }) : starterCount =
            starterCount ??
            (variant == LeagueMatchVariant.traditional ? 4 : homePlayers.length),
-       substitutionLimit =
-           substitutionLimit ??
-           (variant == LeagueMatchVariant.traditional ? 4 : maxReservePlayers),
+       substitutionLimits =
+           substitutionLimits ??
+           List<int>.filled(
+             2,
+             substitutionLimit ??
+                 (variant == LeagueMatchVariant.traditional
+                     ? 4
+                     : maxReservePlayers),
+           ),
        substitutions = substitutions ?? [];
   final String homeTeam;
   final String awayTeam;
@@ -174,8 +181,18 @@ class LeagueMatch {
   final int doublesCount;
   final int starterCount;
   int maxReservePlayers;
-  int substitutionLimit;
+  List<int> substitutionLimits;
   final bool allowReentry;
+
+  /// Legacy compatibility for callers that only need the shared maximum.
+  int get substitutionLimit => substitutionLimits.reduce(
+    (left, right) => left > right ? left : right,
+  );
+
+  int substitutionLimitFor(int teamSide) {
+    _validateTeamSide(teamSide);
+    return substitutionLimits[teamSide];
+  }
   final List<LeagueSubstitution> substitutions;
 
   List<int> activePlayers(int teamSide) {
@@ -238,7 +255,7 @@ class LeagueMatch {
                   )),
         )
         .length;
-    return (substitutionLimit - substitutionsUsed(teamSide)).clamp(
+    return (substitutionLimits[teamSide] - substitutionsUsed(teamSide)).clamp(
       0,
       availableReserveCount,
     );
@@ -266,7 +283,7 @@ class LeagueMatch {
   /// Wechsel bereitstellen, den das Team später selbst nutzen kann.
   void addSubstitutionBudget({required int teamSide}) {
     _validateTeamSide(teamSide);
-    substitutionLimit += 1;
+    substitutionLimits[teamSide] += 1;
   }
 
   /// Ein Wechsel darf nicht durchgeführt werden, solange der betroffene
@@ -290,7 +307,7 @@ class LeagueMatch {
     DateTime? occurredAt,
   }) {
     _validateTeamSide(teamSide);
-    substitutionLimit += 1;
+    substitutionLimits[teamSide] += 1;
     try {
       substitute(
         teamSide: teamSide,
@@ -299,7 +316,7 @@ class LeagueMatch {
         occurredAt: occurredAt,
       );
     } catch (_) {
-      substitutionLimit -= 1;
+      substitutionLimits[teamSide] -= 1;
       rethrow;
     }
   }
@@ -317,11 +334,23 @@ class LeagueMatch {
     if (outPlayerIndex < 0 ||
         outPlayerIndex >= roster.length ||
         inPlayerIndex < 0 ||
-        inPlayerIndex >= roster.length ||
-        !active.contains(outPlayerIndex) ||
-        !reserves.contains(inPlayerIndex) ||
-        active.contains(inPlayerIndex)) {
+        inPlayerIndex >= roster.length) {
       throw const FormatException('Ungültiger Teilnehmerwechsel.');
+    }
+    if (!active.contains(outPlayerIndex)) {
+      throw const FormatException(
+        'Der ausgewählte Spieler steht nicht in der aktuellen Aufstellung.',
+      );
+    }
+    if (active.contains(inPlayerIndex)) {
+      throw const FormatException(
+        'Der ausgewählte Ersatzspieler ist bereits aktiv.',
+      );
+    }
+    if (!reserves.contains(inPlayerIndex)) {
+      throw const FormatException(
+        'Der ausgewählte Ersatzspieler ist nicht verfügbar.',
+      );
     }
     if (isPlayerInStartedGame(teamSide, outPlayerIndex)) {
       throw const FormatException(
@@ -514,7 +543,8 @@ class LeagueMatch {
     }
     if (starterCount < 1 ||
         maxReservePlayers < 0 ||
-        substitutionLimit < 0 ||
+        substitutionLimits.length != 2 ||
+        substitutionLimits.any((limit) => limit < 0) ||
         homePlayers.length > starterCount + maxReservePlayers ||
         awayPlayers.length > starterCount + maxReservePlayers) {
       throw const FormatException('Ungültige Kader- oder Wechselregeln.');
@@ -601,12 +631,14 @@ class LeagueMatch {
   }
 
   Map<String, dynamic> toJson() => {
-    'version': 5,
+    'version': 6,
     'preset': 'rhl',
     'variant': variant.name,
     'starterCount': starterCount,
     'maxReservePlayers': maxReservePlayers,
+    // Keep the legacy field for older readers; version 6 stores both teams.
     'substitutionLimit': substitutionLimit,
+    'substitutionLimits': List<int>.from(substitutionLimits),
     'allowReentry': allowReentry,
     'substitutions': substitutions.map((event) => event.toJson()).toList(),
     if (variant == LeagueMatchVariant.adjusted) ...{
@@ -621,9 +653,25 @@ class LeagueMatch {
     'games': games.map((g) => g.toJson()).toList(),
   };
   factory LeagueMatch.fromJson(Map<String, dynamic> json) {
-    if (![1, 2, 3, 4, 5].contains(json['version']) || json['preset'] != 'rhl') {
+    if (![1, 2, 3, 4, 5, 6].contains(json['version']) ||
+        json['preset'] != 'rhl') {
       throw const FormatException('Nicht unterstützte Ligaspiel-Version.');
     }
+    final storedLimits = json['substitutionLimits'] as List?;
+    if (storedLimits != null && storedLimits.length != 2) {
+      throw const FormatException('Ungültiges Wechselkontingent gespeichert.');
+    }
+    final substitutionLimits = storedLimits == null
+        ? null
+        : List<int>.generate(2, (index) {
+            final value = storedLimits[index] as int?;
+            if (value == null || value < 0) {
+              throw const FormatException(
+                'Ungültiges Wechselkontingent gespeichert.',
+              );
+            }
+            return value;
+          });
     final gameFormat = json['gameFormat'] is Map
         ? TournamentGameFormat.fromJson(
             Map<String, dynamic>.from(json['gameFormat'] as Map),
@@ -653,6 +701,7 @@ class LeagueMatch {
           json['maxReservePlayers'] as int? ??
           (json['variant'] == LeagueMatchVariant.adjusted.name ? 0 : 4),
       substitutionLimit: json['substitutionLimit'] as int?,
+      substitutionLimits: substitutionLimits,
       allowReentry: json['allowReentry'] as bool? ?? false,
       substitutions: (json['substitutions'] as List? ?? const [])
           .map(

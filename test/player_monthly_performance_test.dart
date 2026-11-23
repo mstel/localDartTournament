@@ -1,5 +1,6 @@
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/monthly_player_performance.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/tournament_monthly_results.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -65,6 +66,67 @@ void main() {
       expect(current.weightedLegs, 100);
       expect(current.average, 82);
       expect(current.scoring, 49);
+    },
+  );
+
+  test(
+    'tournament results replace manual match counts but keep recorded metrics',
+    () {
+      final combined = combineMonthlyPlayerPerformances(
+        recorded: const [
+          PlayerMonthlyPerformance(
+            playerId: 'player-1',
+            year: 2025,
+            month: 10,
+            weightedLegs: 20,
+            matches: 99,
+            wins: 88,
+            losses: 77,
+            average: 80,
+            scoring: 45,
+          ),
+        ],
+        tournamentResults: const [
+          TournamentMonthlyResult(
+            playerId: 'player-1',
+            year: 2025,
+            month: 10,
+            matches: 4,
+            wins: 3,
+            losses: 1,
+            weightedLegs: 14,
+          ),
+          TournamentMonthlyResult(
+            playerId: 'player-1',
+            year: 2025,
+            month: 9,
+            matches: 2,
+            wins: 0,
+            losses: 2,
+            weightedLegs: 8,
+          ),
+        ],
+      );
+
+      expect(combined, hasLength(2));
+      expect(combined.first.month, 9);
+      expect(combined.first.weightedLegs, 8);
+      expect(combined.first.matches, 2);
+      expect(combined.first.wins, 0);
+      expect(combined.first.losses, 2);
+      expect(combined.last.weightedLegs, 20);
+      expect(combined.last.matches, 4);
+      expect(combined.last.wins, 3);
+      expect(combined.last.losses, 1);
+      expect(combined.last.winRate, 75);
+      expect(combined.last.average, 80);
+      expect(combined.last.scoring, 45);
+
+      final summary = summarizeMonthlyPerformance(combined);
+      expect(summary.matches, 6);
+      expect(summary.wins, 3);
+      expect(summary.losses, 3);
+      expect(summary.winRate, 50);
     },
   );
 

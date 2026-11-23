@@ -654,6 +654,83 @@ void main() {
     },
   );
 
+  testWidgets(
+    'league standings use one full-width table with player match points',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final tournament = _completedLeagueTournament()
+        ..finishedAt = null
+        ..secondScreenLayouts['Standard'] = const [
+          SecondScreenWidgetPlacement(widgetId: 'combined', widthUnits: 4),
+        ]
+        ..secondScreenActiveLayout = 'Standard';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TournamentSecondScreenView(
+              tournament: tournament,
+              isStandaloneWindow: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Heimspieler'), findsOneWidget);
+      final card = find.byKey(
+        const ValueKey('second-screen-league-standings-combined'),
+      );
+      expect(card, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('second-screen-league-results-home')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('second-screen-league-results-away')),
+        findsNothing,
+      );
+      expect(tester.getSize(card).width, greaterThan(1000));
+      expect(find.text('Heimspieler'), findsOneWidget);
+      expect(find.text('Gastspieler'), findsOneWidget);
+      expect(
+        find.descendant(of: card, matching: find.text('Legs')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: card, matching: find.text('Sets')),
+        findsNothing,
+      );
+      // Namen stehen in den Tabellenzeilen und brauchen keine zweite Zeile.
+      expect(find.text('Lena · Lars'), findsNothing);
+      expect(find.text('Mira · Mattes'), findsNothing);
+
+      final tableFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is DataTable &&
+            widget.columns.any(
+              (column) => (column.label as Text).data == 'Heimspieler',
+            ),
+      );
+      expect(tableFinder, findsOneWidget);
+      final table = tester.widget<DataTable>(tableFinder);
+      expect(table.columns, hasLength(10));
+      expect(table.rows, hasLength(2));
+      expect(
+        table.rows.first.cells.map((cell) => (cell.child as Text).data).toList(),
+        ['Lena', '1', '1', '0', '1', 'Mira', '1', '0', '1', '0'],
+      );
+      expect(
+        table.rows.last.cells.map((cell) => (cell.child as Text).data).toList(),
+        ['Lars', '1', '0', '1', '0', 'Mattes', '1', '1', '0', '1'],
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('league substitutions appear in the monitor activity panel', (
     tester,
   ) async {
@@ -665,12 +742,20 @@ void main() {
     const message =
         'Heimmannschaft hat Lena gegen Jonas ausgewechselt. '
         'Übrige Auswechselungen: 1';
+    const budgetMessage =
+        'Auswechselung hinzugefügt: Heimmannschaft hat eine zusätzliche '
+        'Auswechselung erhalten. Verfügbar: 2';
     final tournament = _completedLeagueTournament()
       ..finishedAt = null
       ..addActivity(
         'substitution',
         message,
         timestamp: DateTime(2026, 11, 17, 11, 30),
+      )
+      ..addActivity(
+        'substitution_budget',
+        budgetMessage,
+        timestamp: DateTime(2026, 11, 17, 11, 31),
       );
 
     await tester.pumpWidget(
@@ -687,6 +772,7 @@ void main() {
 
     expect(find.text('Aktuelles'), findsOneWidget);
     expect(find.text(message), findsOneWidget);
+    expect(find.text(budgetMessage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1045,16 +1131,26 @@ void main() {
       await tester.pump();
 
       expect(find.text('180 von Robin'), findsOneWidget);
-      expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget.key is ValueKey<String> &&
-              (widget.key! as ValueKey<String>).value.startsWith(
-                'second-screen-best-performance-popup-',
-              ),
-        ),
-        findsOneWidget,
+      final popup = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'second-screen-best-performance-popup-',
+            ),
       );
+      expect(popup, findsOneWidget);
+
+      final popupCenter = tester.getCenter(popup);
+      final overlayCenter = tester.getCenter(
+        find.byKey(const ValueKey('second-screen-performance-overlay')),
+      );
+      expect(popupCenter.dx, closeTo(overlayCenter.dx, 2));
+      expect(popupCenter.dy, closeTo(overlayCenter.dy, 2));
+      expect(tester.getSize(popup).height, greaterThan(100));
+      final labelStyle =
+          tester.widget<Text>(find.text('180 von Robin')).style ??
+              const TextStyle();
+      expect(labelStyle.fontSize, greaterThanOrEqualTo(40));
 
       await tester.pump(const Duration(seconds: 3));
       await tester.pump();

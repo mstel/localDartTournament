@@ -169,6 +169,19 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     unawaited(_applyDefaultRanking());
     unawaited(_refreshEloRankingAvailability());
     unawaited(_loadDirectorDefaults());
+    if (widget.existingTournament == null) {
+      unawaited(_loadGeneralDefaults());
+    }
+  }
+
+  Future<void> _loadGeneralDefaults() async {
+    try {
+      final defaults = await const GeneralDefaultsStorage().load();
+      if (!mounted) return;
+      setState(() => _plannedBoardCount = defaults.defaultBoardCount);
+    } catch (_) {
+      // Keep the built-in default when stored preferences are unavailable.
+    }
   }
 
   Future<void> _loadDirectorDefaults() async {

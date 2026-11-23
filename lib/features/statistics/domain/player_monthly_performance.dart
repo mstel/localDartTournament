@@ -1,4 +1,5 @@
 import 'monthly_player_performance.dart';
+import 'tournament_monthly_results.dart';
 
 class PlayerMonthlyPerformance {
   const PlayerMonthlyPerformance({
@@ -47,6 +48,7 @@ class PlayerMonthlyPerformance {
 List<PlayerMonthlyPerformance> combineMonthlyPlayerPerformances({
   Iterable<PlayerMonthlyPerformance> recorded = const [],
   Iterable<MonthlyPlayerPerformance> imported = const [],
+  Iterable<TournamentMonthlyResult>? tournamentResults,
 }) {
   final byPeriod = <(String, int, int), PlayerMonthlyPerformance>{
     for (final entry in recorded)
@@ -67,6 +69,44 @@ List<PlayerMonthlyPerformance> combineMonthlyPlayerPerformances({
       average: entry.threeDartAverage,
       checkoutRate: entry.checkoutPercentage,
     );
+  }
+  // Once tournament results are supplied they are the only source of truth
+  // for match counts. Months without a tournament result therefore have zero
+  // wins/losses instead of falling back to manually entered values.
+  if (tournamentResults != null) {
+    final derived = {
+      for (final result in tournamentResults) result.key: result,
+    };
+    for (final entry in byPeriod.entries.toList()) {
+      final result = derived[entry.key];
+      final base = entry.value;
+      final recordedLegs = base.weightedLegs;
+      byPeriod[entry.key] = PlayerMonthlyPerformance(
+        playerId: base.playerId,
+        year: base.year,
+        month: base.month,
+        weightedLegs:
+            recordedLegs > 0 ? recordedLegs : result?.weightedLegs ?? 0,
+        matches: result?.matches ?? 0,
+        wins: result?.wins ?? 0,
+        losses: result?.losses ?? 0,
+        scoring: base.scoring,
+        average: base.average,
+        checkoutRate: base.checkoutRate,
+      );
+    }
+    for (final result in derived.values) {
+      if (byPeriod.containsKey(result.key)) continue;
+      byPeriod[result.key] = PlayerMonthlyPerformance(
+        playerId: result.playerId,
+        year: result.year,
+        month: result.month,
+        weightedLegs: result.weightedLegs,
+        matches: result.matches,
+        wins: result.wins,
+        losses: result.losses,
+      );
+    }
   }
   final result = byPeriod.values.toList()
     ..sort((left, right) {
@@ -179,7 +219,7 @@ CurrentFormPerformance calculateCurrentFormPerformance(
   final monthStart = DateTime(today.year, today.month);
   final byPeriod = <(int, int), _MonthlyPerformanceTotals>{};
   for (final entry in entries) {
-    if (entry.weightedLegs <= 0 ||
+    if ((entry.weightedLegs <= 0 && entry.matches <= 0) ||
         !DateTime(entry.year, entry.month).isBefore(monthStart)) {
       continue;
     }
@@ -195,7 +235,7 @@ CurrentFormPerformance calculateCurrentFormPerformance(
       final byYear = right.$1.compareTo(left.$1);
       return byYear != 0 ? byYear : right.$2.compareTo(left.$2);
     });
-  var remainingLegs = targetLegs;
+  var remainingWeight = targetLegs;
   var weightedLegs = 0;
   var matches = 0;
   var wins = 0;
@@ -204,15 +244,16 @@ CurrentFormPerformance calculateCurrentFormPerformance(
   final average = _WeightedMetric();
   final checkoutRate = _WeightedMetric();
   for (final period in periods) {
-    if (remainingLegs <= 0) break;
+    if (remainingWeight <= 0) break;
     final totals = byPeriod[period]!;
-    final legsTaken = remainingLegs.clamp(0, totals.weightedLegs).toInt();
-    final fraction = legsTaken / totals.weightedLegs;
-    weightedLegs += legsTaken;
+    final weightTaken = remainingWeight.clamp(0, totals.selectionWeight).toInt();
+    if (totals.selectionWeight <= 0) continue;
+    final fraction = weightTaken / totals.selectionWeight;
+    weightedLegs += (totals.weightedLegs * fraction).round();
     matches += (totals.matches * fraction).round();
     wins += (totals.wins * fraction).round();
     losses += (totals.losses * fraction).round();
-    remainingLegs -= legsTaken;
+    remainingWeight -= weightTaken;
     scoring.addTotals(totals.scoring, fraction);
     average.addTotals(totals.average, fraction);
     checkoutRate.addTotals(totals.checkoutRate, fraction);
@@ -236,7 +277,7 @@ CurrentFormPerformance summarizeMonthlyPerformance(
 ) {
   final totals = _MonthlyPerformanceTotals();
   for (final entry in entries) {
-    if (entry.weightedLegs > 0) totals.add(entry);
+    if (entry.weightedLegs > 0 || entry.matches > 0) totals.add(entry);
   }
   return CurrentFormPerformance(
     weightedLegs: totals.weightedLegs,
@@ -251,6 +292,7 @@ CurrentFormPerformance summarizeMonthlyPerformance(
 
 class _MonthlyPerformanceTotals {
   int weightedLegs = 0;
+  int selectionWeight = 0;
   int matches = 0;
   int wins = 0;
   int losses = 0;
@@ -259,13 +301,20 @@ class _MonthlyPerformanceTotals {
   final _WeightedMetric checkoutRate = _WeightedMetric();
 
   void add(PlayerMonthlyPerformance entry) {
+    // Legs remain the preferred weight for scoring averages. If a month only
+    // contains tournament results, use the match count as a neutral weight so
+    // wins/losses still contribute to current form and summaries.
+    final effectiveWeight = entry.weightedLegs > 0
+        ? entry.weightedLegs
+        : entry.matches;
     weightedLegs += entry.weightedLegs;
+    selectionWeight += effectiveWeight;
     matches += entry.matches;
     wins += entry.wins;
     losses += entry.losses;
-    scoring.addMetric(entry.scoring, entry.weightedLegs.toDouble());
-    average.addMetric(entry.average, entry.weightedLegs.toDouble());
-    checkoutRate.addMetric(entry.checkoutRate, entry.weightedLegs.toDouble());
+    scoring.addMetric(entry.scoring, effectiveWeight.toDouble());
+    average.addMetric(entry.average, effectiveWeight.toDouble());
+    checkoutRate.addMetric(entry.checkoutRate, effectiveWeight.toDouble());
   }
 }
 

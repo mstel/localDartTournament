@@ -40,13 +40,11 @@ class _PlayerPerformanceEntryPageState
   late int _year = DateTime.now().year;
   late int _month = DateTime.now().month;
   final _legsController = TextEditingController();
-  final _matchesController = TextEditingController();
-  final _winsController = TextEditingController();
-  final _lossesController = TextEditingController();
   final _scoringController = TextEditingController();
   final _averageController = TextEditingController();
   final _checkoutController = TextEditingController();
   late Future<PlayerMonthlyPerformance?> _entry;
+  PlayerMonthlyPerformance? _loadedEntry;
   bool _saving = false;
   String? _error;
 
@@ -80,10 +78,8 @@ class _PlayerPerformanceEntryPageState
   }
 
   void _populate(PlayerMonthlyPerformance? entry) {
+    _loadedEntry = entry;
     _legsController.text = '${entry?.weightedLegs ?? 0}';
-    _matchesController.text = '${entry?.matches ?? 0}';
-    _winsController.text = '${entry?.wins ?? 0}';
-    _lossesController.text = '${entry?.losses ?? 0}';
     _scoringController.text = entry?.scoring?.toString() ?? '';
     _averageController.text = entry?.average?.toString() ?? '';
     _checkoutController.text = entry?.checkoutRate?.toString() ?? '';
@@ -121,16 +117,10 @@ class _PlayerPerformanceEntryPageState
 
   Future<void> _save() async {
     final legs = _nonNegativeInt(_legsController);
-    final matches = _nonNegativeInt(_matchesController);
-    final wins = _nonNegativeInt(_winsController);
-    final losses = _nonNegativeInt(_lossesController);
     final scoring = _optionalNumber(_scoringController);
     final average = _optionalNumber(_averageController);
     final checkout = _optionalNumber(_checkoutController);
     if (legs == null ||
-        matches == null ||
-        wins == null ||
-        losses == null ||
         _scoringController.text.trim().isNotEmpty && scoring == null ||
         _averageController.text.trim().isNotEmpty && average == null ||
         _checkoutController.text.trim().isNotEmpty && checkout == null ||
@@ -140,9 +130,8 @@ class _PlayerPerformanceEntryPageState
             (!checkout.isFinite || checkout < 0 || checkout > 100)) {
       setState(
         () => _error =
-            'Bitte gültige, nicht negative ganze Zahlen für Legs, Partien, '
-            'Gewonnen und Verloren eingeben. Die Checkout-Quote muss zwischen '
-            '0 und 100 liegen.',
+            'Bitte gültige, nicht negative ganze Zahlen für die gewerteten '
+            'Legs eingeben. Die Checkout-Quote muss zwischen 0 und 100 liegen.',
       );
       return;
     }
@@ -152,21 +141,23 @@ class _PlayerPerformanceEntryPageState
       _error = null;
     });
     try {
-      await _database.savePlayerMonthlyPerformance(
-        PlayerMonthlyPerformance(
-          playerId: widget.player.id,
-          year: _year,
-          month: _month,
-          weightedLegs: legs,
-          matches: matches,
-          wins: wins,
-          losses: losses,
-          scoring: scoring,
-          average: average,
-          checkoutRate: checkout,
-        ),
+      final entry = PlayerMonthlyPerformance(
+        playerId: widget.player.id,
+        year: _year,
+        month: _month,
+        weightedLegs: legs,
+        // Match counts, wins and losses are derived from assigned tournaments
+        // and must survive edits of the manually recorded performance values.
+        matches: _loadedEntry?.matches ?? 0,
+        wins: _loadedEntry?.wins ?? 0,
+        losses: _loadedEntry?.losses ?? 0,
+        scoring: scoring,
+        average: average,
+        checkoutRate: checkout,
       );
+      await _database.savePlayerMonthlyPerformance(entry);
       if (!mounted) return;
+      _loadedEntry = entry;
       setState(() => _entry = _loadEntry());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -185,9 +176,6 @@ class _PlayerPerformanceEntryPageState
   @override
   void dispose() {
     _legsController.dispose();
-    _matchesController.dispose();
-    _winsController.dispose();
-    _lossesController.dispose();
     _scoringController.dispose();
     _averageController.dispose();
     _checkoutController.dispose();
@@ -219,7 +207,9 @@ class _PlayerPerformanceEntryPageState
           padding: const EdgeInsets.all(20),
           children: [
             Text(
-              'Monatliche Werte manuell erfassen. Nicht eingetragene Kennzahlen werden bei Mittelwerten ausgelassen.',
+              'Gewertete Legs und Durchschnittswerte manuell erfassen. Partien, '
+              'Gewonnen, Verloren und Siegesrate werden automatisch aus den '
+              'zugewiesenen Turnieren und ihren Ergebnissen berechnet.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -306,30 +296,6 @@ class _PlayerPerformanceEntryPageState
                         fieldKey: 'performance-weighted-legs',
                         label: 'Gewertete Legs',
                         controller: _legsController,
-                      ),
-                    ),
-                    SizedBox(
-                      width: fieldWidth,
-                      child: _numberField(
-                        fieldKey: 'performance-matches',
-                        label: 'Partien',
-                        controller: _matchesController,
-                      ),
-                    ),
-                    SizedBox(
-                      width: fieldWidth,
-                      child: _numberField(
-                        fieldKey: 'performance-wins',
-                        label: 'Gewonnen',
-                        controller: _winsController,
-                      ),
-                    ),
-                    SizedBox(
-                      width: fieldWidth,
-                      child: _numberField(
-                        fieldKey: 'performance-losses',
-                        label: 'Verloren',
-                        controller: _lossesController,
                       ),
                     ),
                     SizedBox(

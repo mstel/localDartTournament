@@ -9,6 +9,7 @@ import '../../notifications/presentation/push_sender_menu.dart';
 import '../../notifications/presentation/push_device_menu.dart';
 import '../../random_draw/presentation/random_draw_tool_page.dart';
 import '../../team_game/presentation/team_game_page.dart';
+import 'general_defaults_panel.dart';
 import 'tie_breaker_defaults_panel.dart';
 import 'player_insight_defaults_panel.dart';
 import 'tournament_trash_panel.dart';
@@ -32,7 +33,8 @@ class _SettingsPageState extends State<SettingsPage> {
     'Daten',
     'Updates',
     'Darstellung',
-    'Sonstige Einstellungen',
+    'Standardwerte',
+    'Tools',
   ];
 
   @override
@@ -55,7 +57,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         Icons.storage,
                         Icons.system_update_outlined,
                         Icons.palette,
-                        Icons.settings_outlined,
+                        Icons.tune,
+                        Icons.construction_outlined,
                       ][i],
                     ),
                     selected: _selected == i,
@@ -69,7 +72,8 @@ class _SettingsPageState extends State<SettingsPage> {
               0 => _DataPanel(onReset: () => _resetLocalData(context)),
               1 => const AndroidUpdatesPanel(),
               2 => const AppearancePanel(),
-              _ => const _AdministrationPanel(),
+              3 => const _DefaultsPanel(),
+              _ => const _ToolsPanel(),
             },
           ),
         ],
@@ -104,39 +108,57 @@ class _DataPanel extends StatelessWidget {
   );
 }
 
-class _AdministrationPanel extends StatefulWidget {
-  const _AdministrationPanel();
+class _DefaultsPanel extends StatelessWidget {
+  const _DefaultsPanel();
 
   @override
-  State<_AdministrationPanel> createState() => _AdministrationPanelState();
-}
-
-class _AdministrationPanelState extends State<_AdministrationPanel> {
-  @override
-  Widget build(BuildContext context) => _toolsPanel(context);
-
-  Widget _toolsPanel(BuildContext context) => AdaptiveContentList(
+  Widget build(BuildContext context) => AdaptiveContentList(
     padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
     children: [
       Text(
-        'Sonstige Einstellungen',
+        'Standardwerte',
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 16),
-      const PushSenderMenu(),
-      const PushDeviceMenu(),
-      const Card(child: PlayerInsightDefaultsPanel()),
+      const GeneralDefaultsPanel(),
       const AppPresentationSettings(),
+      const Card(child: PlayerInsightDefaultsPanel()),
       Card(
         child: ListTile(
-          leading: const Icon(Icons.tune),
-          title: const Text('Standardwerte für Turnierleitermodus'),
+          leading: const Icon(Icons.support_agent_outlined),
+          title: const Text('Turnierleitermodus'),
           subtitle: const Text(
             'Legt Spielleiter-Modus, Spielplan, Vorschläge und Sprachausgabe für neue Turniere und Ligaspiele fest.',
           ),
           onTap: () => showDirectorModeDefaultsDialog(context),
         ),
       ),
+      Card(
+        child: ListTile(
+          leading: const Icon(Icons.auto_awesome_outlined),
+          title: const Text('Passende Turnierform finden'),
+          subtitle: const Text('Zeitberechnung und Strafpunkte für die Turniersuche.'),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const PlanningParametersPage(),
+            ),
+          ),
+        ),
+      ),
+      const Card(child: TieBreakerDefaultsPanel()),
+    ],
+  );
+}
+
+class _ToolsPanel extends StatelessWidget {
+  const _ToolsPanel();
+
+  @override
+  Widget build(BuildContext context) => AdaptiveContentList(
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+    children: [
+      Text('Tools', style: Theme.of(context).textTheme.headlineSmall),
+      const SizedBox(height: 16),
       Card(
         child: ListTile(
           leading: const Icon(Icons.casino_outlined),
@@ -161,20 +183,9 @@ class _AdministrationPanelState extends State<_AdministrationPanel> {
           ),
         ),
       ),
-      Card(
-        child: ListTile(
-          leading: const Icon(Icons.auto_awesome_outlined),
-          title: const Text(
-            'Passende Turnierform finden - Zeitberechnung & Standardwerte',
-          ),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const PlanningParametersPage(),
-            ),
-          ),
-        ),
-      ),
-      const Card(child: TieBreakerDefaultsPanel()),
+      const SizedBox(height: 12),
+      const PushSenderMenu(),
+      const PushDeviceMenu(),
     ],
   );
 }
