@@ -17,6 +17,7 @@ import '../../../domain/tournament_models.dart';
 import 'tournament_timing_panel.dart';
 import 'tournament_second_screen_view.dart';
 import 'recommended_matches_table.dart';
+import 'global_waitlist_panel.dart';
 import 'recent_match_result_card.dart';
 import '../../../../league/domain/league_match.dart';
 import '../../../../league/presentation/league_overview.dart';
@@ -536,6 +537,19 @@ class _TournamentDirectorDashboardState
     );
     if (match == null || !mounted) return;
     await startOnBoard(board, match: match);
+  }
+
+  Future<void> _setGlobalWaitlistCount(int count) async {
+    if (count == widget.tournament.directorGlobalWaitlist.fixedCount) return;
+    final previous = widget.tournament.directorGlobalWaitlist.copy();
+    setState(() => widget.tournament.directorGlobalWaitlist.fixedCount = count);
+    try {
+      await widget.onChange();
+    } catch (_) {
+      widget.tournament.directorGlobalWaitlist = previous;
+      if (mounted) setState(() {});
+      rethrow;
+    }
   }
 
   Widget _matchQueue(
@@ -1409,8 +1423,7 @@ class _TournamentDirectorDashboardState
                   icon: const Icon(Icons.undo),
                   label: const Text('Vorherige Phase wieder öffnen'),
                 ),
-              if (widget.onUndoLastMatch != null &&
-                  widget.canUndoLastMatch)
+              if (widget.onUndoLastMatch != null && widget.canUndoLastMatch)
                 OutlinedButton.icon(
                   key: const ValueKey('director-undo-last-match'),
                   onPressed: widget.onUndoLastMatch,
@@ -1696,6 +1709,17 @@ class _TournamentDirectorDashboardState
           ],
         ],
         if (widget.directorModeEnabled) ...[
+          if (state.usesGlobalWaitlist) ...[
+            _box([
+              GlobalWaitlistPanel(
+                snapshot: state,
+                onFixedCountChanged: widget.isSimulationMode
+                    ? null
+                    : _setGlobalWaitlistCount,
+              ),
+            ]),
+            const SizedBox(height: 12),
+          ],
           boardOverview,
           const SizedBox(height: 12),
           if (!isCustomLeague)

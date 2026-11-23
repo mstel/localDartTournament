@@ -53,7 +53,7 @@ class TournamentStorage {
   final LocalAppDatabase _activeDatabase;
   final TournamentTrash? _trash;
   // Schema 24 is accepted only after exact verification against its v22 backup.
-  static const schemaVersion = 49;
+  static const schemaVersion = 50;
   static const _schemaVersion = schemaVersion;
   static const _maximumDocumentBytes = 128 * 1024 * 1024;
 
@@ -95,7 +95,6 @@ class TournamentStorage {
       note: note,
     );
   });
-
 
   Map<String, dynamic> _cloneDocument(Map<String, dynamic> source) {
     final copy = Map<String, dynamic>.from(source);
@@ -300,7 +299,8 @@ class TournamentStorage {
       await trash.putUnlocked(
         tournament,
         reason: TournamentTrashReason.deleted,
-        note: 'Automatisch gesichert, weil der Eintrag aus dem Archiv '
+        note:
+            'Automatisch gesichert, weil der Eintrag aus dem Archiv '
             'verschwand.',
       );
     }
@@ -819,8 +819,7 @@ class TournamentStorage {
             !tournament.reopenedForCorrections) {
           await (await _trashForCurrentFile()).putUnlocked(
             archived!,
-            reason:
-                trashReason ?? TournamentTrashReason.staleActiveCopy,
+            reason: trashReason ?? TournamentTrashReason.staleActiveCopy,
             note:
                 'Ein unvollständiger Zwischenstand sollte ein abgeschlossenes '
                 'Turnier überschreiben.',
@@ -979,10 +978,7 @@ class TournamentStorage {
         );
       }
       tournaments.removeWhere((item) => item.id == id);
-      await _writeArchiveSnapshot(
-        tournaments,
-        removedCompletedIds: {id},
-      );
+      await _writeArchiveSnapshot(tournaments, removedCompletedIds: {id});
     });
     await _activeDatabase.deleteActiveTournamentCopy(id);
     StorageAccess.markLocalDataChanged();

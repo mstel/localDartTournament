@@ -5,6 +5,7 @@ import '../domain/tournament_flow_priority_settings.dart';
 import 'order_of_play/order_of_play_controller.dart';
 import 'order_of_play/global_order_of_play_service.dart';
 import '../domain/engines/group_board_assignment.dart';
+import '../domain/engines/global_waitlist_engine.dart';
 
 /// A read-only view of the production queue. Does not predict future winners.
 class TournamentDirectorSnapshot {
@@ -30,6 +31,19 @@ class TournamentDirectorSnapshot {
         .toList();
     _assignedQueueByBoard = _buildAssignedQueueByBoard();
   }
+
+  /// Shared waiting list of the dynamic global mode. Reading the snapshot also
+  /// materialises the persisted fixed preview so every consumer sees the same
+  /// order.
+  late final GlobalWaitlistPlan globalWaitlist = const GlobalWaitlistEngine()
+      .plan(
+        tournament,
+        stage,
+        allEntries: entries,
+        schedule: schedule,
+        isPreviewable: isPreviewableMatch,
+      );
+
   final CreatedTournament tournament;
   final int stage;
   final BoardSchedule schedule;
@@ -69,6 +83,11 @@ class TournamentDirectorSnapshot {
       tournament.directorPlayOrderMode == 'fixed_schedule';
 
   bool get isDynamicSchedule => tournament.directorPlayOrderMode == 'dynamic';
+
+  /// True only for the newly redesigned variant. All other modes keep their
+  /// existing presentation and planning behaviour.
+  bool get usesGlobalWaitlist =>
+      isDirectorManagedNormalRanking && isDynamicSchedule && isGlobalStrategy;
 
   /// Fixed + global: the board is freely selectable, so fixed schedule tiles
   /// must not show a board label.
@@ -215,14 +234,19 @@ class TournamentDirectorSnapshot {
         showBoardLabels: false,
       );
     }
-    if (isDynamicSchedule && isGlobalStrategy) {
-      final assignments = globalBoardAssignments();
-      final boards = assignments.keys.toList()..sort();
+    if (usesGlobalWaitlist) {
+      final entries = globalWaitlist.queue
+          .asMap()
+          .entries
+          .map((item) => BoardAssignment(item.value, item.key, 0))
+          .toList(growable: false);
       return DirectorScheduleOverview(
-        presentation: DirectorSchedulePresentation.globalPerBoard,
-        suggestions: [for (final board in boards) assignments[board]!],
-        note: 'Feste Vorschläge je Board · Rest wird dynamisch berechnet',
+        presentation: DirectorSchedulePresentation.globalWaitlist,
+        suggestions: entries,
+        note: 'Die nächste Begegnung kommt an das nächste freie Board.',
         showBoardLabels: false,
+        fixedCount: globalWaitlist.fixedCount,
+        waitlist: globalWaitlist,
       );
     }
     final boardsByGroup = configuredBoardsByGroup();
@@ -459,12 +483,29 @@ class TournamentDirectorSnapshot {
   /// the globally best playable matches as suggestions for every board.
   List<BoardAssignment> suggestionsForBoard(int board, {int limit = 3}) {
     if (tournament.blockedBoards.contains(board)) return const [];
+    if (usesGlobalWaitlist) {
+      // The board is not fixed in advance: every free board may take the top
+      // entry of the shared list. The board number here is only the tile the
+      // suggestion is rendered on, not a pre-assignment.
+      return globalWaitlist.fixed
+          .take(limit.clamp(1, 1))
+          .map((entry) => BoardAssignment(entry, 0, board))
+          .toList(growable: false);
+    }
     if (isDirectorManagedNormalRanking && isGlobalStrategy) {
       if (isFixedSchedule) {
+        // A fixed global schedule is a flat list: no board is reserved in
+        // advance. The simulator boards are only a planning aid, so every free
+        // board must see the whole collision-free list. Otherwise running
+        // matches leave the remaining boards without any suggestion.
+        if (runningOn(board) != null) return const [];
         return flatGlobalFixedSuggestions()
-            .where((assignment) => assignment.board == board)
+            .map(
+              (assignment) =>
+                  BoardAssignment(assignment.entry, assignment.block, board),
+            )
             .take(limit)
-            .toList();
+            .toList(growable: false);
       }
       final stable = globalBoardAssignments()[board];
       return stable == null ? const [] : [stable];
@@ -774,7 +815,11 @@ enum DirectorSchedulePresentation {
   /// Fixed order + global strategy: one flat fixed list, free board choice.
   globalFlat,
 
-  /// Dynamic order + global strategy: one stable fixed item per board.
+  /// Dynamic order + global strategy: one shared waiting list with a fixed
+  /// preview and an optimised remainder. No board is assigned in advance.
+  globalWaitlist,
+
+  /// Legacy dynamic global presentation, kept for persisted screenshots/tests.
   globalPerBoard,
 
   /// League/friendly or director mode off: keep the existing presentation.
@@ -791,6 +836,8 @@ class DirectorScheduleOverview {
     this.suggestions = const [],
     this.note,
     this.showBoardLabels = true,
+    this.fixedCount = 0,
+    this.waitlist,
   });
 
   final DirectorSchedulePresentation presentation;
@@ -798,9 +845,12 @@ class DirectorScheduleOverview {
   final List<BoardAssignment> suggestions;
   final String? note;
   final bool showBoardLabels;
+  final int fixedCount;
+  final GlobalWaitlistPlan? waitlist;
 
   bool get isFlat =>
       presentation == DirectorSchedulePresentation.globalFlat ||
+      presentation == DirectorSchedulePresentation.globalWaitlist ||
       presentation == DirectorSchedulePresentation.globalPerBoard;
 
   List<BoardAssignment> get visibleSuggestions => isFlat

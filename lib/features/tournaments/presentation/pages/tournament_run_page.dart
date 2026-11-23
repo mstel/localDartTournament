@@ -562,9 +562,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         activeStageIndex: _activeStageIndex,
         completedStageIndexes: _completedStageIndexes,
         allowUnfinishingCompleted: rule.retroactive,
-        trashReason: rule.retroactive
-            ? TournamentTrashReason.reopened
-            : null,
+        trashReason: rule.retroactive ? TournamentTrashReason.reopened : null,
       );
       _queueAchievementRefresh(null, forceHistoricalUnlockRefresh: true);
     } catch (_) {
@@ -1200,15 +1198,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return null;
     }
     final stage = widget.tournament.runStages[_activeStageIndex];
-    final candidates =
-        _matchesForStage(stage)
-            .where(
-              (match) =>
-                  match.hasResult &&
-                  match.hasPlayers &&
-                  match.withdrawalSignature == null,
-            )
-            .toList();
+    final candidates = _matchesForStage(stage)
+        .where(
+          (match) =>
+              match.hasResult &&
+              match.hasPlayers &&
+              match.withdrawalSignature == null,
+        )
+        .toList();
     if (candidates.isEmpty) return null;
     final epoch = DateTime.fromMillisecondsSinceEpoch(0);
     candidates.sort((a, b) {
@@ -1300,7 +1297,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sicherung vor dem Rückgängigmachen fehlgeschlagen: $error'),
+            content: Text(
+              'Sicherung vor dem Rückgängigmachen fehlgeschlagen: $error',
+            ),
           ),
         );
       }
@@ -1465,6 +1464,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     } catch (_) {
       widget.tournament.directorSchedulingStrategy = previous;
       _restoreFixedScheduleOrders(previousOrders);
+      if (mounted) setState(() {});
+      rethrow;
+    }
+  }
+
+  Future<void> _setGlobalWaitlistFixedCount(int count) async {
+    final previous = widget.tournament.directorGlobalWaitlist.copy();
+    if (previous.fixedCount == count) return;
+    setState(() => widget.tournament.directorGlobalWaitlist.fixedCount = count);
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      widget.tournament.directorGlobalWaitlist = previous;
       if (mounted) setState(() {});
       rethrow;
     }
@@ -1855,10 +1867,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (!widget.tournament.tournamentSettings.liveVisible) return;
     try {
       await _loadLiveProfilesIfNeeded();
-      await _livePublisher.publish(
-        widget.tournament,
-        profiles: _liveProfiles,
-      );
+      await _livePublisher.publish(widget.tournament, profiles: _liveProfiles);
     } catch (_) {
       // Periodic publishing must never disturb result entry; the settings
       // panel shows errors for an explicit publish.
@@ -1867,8 +1876,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<void> _setLiveVisible(bool value) async {
     setState(() {
-      widget.tournament.tournamentSettings =
-          widget.tournament.tournamentSettings.copyWith(liveVisible: value);
+      widget.tournament.tournamentSettings = widget
+          .tournament
+          .tournamentSettings
+          .copyWith(liveVisible: value);
     });
     if (value) await _loadLiveProfilesIfNeeded();
     await _saveTournamentSettings();
@@ -4236,9 +4247,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     });
     await _saveTournamentProgress(
       allowUnfinishingCompleted: clearsCompletion,
-      trashReason: clearsCompletion
-          ? TournamentTrashReason.reopened
-          : null,
+      trashReason: clearsCompletion ? TournamentTrashReason.reopened : null,
     );
   }
 
@@ -7587,6 +7596,66 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                                   _handleDirectorSettings(
                                                     () =>
                                                         _setDirectorSchedulingStrategy(
+                                                          value,
+                                                        ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        if (widget
+                                                .tournament
+                                                .directorModeEnabled &&
+                                            widget.tournament.leagueMatch ==
+                                                null &&
+                                            widget
+                                                    .tournament
+                                                    .directorSchedulingStrategy ==
+                                                'global' &&
+                                            widget
+                                                    .tournament
+                                                    .directorPlayOrderMode ==
+                                                'dynamic')
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
+                                            ),
+                                            child: DropdownButtonFormField<int>(
+                                              key: const ValueKey(
+                                                'global-waitlist-fixed-count',
+                                              ),
+                                              initialValue: widget
+                                                  .tournament
+                                                  .directorGlobalWaitlist
+                                                  .fixedCount,
+                                              isExpanded: true,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Fixierte Vorschau',
+                                                border: OutlineInputBorder(),
+                                                helperText:
+                                                    'Die ersten Begegnungen bleiben in dieser Reihenfolge fest; danach wird dynamisch optimiert.',
+                                              ),
+                                              items: [
+                                                for (final count in const [
+                                                  2,
+                                                  4,
+                                                  6,
+                                                  8,
+                                                  10,
+                                                  12,
+                                                ])
+                                                  DropdownMenuItem(
+                                                    value: count,
+                                                    child: Text(
+                                                      '$count Begegnungen',
+                                                    ),
+                                                  ),
+                                              ],
+                                              onChanged: (value) {
+                                                if (value != null) {
+                                                  _handleDirectorSettings(
+                                                    () =>
+                                                        _setGlobalWaitlistFixedCount(
                                                           value,
                                                         ),
                                                   );

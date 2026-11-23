@@ -168,6 +168,43 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('dynamic + global monitor shows one shared fixed waitlist', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = _tournament()
+      ..directorModeEnabled = true
+      ..directorSchedulingStrategy = 'global'
+      ..directorPlayOrderMode = 'dynamic'
+      ..boardCount = 3;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nächste Begegnungen'), findsOneWidget);
+    expect(find.byKey(const ValueKey('global-waitlist-panel')), findsOneWidget);
+    expect(find.text('Fest eingeplant'), findsOneWidget);
+    expect(find.text('Dynamisch optimiert'), findsOneWidget);
+    expect(
+      find.text('Die nächste Begegnung kommt an das nächste freie Board.'),
+      findsOneWidget,
+    );
+    expect(find.text('Nächstes freies Board'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('director mode shows board status and upcoming matches on TV', (
     tester,
   ) async {
@@ -720,7 +757,9 @@ void main() {
       expect(table.columns, hasLength(10));
       expect(table.rows, hasLength(2));
       expect(
-        table.rows.first.cells.map((cell) => (cell.child as Text).data).toList(),
+        table.rows.first.cells
+            .map((cell) => (cell.child as Text).data)
+            .toList(),
         ['Lena', '1', '1', '0', '1', 'Mira', '1', '0', '1', '0'],
       );
       expect(
@@ -1149,7 +1188,7 @@ void main() {
       expect(tester.getSize(popup).height, greaterThan(100));
       final labelStyle =
           tester.widget<Text>(find.text('180 von Robin')).style ??
-              const TextStyle();
+          const TextStyle();
       expect(labelStyle.fontSize, greaterThanOrEqualTo(40));
 
       await tester.pump(const Duration(seconds: 3));

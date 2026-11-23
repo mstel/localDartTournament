@@ -8,6 +8,7 @@ import '../../league/domain/league_match.dart';
 import 'second_screen_dialog_requests.dart';
 import 'second_screen_widget_placement.dart';
 import 'tournament_activity_entry.dart';
+import 'global_waitlist_state.dart';
 import 'tournament_settings.dart';
 
 const List<String> defaultGroupTieBreakers = [
@@ -894,6 +895,7 @@ class CreatedTournament {
     this.directorSchedulingStrategy = 'group',
     this.directorPlayOrderMode = 'dynamic',
     this.directorMultiBoardAssignmentBehavior = 'mirror',
+    GlobalWaitlistState? directorGlobalWaitlist,
     this.showAchievementNotifications = true,
     this.showPlayerInsights = false,
     bool? soundModeEnabled,
@@ -955,6 +957,7 @@ class CreatedTournament {
          for (final entry in directorGroupBoardAssignments.entries)
            entry.key: List<int>.from(entry.value),
        },
+       directorGlobalWaitlist = directorGlobalWaitlist ?? GlobalWaitlistState(),
        rankingIds = List<String>.from(rankingIds.take(1)),
        withdrawals = withdrawals ?? [],
        activityLog = activityLog ?? [];
@@ -1023,6 +1026,9 @@ class CreatedTournament {
           _directorMultiBoardAssignmentBehaviorFromJson(
             json['directorMultiBoardAssignmentBehavior'],
           ),
+      directorGlobalWaitlist: GlobalWaitlistState.fromJson(
+        json['directorGlobalWaitlist'],
+      ),
       showAchievementNotifications:
           json['showAchievementNotifications'] as bool? ?? true,
       showPlayerInsights: json['showPlayerInsights'] as bool? ?? false,
@@ -1130,6 +1136,7 @@ class CreatedTournament {
   String directorSchedulingStrategy;
   String directorPlayOrderMode;
   String directorMultiBoardAssignmentBehavior;
+  GlobalWaitlistState directorGlobalWaitlist;
   bool showAchievementNotifications;
   bool showPlayerInsights;
   TournamentSettings tournamentSettings;
@@ -1221,6 +1228,8 @@ class CreatedTournament {
         'directorPlayOrderMode': directorPlayOrderMode,
       'directorMultiBoardAssignmentBehavior':
           directorMultiBoardAssignmentBehavior,
+      if (directorGlobalWaitlist.hasPersistedData)
+        'directorGlobalWaitlist': directorGlobalWaitlist.toJson(),
       if (!showAchievementNotifications) 'showAchievementNotifications': false,
       if (showPlayerInsights) 'showPlayerInsights': true,
       'soundModeEnabled': soundModeEnabled,

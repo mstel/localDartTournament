@@ -1,6 +1,7 @@
 import '../../domain/knockout_round_names.dart';
 import '../../domain/tournament_models.dart';
 import '../../domain/engines/board_scheduling_engine.dart';
+import '../../domain/engines/global_waitlist_engine.dart';
 import '../../domain/engines/group_board_assignment.dart';
 export '../../domain/engines/board_scheduling_engine.dart';
 
@@ -535,6 +536,7 @@ class OrderOfPlayController {
     int board, {
     DateTime? startedAt,
   }) {
+    final all = entries(tournament);
     final schedule = plan(tournament, stage);
     final candidates = schedule.planned.where(
       (a) => identical(a.entry.match, match),
@@ -557,6 +559,23 @@ class OrderOfPlayController {
     match.startedAt = startedAt ?? DateTime.now();
     match.startedPlayers = entry.playerSignature;
     match.finishedAt = null;
+
+    final openSinglesRemain = all.any(
+      (candidate) =>
+          candidate.stageIndex == stage &&
+          candidate.match.hasPlayers &&
+          !candidate.match.isResolved &&
+          !candidate.match.hasTeamParticipant,
+    );
+    const GlobalWaitlistEngine().recordStart(
+      tournament,
+      stage,
+      match,
+      allEntries: all,
+      schedule: schedule,
+      isPreviewable: (candidate) =>
+          !candidate.hasTeamParticipant || !openSinglesRemain,
+    );
     return true;
   }
 

@@ -38,6 +38,7 @@ import '../../../application/order_of_play/order_of_play_controller.dart';
 import '../../../domain/engines/group_advancement_forecast_engine.dart';
 import 'standings_table.dart';
 import 'recommended_matches_table.dart';
+import 'global_waitlist_panel.dart';
 import 'player_insight_badges.dart';
 import '../../../data/app_database.dart';
 import '../../../../rankings/application/tournament_match_elo_service.dart';
@@ -3806,27 +3807,29 @@ class _TournamentSecondScreenViewState
               ),
               Divider(height: 12, color: colors.border),
               ...() {
-            var realRank = 0;
-            final widgets = <Widget>[];
-            for (var index = 0; index < ranking.entries.length; index++) {
-              final entry = ranking.entries[index];
-              final hypothetical = ranking.hypotheticalIds.contains(entry.id);
-              if (!hypothetical) realRank++;
-              if (_showOnlyRankingParticipants &&
-                  !participantIds.contains(entry.id)) {
-                continue;
-              }
-              widgets.add(
-                _buildRankingEntry(
-                  context,
-                  ranking,
-                  entry,
-                  hypothetical ? null : realRank,
-                ),
-              );
-            }
-            return widgets;
-          }(),
+                var realRank = 0;
+                final widgets = <Widget>[];
+                for (var index = 0; index < ranking.entries.length; index++) {
+                  final entry = ranking.entries[index];
+                  final hypothetical = ranking.hypotheticalIds.contains(
+                    entry.id,
+                  );
+                  if (!hypothetical) realRank++;
+                  if (_showOnlyRankingParticipants &&
+                      !participantIds.contains(entry.id)) {
+                    continue;
+                  }
+                  widgets.add(
+                    _buildRankingEntry(
+                      context,
+                      ranking,
+                      entry,
+                      hypothetical ? null : realRank,
+                    ),
+                  );
+                }
+                return widgets;
+              }(),
             ],
           ],
         );
@@ -4606,15 +4609,11 @@ class _TournamentSecondScreenViewState
             )
               DataRow(
                 cells: [
-                  DataCell(
-                    Text(index < home.length ? home[index].name : '–'),
-                  ),
+                  DataCell(Text(index < home.length ? home[index].name : '–')),
                   ..._leagueStandingCells(
                     index < home.length ? home[index] : null,
                   ),
-                  DataCell(
-                    Text(index < away.length ? away[index].name : '–'),
-                  ),
+                  DataCell(Text(index < away.length ? away[index].name : '–')),
                   ..._leagueStandingCells(
                     index < away.length ? away[index] : null,
                   ),
@@ -4700,11 +4699,7 @@ class _TournamentSecondScreenViewState
         if (showHeader) ...[
           Row(
             children: [
-              const Icon(
-                Icons.leaderboard,
-                size: 20,
-                color: Color(0xFF70E0BA),
-              ),
+              const Icon(Icons.leaderboard, size: 20, color: Color(0xFF70E0BA)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -5267,10 +5262,9 @@ class _TournamentSecondScreenViewState
     );
     final previewGate = TournamentDirectorSnapshot(t, activeIndex);
     final scheduleOverview = previewGate.scheduleOverview;
-    final previewableEntries =
-        orderedEntries
-            .where((entry) => previewGate.isPreviewableMatch(entry.match))
-            .toList();
+    final previewableEntries = orderedEntries
+        .where((entry) => previewGate.isPreviewableMatch(entry.match))
+        .toList();
     final legacyGroups = stage is GroupTournamentRunStage
         ? [
             for (final group in stage.groups)
@@ -5295,9 +5289,7 @@ class _TournamentSecondScreenViewState
             if (stage != null)
               RecommendedMatchGroup(
                 name: stage.name,
-                matches: [
-                  for (final entry in previewableEntries) entry.match,
-                ],
+                matches: [for (final entry in previewableEntries) entry.match],
                 playedMatches: _matchesOf(
                   stage,
                 ).where((match) => match.hasResult).length,
@@ -5306,62 +5298,63 @@ class _TournamentSecondScreenViewState
           ];
     final recommendedGroups = switch (scheduleOverview.presentation) {
       DirectorSchedulePresentation.groupFull ||
-      DirectorSchedulePresentation.groupFirstOnly => stage is GroupTournamentRunStage
-          ? [
-              for (final group in stage.groups)
-                RecommendedMatchGroup(
-                  name: group.name,
-                  matches: [
-                    for (final assignment in
-                        scheduleOverview.groups[tournamentGroupBoardKey(
-                              activeIndex,
-                              group.name,
-                            )] ??
-                        const <BoardAssignment>[])
-                      assignment.entry.match,
-                  ],
-                  isDelayed: flowPriority.delayedGroups.contains(group.name),
-                  playedMatches: _matchesOfGroup(
-                    group,
-                  ).where((match) => match.hasPlayers && match.hasResult).length,
-                  totalMatches: _matchesOfGroup(
-                    group,
-                  ).where((match) => match.hasPlayers).length,
-                ),
-            ]
-          : [
-              if (stage != null)
-                RecommendedMatchGroup(
-                  name: stage.name,
-                  matches: [
-                    for (final assignments in scheduleOverview.groups.values)
-                      for (final assignment in assignments)
+      DirectorSchedulePresentation.groupFirstOnly =>
+        stage is GroupTournamentRunStage
+            ? [
+                for (final group in stage.groups)
+                  RecommendedMatchGroup(
+                    name: group.name,
+                    matches: [
+                      for (final assignment
+                          in scheduleOverview.groups[tournamentGroupBoardKey(
+                                activeIndex,
+                                group.name,
+                              )] ??
+                              const <BoardAssignment>[])
                         assignment.entry.match,
-                  ],
-                  playedMatches: _matchesOf(
-                    stage,
-                  ).where((match) => match.hasResult).length,
-                  totalMatches: _countMatchesForProgress(stage),
-                ),
-            ],
+                    ],
+                    isDelayed: flowPriority.delayedGroups.contains(group.name),
+                    playedMatches: _matchesOfGroup(group)
+                        .where((match) => match.hasPlayers && match.hasResult)
+                        .length,
+                    totalMatches: _matchesOfGroup(
+                      group,
+                    ).where((match) => match.hasPlayers).length,
+                  ),
+              ]
+            : [
+                if (stage != null)
+                  RecommendedMatchGroup(
+                    name: stage.name,
+                    matches: [
+                      for (final assignments in scheduleOverview.groups.values)
+                        for (final assignment in assignments)
+                          assignment.entry.match,
+                    ],
+                    playedMatches: _matchesOf(
+                      stage,
+                    ).where((match) => match.hasResult).length,
+                    totalMatches: _countMatchesForProgress(stage),
+                  ),
+              ],
       DirectorSchedulePresentation.globalFlat ||
       DirectorSchedulePresentation.globalPerBoard => [
-          RecommendedMatchGroup(
-            name:
-                scheduleOverview.presentation ==
-                        DirectorSchedulePresentation.globalFlat
-                    ? 'Vorschläge für freie Boards'
-                    : 'Vorschläge je Board',
-            matches: [
-              for (final assignment in scheduleOverview.suggestions)
-                assignment.entry.match,
-            ],
-            playedMatches: stage == null
-                ? null
-                : _matchesOf(stage).where((match) => match.hasResult).length,
-            totalMatches: stage == null ? null : _countMatchesForProgress(stage),
-          ),
-        ],
+        RecommendedMatchGroup(
+          name:
+              scheduleOverview.presentation ==
+                  DirectorSchedulePresentation.globalFlat
+              ? 'Vorschläge für freie Boards'
+              : 'Vorschläge je Board',
+          matches: [
+            for (final assignment in scheduleOverview.suggestions)
+              assignment.entry.match,
+          ],
+          playedMatches: stage == null
+              ? null
+              : _matchesOf(stage).where((match) => match.hasResult).length,
+          totalMatches: stage == null ? null : _countMatchesForProgress(stage),
+        ),
+      ],
       _ => legacyGroups,
     };
     final hasOpenMatches = recommendedGroups.any(
@@ -6008,6 +6001,193 @@ class _TournamentSecondScreenViewState
     );
   }
 
+  Widget _buildGlobalWaitlistSecondScreen(
+    BuildContext context,
+    CreatedTournament tournament,
+    TournamentDirectorSnapshot snapshot,
+    TournamentDisplayColors colors, {
+    Object? playerInsightsError,
+  }) {
+    final freeBoards = <int>[
+      for (var board = 1; board <= tournament.boardCount; board++)
+        if (!tournament.blockedBoards.contains(board) &&
+            snapshot.runningOn(board) == null)
+          board,
+    ];
+    final nextFreeBoard = freeBoards.firstOrNull;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 6.0;
+        final columns = ((constraints.maxWidth + spacing) / 220).floor().clamp(
+          1,
+          tournament.boardCount,
+        );
+        final cardWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return SingleChildScrollView(
+          key: const ValueKey('second-screen-global-waitlist-scroll'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (playerInsightsError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Player-Insights konnten nicht geladen werden: '
+                    '$playerInsightsError',
+                    style: const TextStyle(color: Colors.amber),
+                  ),
+                ),
+              GlobalWaitlistPanel(snapshot: snapshot, dense: true),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    Icons.dashboard_outlined,
+                    size: 18,
+                    color: colors.accent,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Nächstes freies Board',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (nextFreeBoard != null)
+                    Text(
+                      tournament.boardDisplayName(nextFreeBoard),
+                      style: TextStyle(
+                        color: const Color(0xFF4ED9A4),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (var board = 1; board <= tournament.boardCount; board++)
+                    SizedBox(
+                      key: ValueKey('second-screen-director-board-$board'),
+                      width: cardWidth,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.card,
+                          border: Border.all(
+                            color: board == nextFreeBoard
+                                ? const Color(0xFF4ED9A4)
+                                : colors.border,
+                            width: 2,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Builder(
+                          builder: (context) {
+                            final running = snapshot.runningOn(board);
+                            final blocked = tournament.blockedBoards.contains(
+                              board,
+                            );
+                            final status = running != null
+                                ? 'LIVE'
+                                : blocked
+                                ? 'GESPERRT'
+                                : 'FREI';
+                            final statusColor = running != null
+                                ? TournamentDisplayPalette.accent
+                                : blocked
+                                ? Colors.redAccent
+                                : const Color(0xFF4ED9A4);
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        tournament
+                                            .boardDisplayName(board)
+                                            .toUpperCase(),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: colors.text,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withValues(
+                                          alpha: 0.18,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        status,
+                                        style: TextStyle(
+                                          color: statusColor,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (running != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      running.match.participantShortLabel,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: colors.text),
+                                    ),
+                                  )
+                                else
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      blocked
+                                          ? 'Manuell gesperrt'
+                                          : board == nextFreeBoard
+                                          ? 'Nächster Aufruf'
+                                          : 'Wartet auf freie Partie',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: colors.mutedText,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildDirectorBoardQueue(
     BuildContext context,
     CreatedTournament tournament,
@@ -6017,6 +6197,15 @@ class _TournamentSecondScreenViewState
   }) {
     final colors = _displayColors(context);
     final snapshot = TournamentDirectorSnapshot(tournament, activeIndex);
+    if (snapshot.usesGlobalWaitlist) {
+      return _buildGlobalWaitlistSecondScreen(
+        context,
+        tournament,
+        snapshot,
+        colors,
+        playerInsightsError: playerInsightsError,
+      );
+    }
     final mergedGroupBoards = snapshot.mergedGroupBoards();
     final boardToMergedGroup = <int, String>{
       for (final entry in mergedGroupBoards.entries)
@@ -6106,18 +6295,20 @@ class _TournamentSecondScreenViewState
                                       : boardNames.join(' & ');
                                   final recommendations = mergedGroupKey == null
                                       ? snapshot.suggestionsForBoard(board)
-                                      : snapshot.scheduleOverview.presentation ==
-                                              DirectorSchedulePresentation
-                                                  .unchanged
-                                          ? snapshot.upcomingForBoards(
-                                              boards,
-                                              groupKey: mergedGroupKey,
-                                              limit: boards.length * 3,
-                                            )
-                                          : snapshot.scheduleOverview.groups[
-                                                mergedGroupKey
-                                              ] ??
-                                              const <BoardAssignment>[];
+                                      : snapshot
+                                                .scheduleOverview
+                                                .presentation ==
+                                            DirectorSchedulePresentation
+                                                .unchanged
+                                      ? snapshot.upcomingForBoards(
+                                          boards,
+                                          groupKey: mergedGroupKey,
+                                          limit: boards.length * 3,
+                                        )
+                                      : snapshot
+                                                .scheduleOverview
+                                                .groups[mergedGroupKey] ??
+                                            const <BoardAssignment>[];
                                   final fewestMatchesHint =
                                       snapshot.isDirectorManagedNormalRanking &&
                                           snapshot.isDynamicSchedule &&
@@ -6440,20 +6631,21 @@ class _TournamentSecondScreenViewState
               entry.type == 'substitution_budget',
         )
         .toList();
-    final activityItems = <_RecentFeedItem>[
-      for (final match in recent)
-        _RecentFeedItem.match(
-          match,
-          match.finishedAt ?? match.startedAt ?? t.startedAt ?? t.createdAt,
-        ),
-      if (t.leagueMatch != null)
-        for (final entry in recentActivity)
-          _RecentFeedItem.activity(entry, entry.timestamp),
-    ]..sort((left, right) {
-      final dateComparison = right.timestamp.compareTo(left.timestamp);
-      if (dateComparison != 0) return dateComparison;
-      return right.order.compareTo(left.order);
-    });
+    final activityItems =
+        <_RecentFeedItem>[
+          for (final match in recent)
+            _RecentFeedItem.match(
+              match,
+              match.finishedAt ?? match.startedAt ?? t.startedAt ?? t.createdAt,
+            ),
+          if (t.leagueMatch != null)
+            for (final entry in recentActivity)
+              _RecentFeedItem.activity(entry, entry.timestamp),
+        ]..sort((left, right) {
+          final dateComparison = right.timestamp.compareTo(left.timestamp);
+          if (dateComparison != 0) return dateComparison;
+          return right.order.compareTo(left.order);
+        });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -6503,8 +6695,7 @@ class _TournamentSecondScreenViewState
                           )
                         : Scrollbar(
                             controller: _recentResultsController,
-                            thumbVisibility:
-                                activityItems.length > visibleRows,
+                            thumbVisibility: activityItems.length > visibleRows,
                             child: ListView.separated(
                               controller: _recentResultsController,
                               padding: EdgeInsets.zero,
@@ -6564,7 +6755,10 @@ class _TournamentSecondScreenViewState
                             height: activityItems.isEmpty
                                 ? itemExtent
                                 : itemExtent *
-                                      activityItems.length.clamp(1, visibleRows),
+                                      activityItems.length.clamp(
+                                        1,
+                                        visibleRows,
+                                      ),
                             child: recentContent,
                           );
                   },
@@ -6962,7 +7156,9 @@ class _BestPerformancePopupState extends State<_BestPerformancePopup>
                               size: 64,
                             ),
                             const SizedBox(width: 24),
-                            Flexible(child: Text(widget.label, style: labelStyle)),
+                            Flexible(
+                              child: Text(widget.label, style: labelStyle),
+                            ),
                           ],
                         ),
                       ),
