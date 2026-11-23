@@ -1502,12 +1502,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       widget.tournamentStorage ?? TournamentStorage();
   late final Future<List<LocalRanking>> _localRankings = LocalAppDatabase()
       .loadLocalRankings();
+  late final LiveTournamentPublisher _livePublisher = LiveTournamentPublisher(
+    uploader: SupabaseLiveTournamentUploader(),
+  );
+  Map<String, PlayerProfile> _liveProfiles = const {};
+  bool _liveProfilesLoaded = false;
+  Timer? _livePublishTimer;
   late String _lastAchievementResultSignature;
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _secondScreenInfoPollTimer?.cancel();
+    _livePublishTimer?.cancel();
     _tournamentNameController.dispose();
     _tournamentNotesController.dispose();
     _simulationSeedController.dispose();
@@ -1537,6 +1544,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     // gestartet worden sein; deshalb wird unabhängig von einer lokalen
     // Prozess-Referenz gepollt.
     _startSecondScreenInfoPolling();
+    _livePublishTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_publishLiveIfEnabled()),
+    );
     WidgetsBinding.instance.addObserver(this);
     if (widget.tournament.leagueMatch != null) {
       _leagueRuntime = LeagueBoardRuntime(widget.tournament)
@@ -1562,6 +1573,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       await _applyPendingStartDrawForActiveStage();
       if (!mounted) return;
       await _saveTournamentProgress();
+      if (widget.tournament.tournamentSettings.liveVisible) {
+        unawaited(_publishLiveIfEnabled());
+      }
     });
   }
 
@@ -1828,6 +1842,36 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _audioAnnouncementService?.cancel();
     }
     if (mounted) setState(() {});
+  }
+
+  Future<void> _loadLiveProfilesIfNeeded() async {
+    if (_liveProfilesLoaded) return;
+    final profiles = await LocalAppDatabase().loadPlayerProfiles();
+    _liveProfiles = {for (final profile in profiles) profile.id: profile};
+    _liveProfilesLoaded = true;
+  }
+
+  Future<void> _publishLiveIfEnabled() async {
+    if (!widget.tournament.tournamentSettings.liveVisible) return;
+    try {
+      await _loadLiveProfilesIfNeeded();
+      await _livePublisher.publish(
+        widget.tournament,
+        profiles: _liveProfiles,
+      );
+    } catch (_) {
+      // Periodic publishing must never disturb result entry; the settings
+      // panel shows errors for an explicit publish.
+    }
+  }
+
+  Future<void> _setLiveVisible(bool value) async {
+    setState(() {
+      widget.tournament.tournamentSettings =
+          widget.tournament.tournamentSettings.copyWith(liveVisible: value);
+    });
+    if (value) await _loadLiveProfilesIfNeeded();
+    await _saveTournamentSettings();
   }
 
   bool get _canStartSimulation =>
@@ -2142,6 +2186,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           onChangeTournamentDate: _saveTournamentDate,
           onShiftMatchDates: _shiftTournamentMatchDates,
           showCollapsibleHeader: false,
+        ),
+        const Divider(height: 32),
+        LiveTournamentSettingsPanel(
+          tournament: widget.tournament,
+          publisher: _livePublisher,
+          profiles: _liveProfiles,
+          onLiveVisibleChanged: _setLiveVisible,
         ),
       ],
     ),

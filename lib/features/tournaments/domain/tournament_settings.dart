@@ -14,6 +14,7 @@ class TournamentSettings {
     this.alternativeRecommendationCount = 3,
     this.announcementNameFormat = AnnouncementNameFormat.fullName,
     this.speakNicknameWhenAvailable = false,
+    this.liveVisible = false,
   });
 
   static const schemaVersion = 1;
@@ -32,6 +33,10 @@ class TournamentSettings {
   final int alternativeRecommendationCount;
   final AnnouncementNameFormat announcementNameFormat;
   final bool speakNicknameWhenAvailable;
+
+  /// Publishes a slim spectator view of the running tournament. Additive to
+  /// schema version 1 so older app versions can still read tournaments.
+  final bool liveVisible;
 
   bool get isValid =>
       playerMatchDeficitThreshold >= minimumThreshold &&
@@ -58,6 +63,7 @@ class TournamentSettings {
     int? alternativeRecommendationCount,
     AnnouncementNameFormat? announcementNameFormat,
     bool? speakNicknameWhenAvailable,
+    bool? liveVisible,
   }) => TournamentSettings(
     playerMatchDeficitThreshold:
         playerMatchDeficitThreshold ?? this.playerMatchDeficitThreshold,
@@ -80,6 +86,7 @@ class TournamentSettings {
         announcementNameFormat ?? this.announcementNameFormat,
     speakNicknameWhenAvailable:
         speakNicknameWhenAvailable ?? this.speakNicknameWhenAvailable,
+    liveVisible: liveVisible ?? this.liveVisible,
   );
 
   factory TournamentSettings.fromJson(Map<String, dynamic> json) {
@@ -127,6 +134,7 @@ class TournamentSettings {
       ),
       speakNicknameWhenAvailable:
           json['speakNicknameWhenAvailable'] as bool? ?? false,
+      liveVisible: json['liveVisible'] as bool? ?? false,
     );
     if (json['version'] != null && json['version'] != schemaVersion) {
       throw FormatException(
@@ -150,6 +158,7 @@ class TournamentSettings {
     'alternativeRecommendationCount': alternativeRecommendationCount,
     'announcementNameFormat': announcementNameFormat.name,
     'speakNicknameWhenAvailable': speakNicknameWhenAvailable,
+    if (liveVisible) 'liveVisible': true,
   };
 
   static int _boundedInt(
@@ -176,7 +185,8 @@ class TournamentSettings {
       other.readAlternativeRecommendations == readAlternativeRecommendations &&
       other.alternativeRecommendationCount == alternativeRecommendationCount &&
       other.announcementNameFormat == announcementNameFormat &&
-      other.speakNicknameWhenAvailable == speakNicknameWhenAvailable;
+      other.speakNicknameWhenAvailable == speakNicknameWhenAvailable &&
+      other.liveVisible == liveVisible;
 
   @override
   int get hashCode => Object.hash(
@@ -192,5 +202,6 @@ class TournamentSettings {
     alternativeRecommendationCount,
     announcementNameFormat,
     speakNicknameWhenAvailable,
+    liveVisible,
   );
 }

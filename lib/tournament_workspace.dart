@@ -113,6 +113,9 @@ import 'features/tournaments/presentation/widgets/creation/group_game_limit_setu
 import 'features/tournaments/presentation/widgets/creation/group_player_allocation_dialog.dart';
 import 'features/tournaments/presentation/widgets/run/result_entry.dart';
 import 'features/tournaments/presentation/widgets/run/stage_controls.dart';
+import 'features/live/application/live_tournament_publisher.dart';
+import 'features/live/data/supabase_live_tournament_uploader.dart';
+import 'features/live/presentation/live_tournament_settings_panel.dart';
 import 'features/tournaments/presentation/widgets/run/stage_results_split_view.dart';
 
 part 'features/home/presentation/home_page.dart';

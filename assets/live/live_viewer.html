@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Turnier Live</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --card: #161b22;
+      --line: #30363d;
+      --text: #f0f6fc;
+      --muted: #9ba7b4;
+      --accent: #4ade80;
+      --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: clamp(16px, 3vw, 40px);
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    .shell { max-width: 1440px; margin: 0 auto; }
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px 24px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); }
+    h2 { margin: 0 0 12px; font-size: 1.15rem; }
+    .live-dot {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .live-dot::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 5px rgba(74, 222, 128, .15);
+    }
+    .muted { color: var(--muted); }
+    .clock { margin-left: auto; text-align: right; }
+    .clock strong { display: block; font-size: 1.2rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    .chip {
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--card);
+      font-size: .95rem;
+    }
+    .grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+      align-items: start;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    .card.wide { grid-column: 1 / -1; }
+    .scroll { overflow-x: auto; }
+    .scroll-hint { color: var(--muted); font-size: .85rem; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; min-width: 420px; }
+    th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .match {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .match:last-child { border-bottom: 0; }
+    .match .home { text-align: right; }
+    .score { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 56px; text-align: center; }
+    .status {
+      display: inline-block;
+      min-width: 72px;
+      text-align: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+      border: 1px solid var(--line);
+    }
+    .status.running { color: var(--accent); border-color: rgba(74, 222, 128, .5); }
+    .status.finished { color: var(--warn); border-color: rgba(251, 191, 36, .5); }
+    .bracket { display: flex; gap: 16px; min-width: max-content; }
+    .bracket-col { min-width: 240px; }
+    .bracket-col > h3 { margin: 0 0 8px; color: var(--muted); font-size: .9rem; }
+    .empty { color: var(--muted); font-style: italic; }
+    .end {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(74, 222, 128, .25), 0 20px 60px rgba(0, 0, 0, .4);
+      text-align: center;
+      padding: clamp(24px, 5vw, 64px);
+    }
+    .end .winner { font-size: clamp(1.6rem, 5vw, 3rem); font-weight: 800; margin: 12px 0; }
+    .error {
+      border: 1px solid #f85149;
+      background: rgba(248, 81, 73, .1);
+      padding: 16px;
+      border-radius: 12px;
+    }
+    @media (max-width: 600px) {
+      .clock { margin-left: 0; text-align: left; }
+      .card { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div id="content" aria-live="polite">
+      <p class="muted">Turnierdaten werden geladen …</p>
+    </div>
+  </main>
+  <script>
+    const content = document.getElementById('content');
+    const refreshSeconds = 30;
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined && text !== null) node.textContent = String(text);
+      return node;
+    }
+
+    function formatTime(value) {
+      if (!value) return '–';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '–';
+      return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatDate(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleDateString('de-DE');
+    }
+
+    function addMatchList(card, title, matches) {
+      if (!matches.length) return;
+      card.append(el('h2', null, title));
+      for (const match of matches) {
+        const row = el('div', 'match');
+        row.append(el('span', 'home', match.home));
+        row.append(el('span', 'score', `${match.homeLegs ?? '–'} : ${match.awayLegs ?? '–'}`));
+        row.append(el('span', null, match.away));
+        const meta = el('div', 'muted');
+        meta.style.gridColumn = '1 / -1';
+        meta.style.textAlign = 'center';
+        const status = el('span', `status ${match.status}`, match.status);
+        meta.append(status);
+        if (match.label) meta.append(document.createTextNode(` · ${match.label}`));
+        row.append(meta);
+        card.append(row);
+      }
+    }
+
+    function addStandings(card, groups) {
+      for (const group of groups) {
+        card.append(el('h2', null, group.name));
+        const scroll = el('div', 'scroll');
+        const table = el('table');
+        const head = el('tr');
+        for (const label of ['Spieler', 'Sp', 'S', 'U', 'N', 'Pkt']) {
+          head.append(el('th', label === 'Spieler' ? null : 'num', label));
+        }
+        table.append(head);
+        for (const row of group.rows) {
+          const tr = el('tr');
+          tr.append(el('td', null, row.name));
+          tr.append(el('td', 'num', row.played));
+          tr.append(el('td', 'num', row.wins));
+          tr.append(el('td', 'num', row.draws));
+          tr.append(el('td', 'num', row.losses));
+          tr.append(el('td', 'num', row.points));
+          table.append(tr);
+        }
+        scroll.append(table);
+        scroll.append(el('div', 'scroll-hint', 'Tabelle seitlich scrollbar'));
+        card.append(scroll);
+      }
+    }
+
+    function addBracket(card, rounds) {
+      if (!rounds.length) return;
+      const scroll = el('div', 'scroll');
+      const bracket = el('div', 'bracket');
+      for (const round of rounds) {
+        const col = el('div', 'bracket-col');
+        col.append(el('h3', null, round.name));
+        for (const match of round.matches) {
+          const tile = el('div', 'match');
+          tile.append(el('span', 'home', match.home));
+          tile.append(el('span', 'score', `${match.homeLegs ?? '–'} : ${match.awayLegs ?? '–'}`));
+          tile.append(el('span', null, match.away));
+          col.append(tile);
+        }
+        bracket.append(col);
+      }
+      scroll.append(bracket);
+      scroll.append(el('div', 'scroll-hint', 'KO-Baum seitlich scrollbar'));
+      card.append(scroll);
+    }
+
+    function render(payload) {
+      content.replaceChildren();
+      if (!payload || payload.schemaVersion !== 1) {
+        content.append(el('p', 'error', 'Live-Daten sind derzeit nicht verfügbar.'));
+        return;
+      }
+      const info = payload.tournament || {};
+      const clock = info.clock || {};
+      const top = el('div', 'top');
+      const heading = el('div');
+      heading.append(el('div', 'live-dot', info.status === 'finished' ? 'Ergebnis' : 'Live'));
+      heading.append(el('h1', null, info.name || 'Turnier'));
+      if (payload.tournamentDate || info.date) {
+        heading.append(el('div', 'muted', formatDate(payload.tournamentDate || info.date)));
+      }
+      top.append(heading);
+      const clockBox = el('div', 'clock');
+      clockBox.append(el('span', 'muted', 'Start / voraussichtliches Ende'));
+      clockBox.append(el('strong', null, `${formatTime(clock.startedAt)} – ${formatTime(clock.forecastEnd)}`));
+      top.append(clockBox);
+      content.append(top);
+
+      const chips = el('div', 'chips');
+      for (const line of payload.format || []) chips.append(el('span', 'chip', line));
+      content.append(chips);
+
+      if (info.status === 'finished') {
+        const end = el('section', 'card end');
+        end.append(el('div', 'live-dot', 'Turnier beendet'));
+        end.append(el('div', 'winner', (payload.endScreen && payload.endScreen.winner) || 'Ergebnisübersicht'));
+        if (payload.endScreen && payload.endScreen.resultLine) {
+          end.append(el('p', null, payload.endScreen.resultLine));
+        }
+        content.append(end);
+      }
+
+      const grid = el('div', 'grid');
+      const live = el('section', 'card');
+      const finished = el('section', 'card');
+      const matches = payload.matches || [];
+      addMatchList(live, 'Laufende und offene Partien', matches.filter(m => m.status !== 'finished'));
+      addMatchList(finished, 'Abgeschlossene Begegnungen', matches.filter(m => m.status === 'finished').slice().reverse());
+      if (!live.children.length) live.append(el('p', 'empty', 'Keine offenen Partien.'));
+      if (!finished.children.length) finished.append(el('p', 'empty', 'Noch keine Ergebnisse.'));
+      grid.append(live, finished);
+
+      const standings = el('section', 'card wide');
+      standings.append(el('h2', null, 'Tabellen & Zwischenstände'));
+      addStandings(standings, payload.standings || []);
+      if (!(payload.standings || []).length) standings.append(el('p', 'empty', 'Keine Tabelle vorhanden.'));
+      grid.append(standings);
+
+      const bracketCard = el('section', 'card wide');
+      bracketCard.append(el('h2', null, 'KO Baum'));
+      addBracket(bracketCard, payload.bracket || []);
+      if (!(payload.bracket || []).length) bracketCard.append(el('p', 'empty', 'Noch kein KO-Baum.'));
+      grid.append(bracketCard);
+
+      if ((payload.bestPerformances || []).length) {
+        const best = el('section', 'card wide');
+        best.append(el('h2', null, 'Bestleistungen'));
+        const rows = el('div', 'grid');
+        for (const item of payload.bestPerformances) {
+          const tile = el('div', 'card');
+          tile.append(el('strong', null, item.player));
+          tile.append(el('div', null, item.label));
+          if (item.value !== undefined && item.value !== null) {
+            tile.append(el('div', 'muted', String(item.value)));
+          }
+          rows.append(tile);
+        }
+        best.append(rows);
+        grid.append(best);
+      }
+      content.append(grid);
+      content.append(el('p', 'muted', `Aktualisiert ${new Date().toLocaleTimeString('de-DE')} · autorefresh alle ${refreshSeconds} s`));
+    }
+
+    async function refresh() {
+      try {
+        const url = new URL('latest.json', location.href);
+        url.search = `t=${Date.now()}`;
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        render(await response.json());
+      } catch (error) {
+        content.replaceChildren();
+        content.append(el('p', 'error', `Live-Daten konnten nicht geladen werden (${error.message}).`));
+      }
+    }
+
+    refresh();
+    setInterval(refresh, refreshSeconds * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refresh();
+    });
+  </script>
+</body>
+</html>
