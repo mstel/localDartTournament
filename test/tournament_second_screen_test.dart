@@ -2274,6 +2274,18 @@ void main() {
 
     CreatedTournament withManualGroups({required bool assigned}) {
       final source = _tournament();
+      final groupStage = source.runStages.first as GroupTournamentRunStage;
+      for (final group in groupStage.groups) {
+        for (final match in group.matches) {
+          match
+            ..homeLegs = null
+            ..awayLegs = null
+            ..homeSets = null
+            ..awaySets = null
+            ..startedAt = null
+            ..finishedAt = null;
+        }
+      }
       return CreatedTournament(
         name: source.name,
         players: source.players,

@@ -1113,6 +1113,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             ?.entry
             .match;
     if (targetMatch == null || !mounted) return;
+    final acknowledgementNeeded = _needsUnassignedGroupsAcknowledgement();
     if (!await _confirmUnassignedGroupsBeforeFirstMatch()) return;
     final previousBoard = targetMatch.boardNumber;
     final previousStartedAt = targetMatch.startedAt;
@@ -1124,7 +1125,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       targetMatch,
       board,
     );
-    if (!started) return;
+    if (!started) {
+      if (acknowledgementNeeded) {
+        await _saveTournamentProgress(propagateError: true);
+      }
+      return;
+    }
     setState(() {});
     try {
       await _saveTournamentProgress(propagateError: true);
@@ -1153,12 +1159,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   Future<bool> _confirmUnassignedGroupsBeforeFirstMatch() async {
     final stageIndex = _activeStageIndex;
-    if (!_hasPendingManualGroupAssignment(stageIndex) ||
-        widget.tournament.activityLog.any(
-          (entry) => entry.type == 'group_assignment_acknowledged:$stageIndex',
-        )) {
-      return true;
-    }
+    if (!_needsUnassignedGroupsAcknowledgement()) return true;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1185,17 +1186,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       'Vorläufige Gruppenzuweisung für Phase ${stageIndex + 1} bestätigt.',
       timestamp: acknowledgementTimestamp,
     );
-    try {
-      await _saveTournamentProgress(propagateError: true);
-    } catch (_) {
-      widget.tournament.activityLog.removeWhere(
-        (entry) =>
-            entry.type == 'group_assignment_acknowledged:$stageIndex' &&
-            entry.timestamp == acknowledgementTimestamp,
-      );
-      rethrow;
-    }
+    setState(() {});
     return true;
+  }
+
+  bool _needsUnassignedGroupsAcknowledgement() {
+    final stageIndex = _activeStageIndex;
+    return _hasPendingManualGroupAssignment(stageIndex) &&
+        !widget.tournament.activityLog.any(
+          (entry) => entry.type == 'group_assignment_acknowledged:$stageIndex',
+        );
   }
 
   Future<void> _resetRunningMatch(GroupMatch match) async {
@@ -4194,6 +4194,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }) async {
     if (_simulation != null) return;
     final correctingExistingResult = match.hasResult;
+    final acknowledgementNeeded =
+        !correctingExistingResult && _needsUnassignedGroupsAcknowledgement();
     if (!correctingExistingResult &&
         !await _confirmUnassignedGroupsBeforeFirstMatch()) {
       return;
@@ -4234,6 +4236,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     );
 
     if (result == null) {
+      if (acknowledgementNeeded && mounted) {
+        await _saveTournamentProgress(propagateError: true);
+      }
       return;
     }
     if (!mounted) return;
