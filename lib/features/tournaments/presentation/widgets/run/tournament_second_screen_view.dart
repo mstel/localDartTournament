@@ -6008,13 +6008,6 @@ class _TournamentSecondScreenViewState
     TournamentDisplayColors colors, {
     Object? playerInsightsError,
   }) {
-    final freeBoards = <int>[
-      for (var board = 1; board <= tournament.boardCount; board++)
-        if (!tournament.blockedBoards.contains(board) &&
-            snapshot.runningOn(board) == null)
-          board,
-    ];
-    final nextFreeBoard = freeBoards.firstOrNull;
     return LayoutBuilder(
       builder: (context, constraints) {
         const spacing = 6.0;
@@ -6040,33 +6033,6 @@ class _TournamentSecondScreenViewState
                 ),
               GlobalWaitlistPanel(snapshot: snapshot, dense: true),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Icon(
-                    Icons.dashboard_outlined,
-                    size: 18,
-                    color: colors.accent,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Nächstes freies Board',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (nextFreeBoard != null)
-                    Text(
-                      tournament.boardDisplayName(nextFreeBoard),
-                      style: TextStyle(
-                        color: const Color(0xFF4ED9A4),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
               Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
@@ -6082,12 +6048,7 @@ class _TournamentSecondScreenViewState
                         ),
                         decoration: BoxDecoration(
                           color: colors.card,
-                          border: Border.all(
-                            color: board == nextFreeBoard
-                                ? const Color(0xFF4ED9A4)
-                                : colors.border,
-                            width: 2,
-                          ),
+                          border: Border.all(color: colors.border, width: 2),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Builder(
@@ -6156,15 +6117,11 @@ class _TournamentSecondScreenViewState
                                       style: TextStyle(color: colors.text),
                                     ),
                                   )
-                                else
+                                else if (blocked)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 4),
                                     child: Text(
-                                      blocked
-                                          ? 'Manuell gesperrt'
-                                          : board == nextFreeBoard
-                                          ? 'Nächster Aufruf'
-                                          : 'Wartet auf freie Partie',
+                                      'Manuell gesperrt',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
@@ -6217,6 +6174,21 @@ class _TournamentSecondScreenViewState
       for (final entry in mergedGroupBoards.entries)
         MapEntry(entry.value, entry.key),
     ]..sort((a, b) => a.key.first.compareTo(b.key.first));
+    final expandNumberOffsets = <int, int>{};
+    if (tournament.directorModeEnabled &&
+        tournament.directorPlayOrderMode == 'fixed_schedule' &&
+        tournament.directorSchedulingStrategy == 'group' &&
+        tournament.directorMultiBoardAssignmentBehavior == 'expand') {
+      for (final boards in snapshot.configuredBoardsByGroup().values) {
+        final sorted = boards.toList()..sort();
+        for (var boardIndex = 0; boardIndex < sorted.length; boardIndex++) {
+          expandNumberOffsets.putIfAbsent(
+            sorted[boardIndex],
+            () => boardIndex * 3,
+          );
+        }
+      }
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         const spacing = 6.0;
@@ -6283,6 +6255,10 @@ class _TournamentSecondScreenViewState
                                   final boards = boardTile.key;
                                   final mergedGroupKey = boardTile.value;
                                   final board = boards.first;
+                                  final suggestionNumberOffset =
+                                      mergedGroupKey == null
+                                      ? (expandNumberOffsets[board] ?? 0)
+                                      : 0;
                                   final boardNames = boards
                                       .map(tournament.boardDisplayName)
                                       .toList();
@@ -6510,7 +6486,7 @@ class _TournamentSecondScreenViewState
                                                                 SizedBox(
                                                                   width: 20,
                                                                   child: Text(
-                                                                    '${index + 1}.',
+                                                                    '${suggestionNumberOffset + index + 1}.',
                                                                     style: TextStyle(
                                                                       color: colors
                                                                           .accent,

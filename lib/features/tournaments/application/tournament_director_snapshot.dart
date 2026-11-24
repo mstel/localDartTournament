@@ -3,10 +3,10 @@ import '../domain/tournament_settings.dart';
 import 'tournament_flow_priority.dart';
 import '../domain/tournament_flow_priority_settings.dart';
 import 'order_of_play/order_of_play_controller.dart';
+import 'order_of_play/fixed_global_suggestions.dart';
 import 'order_of_play/global_order_of_play_service.dart';
 import '../domain/engines/group_board_assignment.dart';
 import '../domain/engines/global_waitlist_engine.dart';
-import '../domain/engines/schedule_priority_engine.dart';
 
 /// A read-only view of the production queue. Does not predict future winners.
 class TournamentDirectorSnapshot {
@@ -107,50 +107,15 @@ class TournamentDirectorSnapshot {
   /// any later block can be started now if its players are free. All such
   /// entries are offered, collisions are filtered greedily in the persisted
   /// `fixedScheduleOrder` (the shared priority engine breaks ties).
-  List<BoardAssignment> flatGlobalFixedSuggestions({int limit = 16}) {
-    if (!isDirectorManagedNormalRanking ||
-        !isFixedSchedule ||
-        !isGlobalStrategy ||
-        limit <= 0) {
-      return const [];
-    }
-    final stageEntries = entries
-        .where((entry) => entry.stageIndex == stage && entry.match.hasPlayers)
-        .toList(growable: false);
-    final priorityContext = SchedulePriorityContext.build(
-      all: stageEntries,
-      finished: schedule.finished.where((e) => e.stageIndex == stage).toList(),
-      running: schedule.blockingRunning,
-    );
-    const priority = SchedulePriorityEngine();
-    final candidates = <BoardAssignment>[
-      for (final assignment in schedule.planned)
-        if (assignment.entry.stageIndex == stage &&
-            assignment.entry.match.hasPlayers &&
-            !assignment.entry.match.isResolved &&
-            isPreviewableMatch(assignment.entry.match))
-          assignment,
-    ];
-    candidates.sort((a, b) {
-      final fixedOrder = (a.entry.match.fixedScheduleOrder ?? 1 << 30)
-          .compareTo(b.entry.match.fixedScheduleOrder ?? 1 << 30);
-      return fixedOrder != 0
-          ? fixedOrder
-          : priority.compare(a.entry, b.entry, context: priorityContext);
-    });
-
-    final used = <String>{
-      for (final entry in schedule.blockingRunning) ...entry.players,
-    };
-    final result = <BoardAssignment>[];
-    for (final assignment in candidates) {
-      if (assignment.entry.players.any(used.contains)) continue;
-      result.add(assignment);
-      used.addAll(assignment.entry.players);
-      if (result.length >= limit) break;
-    }
-    return result;
-  }
+  List<BoardAssignment> flatGlobalFixedSuggestions({int limit = 16}) =>
+      const FixedGlobalSuggestions().plan(
+        tournament: tournament,
+        stage: stage,
+        entries: entries,
+        schedule: schedule,
+        isPreviewable: isPreviewableMatch,
+        limit: limit,
+      );
 
   /// Stable per-board suggestions of the dynamic global mode. They only change
   /// after a result was entered; starting a match keeps them intact.
@@ -685,6 +650,14 @@ class TournamentDirectorSnapshot {
 
   List<BoardAssignment> selectableForBoard(int board) {
     if (!freeBoards.contains(board)) return [];
+    if (hideScheduleBoardLabels && isFixedSchedule) {
+      return flatGlobalFixedSuggestions(limit: 32)
+          .map(
+            (assignment) =>
+                BoardAssignment(assignment.entry, assignment.block, board),
+          )
+          .toList(growable: false);
+    }
     return _selectableAssignments();
   }
 

@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../application/tournament_director_snapshot.dart';
 import '../../../domain/engines/board_scheduling_engine.dart';
-import '../../../domain/engines/global_waitlist_engine.dart';
 import '../../../domain/tournament_models.dart';
 
 /// Shared presentation of the tournament-wide waiting list.
 ///
 /// The same widget is used by the tournament director and by the standalone
-/// second monitor, so both views always show the same fixed preview and the
-/// same optimised remainder.
+/// second monitor, so both views always show the same upcoming matches in the
+/// same order.
 class GlobalWaitlistPanel extends StatelessWidget {
   const GlobalWaitlistPanel({
     super.key,
@@ -90,7 +89,7 @@ class GlobalWaitlistPanel extends StatelessWidget {
             ),
             SizedBox(height: spacing),
             Text(
-              'Die nächste Begegnung kommt an das nächste freie Board.',
+              'Die nächste Begegnung startet an einem freien Board.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -109,82 +108,32 @@ class GlobalWaitlistPanel extends StatelessWidget {
                   ),
                 ),
               ),
-            if (plan.groupProgress.isNotEmpty) ...[
-              SizedBox(height: spacing),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final group in plan.groupProgress)
-                    _GroupProgressChip(group: group, dense: dense),
-                ],
-              ),
-            ],
-            SizedBox(height: spacing + 2),
-            _sectionHeading(
-              context,
-              key: const ValueKey('global-waitlist-fixed-heading'),
-              icon: Icons.lock_outline,
-              label: 'Fest eingeplant',
-              detail: 'Nächste ${plan.fixedCount} Begegnungen: FIX',
-              color: accent,
-            ),
-            if (plan.fixed.isEmpty)
+            SizedBox(height: spacing),
+            if (plan.fixed.isEmpty && plan.dynamic.isEmpty)
               Padding(
-                padding: EdgeInsets.only(top: spacing, bottom: spacing),
+                padding: EdgeInsets.only(bottom: spacing),
                 child: Text(
                   'Derzeit sind keine spielbaren Begegnungen verfügbar.',
                   style: theme.textTheme.bodySmall,
                 ),
               )
             else
-              for (var index = 0; index < plan.fixed.length; index++)
+              for (var index = 0;
+                  index < plan.fixed.length + plan.dynamic.length;
+                  index++)
                 _MatchRow(
-                  key: ValueKey('global-waitlist-fixed-$index'),
+                  key: ValueKey('global-waitlist-entry-$index'),
                   number: index + 1,
-                  entry: plan.fixed[index],
-                  fixed: true,
-                  skipped: plan.isSkipped(plan.fixed[index]),
-                  dense: dense,
-                ),
-            if (plan.fixed.length < plan.fixedCount)
-              Padding(
-                padding: EdgeInsets.only(top: spacing),
-                child: Text(
-                  'Nur ${plan.fixed.length} spielbare Begegnungen verfügbar.',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  entry: index < plan.fixed.length
+                      ? plan.fixed[index]
+                      : plan.dynamic[index - plan.fixed.length],
+                  fixed: index < plan.fixed.length,
+                  showFixedIndicator: onFixedCountChanged != null,
+                  skipped: plan.isSkipped(
+                    index < plan.fixed.length
+                        ? plan.fixed[index]
+                        : plan.dynamic[index - plan.fixed.length],
                   ),
-                ),
-              ),
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: spacing + 2),
-              child: Divider(color: accent.withValues(alpha: 0.4)),
-            ),
-            _sectionHeading(
-              context,
-              key: const ValueKey('global-waitlist-dynamic-heading'),
-              icon: Icons.autorenew,
-              label: 'Dynamisch optimiert',
-              detail: 'Wird nach jedem Aufruf neu berechnet',
-              color: theme.colorScheme.tertiary,
-            ),
-            if (plan.dynamic.isEmpty)
-              Padding(
-                padding: EdgeInsets.only(top: spacing),
-                child: Text(
-                  'Keine weiteren offenen Begegnungen.',
-                  style: theme.textTheme.bodySmall,
-                ),
-              )
-            else
-              for (var index = 0; index < plan.dynamic.length; index++)
-                _MatchRow(
-                  key: ValueKey('global-waitlist-dynamic-$index'),
-                  number: plan.fixed.length + index + 1,
-                  entry: plan.dynamic[index],
-                  fixed: false,
-                  skipped: plan.isSkipped(plan.dynamic[index]),
                   dense: dense,
                 ),
           ],
@@ -193,113 +142,6 @@ class GlobalWaitlistPanel extends StatelessWidget {
     );
   }
 
-  Widget _sectionHeading(
-    BuildContext context, {
-    required Key key,
-    required IconData icon,
-    required String label,
-    required String detail,
-    required Color color,
-  }) {
-    return Row(
-      key: key,
-      children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            detail,
-            textAlign: TextAlign.end,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _GroupProgressChip extends StatelessWidget {
-  const _GroupProgressChip({required this.group, required this.dense});
-
-  final GlobalWaitlistGroupProgress group;
-  final bool dense;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final percent = (group.displayedRatio * 100).round();
-    return Container(
-      constraints: BoxConstraints(minWidth: dense ? 150 : 180, maxWidth: 240),
-      padding: EdgeInsets.symmetric(
-        horizontal: dense ? 8 : 10,
-        vertical: dense ? 6 : 8,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${group.label} · ${group.total} Spieler',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (group.needsCatchUp)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Aufholbedarf',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 3),
-          Text(
-            '${group.completed} von ${group.total} Partien · $percent %',
-            style: theme.textTheme.labelSmall,
-          ),
-          const SizedBox(height: 4),
-          LinearProgressIndicator(
-            value: group.displayedRatio.clamp(0.0, 1.0),
-            minHeight: 5,
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _MatchRow extends StatelessWidget {
@@ -308,6 +150,7 @@ class _MatchRow extends StatelessWidget {
     required this.number,
     required this.entry,
     required this.fixed,
+    required this.showFixedIndicator,
     required this.skipped,
     required this.dense,
   });
@@ -315,6 +158,7 @@ class _MatchRow extends StatelessWidget {
   final int number;
   final PlayEntry entry;
   final bool fixed;
+  final bool showFixedIndicator;
   final bool skipped;
   final bool dense;
 
@@ -323,7 +167,8 @@ class _MatchRow extends StatelessWidget {
     final theme = Theme.of(context);
     final GroupMatch match = entry.match;
     final group = _groupShortLabel(entry.groupKey);
-    final color = fixed
+    final isFixed = fixed && showFixedIndicator;
+    final color = isFixed
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
     return Padding(
@@ -335,7 +180,7 @@ class _MatchRow extends StatelessWidget {
             height: dense ? 24 : 28,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: fixed
+              color: isFixed
                   ? theme.colorScheme.primaryContainer
                   : theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(999),
@@ -355,7 +200,7 @@ class _MatchRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: fixed ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: isFixed ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ),
@@ -379,7 +224,7 @@ class _MatchRow extends StatelessWidget {
                 ),
               ),
             ),
-          if (fixed)
+          if (isFixed)
             Padding(
               padding: const EdgeInsets.only(left: 6),
               child: Icon(

@@ -4,6 +4,7 @@ import '../../domain/engines/board_scheduling_engine.dart';
 import '../../domain/engines/global_waitlist_engine.dart';
 import '../../domain/engines/group_board_assignment.dart';
 import '../../domain/engines/schedule_priority_engine.dart';
+import 'fixed_global_suggestions.dart';
 export '../../domain/engines/board_scheduling_engine.dart';
 
 String tournamentGroupBoardKey(int stageIndex, String groupName) =>
@@ -576,6 +577,32 @@ class OrderOfPlayController {
       (entry) => entry.match.boardNumber == board,
     )) {
       return null;
+    }
+
+    final isFixedGlobal = tournament.leagueMatch == null &&
+        tournament.directorModeEnabled &&
+        tournament.directorPlayOrderMode == 'fixed_schedule' &&
+        tournament.directorSchedulingStrategy == 'global';
+    if (isFixedGlobal) {
+      final all = entries(tournament);
+      final openSinglesRemain = all.any(
+        (entry) =>
+            entry.stageIndex == stage &&
+            entry.match.hasPlayers &&
+            !entry.match.isResolved &&
+            !entry.match.hasTeamParticipant,
+      );
+      final suggestions = const FixedGlobalSuggestions().plan(
+        tournament: tournament,
+        stage: stage,
+        entries: all,
+        schedule: schedule,
+        isPreviewable: (match) =>
+            !match.hasTeamParticipant || !openSinglesRemain,
+        limit: 1,
+      );
+      if (suggestions.isEmpty) return null;
+      return BoardAssignment(suggestions.first.entry, suggestions.first.block, board);
     }
 
     final busy = {

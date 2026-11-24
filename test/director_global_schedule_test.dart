@@ -254,6 +254,43 @@ void main() {
     },
   );
 
+  test(
+    'fixed + global start suggestion follows the flat list on a stale board',
+    () {
+      final t = twoGroupFixture(boards: 6)
+        ..directorModeEnabled = true
+        ..directorSchedulingStrategy = 'global'
+        ..directorPlayOrderMode = 'fixed_schedule';
+      controller.initializeFixedSchedule(t);
+      final runningMatch = controller.plan(t, 0).planned.first.entry.match;
+      expect(controller.start(t, 0, runningMatch, 1), isTrue);
+
+      final snapshot = TournamentDirectorSnapshot(t, 0);
+      final busyPlayers = snapshot.schedule.blockingRunning
+          .expand((entry) => entry.players)
+          .toSet();
+      final staleBoard = snapshot.freeBoards.firstWhere(
+        (board) => snapshot.schedule.planned
+            .where((assignment) => assignment.board == board)
+            .every((assignment) => assignment.entry.players.any(busyPlayers.contains)),
+        orElse: () => throw StateError('Kein veraltetes Board gefunden'),
+      );
+      final displayed = snapshot.suggestionsForBoard(staleBoard).first;
+
+      // The simulated board in schedule.planned is stale after a start, but
+      // the flat recommendation and the concrete start target must agree.
+      expect(displayed.entry.players.any(busyPlayers.contains), isFalse);
+      final suggestion = controller.suggestForBoard(t, 0, staleBoard);
+      expect(suggestion, isNotNull);
+      expect(suggestion!.entry.match, displayed.entry.match);
+      expect(suggestion.board, staleBoard);
+      expect(
+        snapshot.selectableForBoard(staleBoard).map((item) => item.entry.match),
+        contains(displayed.entry.match),
+      );
+    },
+  );
+
   test('fewest-match hint lists comma-separated player names', () {
     final t = twoGroupFixture(boards: 2)
       ..directorModeEnabled = true

@@ -454,6 +454,19 @@ class _TournamentDirectorDashboardState
     )) {
       return null;
     }
+    if (_hideScheduleBoardLabels &&
+        widget.tournament.directorPlayOrderMode == 'fixed_schedule') {
+      for (final board in snapshot.freeBoards) {
+        if (widget.isSimulationMode) {
+          final canStart = widget.canStartSimulationMatch;
+          if (canStart == null) return null;
+          if (canStart(entry.match, board)) return board;
+        } else {
+          return board;
+        }
+      }
+      return null;
+    }
     final assignment = snapshot.schedule.planned
         .where((assignment) => identical(assignment.entry.match, entry.match))
         .firstOrNull;

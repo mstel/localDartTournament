@@ -1,3 +1,10 @@
+# 4.0.1+131
+
+- Zweitmonitor und Turnierleitung zeigen in der gemeinsamen Warteliste nur noch die nächsten Begegnungen in einer durchgehenden Liste; „Nächstes freies Board“, boardbezogene Sondermarkierungen, Fortschrittsbalken, „Aufholbedarf“, „Spieler“ und die technischen Kategorien „Fest eingeplant“ / „Dynamisch optimiert“ sind entfernt. Der echte Rückstand erscheint weiterhin im Hinweis-Widget.
+- `Fest – Turnierweit` behält Empfehlungen, Start-Buttons und manuelle Partieauswahl auch während laufender Partien: eine gemeinsame Helper-Library liefert Anzeige, Quick-Start und Auswahl aus derselben kollisionsfreien Flatten-Liste.
+- `expand` bei `Fest – Gruppenbasiert` nummeriert Vorschläge über die Boards einer Gruppe fortlaufend (`1.–3.`, `4.–6.`) wie `merge`.
+- Version 4.0.1+131; Turnier-JSON Schema 50 und SQLite-Schema 18 bleiben unverändert. `flutter analyze`, Simulationsmatrix, adaptive/responsive Tests und vollständige Testsuite sind grün.
+
 # 4.0.0+130
 
 - Turnierleitung auf genau drei Modi umgestellt: `Dynamisch` (turnierweit, ohne Board-Zuweisung), `Fest – Gruppenbasiert` (verbindliche Gruppen-Boards, kein Cross-Group-Fallback) und `Fest – Turnierweit` (Reihenfolge als Empfehlung, freie Boards). Legacy `dynamic + group` und `fixed_order` werden kompatibel normalisiert; Liga/Freundschaft bleibt unverändert.
