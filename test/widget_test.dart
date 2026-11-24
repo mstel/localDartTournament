@@ -907,6 +907,14 @@ void main() {
     await tester.ensureVisible(find.byTooltip('Ergebnis eingeben').first);
     await tester.tap(find.byTooltip('Ergebnis eingeben').first);
     await tester.pumpAndSettle();
+    final unassignedGroupsPrompt = find.text(
+      'Die Gruppen sind noch nicht zugewiesen worden, sind Sie sich sicher?',
+    );
+    if (unassignedGroupsPrompt.evaluate().isNotEmpty) {
+      expect(unassignedGroupsPrompt, findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Ja'));
+      await tester.pumpAndSettle();
+    }
     await tester.enterText(find.byKey(const ValueKey('home-legs-field')), '2');
     await tester.enterText(find.byKey(const ValueKey('away-legs-field')), '0');
     await tester.tap(find.text('Speichern'));

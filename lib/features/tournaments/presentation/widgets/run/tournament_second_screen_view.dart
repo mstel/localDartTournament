@@ -1159,7 +1159,7 @@ class _TournamentSecondScreenViewState
     );
     // Sobald der Zuweisungsdialog auf dem Monitor erscheint, ist der Hinweis
     // überflüssig und soll verschwinden.
-    if (hasStartedMatches ||
+    if ((pending && hasStartedMatches) ||
         warningDismissed ||
         _groupAssignmentDialogOpen ||
         (!pending && !_showGroupAssignmentSuccess)) {
