@@ -63,9 +63,11 @@ class GlobalOrderOfPlayService {
 
     const controller = OrderOfPlayController();
     final schedule = controller.plan(tournament, stage);
-    final running = schedule.running.map((entry) => entry.match).toSet();
+    final running = schedule.blockingRunning
+        .map((entry) => entry.match)
+        .toSet();
     final runningBoards = {
-      for (final entry in schedule.running) entry.match.boardNumber,
+      for (final entry in schedule.blockingRunning) entry.match.boardNumber,
     };
     final freeBoards = <int>{
       for (var board = 1; board <= tournament.boardCount; board++)
@@ -95,7 +97,7 @@ class GlobalOrderOfPlayService {
     // a colliding suggestion is deferred into the remaining queue instead of
     // being shown as fixed on a second board.
     final used = <String>{
-      for (final entry in schedule.running) ...entry.players,
+      for (final entry in schedule.blockingRunning) ...entry.players,
     };
     final suggestions = <int, BoardAssignment>{};
     final firstBlock = <BoardAssignment>[

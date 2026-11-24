@@ -306,7 +306,58 @@ void main() {
     );
     expect(match.fixedScheduleOrder, orderBefore);
   });
-  test('expand behavior can use an idle board assigned to another group', () {
+  test(
+    'fixed + global allows an out-of-order start without rewriting the fixed order',
+    () {
+      final tournament = fixture(boards: 2)
+        ..directorModeEnabled = true
+        ..directorSchedulingStrategy = 'global'
+        ..directorPlayOrderMode = 'fixed_schedule';
+      controller.initializeFixedSchedule(tournament);
+      final entries = controller.entries(tournament)
+        ..sort(
+          (a, b) => a.match.fixedScheduleOrder!.compareTo(
+            b.match.fixedScheduleOrder!,
+          ),
+        );
+      final orders = {
+        for (final entry in entries)
+          entry.match: entry.match.fixedScheduleOrder,
+      };
+      final first = entries.first.match;
+      final laterEntry = entries.last;
+      final later = laterEntry.match;
+      final colliding = entries.firstWhere(
+        (entry) =>
+            entry.match != later &&
+            entry.players.any(laterEntry.players.contains),
+      );
+
+      expect(controller.start(tournament, 0, later, 1), isTrue);
+      expect(later.boardNumber, 1);
+      expect(later.startedPlayers, isNotNull);
+      for (final entry in entries) {
+        expect(entry.match.fixedScheduleOrder, orders[entry.match]);
+      }
+
+      // The board is occupied and a running player may not play a second match.
+      expect(controller.start(tournament, 0, first, 1), isFalse);
+      expect(controller.start(tournament, 0, colliding.match, 2), isFalse);
+
+      final blocked =
+          CreatedTournament.fromJson(
+              fixture(boards: 2).toJson()..['blockedBoards'] = [2],
+            )
+            ..directorModeEnabled = true
+            ..directorSchedulingStrategy = 'global'
+            ..directorPlayOrderMode = 'fixed_schedule';
+      controller.initializeFixedSchedule(blocked);
+      final candidate = controller.plan(blocked, 0).planned.first.entry.match;
+      expect(controller.start(blocked, 0, candidate, 2), isFalse);
+    },
+  );
+
+  test('expand behavior keeps board assignments binding for fixed + group', () {
     final players = [
       for (var index = 1; index <= 6; index++)
         TournamentPlayer.generated(index),
@@ -364,11 +415,26 @@ void main() {
         .where((assignment) => assignment.block == 0)
         .toList();
 
-    expect(firstBlock, hasLength(3));
-    expect(firstBlock.map((assignment) => assignment.board).toSet(), {1, 2, 3});
+    // Group A owns boards 1 and 2, group B owns board 3. Even with `expand`
+    // a group may not spill over onto another group's reserved board: board 2
+    // stays idle because group A has no second playable match in this block.
+    expect(firstBlock, hasLength(2));
+    expect(firstBlock.map((assignment) => assignment.board).toSet(), {1, 3});
+    expect(
+      firstBlock
+          .where((assignment) => assignment.entry.groupKey == '0:A')
+          .map((assignment) => assignment.board),
+      orderedEquals([1]),
+    );
+    expect(
+      firstBlock
+          .where((assignment) => assignment.entry.groupKey == '0:B')
+          .map((assignment) => assignment.board),
+      orderedEquals([3]),
+    );
     expect(
       firstBlock.expand((assignment) => assignment.entry.players).toSet(),
-      hasLength(6),
+      hasLength(4),
     );
   });
   test(
@@ -612,50 +678,56 @@ void main() {
   });
 
   test('assigned fixed schedule keeps other boards stable after a result', () {
-    final players = [for (var i = 1; i <= 7; i++) TournamentPlayer.generated(i)];
-    final tournament = CreatedTournament(
-      name: 'Test',
-      players: players,
-      stages: [],
-      boardCount: 4,
-      runStages: [
-        GroupTournamentRunStage(
-          name: 'Gruppen',
-          groupPlayType: 'round_robin',
-          qualificationPlan: null,
-          tieBreakers: defaultGroupTieBreakers,
-          groups: [
-            TournamentGroup(
-              name: 'A',
-              playType: 'round_robin',
-              players: players,
-              matches: [
-                for (var a = 0; a < players.length; a++)
-                  for (var b = a + 1; b < players.length; b++)
-                    GroupMatch(
-                      homePlayer: players[a],
-                      awayPlayer: players[b],
-                      round: 1,
-                    ),
-              ],
-            ),
-          ],
-        ),
-      ],
-    )
-      ..directorModeEnabled = true
-      ..directorSchedulingStrategy = 'group'
-      ..directorPlayOrderMode = 'fixed_schedule'
-      ..directorMultiBoardAssignmentBehavior = 'assigned'
-      ..directorGroupBoardAssignments['0:A'] = [1, 2, 3, 4];
+    final players = [
+      for (var i = 1; i <= 7; i++) TournamentPlayer.generated(i),
+    ];
+    final tournament =
+        CreatedTournament(
+            name: 'Test',
+            players: players,
+            stages: [],
+            boardCount: 4,
+            runStages: [
+              GroupTournamentRunStage(
+                name: 'Gruppen',
+                groupPlayType: 'round_robin',
+                qualificationPlan: null,
+                tieBreakers: defaultGroupTieBreakers,
+                groups: [
+                  TournamentGroup(
+                    name: 'A',
+                    playType: 'round_robin',
+                    players: players,
+                    matches: [
+                      for (var a = 0; a < players.length; a++)
+                        for (var b = a + 1; b < players.length; b++)
+                          GroupMatch(
+                            homePlayer: players[a],
+                            awayPlayer: players[b],
+                            round: 1,
+                          ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          )
+          ..directorModeEnabled = true
+          ..directorSchedulingStrategy = 'group'
+          ..directorPlayOrderMode = 'fixed_schedule'
+          ..directorMultiBoardAssignmentBehavior = 'assigned'
+          ..directorGroupBoardAssignments['0:A'] = [1, 2, 3, 4];
     controller.initializeFixedSchedule(tournament);
 
-    List<GroupMatch> queueFor(int board) => TournamentDirectorSnapshot(
-      tournament,
-      0,
-    ).suggestionsForBoard(board).map((assignment) => assignment.entry.match).toList();
+    List<GroupMatch> queueFor(int board) =>
+        TournamentDirectorSnapshot(tournament, 0)
+            .suggestionsForBoard(board)
+            .map((assignment) => assignment.entry.match)
+            .toList();
 
-    final before = {for (final board in [1, 2, 3, 4]) board: queueFor(board)};
+    final before = {
+      for (final board in [1, 2, 3, 4]) board: queueFor(board),
+    };
     expect(before[4]!.length, 3);
 
     final played = before[4]!.first;
@@ -663,7 +735,9 @@ void main() {
     played.awayLegs = 0;
     controller.resultRecorded(played);
 
-    final after = {for (final board in [1, 2, 3, 4]) board: queueFor(board)};
+    final after = {
+      for (final board in [1, 2, 3, 4]) board: queueFor(board),
+    };
     for (final board in [1, 2, 3]) {
       expect(after[board]!, orderedEquals(before[board]!));
     }
@@ -674,7 +748,9 @@ void main() {
   });
 
   test('doubles stay hidden in previews until every single is finished', () {
-    final players = [for (var i = 1; i <= 4; i++) TournamentPlayer.generated(i)];
+    final players = [
+      for (var i = 1; i <= 4; i++) TournamentPlayer.generated(i),
+    ];
     final doubles = TournamentPlayer.team(players.skip(2));
     final singles = [
       GroupMatch(homePlayer: players[0], awayPlayer: players[1], round: 1),
@@ -711,12 +787,15 @@ void main() {
     final before = TournamentDirectorSnapshot(tournament, 0);
     expect(before.isPreviewableMatch(teamMatch), isFalse);
     expect(
-      before.suggestionsForBoard(1).any(
-        (assignment) => identical(assignment.entry.match, teamMatch),
-      ),
+      before
+          .suggestionsForBoard(1)
+          .any((assignment) => identical(assignment.entry.match, teamMatch)),
       isFalse,
     );
-    expect(before.ready.any((entry) => identical(entry.match, teamMatch)), isFalse);
+    expect(
+      before.ready.any((entry) => identical(entry.match, teamMatch)),
+      isFalse,
+    );
 
     for (final match in singles) {
       match.homeLegs = 1;
@@ -726,7 +805,9 @@ void main() {
     final after = TournamentDirectorSnapshot(tournament, 0);
     expect(after.isPreviewableMatch(teamMatch), isTrue);
     expect(
-      after.visibleRecommendations().map((assignment) => assignment.entry.match),
+      after.visibleRecommendations().map(
+        (assignment) => assignment.entry.match,
+      ),
       contains(teamMatch),
     );
   });

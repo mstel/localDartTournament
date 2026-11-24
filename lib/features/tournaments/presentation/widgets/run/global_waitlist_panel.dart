@@ -95,6 +95,20 @@ class GlobalWaitlistPanel extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            if ([
+              ...plan.fixed,
+              ...plan.dynamic,
+              ...plan.skipped,
+            ].any(plan.isSkipped))
+              Padding(
+                padding: EdgeInsets.only(top: spacing / 2),
+                child: Text(
+                  'Einige Begegnungen sind vorläufig übersprungen, weil ihre Spieler noch spielen.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
             if (plan.groupProgress.isNotEmpty) ...[
               SizedBox(height: spacing),
               Wrap(
@@ -130,6 +144,7 @@ class GlobalWaitlistPanel extends StatelessWidget {
                   number: index + 1,
                   entry: plan.fixed[index],
                   fixed: true,
+                  skipped: plan.isSkipped(plan.fixed[index]),
                   dense: dense,
                 ),
             if (plan.fixed.length < plan.fixedCount)
@@ -169,6 +184,7 @@ class GlobalWaitlistPanel extends StatelessWidget {
                   number: plan.fixed.length + index + 1,
                   entry: plan.dynamic[index],
                   fixed: false,
+                  skipped: plan.isSkipped(plan.dynamic[index]),
                   dense: dense,
                 ),
           ],
@@ -292,12 +308,14 @@ class _MatchRow extends StatelessWidget {
     required this.number,
     required this.entry,
     required this.fixed,
+    required this.skipped,
     required this.dense,
   });
 
   final int number;
   final PlayEntry entry;
   final bool fixed;
+  final bool skipped;
   final bool dense;
 
   @override
@@ -350,6 +368,17 @@ class _MatchRow extends StatelessWidget {
               ),
             ),
           ],
+          if (skipped)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Text(
+                '· übersprungen',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           if (fixed)
             Padding(
               padding: const EdgeInsets.only(left: 6),

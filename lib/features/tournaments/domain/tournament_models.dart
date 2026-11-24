@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'director_schedule_modes.dart';
 import 'player_withdrawal.dart';
 import 'imported_tournament_archive.dart';
 import '../../statistics/domain/best_performance.dart';
@@ -108,16 +109,11 @@ int? _kratzerPlayersPerBoardFromJson(Object? value) {
 
 bool _boolFromJson(Object? value) => value is bool && value;
 
-String _directorSchedulingStrategyFromJson(Object? value) {
-  final strategy = (value as String? ?? 'group').trim().toLowerCase();
-  return strategy == 'global' ? 'global' : 'group';
-}
+String _directorSchedulingStrategyFromJson(Object? value, String mode) =>
+    DirectorScheduleModes.schedulingStrategy(value, mode);
 
-String _directorPlayOrderModeFromJson(Object? value) => switch (value) {
-  'fixed_order' => 'fixed_schedule',
-  'fixed_schedule' => 'fixed_schedule',
-  _ => 'dynamic',
-};
+String _directorPlayOrderModeFromJson(Object? value) =>
+    DirectorScheduleModes.playOrderMode(value);
 
 String _directorMultiBoardAssignmentBehaviorFromJson(Object? value) =>
     value == 'expand'
@@ -895,6 +891,7 @@ class CreatedTournament {
     this.directorSchedulingStrategy = 'group',
     this.directorPlayOrderMode = 'dynamic',
     this.directorMultiBoardAssignmentBehavior = 'mirror',
+    this.fixedScheduleManuallyAdjusted = false,
     GlobalWaitlistState? directorGlobalWaitlist,
     this.showAchievementNotifications = true,
     this.showPlayerInsights = false,
@@ -1018,6 +1015,7 @@ class CreatedTournament {
       directorModeEnabled: json['directorModeEnabled'] as bool? ?? false,
       directorSchedulingStrategy: _directorSchedulingStrategyFromJson(
         json['directorSchedulingStrategy'],
+        _directorPlayOrderModeFromJson(json['directorPlayOrderMode']),
       ),
       directorPlayOrderMode: _directorPlayOrderModeFromJson(
         json['directorPlayOrderMode'],
@@ -1026,6 +1024,8 @@ class CreatedTournament {
           _directorMultiBoardAssignmentBehaviorFromJson(
             json['directorMultiBoardAssignmentBehavior'],
           ),
+      fixedScheduleManuallyAdjusted:
+          json['fixedScheduleManuallyAdjusted'] as bool? ?? false,
       directorGlobalWaitlist: GlobalWaitlistState.fromJson(
         json['directorGlobalWaitlist'],
       ),
@@ -1136,6 +1136,7 @@ class CreatedTournament {
   String directorSchedulingStrategy;
   String directorPlayOrderMode;
   String directorMultiBoardAssignmentBehavior;
+  bool fixedScheduleManuallyAdjusted;
   GlobalWaitlistState directorGlobalWaitlist;
   bool showAchievementNotifications;
   bool showPlayerInsights;
@@ -1228,6 +1229,7 @@ class CreatedTournament {
         'directorPlayOrderMode': directorPlayOrderMode,
       'directorMultiBoardAssignmentBehavior':
           directorMultiBoardAssignmentBehavior,
+      if (fixedScheduleManuallyAdjusted) 'fixedScheduleManuallyAdjusted': true,
       if (directorGlobalWaitlist.hasPersistedData)
         'directorGlobalWaitlist': directorGlobalWaitlist.toJson(),
       if (!showAchievementNotifications) 'showAchievementNotifications': false,

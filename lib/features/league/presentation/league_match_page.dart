@@ -95,8 +95,7 @@ class _LeagueSubstitutionDialogState extends State<LeagueSubstitutionDialog> {
   }) {
     final status = _status(player, active);
     final startsRunningGame =
-        lineup &&
-        widget.league.isPlayerInStartedGame(widget.teamSide, player);
+        lineup && widget.league.isPlayerInStartedGame(widget.teamSide, player);
     final canSelect =
         !startsRunningGame &&
         (lineup || widget.league.allowReentry || !_wasSubstitutedOut(player));
@@ -198,7 +197,8 @@ class _LeagueSubstitutionDialogState extends State<LeagueSubstitutionDialog> {
     final outPlayer = _outPlayer;
     final inPlayer = _inPlayer;
     if (outPlayer == null || inPlayer == null) return;
-    final remaining = widget.league.substitutionsRemaining(widget.teamSide) - 1;
+    final remaining =
+        widget.league.substitutionBudgetRemaining(widget.teamSide) - 1;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -228,9 +228,10 @@ class _LeagueSubstitutionDialogState extends State<LeagueSubstitutionDialog> {
   Widget build(BuildContext context) {
     final league = widget.league;
     final active = league.activePlayers(widget.teamSide).toSet();
-    final reserves = league.reservePlayers(
-      widget.teamSide,
-    ).where((player) => !active.contains(player)).toList();
+    final reserves = league
+        .reservePlayers(widget.teamSide)
+        .where((player) => !active.contains(player))
+        .toList();
     final width = MediaQuery.sizeOf(context).width;
     return AlertDialog(
       title: Text('Auswechselungen · ${widget.teamName}'),
@@ -892,7 +893,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
       final roster = homeSide
           ? next.leagueMatch!.homePlayers
           : next.leagueMatch!.awayPlayers;
-      final remainingAfter = next.leagueMatch!.substitutionsRemaining(teamSide);
+      final remainingAfter = next.leagueMatch!.substitutionBudgetRemaining(
+        teamSide,
+      );
       next.addActivity(
         'substitution',
         '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
@@ -974,20 +977,42 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
         _busy) {
       return;
     }
+    final league = tournament.leagueMatch!;
+    final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
+    if (!league.canAddSubstitutionBudget(teamSide)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Maximale Auswechselungen für $teamName erreicht '
+              '(${league.maximumSubstitutionBudget(teamSide)}).',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final next = CreatedTournament.fromJson(tournament.toJson());
     final nextLeague = next.leagueMatch!;
-    final teamName = teamSide == 0
-        ? nextLeague.homeTeam
-        : nextLeague.awayTeam;
     try {
       nextLeague.addSubstitutionBudget(teamSide: teamSide);
+      final budgetRemaining = nextLeague.substitutionBudgetRemaining(teamSide);
       next.addActivity(
         'substitution_budget',
         'Auswechselung hinzugefügt: $teamName hat eine zusätzliche '
-            'Auswechselung erhalten. Verfügbar: '
-            '${nextLeague.substitutionsRemaining(teamSide)}',
+            'Auswechselung erhalten. Verfügbar: $budgetRemaining',
       );
       await _save(next, rethrowError: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Auswechselung hinzugefügt. Für $teamName sind noch '
+              '$budgetRemaining verfügbar.',
+            ),
+          ),
+        );
+      }
     } catch (error) {
       if (mounted) {
         setState(
@@ -1548,8 +1573,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                             ? 'league-add-reserve-home'
                             : 'league-add-reserve-away',
                       ),
-                      onPressed:
-                          _busy ? null : () => _addReservePlayer(teamSide),
+                      onPressed: _busy
+                          ? null
+                          : () => _addReservePlayer(teamSide),
                       icon: const Icon(Icons.person_add_alt_1_outlined),
                       label: const Text('Ersatzspieler hinzufügen'),
                     ),
@@ -1561,7 +1587,9 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                   runSpacing: 8,
                   children: [
                     Text(
-                      '${league.substitutionsRemaining(teamSide)} Auswechselungen verfügbar',
+                      '${league.substitutionBudgetRemaining(teamSide)} von '
+                      '${league.substitutionLimitFor(teamSide)} Auswechselungen '
+                      'verfügbar',
                     ),
                     OutlinedButton.icon(
                       key: ValueKey(
@@ -1590,9 +1618,15 @@ class _LeagueMatchPageState extends State<LeagueMatchPage> {
                               : 'league-add-substitution-away',
                         ),
                         onPressed:
-                            _busy ? null : () => _addSubstitution(teamSide),
+                            _busy || !league.canAddSubstitutionBudget(teamSide)
+                            ? null
+                            : () => _addSubstitution(teamSide),
                         icon: const Icon(Icons.swap_vert_outlined),
-                        label: const Text('Auswechselung hinzufügen'),
+                        label: Text(
+                          league.canAddSubstitutionBudget(teamSide)
+                              ? 'Auswechselung hinzufügen'
+                              : 'Maximum erreicht',
+                        ),
                       ),
                   ],
                 ),

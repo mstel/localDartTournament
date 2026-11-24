@@ -10,11 +10,15 @@ class PlayerPerformanceTrendChart extends StatefulWidget {
     required this.entries,
     required this.year,
     this.title = 'Performance-Entwicklung',
+    this.seriesIndexes,
   });
 
   final List<PlayerMonthlyPerformance> entries;
   final int? year;
   final String title;
+
+  /// Optional filter, e.g. `const [3]` for a dedicated win-rate chart.
+  final List<int>? seriesIndexes;
 
   static const series = [
     (label: 'Scoring', color: Color(0xFF4FC3F7)),
@@ -43,11 +47,12 @@ class _PlayerPerformanceTrendChartState
         Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
         for (final chartYear in years)
-          for (
-            var series = 0;
-            series < PlayerPerformanceTrendChart.series.length;
-            series++
-          )
+          for (final series
+              in widget.seriesIndexes ??
+                  List<int>.generate(
+                    PlayerPerformanceTrendChart.series.length,
+                    (index) => index,
+                  ))
             _YearPerformanceChart(
               key: ValueKey('performance-chart-$chartYear-$series'),
               year: chartYear,

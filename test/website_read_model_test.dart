@@ -195,9 +195,25 @@ void main() {
             'matchCount': 1,
             'mode': 'groups:round_robin',
             'hasImportedArchive': false,
+            // No tie-breakers are configured, so the shared winner derivation
+            // cannot resolve a group winner for this fixture.
+            'winnerId': null,
+            'winnerName': null,
+            'phaseKinds': ['table'],
           },
         ],
       });
+      final publishedTournament =
+          (model['completedTournaments'] as List).single
+              as Map<String, dynamic>;
+      expect(publishedTournament['winnerId'], isNull);
+      expect(publishedTournament['winnerName'], isNull);
+      expect(publishedTournament['phaseKinds'], ['table']);
+      expect(
+        (publishedTournament['phaseViews'] as List).single
+            as Map<String, dynamic>,
+        containsPair('type', 'table'),
+      );
       expect(model['statistics'], [
         {
           'playerId': player.id,
@@ -329,6 +345,29 @@ void main() {
             'checkoutQuote': 38.5,
           },
         ],
+        'winRateSeries': [
+          {
+            'playerId': player.id,
+            'period': '2026-10',
+            'year': 2026,
+            'month': 10,
+            'matches': 1,
+            'wins': 1,
+            'losses': 0,
+            'winRate': 100.0,
+          },
+        ],
+        'clubWinRateSeries': [
+          {
+            'period': '2026-10',
+            'year': 2026,
+            'month': 10,
+            'matches': 0,
+            'wins': 0,
+            'losses': 0,
+            'winRate': 0.0,
+          },
+        ],
         'importedMonthlyStatistics': <Map<String, dynamic>>[],
         'currentForm': [
           {
@@ -356,6 +395,9 @@ void main() {
           'matchCount': 1,
           'mode': 'groups:round_robin',
           'hasImportedArchive': false,
+          'winnerId': null,
+          'winnerName': null,
+          'phaseKinds': ['table'],
         },
       ]);
       final serialized = model.toString();
@@ -463,83 +505,85 @@ void main() {
     },
   );
 
-  test('performance API keeps imported metrics separate from derived match counts',
-      () async {
-    final player = await database.createPlayerProfile(
-      firstName: 'Ada',
-      lastName: 'Dart',
-      country: 'DE',
-      city: 'Berlin',
-    );
-    await database.saveMonthlyPlayerPerformances([
-      MonthlyPlayerPerformance(
-        playerProfileId: player.id,
-        sourcePlayerName: player.displayName,
-        month: '2026-09',
-        threeDartAverage: 54.2,
-        firstNineAverage: 62.7,
-        checkoutPercentage: null,
-        legs: 36,
-        matches: 12,
-      ),
-    ]);
+  test(
+    'performance API keeps imported metrics separate from derived match counts',
+    () async {
+      final player = await database.createPlayerProfile(
+        firstName: 'Ada',
+        lastName: 'Dart',
+        country: 'DE',
+        city: 'Berlin',
+      );
+      await database.saveMonthlyPlayerPerformances([
+        MonthlyPlayerPerformance(
+          playerProfileId: player.id,
+          sourcePlayerName: player.displayName,
+          month: '2026-09',
+          threeDartAverage: 54.2,
+          firstNineAverage: 62.7,
+          checkoutPercentage: null,
+          legs: 36,
+          matches: 12,
+        ),
+      ]);
 
-    final service = WebsiteReadModelService(
-      database: database,
-      tournamentStorage: tournamentStorage,
-    );
-    final resources = await service.createVersion2Resources(
-      await service.create(),
-    );
-    final monthly = (resources['performance']!['monthlyPerformance'] as List)
-        .cast<Map<String, dynamic>>();
+      final service = WebsiteReadModelService(
+        database: database,
+        tournamentStorage: tournamentStorage,
+      );
+      final resources = await service.createVersion2Resources(
+        await service.create(),
+      );
+      final monthly = (resources['performance']!['monthlyPerformance'] as List)
+          .cast<Map<String, dynamic>>();
 
-    expect(monthly, [
-      {
-        'playerId': player.id,
-        'period': '2026-09',
-        'year': 2026,
-        'month': 9,
-        'matches': 0,
-        'wins': 0,
-        'losses': 0,
-        'winRate': 0.0,
-        'weightedLegs': 36,
-        'scoring': 62.7,
-        'average': 54.2,
-        'checkoutQuote': null,
-      },
-    ]);
-    expect(resources['performance']!['importedMonthlyStatistics'], [
-      {
-        'playerId': player.id,
-        'sourcePlayerName': player.displayName,
-        'period': '2026-09',
-        'year': 2026,
-        'month': 9,
-        'threeDartAverage': 54.2,
-        'firstNineAverage': 62.7,
-        'checkoutPercentage': null,
-        'legs': 36,
-        'matches': 12,
-      },
-    ]);
-    final monthlyClubPerformance =
-        resources['performance']!['monthlyClubPerformance'] as List;
-    expect(monthlyClubPerformance, hasLength(1));
-    final clubMonth = monthlyClubPerformance.single as Map<String, dynamic>;
-    expect(clubMonth['year'], 2026);
-    expect(clubMonth['month'], 9);
-    expect(clubMonth['period'], '2026-09');
-    expect(clubMonth['matches'], 0);
-    expect(clubMonth['wins'], 0);
-    expect(clubMonth['losses'], 0);
-    expect(clubMonth['winRate'], 0.0);
-    expect(clubMonth['weightedLegs'], 18);
-    expect(clubMonth['scoring'], closeTo(62.7, 0.0001));
-    expect(clubMonth['average'], 54.2);
-    expect(clubMonth['checkoutQuote'], isNull);
-  });
+      expect(monthly, [
+        {
+          'playerId': player.id,
+          'period': '2026-09',
+          'year': 2026,
+          'month': 9,
+          'matches': 0,
+          'wins': 0,
+          'losses': 0,
+          'winRate': 0.0,
+          'weightedLegs': 36,
+          'scoring': 62.7,
+          'average': 54.2,
+          'checkoutQuote': null,
+        },
+      ]);
+      expect(resources['performance']!['importedMonthlyStatistics'], [
+        {
+          'playerId': player.id,
+          'sourcePlayerName': player.displayName,
+          'period': '2026-09',
+          'year': 2026,
+          'month': 9,
+          'threeDartAverage': 54.2,
+          'firstNineAverage': 62.7,
+          'checkoutPercentage': null,
+          'legs': 36,
+          'matches': 12,
+        },
+      ]);
+      final monthlyClubPerformance =
+          resources['performance']!['monthlyClubPerformance'] as List;
+      expect(monthlyClubPerformance, hasLength(1));
+      final clubMonth = monthlyClubPerformance.single as Map<String, dynamic>;
+      expect(clubMonth['year'], 2026);
+      expect(clubMonth['month'], 9);
+      expect(clubMonth['period'], '2026-09');
+      expect(clubMonth['matches'], 0);
+      expect(clubMonth['wins'], 0);
+      expect(clubMonth['losses'], 0);
+      expect(clubMonth['winRate'], 0.0);
+      expect(clubMonth['weightedLegs'], 18);
+      expect(clubMonth['scoring'], closeTo(62.7, 0.0001));
+      expect(clubMonth['average'], 54.2);
+      expect(clubMonth['checkoutQuote'], isNull);
+    },
+  );
 
   test(
     'publishes the new best-performance categories and Bullseye details',
@@ -772,40 +816,220 @@ void main() {
     expect(achievements['resource'], 'achievements');
   });
 
-  test('performance API derives win/loss counts from assigned tournaments',
-      () async {
-    final player = await database.createPlayerProfile(
-      firstName: 'Ada',
-      lastName: 'Dart',
-    );
-    await database.savePlayerMonthlyPerformance(
-      PlayerMonthlyPerformance(
-        playerId: player.id,
-        year: 2026,
-        month: 10,
-        weightedLegs: 20,
-        // Manually stored values must never reach the API.
-        matches: 10,
-        wins: 7,
-        losses: 3,
-        average: 50,
-      ),
-    );
-    final participant = TournamentPlayer(
-      profileId: player.id,
-      name: player.displayName,
-      isGenerated: false,
-    );
-    final opponent = TournamentPlayer.generated(2);
-    await tournamentStorage.saveTournament(
-      CreatedTournament(
-        id: 'performance-month',
-        name: 'Oktoberturnier',
-        players: [participant, opponent],
+  test(
+    'performance API derives win/loss counts from assigned tournaments',
+    () async {
+      final player = await database.createPlayerProfile(
+        firstName: 'Ada',
+        lastName: 'Dart',
+      );
+      await database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: player.id,
+          year: 2026,
+          month: 10,
+          weightedLegs: 20,
+          // Manually stored values must never reach the API.
+          matches: 10,
+          wins: 7,
+          losses: 3,
+          average: 50,
+        ),
+      );
+      final participant = TournamentPlayer(
+        profileId: player.id,
+        name: player.displayName,
+        isGenerated: false,
+      );
+      final opponent = TournamentPlayer.generated(2);
+      await tournamentStorage.saveTournament(
+        CreatedTournament(
+          id: 'performance-month',
+          name: 'Oktoberturnier',
+          players: [participant, opponent],
+          stages: const [],
+          runStages: [
+            GroupTournamentRunStage(
+              name: 'Gruppe',
+              groupPlayType: 'round_robin',
+              qualificationPlan: null,
+              tieBreakers: defaultGroupTieBreakers,
+              groups: [
+                TournamentGroup(
+                  name: 'Gruppe A',
+                  playType: 'round_robin',
+                  players: [participant, opponent],
+                  matches: [
+                    GroupMatch(
+                      homePlayer: participant,
+                      awayPlayer: opponent,
+                      round: 1,
+                      homeLegs: 3,
+                      awayLegs: 1,
+                      finishedAt: DateTime(2026, 10, 10),
+                    ),
+                    GroupMatch(
+                      homePlayer: participant,
+                      awayPlayer: opponent,
+                      round: 2,
+                      homeLegs: 3,
+                      awayLegs: 2,
+                      finishedAt: DateTime(2026, 10, 15),
+                    ),
+                    GroupMatch(
+                      homePlayer: participant,
+                      awayPlayer: opponent,
+                      round: 3,
+                      homeLegs: 1,
+                      awayLegs: 3,
+                      finishedAt: DateTime(2026, 10, 20),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+          tournamentDate: DateTime(2026, 10, 20),
+          finishedAt: DateTime(2026, 10, 20),
+        ),
+      );
+      final service = WebsiteReadModelService(
+        database: database,
+        tournamentStorage: tournamentStorage,
+        clock: () => DateTime(2026, 11, 3),
+      );
+
+      final model = await service.create();
+      final currentForm =
+          (model['currentForm'] as List).single as Map<String, dynamic>;
+      expect(currentForm, containsPair('matches', 3));
+      expect(currentForm, containsPair('wins', 2));
+      expect(currentForm, containsPair('losses', 1));
+      expect(currentForm['winRate'], closeTo(66.666, 0.001));
+
+      final resources = await service.createVersion2Resources(model);
+      final monthly =
+          (resources['performance']!['monthlyPerformance'] as List).single
+              as Map<String, dynamic>;
+      expect(monthly, containsPair('matches', 3));
+      expect(monthly, containsPair('wins', 2));
+      expect(monthly, containsPair('losses', 1));
+      expect(monthly['winRate'], closeTo(66.666, 0.001));
+
+      final club =
+          (resources['performance']!['monthlyClubPerformance'] as List).single
+              as Map<String, dynamic>;
+      expect(club, containsPair('matches', 1));
+      expect(club, containsPair('wins', 1));
+      expect(club, containsPair('losses', 0));
+      expect(club['winRate'], closeTo(100, 0.001));
+
+      final winRateSeries =
+          (resources['performance']!['winRateSeries'] as List).single
+              as Map<String, dynamic>;
+      expect(winRateSeries, containsPair('playerId', player.id));
+      expect(winRateSeries, containsPair('period', '2026-10'));
+      expect(winRateSeries, containsPair('matches', 3));
+      expect(winRateSeries, containsPair('wins', 2));
+      expect(winRateSeries, containsPair('losses', 1));
+      expect(winRateSeries['winRate'], closeTo(66.666, 0.001));
+      expect(winRateSeries, isNot(containsPair('weightedLegs', 20)));
+
+      final clubWinRateSeries =
+          (resources['performance']!['clubWinRateSeries'] as List).single
+              as Map<String, dynamic>;
+      expect(clubWinRateSeries, containsPair('period', '2026-10'));
+      expect(clubWinRateSeries, containsPair('matches', 1));
+      expect(clubWinRateSeries, containsPair('wins', 1));
+      expect(clubWinRateSeries, containsPair('losses', 0));
+      expect(clubWinRateSeries['winRate'], closeTo(100, 0.001));
+      expect(clubWinRateSeries, isNot(containsPair('playerId', anything)));
+      expect(clubWinRateSeries, isNot(containsPair('weightedLegs', anything)));
+    },
+  );
+
+  test(
+    'trashed completed tournaments stay out of the API until restored',
+    () async {
+      final completed = CreatedTournament(
+        id: 'trashed-completed',
+        name: 'Papierkorb Turnier',
+        players: const [],
+        stages: const [],
+        runStages: const [],
+        finishedAt: DateTime.utc(2026, 10, 20),
+      );
+      await tournamentStorage.saveTournament(completed);
+      await tournamentStorage.deleteTournament(completed.id);
+
+      final trash = TournamentTrash(
+        file: File(
+          '${directory.path}${Platform.pathSeparator}tournament_trash.json',
+        ),
+      );
+      final entry = (await trash.list()).singleWhere(
+        (item) =>
+            item.tournamentId == completed.id &&
+            item.reason == TournamentTrashReason.deleted,
+      );
+      final service = WebsiteReadModelService(
+        database: database,
+        tournamentStorage: tournamentStorage,
+      );
+
+      final trashedModel = await service.create();
+      expect(trashedModel['completedTournaments'], isEmpty);
+      final trashedResources = await service.createVersion2Resources(
+        trashedModel,
+      );
+      expect(
+        trashedResources['tournaments:1']!['completedTournaments'],
+        isEmpty,
+      );
+
+      await tournamentStorage.saveTournamentWithIntent(
+        entry.toTournament(),
+        allowUnfinishingCompleted: true,
+      );
+      await trash.remove(entry.entryId);
+
+      final restoredModel = await service.create();
+      expect(
+        (restoredModel['completedTournaments'] as List).single['id'],
+        completed.id,
+      );
+    },
+  );
+
+  test(
+    'publishes winner and table/knockout phase views for detail pages',
+    () async {
+      final champion = await database.createPlayerProfile(
+        firstName: 'Ada',
+        lastName: 'Dart',
+      );
+      final rival = await database.createPlayerProfile(
+        firstName: 'Bert',
+        lastName: 'Dart',
+      );
+      final championPlayer = TournamentPlayer(
+        profileId: champion.id,
+        name: champion.displayName,
+        isGenerated: false,
+      );
+      final rivalPlayer = TournamentPlayer(
+        profileId: rival.id,
+        name: rival.displayName,
+        isGenerated: false,
+      );
+      final tournament = CreatedTournament(
+        id: 'table-and-knockout',
+        name: 'Finale',
+        players: [championPlayer, rivalPlayer],
         stages: const [],
         runStages: [
           GroupTournamentRunStage(
-            name: 'Gruppe',
+            name: 'Gruppen',
             groupPlayType: 'round_robin',
             qualificationPlan: null,
             tieBreakers: defaultGroupTieBreakers,
@@ -813,114 +1037,99 @@ void main() {
               TournamentGroup(
                 name: 'Gruppe A',
                 playType: 'round_robin',
-                players: [participant, opponent],
+                players: [championPlayer, rivalPlayer],
                 matches: [
                   GroupMatch(
-                    homePlayer: participant,
-                    awayPlayer: opponent,
+                    homePlayer: championPlayer,
+                    awayPlayer: rivalPlayer,
                     round: 1,
                     homeLegs: 3,
                     awayLegs: 1,
-                    finishedAt: DateTime(2026, 10, 10),
-                  ),
-                  GroupMatch(
-                    homePlayer: participant,
-                    awayPlayer: opponent,
-                    round: 2,
-                    homeLegs: 3,
-                    awayLegs: 2,
-                    finishedAt: DateTime(2026, 10, 15),
-                  ),
-                  GroupMatch(
-                    homePlayer: participant,
-                    awayPlayer: opponent,
-                    round: 3,
-                    homeLegs: 1,
-                    awayLegs: 3,
-                    finishedAt: DateTime(2026, 10, 20),
+                    finishedAt: DateTime.utc(2026, 10, 20),
                   ),
                 ],
               ),
             ],
           ),
+          KnockoutTournamentRunStage(
+            name: 'K.-o.-Runde',
+            rounds: [
+              [
+                GroupMatch(
+                  homePlayer: championPlayer,
+                  awayPlayer: rivalPlayer,
+                  round: 1,
+                  homeLegs: 3,
+                  awayLegs: 2,
+                  finishedAt: DateTime.utc(2026, 10, 21),
+                ),
+              ],
+            ],
+          ),
         ],
-        tournamentDate: DateTime(2026, 10, 20),
-        finishedAt: DateTime(2026, 10, 20),
-      ),
-    );
-    final service = WebsiteReadModelService(
-      database: database,
-      tournamentStorage: tournamentStorage,
-      clock: () => DateTime(2026, 11, 3),
-    );
+        finishedAt: DateTime.utc(2026, 10, 21),
+      );
+      await tournamentStorage.saveTournament(tournament);
 
-    final model = await service.create();
-    final currentForm = (model['currentForm'] as List).single
-        as Map<String, dynamic>;
-    expect(currentForm, containsPair('matches', 3));
-    expect(currentForm, containsPair('wins', 2));
-    expect(currentForm, containsPair('losses', 1));
-    expect(currentForm['winRate'], closeTo(66.666, 0.001));
+      final service = WebsiteReadModelService(
+        database: database,
+        tournamentStorage: tournamentStorage,
+      );
+      final model = await service.create();
+      final published =
+          (model['completedTournaments'] as List).single
+              as Map<String, dynamic>;
+      expect(published['winnerId'], champion.id);
+      expect(published['winnerName'], champion.displayName);
+      expect(published['phaseKinds'], ['table', 'knockout']);
+      final phaseViews = (published['phaseViews'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(phaseViews.map((view) => view['type']), ['table', 'knockout']);
+      expect(phaseViews.map((view) => view['stageKind']), [
+        'groups',
+        'knockout',
+      ]);
+      expect(phaseViews.first['groups'], isNotEmpty);
+      expect(phaseViews.last['rounds'], isNotEmpty);
 
-    final resources = await service.createVersion2Resources(model);
-    final monthly = (resources['performance']!['monthlyPerformance'] as List)
-        .single as Map<String, dynamic>;
-    expect(monthly, containsPair('matches', 3));
-    expect(monthly, containsPair('wins', 2));
-    expect(monthly, containsPair('losses', 1));
-    expect(monthly['winRate'], closeTo(66.666, 0.001));
+      final index = WebsiteReadModelService.createTournamentIndex(model);
+      final indexed =
+          (index['completedTournaments'] as List).single
+              as Map<String, dynamic>;
+      expect(indexed['winnerId'], champion.id);
+      expect(indexed['winnerName'], champion.displayName);
+      expect(indexed['phaseKinds'], ['table', 'knockout']);
+      expect(indexed, isNot(containsPair('phaseViews', anything)));
 
-    final club = (resources['performance']!['monthlyClubPerformance'] as List)
-        .single as Map<String, dynamic>;
-    expect(club, containsPair('matches', 1));
-    expect(club, containsPair('wins', 1));
-    expect(club, containsPair('losses', 0));
-    expect(club['winRate'], closeTo(100, 0.001));
-  });
+      final resources = await service.createVersion2Resources(model);
+      final paged =
+          (resources['tournaments:1']!['completedTournaments'] as List).single
+              as Map<String, dynamic>;
+      expect(paged['winnerId'], champion.id);
+      expect(paged['winnerName'], champion.displayName);
+      expect(paged['phaseKinds'], ['table', 'knockout']);
+      expect(paged, isNot(containsPair('phaseViews', anything)));
+    },
+  );
 
-  test('trashed completed tournaments stay out of the API until restored',
-      () async {
-    final completed = CreatedTournament(
-      id: 'trashed-completed',
-      name: 'Papierkorb Turnier',
-      players: const [],
-      stages: const [],
-      runStages: const [],
-      finishedAt: DateTime.utc(2026, 10, 20),
-    );
-    await tournamentStorage.saveTournament(completed);
-    await tournamentStorage.deleteTournament(completed.id);
-
-    final trash = TournamentTrash(
-      file: File(
-        '${directory.path}${Platform.pathSeparator}tournament_trash.json',
-      ),
-    );
-    final entry = (await trash.list()).singleWhere(
-      (item) =>
-          item.tournamentId == completed.id &&
-          item.reason == TournamentTrashReason.deleted,
-    );
-    final service = WebsiteReadModelService(
-      database: database,
-      tournamentStorage: tournamentStorage,
-    );
-
-    final trashedModel = await service.create();
-    expect(trashedModel['completedTournaments'], isEmpty);
-    final trashedResources = await service.createVersion2Resources(trashedModel);
-    expect(trashedResources['tournaments:1']!['completedTournaments'], isEmpty);
-
-    await tournamentStorage.saveTournamentWithIntent(
-      entry.toTournament(),
-      allowUnfinishingCompleted: true,
-    );
-    await trash.remove(entry.entryId);
-
-    final restoredModel = await service.create();
-    expect(
-      (restoredModel['completedTournaments'] as List).single['id'],
-      completed.id,
-    );
+  test('compact index tolerates legacy read models without winner data', () {
+    final index = WebsiteReadModelService.createTournamentIndex({
+      'generatedAt': '2026-10-28T00:00:00.000Z',
+      'completedTournaments': [
+        {
+          'id': 'legacy',
+          'name': 'Legacy',
+          'finishedAt': '2026-10-20T00:00:00.000Z',
+          'startedAt': null,
+          'createdAt': '2026-10-19T00:00:00.000Z',
+          'players': const [],
+        },
+      ],
+    });
+    final summary =
+        (index['completedTournaments'] as List).single as Map<String, dynamic>;
+    expect(summary['winnerId'], isNull);
+    expect(summary['winnerName'], isNull);
+    expect(summary['phaseKinds'], isEmpty);
   });
 }

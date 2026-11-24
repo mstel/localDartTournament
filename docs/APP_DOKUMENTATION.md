@@ -1,7 +1,7 @@
 # Dart Tournament Manager (DartTournamentPro) – Gesamtdokumentation
 
-**Version:** 2.6.3+83  
-**Stand:** November 2026  
+**Version:** 4.0.0+130
+**Stand:** November 2026
 **Zielgruppe:** Turnierleiter, Vereinsadministratoren, Spieler und Entwickler
 
 ---
@@ -43,7 +43,7 @@ Der **Dart Tournament Manager** ist eine modulare Flutter-Anwendung für Steelda
 
 ### Technologie-Stack
 - **Framework:** Flutter 3.x / Dart 3.x
-- **Lokale Persistenz:** SQLite (Schema Version 15) & JSON-Dateispeicher für Turniere
+- **Lokale Persistenz:** SQLite (Schema Version 18) & versionierter JSON-Dateispeicher für Turniere (Schema Version 50)
 - **Cloud-Backend:** Supabase (Auth, PostgreSQL, Storage, Edge Functions)
 - **Audio:** Lokale Text-to-Speech (TTS) & Soundeffekte (`audioplayers`)
 - **Unterstützte Betriebssysteme:** Windows, Android, macOS, Linux, iOS
@@ -142,12 +142,16 @@ Die Navigation basiert auf der responsiven `SportAppShell`:
   - **Dashboard:** Live-Turnierfortschritt, aktuelle Partien, Podiumsprognose, Gesamtzeitleiste.
   - **Ergebnisse:** Interaktive Brackets und Tabellen, Ergebniseingabe mit Bestleistungen-Dialog.
   - **Turnierleiter (Director Dashboard):**
-    - Board-Status (Belegt, Frei, Wartend).
-    - Automatische Board-Empfehlungen ohne Blockade gleicher Gruppen.
-    - Gruppen-Prioritätslogik: Bevorzugt Partien aus Gruppen mit absolutem oder prozentualem Spielrückstand.
+    - Board-Status (Belegt, Frei, Gesperrt, Wartend).
+    - Genau drei Turnier-Modi: `Dynamisch`, `Fest – Gruppenbasiert` und `Fest – Turnierweit`. Ein altes `dynamisch + gruppenbasiert` wird beim Laden auf `Dynamisch` umgestellt.
+    - `Dynamisch`: Eine gemeinsame Warteliste für alle freien Boards; alle offenen Partien werden nach jedem Ergebnis neu bewertet. Vorübergehend belegte Partien bleiben sichtbar und werden als übersprungen markiert; eine Board-Zuweisung gibt es nicht.
+    - `Fest – Gruppenbasiert`: Gespeicherte, bearbeitbare Reihenfolge. Gruppen spielen nur auf ihren zugewiesenen Boards; ist dort keine Partie spielbar, bleibt das Board frei.
+    - `Fest – Turnierweit`: Gespeicherte Reihenfolge als Empfehlung. Partien dürfen vorgezogen werden, ohne die übrige Reihenfolge zu zerstören; Boards sind frei wählbar.
+    - Gemeinsame Priorisierung: Spielerkollisionen werden hart ausgeschlossen, danach zählen Wartezeit seit dem letzten Spielende, tatsächlicher/laufender/prognostizierter Gruppenfortschritt, Spielbelastung, verbleibende Partien und Ursprungsreihenfolge.
+    - Manuell angepasste feste Reihenfolgen werden gekennzeichnet; ein vollständiger Neuaufbau verlangt eine Bestätigung. Laufende Partien blockieren Spieler und Board auch über Phasengrenzen hinweg.
     - Sprachansagen (TTS): Automatisches Ausrufen aufgerufener Spiele an der Scheibe.
     - Akustische Board-Leerlauf-Meldung (einstellbar nach 1–5 Minuten).
-  - **Spielplan (Order of Play):** Geordnete Abfolge anstehender Matches je Board.
+  - **Spielplan (Order of Play):** Empfehlungen und feste Reihenfolge in Übersicht, Leitung, Zweitmonitor, Ergebnissen und Sprachausgabe konsistent; gesperrte Boards erhalten keine Vorschläge.
   - **Spielerliste:** Umbenennen von Spielern und Spielerrückzug (Player Withdrawal: kampflose Wertung oder Streichung).
   - **Einstellungen:** Board-Namen, Schwellenwerte, Audio-Einstellungen live im laufenden Turnier anpassbar.
 - **Zeitverwaltung:**
@@ -155,6 +159,7 @@ Die Navigation basiert auf der responsiven `SportAppShell`:
 
 #### Turnierabschluss & Auswertung
 - Siegerpodest und Abschlussplatzierungen.
+- **Einzelne Turnierphasen anzeigen:** Schreibgeschützte Detailansicht pro Etappe mit Tabellen/Begegnungen beziehungsweise KO-Baum und Kratzer-Leben; Tabellen und Begegnungen stehen ab 900 px nebeneinander.
 - Detaillierte Matchstatistiken und Bestleistungen.
 - Hochformat-PNG-Bildexport der Abschlussgrafik für Vereinsaushänge und Social Media.
 
@@ -169,22 +174,29 @@ Die Navigation basiert auf der responsiven `SportAppShell`:
   - Spiele, Legs, Siege, Niederlagen, Siegquote.
   - Aufklappbare Bestleistungen mit Direktlink zum entsprechenden Turnier.
   - Monatsstatistiken (aggregierte Spiele, Averages, Checkouts) mit Jahresfiltern und Summen.
-  - Interaktive Performance-Diagramme (Average-Entwicklung, 180er, Shortlegs, High Finishes).
+  - Eingabe kumulierter Scolia-Messpunkte ab Oktober 2026 im 100-Leg-Fenster; abgeleitete Monatswerte und Schätzungen werden gekennzeichnet.
+  - Interaktive Performance-Diagramme (Average-Entwicklung, Siegesrate pro Monat, 180er, Shortlegs, High Finishes).
   - Errungenschaften-Fortschrittsbalken und Spieler-Level.
 
 ---
 
 ### 3.4 Statistiken, Performance & Jahresrückblicke
 
-- **Jahresrückblicke:**
+- **Startseite & Jahresrückblicke:**
+  - Startseite zeigt den Sieger des jüngsten abgeschlossenen Turniers und eine kompakte Siegesrate pro Monat.
   - Auswertung nach Rangliste oder einzelnem Spieler für beliebige Jahre.
-  - Kennzahlen: Absolvierte Turniere, gespielte Legs, Monatsaktivität und Bestleistungs-Kategorien.
+  - Kennzahlen: Absolvierte Turniere, gespielte Legs, Monatsaktivität, Siegesraten und Bestleistungs-Kategorien.
   - Exportfunktion für die Jahresübersicht.
 - **Spieler-Vergleich (Head-to-Head):**
   - Direkter Vergleich zweier ausgewählter Spieler: Direkte Duelle, Siegquoten, Bestleistungen und Elo-Historie.
 - **Historischer Statistik-Import:**
   - Import historischer Monatsstatistiken (z. B. aus Excel-Archiven).
   - Werden sauber von Live-Spielen getrennt in Profilen und Jahresrückblicken berücksichtigt.
+- **Scolia-Messpunkte ab Oktober 2026:**
+  - Monatlich werden nur die aktuell angezeigten Gesamtwerte (Legs, Spiele, Scoring, Average, Checkout) eingetragen.
+  - Die App speichert diese kumulierten Messpunkte separat und berechnet daraus eigenständige Monatswerte über die zugrunde liegenden Summen (`Kennzahl × Legs`), nicht über Average-Differenzen.
+  - Oktober 2026 ist die unveränderte Basis; Monate bis September 2026 bleiben unberührt. Bei Korrektur eines Messpunkts werden alle abhängigen Monate neu berechnet.
+  - Bei vollem 100-Leg-Fenster werden die bekannten Vormonatsanteile abgezogen. Ist die Trennung nicht mehr eindeutig, wird der Monat als geschätzt markiert und die neuen Legs des Monats können explizit bestätigt werden.
 
 ---
 
@@ -272,8 +284,8 @@ Erreichbar über das Zahnrad-Symbol oben rechts. Gegliedert in 4 Hauptbereiche:
 
 ### 5.2 Website Read-Only API (v1 & v2)
 - Supabase Edge Function `website-read-model`.
-- Stellt Ranglisten, Elo-Historien, Turnierzusammenfassungen, Spielerprofile, Bestleistungen und Achievements schreibgeschützt für Vereinshomepages oder Info-Screens bereit.
-- Version 2 unterstützt paginiertes Laden einzelner Ressourcen (`tournaments`, `rankings`, etc.).
+- Stellt Ranglisten, Elo-Historien, Turnierzusammenfassungen mit Sieger und Phasenansichten, Spielerprofile, Monats-Siegquoten inklusive Diagrammreihen, Bestleistungen und Achievements schreibgeschützt für Vereinshomepages oder Info-Screens bereit.
+- Version 2 unterstützt paginiertes Laden einzelner Ressourcen (`tournaments`, `rankings`, `performance`, etc.). Added fields bleiben kompatibel mit alten Snapshots; die Schema-Versionen ändern sich nicht.
 
 ### 5.3 Challonge-Import
 - Import von Turnieren im JSON-Format aus Challonge.

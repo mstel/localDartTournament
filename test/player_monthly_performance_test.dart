@@ -185,10 +185,10 @@ void main() {
     expect(aggregated.single.losses, 6);
     expect(aggregated.single.winRate, closeTo(8 * 100 / 14, 0.001));
 
-    final current = calculateCurrentFormPerformance(
-      [recent, older],
-      now: DateTime(2026, 11, 3),
-    );
+    final current = calculateCurrentFormPerformance([
+      recent,
+      older,
+    ], now: DateTime(2026, 11, 3));
     expect(current.matches, 20);
     expect(current.wins, 12);
     expect(current.losses, 8);
@@ -305,5 +305,56 @@ void main() {
     expect(result.scoring, 72);
     expect(result.average, 46);
     expect(result.checkoutRate, 32);
+  });
+
+  test('scolia derived months are authoritative from October 2026 onward', () {
+    final combined = combineMonthlyPlayerPerformances(
+      recorded: const [
+        PlayerMonthlyPerformance(
+          playerId: 'player-1',
+          year: 2026,
+          month: 9,
+          weightedLegs: 12,
+          average: 55,
+        ),
+        PlayerMonthlyPerformance(
+          playerId: 'player-1',
+          year: 2026,
+          month: 10,
+          weightedLegs: 30,
+          average: 42,
+          source: 'scolia_cumulative',
+        ),
+      ],
+      imported: const [
+        MonthlyPlayerPerformance(
+          playerProfileId: 'player-1',
+          sourcePlayerName: 'Teilnehmer 1',
+          month: '2026-09',
+          threeDartAverage: 70,
+          firstNineAverage: 40,
+          legs: 20,
+          matches: 5,
+        ),
+        MonthlyPlayerPerformance(
+          playerProfileId: 'player-1',
+          sourcePlayerName: 'Teilnehmer 1',
+          month: '2026-10',
+          threeDartAverage: 90,
+          firstNineAverage: 50,
+          legs: 99,
+          matches: 20,
+        ),
+      ],
+    );
+
+    expect(combined, hasLength(2));
+    final september = combined.singleWhere((entry) => entry.month == 9);
+    expect(september.average, 70);
+    expect(september.weightedLegs, 20);
+    final october = combined.singleWhere((entry) => entry.month == 10);
+    expect(october.average, 42);
+    expect(october.weightedLegs, 30);
+    expect(october.source, 'scolia_cumulative');
   });
 }

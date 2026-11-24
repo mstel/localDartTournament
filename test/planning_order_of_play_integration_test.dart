@@ -24,6 +24,8 @@ void main() {
             players: [for (final g in groups) ...g.players],
             stages: [],
             boardCount: boards,
+            directorPlayOrderMode: 'dynamic',
+            directorSchedulingStrategy: 'global',
             runStages: [
               GroupTournamentRunStage(
                 name: 'Gruppen',

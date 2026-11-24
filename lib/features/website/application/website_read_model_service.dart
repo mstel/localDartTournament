@@ -7,9 +7,11 @@ import '../../achievements/application/ranking_achievement_service.dart';
 import '../../statistics/domain/local_statistics.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
 import '../../statistics/domain/tournament_monthly_results.dart';
+import '../../tournaments/application/tournament_phase_views.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
+import '../../tournaments/domain/tournament_winner.dart';
 
 class WebsiteReadModelService {
   WebsiteReadModelService({
@@ -293,17 +295,28 @@ class WebsiteReadModelService {
       'bestPerformances': bestPerformances,
       'completedTournaments': [
         for (final tournament in completed)
-          {
-            ...tournament.toJson(),
-            // Ensure finishedAt is always present for the website; fall back
-            // to startedAt or createdAt for legacy Challonge imports where the
-            // public page scrape did not provide a completion timestamp.
-            if (tournament.finishedAt == null)
-              'finishedAt': (tournament.startedAt ?? tournament.createdAt)
-                  .toUtc()
-                  .toIso8601String(),
-          },
+          _completedTournamentJson(tournament),
       ],
+    };
+  }
+
+  static Map<String, dynamic> _completedTournamentJson(
+    CreatedTournament tournament,
+  ) {
+    final phaseViews = const TournamentPhaseViews().derive(tournament);
+    return {
+      ...tournament.toJson(),
+      // Ensure finishedAt is always present for the website; fall back
+      // to startedAt or createdAt for legacy Challonge imports where the
+      // public page scrape did not provide a completion timestamp.
+      if (tournament.finishedAt == null)
+        'finishedAt': (tournament.startedAt ?? tournament.createdAt)
+            .toUtc()
+            .toIso8601String(),
+      'winnerId': TournamentWinner.profileId(tournament),
+      'winnerName': TournamentWinner.name(tournament),
+      'phaseViews': [for (final view in phaseViews) view.toJson()],
+      'phaseKinds': [for (final view in phaseViews) view.type.jsonValue],
     };
   }
 
@@ -342,9 +355,7 @@ class WebsiteReadModelService {
     final tournamentResults = const TournamentMonthlyResultCalculator()
         .calculate(
           completed,
-          playerIds: {
-            for (final player in players) player['id'] as String,
-          },
+          playerIds: {for (final player in players) player['id'] as String},
         );
     for (final player in players) {
       final playerId = player['id'] as String;
@@ -410,6 +421,31 @@ class WebsiteReadModelService {
             'scoring': entry.scoring,
             'average': entry.average,
             'checkoutQuote': entry.checkoutRate,
+          },
+      ],
+      'winRateSeries': [
+        for (final entry in combinedMonthlyPerformance)
+          {
+            'playerId': entry.playerId,
+            'period': entry.periodKey,
+            'year': entry.year,
+            'month': entry.month,
+            'matches': entry.matches,
+            'wins': entry.wins,
+            'losses': entry.losses,
+            'winRate': entry.winRate,
+          },
+      ],
+      'clubWinRateSeries': [
+        for (final entry in monthlyClubPerformance)
+          {
+            'period': '${entry.year}-${entry.month.toString().padLeft(2, '0')}',
+            'year': entry.year,
+            'month': entry.month,
+            'matches': entry.matches,
+            'wins': entry.wins,
+            'losses': entry.losses,
+            'winRate': entry.winRate,
           },
       ],
       'importedMonthlyStatistics': importedMonthlyStatistics,
@@ -492,6 +528,13 @@ class WebsiteReadModelService {
             'matchCount': _matchCount(tournament),
             'mode': _mode(tournament),
             'hasImportedArchive': tournament['importedArchive'] != null,
+            'winnerId': tournament['winnerId'],
+            'winnerName': tournament['winnerName'],
+            'phaseKinds': [
+              for (final kind
+                  in tournament['phaseKinds'] as List<dynamic>? ?? const [])
+                if (kind is String) kind,
+            ],
           },
       ],
     };

@@ -139,7 +139,19 @@ authorization header.
   user-entered `details` string. Legacy `score170` records are exposed as
   `score171Plus`.
 - `completedTournaments`: app tournament JSON objects with a non-null finish
-  timestamp. Reopened tournaments are excluded until finalized again.
+  timestamp. Reopened tournaments are excluded until finalized again. Each
+  entry also contains additive winner/detail-view fields: nullable `winnerId`
+  (catalog profile ID, when the winner is a catalog player) and `winnerName`,
+  plus `phaseKinds` and `phaseViews` derived from the completed run stages.
+  `phaseKinds` is a compact string list with `table` (group/round-robin or
+  Swiss standings), `knockout` (KO bracket) and `kratzer` (KO with lives).
+  `phaseViews` is the ordered list of detail views:
+  `{ index, name, type, stageKind, playType, groups?, rounds?,
+  placementMatches?, eliminationLossLimit?, livesRemaining? }`.
+  Table views include `groups` with standings and matches; KO views include
+  `rounds`, `placementMatches` and `eliminationLossLimit` (kratzer views also
+  include `livesRemaining`). These fields are derived from the stored
+  tournament; clients do not need to reconstruct brackets or standings.
 
 The endpoint accepts legacy schema-version-1 read models and continues to
 serve them as version 1. Version 2 read models include current-form statistics
@@ -150,9 +162,12 @@ and are returned as version 2.
 The `view=tournaments` response keeps `schemaVersion` and `generatedAt`, and
 contains only compact entries in `completedTournaments`: `id`, `name`,
 `finishedAt`, `startedAt`, `createdAt`, `playerCount`, `matchCount`, `mode`,
-and `hasImportedArchive`. `tournamentPage` contains the requested `page`, the
-fixed `pageSize` of 10, the total number of completed tournaments, and
-`hasMore`.
+`hasImportedArchive`, and the additive `winnerId`, `winnerName`, and
+`phaseKinds`. The full `phaseViews` detail list is not part of the compact
+index or the v2 tournament pages; load the full read model document for that.
+Winner fields are `null` when no winner can be derived. `tournamentPage` contains the
+requested `page`, the fixed `pageSize` of 10, the total number of completed
+tournaments, and `hasMore`.
 
 ## Version-2 resource contract
 
@@ -164,7 +179,7 @@ Request one resource per call. `version=2` and `resource` are required;
 | `?version=2&resource=players` | `players` |
 | `?version=2&resource=rankings` | `rankings`, `rankingStandings` |
 | `?version=2&resource=statistics` | `statistics`, `bestPerformances`, `currentForm` |
-| `?version=2&resource=performance` | `monthlyPerformance`, `monthlyClubPerformance`, `importedMonthlyStatistics`, `currentForm` |
+| `?version=2&resource=performance` | `monthlyPerformance`, `monthlyClubPerformance`, `winRateSeries`, `clubWinRateSeries`, `importedMonthlyStatistics`, `currentForm` |
 | `?version=2&resource=achievements` | `rankingAchievements` |
 | `?version=2&resource=tournaments&page=N` | One page of `completedTournaments` and `tournamentPage` |
 
@@ -177,20 +192,31 @@ empty tournament collection is represented by page 1 with an empty list.
 
 `monthlyPerformance` contains one row per player/month across manually
 maintained performance and imported historical aggregates:
-`playerId`, `period` (`YYYY-MM`), `year`, `month`, `matches`, `weightedLegs`,
-`scoring`, `average`, and `checkoutQuote` (the app's stored checkout-rate
-percentage). Imported aggregates are authoritative when both sources contain
-the same player and month. Nullable performance values stay null; no values are
-inferred from tournament results. Profile-private details appear only in the
-independently requested `players` resource.
+`playerId`, `period` (`YYYY-MM`), `year`, `month`, `matches`, `wins`, `losses`,
+`winRate`, `weightedLegs`, `scoring`, `average`, and `checkoutQuote` (the app's
+stored checkout-rate percentage). `wins` and `losses` are derived from
+completed tournament match results for that player and month (draws are
+possible but have no separate field here); `winRate` is the percentage of
+matches won, or `0` when there are no matches. Imported aggregates are
+authoritative when both sources contain the same player and month. Nullable
+performance values stay null; no other values are inferred from tournament
+results. Profile-private details appear only in the independently requested
+`players` resource.
 
 `monthlyClubPerformance` contains one row per month across all catalog players:
-`year`, `month`, `period`, `matches`, `weightedLegs`, `scoring`, `average`, and
-`checkoutQuote`. Match and leg totals are divided by two because each recorded
-match/leg is represented for both players. Scoring, average, and checkout quote
-are weighted by the source leg counts. Imported monthly data is combined with
-manually maintained monthly data using the same player/month precedence as
-`monthlyPerformance`.
+`year`, `month`, `period`, `matches`, `wins`, `losses`, `winRate`,
+`weightedLegs`, `scoring`, `average`, and `checkoutQuote`. Match and leg totals
+are divided by two because each recorded match/leg is represented for both
+players. Scoring, average, and checkout quote are weighted by the source leg
+counts. Imported monthly data is combined with manually maintained monthly data
+using the same player/month precedence as `monthlyPerformance`.
+
+`winRateSeries` and `clubWinRateSeries` are additive, chart-ready projections
+of `monthlyPerformance` and `monthlyClubPerformance`. Each point contains
+`period`, `year`, `month`, `matches`, `wins`, `losses`, and `winRate`;
+player points also contain `playerId`, while aggregated club points omit it.
+They repeat no additional data and can be ignored by clients that already
+render the monthly objects. Existing monthly fields are retained unchanged.
 
 `importedMonthlyStatistics` exposes the imported Excel-backed table without
 aggregation or field renaming: each row contains `playerId`,
@@ -219,8 +245,10 @@ achievement rules or calculate progress.
 ### Compatibility and migration
 
 The endpoint remains compatible with existing v1 full read-model snapshots;
-new synchronizations publish schema version 2. The version-2 resource and
-`view=tournaments` contracts remain independently versioned. No local records
+new synchronizations publish schema version 2. Winner, phase-view and
+win-rate-series fields are additive: schema versions (`2` for the full model
+and resources, `1` for the tournament index) are unchanged, and older snapshots
+without these fields still validate. No local records
 or existing backups are migrated or removed. Existing
 accounts publish the additional objects on their next synchronization. The
 homepage can migrate resource by resource in its separate project, then stop

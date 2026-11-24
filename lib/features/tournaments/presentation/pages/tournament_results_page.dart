@@ -20,6 +20,7 @@ import '../../../statistics/domain/best_performance.dart';
 import '../widgets/run/best_performance_editor.dart';
 import '../widgets/run/tournament_timing_panel.dart';
 import 'challonge_archive_page.dart';
+import 'tournament_phase_results_page.dart';
 import '../../application/tournament_timing.dart';
 import '../../application/tournament_run_controller.dart';
 import '../../application/tournament_duration_range.dart';
@@ -69,9 +70,7 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
         activeStageIndex: tournament.activeStageIndex,
         completedStageIndexes: tournament.completedStageIndexes,
         allowUnfinishingCompleted: finishedAt == null,
-        trashReason: finishedAt == null
-            ? TournamentTrashReason.replaced
-            : null,
+        trashReason: finishedAt == null ? TournamentTrashReason.replaced : null,
       );
       if (mounted) setState(() {});
     } catch (_) {
@@ -303,6 +302,11 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
                   label: 'Teilnehmerergebnisse',
                   icon: Icons.groups_outlined,
                   onTap: () => _openPlayerList(context, summary),
+                ),
+                SportMenuAction(
+                  label: 'Einzelne Turnierphasen anzeigen',
+                  icon: Icons.account_tree_outlined,
+                  onTap: () => _openPhaseResults(context),
                 ),
                 SportMenuAction(
                   label: 'Alle Begegnungen',
@@ -611,6 +615,14 @@ class _TournamentResultsPageState extends State<TournamentResultsPage> {
           tournament: tournament,
           ranking: summary.ranking,
         ),
+      ),
+    );
+  }
+
+  void _openPhaseResults(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TournamentPhaseResultsPage(tournament: tournament),
       ),
     );
   }

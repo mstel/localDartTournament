@@ -3,6 +3,7 @@ import '../../domain/tournament_models.dart';
 import '../../domain/engines/board_scheduling_engine.dart';
 import '../../domain/engines/global_waitlist_engine.dart';
 import '../../domain/engines/group_board_assignment.dart';
+import '../../domain/engines/schedule_priority_engine.dart';
 export '../../domain/engines/board_scheduling_engine.dart';
 
 String tournamentGroupBoardKey(int stageIndex, String groupName) =>
@@ -148,11 +149,10 @@ class OrderOfPlayController {
               b.match.finishedAt ?? DateTime(1970),
             ),
           );
-    final running =
+    final blockingRunning =
         all
             .where(
               (e) =>
-                  e.stageIndex == activeStage &&
                   !e.match.isResolved &&
                   e.match.hasPlayers &&
                   e.match.startedAt != null &&
@@ -162,13 +162,16 @@ class OrderOfPlayController {
             )
             .toList()
           ..sort((a, b) => a.match.startedAt!.compareTo(b.match.startedAt!));
+    final running = blockingRunning
+        .where((entry) => entry.stageIndex == activeStage)
+        .toList(growable: false);
     final pending = all
         .where(
           (e) =>
               e.stageIndex == activeStage &&
               e.match.hasPlayers &&
               !e.match.isResolved &&
-              !running.contains(e),
+              !blockingRunning.contains(e),
         )
         .toList();
     final waiting = all
@@ -176,18 +179,37 @@ class OrderOfPlayController {
           (e) =>
               !finished.contains(e) &&
               !pending.contains(e) &&
-              !running.contains(e),
+              !blockingRunning.contains(e),
         )
         .toList();
     // "global" means tournament-wide: group board reservations are ignored so
-    // the queue is flat and any free board can be used.
+    // the queue is flat and any free board can be used. Dynamic play order is
+    // always global; a persisted legacy "dynamic + group" is normalised by the
+    // model layer, but treating it as global here keeps old data consistent.
+    final isDynamic = tournament.directorPlayOrderMode == 'dynamic';
     final useGlobalStrategy =
         tournament.directorModeEnabled &&
-        tournament.directorSchedulingStrategy == 'global';
+        (isDynamic || tournament.directorSchedulingStrategy == 'global');
+    final engineStrategy = isDynamic
+        ? (tournament.directorModeEnabled ? 'global' : 'group')
+        : 'sequence';
+    final priorityContext = engineStrategy == 'sequence'
+        ? null
+        : SchedulePriorityContext.build(
+            all: all,
+            finished: finished,
+            running: blockingRunning,
+          );
+    // In fixed + group the board assignment is part of the persisted plan, so
+    // a group may never fall back onto another group's reserved board.
+    final bindGroupBoards =
+        tournament.directorModeEnabled &&
+        !isDynamic &&
+        tournament.directorSchedulingStrategy == 'group';
     final planned = const BoardSchedulingEngine().schedule(
       all: all,
       ready: pending,
-      running: running,
+      running: blockingRunning,
       finished: finished,
       boardCount: tournament.boardCount,
       blockedBoards: {
@@ -197,13 +219,12 @@ class OrderOfPlayController {
       preferredBoardsByGroup: useGlobalStrategy
           ? const <String, List<int>>{}
           : tournament.groupBoardAssignments,
-      strategy: tournament.directorPlayOrderMode != 'dynamic'
-          ? 'sequence'
-          : tournament.directorModeEnabled
-          ? tournament.directorSchedulingStrategy
-          : 'group',
+      strategy: engineStrategy,
+      priorityContext: priorityContext,
+      bindGroupBoards: bindGroupBoards,
       assignGroupsToBoards:
           tournament.directorModeEnabled &&
+          !isDynamic &&
           tournament.directorSchedulingStrategy == 'group',
       groupBoardAssignments: {
         for (final entry in tournament.directorGroupBoardAssignments.entries)
@@ -213,7 +234,13 @@ class OrderOfPlayController {
         tournament.directorMultiBoardAssignmentBehavior,
       ),
     );
-    return BoardSchedule(planned, running, finished, waiting);
+    return BoardSchedule(
+      planned,
+      running,
+      finished,
+      waiting,
+      blockingRunning: blockingRunning,
+    );
   }
 
   /// Creates a persisted, complete queue once, including future pairing slots.
@@ -273,6 +300,11 @@ class OrderOfPlayController {
           tournament.directorModeEnabled &&
           tournament.directorSchedulingStrategy == 'group' &&
           stageEntries.every((entry) => entry.groupKey != null);
+      final priorityContext = SchedulePriorityContext.build(
+        all: stageEntries,
+        finished: const [],
+        running: const [],
+      );
       final orderedKnown = useGroupBoardRoundRobin
           ? _roundRobinKnownEntriesByBoard(
               stageIndex: stageIndex,
@@ -298,6 +330,12 @@ class OrderOfPlayController {
                           tournament.directorSchedulingStrategy == 'global'
                       ? 'global'
                       : 'sequence',
+                  priorityContext:
+                      tournament.directorModeEnabled &&
+                          tournament.directorSchedulingStrategy == 'global'
+                      ? priorityContext
+                      : null,
+                  bindGroupBoards: false,
                   assignGroupsToBoards: false,
                   groupBoardAssignments: groupAssignments,
                   allowGroupBoardExpansion: allowsGroupBoardExpansion(
@@ -314,6 +352,34 @@ class OrderOfPlayController {
     }
   }
 
+  /// Materialises the compact fixed preview of the dynamic global waitlist.
+  ///
+  /// Planning itself is pure; persistence happens only here and in
+  /// [GlobalWaitlistEngine.recordStart], so callers decide when keys are
+  /// written (stage setup, stage start, board configuration changes).
+  void initializeGlobalWaitlist(
+    CreatedTournament tournament,
+    int stage, {
+    required List<PlayEntry> allEntries,
+    required BoardSchedule schedule,
+    bool Function(GroupMatch match)? isPreviewable,
+  }) {
+    const engine = GlobalWaitlistEngine();
+    final waitlistPlan = engine.plan(
+      tournament,
+      stage,
+      allEntries: allEntries,
+      schedule: schedule,
+      isPreviewable: isPreviewable,
+    );
+    engine.persistFixedKeys(
+      tournament,
+      stage,
+      waitlistPlan,
+      allEntries: allEntries,
+    );
+  }
+
   /// Builds the persisted fixed order in play blocks: the best match for each
   /// board comes first, then the second-best for each board, and so on. Boards
   /// remain assigned to their groups while those groups still have matches;
@@ -326,10 +392,12 @@ class OrderOfPlayController {
     required int boardCount,
     required Set<int> blockedBoards,
   }) {
-    final originalOrder = {
-      for (var index = 0; index < stageEntries.length; index++)
-        stageEntries[index]: index,
-    };
+    final priorityContext = SchedulePriorityContext.build(
+      all: stageEntries,
+      finished: const [],
+      running: const [],
+    );
+    const scorer = SchedulePriorityEngine();
     final groupOrder = <String, int>{};
     for (final entry in stageEntries) {
       final groupKey = entry.groupKey;
@@ -339,12 +407,10 @@ class OrderOfPlayController {
     }
     final remainingByGroup = <String, List<PlayEntry>>{
       for (final groupKey in groupOrder.keys)
-        groupKey:
-            known
-                .where((entry) => entry.groupKey == groupKey)
-                .toList()
-                .cast<PlayEntry>()
-              ..sort((a, b) => originalOrder[a]!.compareTo(originalOrder[b]!)),
+        groupKey: scorer.sorted(
+          known.where((entry) => entry.groupKey == groupKey),
+          priorityContext,
+        ),
     };
     final groupsByBoard = <int, List<String>>{};
     for (final entry in groupAssignments.entries) {
@@ -365,37 +431,34 @@ class OrderOfPlayController {
       final usedPlayers = <String>{};
       var addedInBlock = false;
       for (final board in boards) {
-        final assignedCandidates = (groupsByBoard[board] ?? const <String>[])
-            .where((groupKey) => remainingByGroup[groupKey]?.isNotEmpty == true)
-            .toSet();
-        final allCandidates = groupOrder.keys
-            .where((groupKey) => remainingByGroup[groupKey]?.isNotEmpty == true)
-            .toSet();
-        final candidateSets = <Set<String>>[assignedCandidates, allCandidates];
-        for (final candidateSet in candidateSets) {
-          if (candidateSet.isEmpty) continue;
-          final candidates = candidateSet.toList()
-            ..sort((a, b) {
-              final remainingComparison = remainingByGroup[b]!.length.compareTo(
-                remainingByGroup[a]!.length,
-              );
-              return remainingComparison != 0
-                  ? remainingComparison
-                  : groupOrder[a]!.compareTo(groupOrder[b]!);
-            });
-          for (final groupKey in candidates) {
-            final entries = remainingByGroup[groupKey]!;
-            final index = entries.indexWhere(
-              (entry) => !entry.players.any(usedPlayers.contains),
-            );
-            if (index < 0) continue;
-            final entry = entries.removeAt(index);
-            ordered.add(entry);
-            usedPlayers.addAll(entry.players);
-            addedInBlock = true;
-            break;
-          }
-          if (addedInBlock) break;
+        // Fixed + group board assignments are binding: a board only ever
+        // receives matches from the groups assigned to it. If every assigned
+        // group is busy, the board stays idle for this block.
+        final candidates =
+            (groupsByBoard[board] ?? const <String>[])
+                .where(
+                  (groupKey) => remainingByGroup[groupKey]?.isNotEmpty == true,
+                )
+                .toSet()
+                .toList()
+              ..sort((a, b) {
+                final remainingComparison = remainingByGroup[b]!.length
+                    .compareTo(remainingByGroup[a]!.length);
+                return remainingComparison != 0
+                    ? remainingComparison
+                    : groupOrder[a]!.compareTo(groupOrder[b]!);
+              });
+        for (final groupKey in candidates) {
+          final entries = remainingByGroup[groupKey]!;
+          final index = entries.indexWhere(
+            (entry) => !entry.players.any(usedPlayers.contains),
+          );
+          if (index < 0) continue;
+          final entry = entries.removeAt(index);
+          ordered.add(entry);
+          usedPlayers.addAll(entry.players);
+          addedInBlock = true;
+          break;
         }
       }
       if (!addedInBlock) break;
@@ -479,13 +542,15 @@ class OrderOfPlayController {
     TournamentPlayer player,
   ) {
     final schedule = plan(tournament, stage);
-    final busy = {for (final entry in schedule.running) ...entry.players};
+    final busy = {
+      for (final entry in schedule.blockingRunning) ...entry.players,
+    };
     final identities = player.individuals
         .map((p) => p.profileId ?? p.name)
         .toSet();
     if (identities.any(busy.contains)) return null;
     final occupied = {
-      for (final entry in schedule.running) entry.match.boardNumber,
+      for (final entry in schedule.blockingRunning) entry.match.boardNumber!,
     };
     for (final assignment in schedule.planned) {
       final candidate = assignment.entry;
@@ -507,17 +572,21 @@ class OrderOfPlayController {
     if (board < 1 || board > tournament.boardCount) return null;
     if (tournament.blockedBoards.contains(board)) return null;
     final schedule = plan(tournament, stage);
-    if (schedule.running.any((entry) => entry.match.boardNumber == board)) {
+    if (schedule.blockingRunning.any(
+      (entry) => entry.match.boardNumber == board,
+    )) {
       return null;
     }
 
-    final busy = {for (final entry in schedule.running) ...entry.players};
+    final busy = {
+      for (final entry in schedule.blockingRunning) ...entry.players,
+    };
     for (final assignment in schedule.planned) {
       final entry = assignment.entry;
       if (assignment.board != board || entry.players.any(busy.contains)) {
         continue;
       }
-      if (schedule.running.any(
+      if (schedule.blockingRunning.any(
         (runningEntry) =>
             runningEntry.match.boardNumber == board ||
             runningEntry.players.any(entry.players.contains),
@@ -538,18 +607,27 @@ class OrderOfPlayController {
   }) {
     final all = entries(tournament);
     final schedule = plan(tournament, stage);
-    final candidates = schedule.planned.where(
-      (a) => identical(a.entry.match, match),
-    );
-    if (candidates.isEmpty ||
+    // The planned order is a recommendation for the fixed global mode. Any
+    // playable match of the active stage may be started on a free board; its
+    // persisted fixedScheduleOrder is deliberately left untouched.
+    final entry = all
+        .where(
+          (candidate) =>
+              identical(candidate.match, match) &&
+              candidate.stageIndex == stage &&
+              candidate.match.hasPlayers,
+        )
+        .firstOrNull;
+    if (entry == null ||
+        match.isResolved ||
+        schedule.blockingRunning.any((e) => identical(e.match, match)) ||
         board < 1 ||
         board > tournament.boardCount ||
         tournament.blockedBoards.contains(board) ||
         tournament.completedStageIndexes.contains(stage)) {
       return false;
     }
-    final entry = candidates.first.entry;
-    if (schedule.running.any(
+    if (schedule.blockingRunning.any(
       (e) =>
           e.match.boardNumber == board || e.players.any(entry.players.contains),
     )) {
@@ -585,7 +663,10 @@ class OrderOfPlayController {
     GroupMatch match,
   ) {
     if (match.hasResult ||
-        !plan(tournament, stage).running.any((entry) => entry.match == match)) {
+        !plan(
+          tournament,
+          stage,
+        ).blockingRunning.any((entry) => entry.match == match)) {
       return false;
     }
     match

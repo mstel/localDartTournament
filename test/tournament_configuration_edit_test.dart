@@ -266,6 +266,49 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('dynamic mode hides board assignment settings', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final storage = _MemoryTournamentStorage();
+    final tournament = _tournament(hasResult: false)
+      ..directorModeEnabled = true
+      ..directorPlayOrderMode = 'dynamic'
+      ..directorSchedulingStrategy = 'global';
+
+    Finder labeledDropdown(String label) => find.byWidgetPredicate(
+      (widget) =>
+          widget is DropdownButtonFormField<String> &&
+          widget.decoration.labelText == label,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TournamentRunPage(
+          tournament: tournament,
+          tournamentStorage: storage,
+          runController: TournamentRunController(storage: storage),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Einstellungen'));
+    await tester.pumpAndSettle();
+    final settings = find.byKey(const ValueKey('director-settings'));
+    await tester.scrollUntilVisible(
+      settings,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(settings);
+    await tester.pumpAndSettle();
+
+    expect(labeledDropdown('Spielplanmodus'), findsOneWidget);
+    expect(labeledDropdown('Board Zuweisung'), findsNothing);
+    expect(find.text('Fixierte Vorschau'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('league fixed schedule offers both board suggestion modes', (
     tester,
   ) async {

@@ -1,4 +1,5 @@
 import 'engines/board_scheduling_engine.dart';
+import 'engines/schedule_priority_engine.dart';
 import 'engines/tournament_engine.dart';
 import 'tournament_models.dart';
 
@@ -76,11 +77,18 @@ class PlanningDuration {
         groupEntries.add(PlayEntry(match, 0, 'G$group', 'G$group'));
       }
     }
+    final priorityContext = SchedulePriorityContext.build(
+      all: groupEntries,
+      finished: const [],
+      running: const [],
+      now: DateTime.fromMillisecondsSinceEpoch(0),
+    );
     final assignments = const BoardSchedulingEngine().schedule(
       all: groupEntries,
       ready: groupEntries,
       boardCount: boards,
       strategy: strategy,
+      priorityContext: priorityContext,
     );
     final groupSlots = assignments.isEmpty ? 0 : assignments.last.block + 1;
     var knockoutSlots = 0;

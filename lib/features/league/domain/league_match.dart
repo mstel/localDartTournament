@@ -185,14 +185,14 @@ class LeagueMatch {
   final bool allowReentry;
 
   /// Legacy compatibility for callers that only need the shared maximum.
-  int get substitutionLimit => substitutionLimits.reduce(
-    (left, right) => left > right ? left : right,
-  );
+  int get substitutionLimit =>
+      substitutionLimits.reduce((left, right) => left > right ? left : right);
 
   int substitutionLimitFor(int teamSide) {
     _validateTeamSide(teamSide);
     return substitutionLimits[teamSide];
   }
+
   final List<LeagueSubstitution> substitutions;
 
   List<int> activePlayers(int teamSide) {
@@ -255,20 +255,31 @@ class LeagueMatch {
                   )),
         )
         .length;
+    final budget = substitutionLimits[teamSide] - substitutionsUsed(teamSide);
+    return budget.clamp(0, availableReserveCount);
+  }
+
+  /// Zeigt das tatsächlich verbleibende Kontingent ohne Reserven-Clamp.
+  /// Für die Anzeige im Aktivitätsprotokoll darf nicht der geclampte Wert aus
+  /// [substitutionsRemaining] verwendet werden: Nach vielen Klicks auf
+  /// „Auswechselung hinzufügen“ blieb die Meldung sonst bei 2 stehen, obwohl
+  /// intern schon 7 Kontingente gespeichert waren.
+  int substitutionBudgetRemaining(int teamSide) {
+    _validateTeamSide(teamSide);
     return (substitutionLimits[teamSide] - substitutionsUsed(teamSide)).clamp(
       0,
-      availableReserveCount,
+      maxSubstitutionBudget,
     );
   }
 
   /// Ergänzt weitere Ersatzspieler nachträglich. Der Index-Bereich der
   /// Stammspieler bleibt dadurch unverändert; alle Spielpläne bleiben gültig.
-  void addReservePlayers({
-    required int teamSide,
-    required List<String> names,
-  }) {
+  void addReservePlayers({required int teamSide, required List<String> names}) {
     _validateTeamSide(teamSide);
-    final clean = names.map((name) => name.trim()).where((name) => name.isNotEmpty).toList();
+    final clean = names
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
     if (clean.isEmpty) {
       throw const FormatException('Bitte einen Namen eingeben.');
     }
@@ -281,8 +292,37 @@ class LeagueMatch {
   /// Erhöht nur das Wechselkontingent. Es wird bewusst kein Wechsel eingetragen:
   /// „Auswechselung hinzufügen“ soll lediglich einen zusätzlich verfügbaren
   /// Wechsel bereitstellen, den das Team später selbst nutzen kann.
+  ///
+  /// Ein Kontingent darf niemals größer werden als die Anzahl der Wechsel, die
+  /// mit dem Kader und der Einwechsel-Regel überhaupt möglich sind. Sonst
+  /// sammeln sich unsichtbare Reserven an: Die Anzeige bleibt durch das Clamp
+  /// in [substitutionsRemaining] klein, während das gespeicherte Limit weiter
+  /// wächst.
+  static const int maxSubstitutionBudget = 10;
+
+  bool canAddSubstitutionBudget(int teamSide) =>
+      substitutionLimitFor(teamSide) < maximumSubstitutionBudget(teamSide);
+
+  int maximumSubstitutionBudget(int teamSide) {
+    _validateTeamSide(teamSide);
+    // Feste Obergrenze für zusätzlich vergebene Wechsel. Ohne diese Grenze
+    // konnte der Button beliebig oft gedrückt werden, während die Anzeige
+    // geclampiert bei 2 stehen blieb und intern 7 oder mehr Kontingente
+    // entstanden. Bei aktivem Wiedereinwechseln sind weitere Wechsel möglich;
+    // die Obergrenze verhindert weiterhin unkontrolliertes Anhäufen.
+    return maxSubstitutionBudget;
+  }
+
+  /// Fügt genau ein zusätzliches Kontingent hinzu oder lehnt den Aufruf ab.
+  /// Wirft [FormatException], wenn das Maximum erreicht ist; der Aufrufer kann
+  /// daraus ein klares Feedback anzeigen.
   void addSubstitutionBudget({required int teamSide}) {
     _validateTeamSide(teamSide);
+    if (!canAddSubstitutionBudget(teamSide)) {
+      throw const FormatException(
+        'Die maximale Anzahl an Auswechselungen ist erreicht.',
+      );
+    }
     substitutionLimits[teamSide] += 1;
   }
 

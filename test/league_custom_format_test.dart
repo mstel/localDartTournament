@@ -284,6 +284,62 @@ void main() {
     expect(restored.substitutionsRemaining(1), 1);
   });
 
+  test('extra substitutions are capped and counted with re-entry', () {
+    final league = LeagueMatch.adjusted(
+      homeTeam: 'Heim',
+      awayTeam: 'Gast',
+      homePlayers: home,
+      awayPlayers: away,
+      singlesPerPlayer: 1,
+      doublesCount: 1,
+      starterCount: 5,
+      maxReservePlayers: 2,
+      substitutionLimit: 2,
+      allowReentry: true,
+    );
+
+    // Adding a budget raises the real counter by exactly one, never an
+    // invisible reserve. Five clicks from the default 2 lead to 7.
+    expect(league.substitutionLimitFor(0), 2);
+    expect(league.maximumSubstitutionBudget(0), 10);
+    for (var expected = 3; expected <= 7; expected++) {
+      league.addSubstitutionBudget(teamSide: 0);
+      expect(league.substitutionLimitFor(0), expected);
+      expect(league.substitutionBudgetRemaining(0), expected);
+      expect(league.substitutions, isEmpty);
+    }
+    for (var click = 0; click < 3; click++) {
+      league.addSubstitutionBudget(teamSide: 0);
+    }
+    expect(league.substitutionLimitFor(0), 10);
+    expect(league.canAddSubstitutionBudget(0), isFalse);
+    expect(
+      () => league.addSubstitutionBudget(teamSide: 0),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('maximale Anzahl'),
+        ),
+      ),
+    );
+    expect(league.substitutionLimitFor(0), 10);
+
+    // A real substitution consumes exactly one budget, even when the player
+    // can later return to the lineup.
+    league.substitute(teamSide: 0, outPlayerIndex: 0, inPlayerIndex: 5);
+    expect(league.substitutionLimitFor(0), 10);
+    expect(league.substitutionsUsed(0), 1);
+    expect(league.substitutionBudgetRemaining(0), 9);
+
+    league.substitute(teamSide: 0, outPlayerIndex: 5, inPlayerIndex: 0);
+    expect(league.substitutionLimitFor(0), 10);
+    expect(league.substitutionsUsed(0), 2);
+    expect(league.substitutionBudgetRemaining(0), 8);
+    expect(league.activePlayers(0), contains(0));
+    expect(league.activePlayers(0), isNot(contains(5)));
+  });
+
   test('a rejected substitution leaves both team budgets untouched', () {
     final league = LeagueMatch.adjusted(
       homeTeam: 'Heim',
@@ -298,11 +354,7 @@ void main() {
     );
 
     expect(
-      () => league.substitute(
-        teamSide: 1,
-        outPlayerIndex: 5,
-        inPlayerIndex: 4,
-      ),
+      () => league.substitute(teamSide: 1, outPlayerIndex: 5, inPlayerIndex: 4),
       throwsA(
         isA<FormatException>().having(
           (error) => error.message,

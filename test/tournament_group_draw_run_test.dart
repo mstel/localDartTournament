@@ -74,6 +74,8 @@ void main() {
             ),
         ],
         directorModeEnabled: true,
+        directorSchedulingStrategy: 'group',
+        directorPlayOrderMode: 'fixed_schedule',
         boardCount: 4,
         activeStageIndex: historyStageCount - 1,
         completedStageIndexes: {

@@ -19,6 +19,14 @@ Partien. Damit bleibt die konfigurierbare Schwelle vergleichbar, ohne Gruppen
 mit gleichem relativen Fortschritt wegen ihrer unterschiedlichen Größe zu
 priorisieren. Die Spielerschwelle bleibt in beiden Modi absolut.
 
+Seit 4.0 verwenden feste und dynamische Spielpläne dieselbe Prioritäts-Engine.
+Spielerkollisionen werden zuerst hart ausgeschlossen; danach entscheiden die
+Wartezeit seit dem letzten Spielende, der Gruppenfortschritt (abgeschlossen =
+1, laufend = 0,5, prognostiziert = 0,25), die absolute Restarbeit, die
+Spielbelastung, die verbleibenden Partien und die Ursprungsreihenfolge. Laufende
+Partien blockieren ihre Spieler und Boards auch dann, wenn sie in einer anderen
+Phase laufen.
+
 Neue Turniere verwenden standardmäßig diese Tie-Breaker-Reihenfolge:
 Matchpunkte, Leg-Differenz, gewonnene Legs, direkter Vergleich. Eine unter
 **Tie Breaker Standardwerte** gespeicherte benutzerdefinierte Reihenfolge wird

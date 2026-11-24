@@ -330,8 +330,13 @@ void main() {
       );
       expect(
         position('Uhr & Zeiteinstellungen'),
+        lessThan(position('Turnier Live sichtbar machen?')),
+      );
+      expect(
+        position('Turnier Live sichtbar machen?'),
         lessThan(position('Turnierlog anzeigen')),
       );
+      expect(find.byKey(const ValueKey('live-visible-switch')), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       final league = LeagueMatch.rhl(

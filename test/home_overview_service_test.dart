@@ -2,23 +2,28 @@ import 'package:dart_tournament_manager/features/home/application/home_overview_
 import 'package:dart_tournament_manager/features/rankings/domain/local_elo_calculator.dart';
 import 'package:dart_tournament_manager/features/rankings/domain/local_ranking.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/best_performance.dart';
+import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/home/presentation/widgets/home_activity_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class _FakeHomeOverviewSource implements HomeOverviewDataSource {
+class _FakeHomeOverviewSource
+    implements HomeOverviewDataSource, HomeMonthlyPerformanceDataSource {
   _FakeHomeOverviewSource({
     required this.tournaments,
     this.rankings = const [],
+    this.monthlyPerformances = const [],
   });
 
   final List<CreatedTournament> tournaments;
   final List<LocalRanking> rankings;
+  final List<PlayerMonthlyPerformance> monthlyPerformances;
   int tournamentLoads = 0;
   int rankingLoads = 0;
   int eloLoads = 0;
+  int monthlyLoads = 0;
 
   @override
   Future<List<CreatedTournament>> loadTournaments() async {
@@ -39,6 +44,15 @@ class _FakeHomeOverviewSource implements HomeOverviewDataSource {
   ) async {
     eloLoads++;
     return null;
+  }
+
+  @override
+  Future<List<PlayerMonthlyPerformance>> loadMonthlyPerformances(
+    Set<String> playerIds,
+    List<CreatedTournament> completedTournaments,
+  ) async {
+    monthlyLoads++;
+    return monthlyPerformances;
   }
 }
 
@@ -179,6 +193,98 @@ void main() {
     expect(source.tournamentLoads, 1);
     expect(source.rankingLoads, 1);
     expect(source.eloLoads, 1);
+    expect(source.monthlyLoads, 1);
+  });
+
+  test('completed tournament card shows the winner at first glance', () async {
+    final past = tournament(
+      id: 'past',
+      name: 'Sommerpokal',
+      match: resultMatch(DateTime(2026, 7, 1, 19)),
+      finishedAt: DateTime(2026, 7, 1, 19),
+    );
+    final source = _FakeHomeOverviewSource(tournaments: [past]);
+
+    final snapshot = await HomeOverviewService(source).load();
+
+    expect(snapshot.winnerName, 'Marvin');
+    expect(snapshot.winnerId, 'player-a');
+    expect(snapshot.latestTournament!.lines, contains('Sieger: Marvin'));
+  });
+
+  test(
+    'a completed tournament without a winner keeps the existing card',
+    () async {
+      final past = CreatedTournament(
+        id: 'no-winner',
+        name: 'Vereinsabend',
+        players: [playerA, playerB],
+        stages: const [],
+        runStages: const [],
+        finishedAt: DateTime(2026, 7, 1, 19),
+      );
+      final source = _FakeHomeOverviewSource(tournaments: [past]);
+
+      final snapshot = await HomeOverviewService(source).load();
+
+      expect(snapshot.winnerName, isNull);
+      expect(snapshot.winnerId, isNull);
+      expect(
+        snapshot.latestTournament!.lines.any(
+          (line) => line.startsWith('Sieger:'),
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test('win-rate series aggregates monthly wins and matches', () async {
+    final past = tournament(
+      id: 'past',
+      name: 'Sommerpokal',
+      match: resultMatch(DateTime(2026, 7, 1, 19)),
+      finishedAt: DateTime(2026, 7, 1, 19),
+    );
+    final source = _FakeHomeOverviewSource(
+      tournaments: [past],
+      monthlyPerformances: [
+        const PlayerMonthlyPerformance(
+          playerId: 'player-a',
+          year: 2026,
+          month: 7,
+          weightedLegs: 40,
+          matches: 4,
+          wins: 3,
+          losses: 1,
+        ),
+        const PlayerMonthlyPerformance(
+          playerId: 'player-b',
+          year: 2026,
+          month: 7,
+          weightedLegs: 40,
+          matches: 4,
+          wins: 1,
+          losses: 3,
+        ),
+        const PlayerMonthlyPerformance(
+          playerId: 'player-a',
+          year: 2026,
+          month: 8,
+          weightedLegs: 10,
+        ),
+      ],
+    );
+
+    final snapshot = await HomeOverviewService(source).load();
+
+    expect(snapshot.winRateSeries, hasLength(1));
+    final point = snapshot.winRateSeries.single;
+    expect(point.year, 2026);
+    expect(point.month, 7);
+    expect(point.matches, 8);
+    expect(point.wins, 4);
+    expect(point.losses, 4);
+    expect(point.winRate, 50);
   });
 
   test('a 16-player two-group event reports all round-robin matches', () async {

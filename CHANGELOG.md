@@ -1,3 +1,15 @@
+# 4.0.0+130
+
+- Turnierleitung auf genau drei Modi umgestellt: `Dynamisch` (turnierweit, ohne Board-Zuweisung), `Fest – Gruppenbasiert` (verbindliche Gruppen-Boards, kein Cross-Group-Fallback) und `Fest – Turnierweit` (Reihenfolge als Empfehlung, freie Boards). Legacy `dynamic + group` und `fixed_order` werden kompatibel normalisiert; Liga/Freundschaft bleibt unverändert.
+- Gemeinsame Prioritäts-Engine für feste und dynamische Pläne: Spielerkollisionen hart, danach echte Wartezeit seit dem letzten Spielende, Gruppenfortschritt inklusive laufend/prognostiziert, Restarbeit, Spielbelastung, verbleibende Partien und Ursprungsreihenfolge. Laufende Partien blockieren Spieler und Boards auch über Phasengrenzen hinweg.
+- Feste Reihenfolgen sind manuell markierbar und werden vor vollständigem Neuaufbau bestätigt; `fixedScheduleOrder` deckt Swiss, Kratzer und KO-Slots inklusive künftiger Baumpaare ab. Dynamische Warteliste bleibt beim Anzeigen read-only, zeigt vorläufig übersprungene Partien und füllt Lücken aus dem dynamischen Bereich.
+- Snapshot, Dashboard, Zweitmonitor, Ergebnis- und Einstellungsansichten nutzen dieselben Vorschläge; gesperrte Boards erhalten keine Empfehlungen. Die Live-Sichtbarkeit wanderte als eigenes Card in die Lauf-Einstellungen.
+- Startseite zeigt den Sieger des jüngsten Turniers und eine monatliche Siegesrate; neue Phasenansicht zeigt Tabellen, Begegnungen, KO-Bäume und Kratzer-Leben schreibgeschützt und responsiv. Der Zweitmonitor zeigt nach Abschluss dauerhaft Platzierungen, Ranglistenänderungen und Bestleistungen.
+- Kumulierte Scolia-Messpunkte ab Oktober 2026 mit Ableitung aus den Gesamtsummen im 100-Leg-Fenster, Schätzungsmarkierung und explizit bestätigbaren neuen Legs; SQLite-Schema 17 → 18 mit Quellspalte und Snapshot-Tabelle ohne Verlust bestehender Monatswerte.
+- Liga-Auswechslungskontingente respektieren ein Maximum von 10, zeigen das echte Restbudget und deaktivieren den Button bei Erreichen der Grenze; Aktivitätslog und Bestätigungsdialog bleiben konsistent.
+- Website-API liefert additiv Sieger, `phaseKinds`, `phaseViews`, Siege/Niederlagen, `winRate` sowie `winRateSeries`/`clubWinRateSeries`; Supabase-Validierung und Dokumentation sind angepasst, Schema-Versionen bleiben kompatibel.
+- Version 4.0.0+130; Turnier-JSON bleibt bei Schema 50. `flutter analyze`, Simulationsmatrix, adaptive/responsive Tests und die vollständige Testsuite sind grün (360 × 800, 800 × 600, 1440 × 900, 200 % Schrift).
+
 # 3.1.3+105
 
 - Ordnet vier Boards im Zweitmonitor in zwei Reihen an. Zusammengeführte

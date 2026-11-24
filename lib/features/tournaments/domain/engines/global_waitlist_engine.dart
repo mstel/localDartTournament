@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../tournament_models.dart';
 import 'board_scheduling_engine.dart';
+import 'schedule_priority_engine.dart';
 
 /// One group's progress in the shared waiting list.
 ///
@@ -26,10 +27,12 @@ class GlobalWaitlistGroupProgress {
   final int running;
   final int fixed;
 
+  int get remaining => (total - completed - running - fixed).clamp(0, 1 << 30);
+
   double get displayedRatio => total == 0 ? 0 : completed / total;
 
   double get balanceScore =>
-      total == 0 ? 0 : (completed + running * 0.5 + fixed * 0.5) / total;
+      total == 0 ? 0 : (completed + running * 0.5 + fixed * 0.25) / total;
 
   String get progressLabel =>
       '$completed von $total Partien · ${(displayedRatio * 100).round()} %';
@@ -40,42 +43,64 @@ class GlobalWaitlistGroupProgress {
   }
 }
 
-/// Result of [GlobalWaitlistEngine.plan]. [fixed] is the persisted, immutable
-/// preview; [dynamic] is the recalculated remainder behind that preview.
+/// Result of [GlobalWaitlistEngine.plan]. [fixed] is the persisted preview
+/// (including temporarily [skipped] entries); [dynamic] is the recalculated,
+/// compact remainder behind that preview.
 class GlobalWaitlistPlan {
   const GlobalWaitlistPlan({
     required this.fixed,
+    required this.skipped,
     required this.dynamic,
     required this.groupProgress,
     required this.fixedCount,
   });
 
   final List<PlayEntry> fixed;
+  final List<PlayEntry> skipped;
   final List<PlayEntry> dynamic;
   final List<GlobalWaitlistGroupProgress> groupProgress;
   final int fixedCount;
 
   List<PlayEntry> get queue => [...fixed, ...dynamic];
 
-  PlayEntry? get next => fixed.isEmpty ? dynamic.firstOrNull : fixed.first;
+  /// Entries can come from different snapshots, so identity is defined by the
+  /// underlying match rather than by the [PlayEntry] instance.
+  bool isSkipped(PlayEntry entry) =>
+      skipped.any((item) => identical(item.match, entry.match));
+
+  PlayEntry? get next {
+    for (final entry in fixed) {
+      if (!isSkipped(entry)) return entry;
+    }
+    return dynamic.firstOrNull;
+  }
 
   bool get isEmpty => queue.isEmpty;
 }
 
 /// Testable planning engine for "Dynamisch + turnierweit optimiert".
 ///
-/// There is no board assignment in this plan. The first [fixedCount] matches
-/// form a stable, collision-free preview. Only the matches after that preview
-/// are recalculated, using relative group progress, running and fixed matches,
-/// player match counts and rest blocks.
+/// [plan] is deliberately pure: it reads the persisted fixed keys but never
+/// writes them. Callers persist the preview explicitly through
+/// `OrderOfPlayController.initializeGlobalWaitlist` or [recordStart].
+///
+/// There is no board assignment in this plan. The persisted preview is kept
+/// stable (busy entries are shown as SKIPPED instead of being replaced); all
+/// other currently open, playable entries are evaluated with the shared
+/// [SchedulePriorityEngine] and only a compact remainder is displayed.
 class GlobalWaitlistEngine {
   const GlobalWaitlistEngine();
 
+  /// The number of recalculated entries shown after the fixed preview.
+  static const dynamicPreviewCount = 4;
+
+  /// Dynamic play order is always global. A persisted legacy "dynamic +
+  /// group" selection is normalised by the model layer, but accepting it here
+  /// keeps old data consistent.
   bool applies(CreatedTournament tournament) =>
       tournament.leagueMatch == null &&
       tournament.directorModeEnabled &&
-      tournament.directorPlayOrderMode == 'dynamic' &&
-      tournament.directorSchedulingStrategy == 'global';
+      tournament.directorPlayOrderMode == 'dynamic';
 
   GlobalWaitlistPlan plan(
     CreatedTournament tournament,
@@ -87,110 +112,47 @@ class GlobalWaitlistEngine {
     List<PlayEntry> additionalRunning = const [],
   }) {
     if (!applies(tournament)) {
-      return GlobalWaitlistPlan(
-        fixed: const [],
-        dynamic: const [],
-        groupProgress: const [],
-        fixedCount: tournament.directorGlobalWaitlist.fixedCount,
-      );
+      return _emptyPlan(tournament.directorGlobalWaitlist.fixedCount);
     }
-    final previewable = isPreviewable ?? (match) => true;
-    final state = tournament.directorGlobalWaitlist;
+    return _buildPlan(
+      tournament,
+      stage,
+      allEntries: allEntries,
+      schedule: schedule,
+      previewable: isPreviewable ?? (match) => true,
+      fixedKeys: tournament.directorGlobalWaitlist.fixedKeys(stage),
+      excludedMatches: excludedMatches,
+      additionalRunning: additionalRunning,
+    );
+  }
+
+  /// Writes the compact preview of [waitlistPlan] to the versioned state.
+  ///
+  /// Kept separate from [plan] so reads (snapshots, second screen, dev tools)
+  /// never mutate the tournament.
+  void persistFixedKeys(
+    CreatedTournament tournament,
+    int stage,
+    GlobalWaitlistPlan waitlistPlan, {
+    required List<PlayEntry> allEntries,
+  }) {
+    if (!applies(tournament)) return;
     final stageEntries = allEntries
         .where((entry) => entry.stageIndex == stage)
         .toList(growable: false);
     final keyByMatch = _keyIndex(stageEntries);
-    final running = [
-      ...schedule.running.where((entry) => entry.stageIndex == stage),
-      ...additionalRunning.where((entry) => entry.stageIndex == stage),
-    ];
-    final runningMatches = {
-      ...running.map((entry) => entry.match),
-      ...excludedMatches,
-    };
-    final candidates = <PlayEntry>[];
-    final seen = <GroupMatch>{};
-    for (final assignment in schedule.planned) {
-      final entry = assignment.entry;
-      if (entry.stageIndex != stage || !seen.add(entry.match)) continue;
-      if (_isPlayable(entry, runningMatches, previewable)) {
-        candidates.add(entry);
-      }
-    }
-
-    final matchByKey = {
-      for (final item in keyByMatch.entries) item.value: item.key,
-    };
-    final entriesByMatch = <GroupMatch, PlayEntry>{
-      for (final entry in stageEntries) entry.match: entry,
-    };
-
-    final busy = <String>{for (final entry in running) ...entry.players};
-    final fixed = <PlayEntry>[];
-    for (final key in state.fixedKeys(stage)) {
-      final match = matchByKey[key];
-      final entry = match == null ? null : entriesByMatch[match];
-      if (entry == null || !_isPlayable(entry, runningMatches, previewable)) {
-        continue;
-      }
-      if (entry.players.any(busy.contains)) continue;
-      fixed.add(entry);
-      busy.addAll(entry.players);
-      if (fixed.length >= state.fixedCount) break;
-    }
-
-    final fixedMatches = fixed.map((entry) => entry.match).toSet();
-    final availableCandidates = candidates
-        .where((entry) => !fixedMatches.contains(entry.match))
-        .toList(growable: false);
-    final missing = state.fixedCount - fixed.length;
-    if (missing > 0) {
-      final additions = _select(
-        candidates: availableCandidates,
-        count: missing,
-        locked: fixed,
-        running: running,
-        stageEntries: stageEntries,
-        schedule: schedule,
-        order: {for (var i = 0; i < candidates.length; i++) candidates[i]: i},
-      );
-      fixed.addAll(additions);
-    }
-    state.setFixedKeys(
-      stage,
-      fixed
-          .map((entry) => keyByMatch[entry.match])
-          .whereType<String>()
-          .toList(),
-    );
-    final remainingMatches = fixed.map((entry) => entry.match).toSet();
-    final dynamicEntries = _select(
-      candidates: candidates
-          .where((entry) => !remainingMatches.contains(entry.match))
-          .toList(growable: false),
-      count: (state.fixedCount * 2).clamp(4, 12),
-      locked: fixed,
-      running: running,
-      stageEntries: stageEntries,
-      schedule: schedule,
-      order: {for (var i = 0; i < candidates.length; i++) candidates[i]: i},
-    );
-
-    return GlobalWaitlistPlan(
-      fixed: List<PlayEntry>.unmodifiable(fixed),
-      dynamic: List<PlayEntry>.unmodifiable(dynamicEntries),
-      groupProgress: _groupProgress(
-        stageEntries: stageEntries,
-        running: running,
-        fixed: fixed,
-      ),
-      fixedCount: state.fixedCount,
-    );
+    final limit = tournament.directorGlobalWaitlist.fixedCount.clamp(1, 12);
+    final keys = waitlistPlan.fixed
+        .map((entry) => keyByMatch[entry.match])
+        .whereType<String>()
+        .take(limit)
+        .toList();
+    tournament.directorGlobalWaitlist.setFixedKeys(stage, keys);
   }
 
-  /// Removes the started match from the fixed preview and refills it from the
-  /// dynamic area. Called after a successful start so every start path uses
-  /// the same behaviour.
+  /// Removes the started match from the preview and refills the free slot from
+  /// the dynamically evaluated area. Every other preview entry (including a
+  /// temporarily busy one) keeps its position and its persisted key.
   void recordStart(
     CreatedTournament tournament,
     int stage,
@@ -200,19 +162,187 @@ class GlobalWaitlistEngine {
     bool Function(GroupMatch match)? isPreviewable,
   }) {
     if (!applies(tournament)) return;
-    final startedEntry = allEntries
+    final stageEntries = allEntries
+        .where((entry) => entry.stageIndex == stage)
+        .toList(growable: false);
+    final keyByMatch = _keyIndex(stageEntries);
+    final startedKey = keyByMatch[match];
+    final keptKeys = tournament.directorGlobalWaitlist
+        .fixedKeys(stage)
+        .where((key) => key != startedKey)
+        .toList();
+    final startedEntry = stageEntries
         .where((entry) => identical(entry.match, match))
         .firstOrNull;
-    plan(
+
+    final waitlistPlan = _buildPlan(
       tournament,
       stage,
       allEntries: allEntries,
       schedule: schedule,
-      isPreviewable: isPreviewable,
+      previewable: isPreviewable ?? (match) => true,
+      fixedKeys: keptKeys,
       excludedMatches: {match},
       additionalRunning: startedEntry == null ? const [] : [startedEntry],
     );
+    persistFixedKeys(tournament, stage, waitlistPlan, allEntries: allEntries);
   }
+
+  GlobalWaitlistPlan _buildPlan(
+    CreatedTournament tournament,
+    int stage, {
+    required List<PlayEntry> allEntries,
+    required BoardSchedule schedule,
+    required bool Function(GroupMatch match) previewable,
+    required List<String> fixedKeys,
+    required Set<GroupMatch> excludedMatches,
+    required List<PlayEntry> additionalRunning,
+  }) {
+    final state = tournament.directorGlobalWaitlist;
+    final fixedCount = state.fixedCount.clamp(1, 12);
+    final stageEntries = allEntries
+        .where((entry) => entry.stageIndex == stage)
+        .toList(growable: false);
+    final keyByMatch = _keyIndex(stageEntries);
+    final matchByKey = {
+      for (final item in keyByMatch.entries) item.value: item.key,
+    };
+    final entriesByMatch = <GroupMatch, PlayEntry>{
+      for (final entry in stageEntries) entry.match: entry,
+    };
+    // Every running match blocks its players and board until it finishes, even
+    // when it belongs to another stage. Group counters below only use the
+    // entries of the active stage.
+    final running = [...schedule.blockingRunning, ...additionalRunning];
+    final runningMatches = {
+      ...running.map((entry) => entry.match),
+      ...excludedMatches,
+    };
+    final finished = schedule.finished
+        .where((entry) => entry.stageIndex == stage)
+        .toList(growable: false);
+
+    // Every currently open, playable entry is a candidate - not just the
+    // matches that happen to appear in the board plan.
+    final candidates = <PlayEntry>[];
+    final seen = <GroupMatch>{};
+    for (final entry in stageEntries) {
+      if (!seen.add(entry.match)) continue;
+      if (_isPlayable(entry, runningMatches, previewable)) {
+        candidates.add(entry);
+      }
+    }
+
+    final now = DateTime.now();
+    final runningPlayers = <String>{
+      for (final entry in running) ...entry.players,
+    };
+
+    // Resolve persisted keys. Finished/invalid entries are dropped; entries
+    // whose players are busy elsewhere stay in the preview as SKIPPED.
+    final fixed = <PlayEntry>[];
+    final skipped = <PlayEntry>[];
+    final previewPlayers = <String>{};
+    for (final key in fixedKeys) {
+      if (fixed.length >= fixedCount) break;
+      final match = matchByKey[key];
+      final entry = match == null ? null : entriesByMatch[match];
+      if (entry == null || !_isPlayable(entry, runningMatches, previewable)) {
+        continue;
+      }
+      final busy = entry.players.any(
+        (player) =>
+            runningPlayers.contains(player) || previewPlayers.contains(player),
+      );
+      fixed.add(entry);
+      previewPlayers.addAll(entry.players);
+      if (busy) skipped.add(entry);
+    }
+
+    SchedulePriorityContext contextFor(Iterable<PlayEntry> projected) =>
+        SchedulePriorityContext.build(
+          all: stageEntries,
+          finished: finished,
+          running: running,
+          projected: projected,
+          now: now,
+          groupKeyOf: _groupKey,
+        );
+
+    List<PlayEntry> select(
+      Iterable<PlayEntry> source,
+      int count,
+      Iterable<PlayEntry> projected,
+    ) => _select(
+      candidates: source.toList(growable: false),
+      count: count,
+      busy: {...runningPlayers, ...previewPlayers},
+      buildContext: (added) => contextFor([...projected, ...added]),
+    );
+
+    // The dynamically evaluated remainder is the refill pool for the preview.
+    final fixedMatches = fixed.map((entry) => entry.match).toSet();
+    var dynamicPreview = select(
+      candidates.where((entry) => !fixedMatches.contains(entry.match)),
+      dynamicPreviewCount,
+      fixed,
+    );
+
+    final missing = fixedCount - fixed.length;
+    if (missing > 0) {
+      final refilled = <PlayEntry>[];
+      for (final entry in dynamicPreview) {
+        if (refilled.length >= missing) break;
+        if (entry.players.any(
+          (player) =>
+              runningPlayers.contains(player) ||
+              previewPlayers.contains(player),
+        )) {
+          continue;
+        }
+        refilled.add(entry);
+        fixed.add(entry);
+        previewPlayers.addAll(entry.players);
+      }
+      if (refilled.length < missing) {
+        final stillAvailable = candidates.where(
+          (entry) =>
+              !fixed.map((item) => item.match).contains(entry.match) &&
+              !refilled.contains(entry),
+        );
+        final extra = select(stillAvailable, missing - refilled.length, fixed);
+        fixed.addAll(extra);
+        previewPlayers.addAll(extra.expand((entry) => entry.players));
+      }
+    }
+
+    final committedMatches = fixed.map((entry) => entry.match).toSet();
+    dynamicPreview = select(
+      candidates.where((entry) => !committedMatches.contains(entry.match)),
+      dynamicPreviewCount,
+      fixed,
+    );
+
+    return GlobalWaitlistPlan(
+      fixed: List<PlayEntry>.unmodifiable(fixed),
+      skipped: List<PlayEntry>.unmodifiable(skipped),
+      dynamic: List<PlayEntry>.unmodifiable(dynamicPreview),
+      groupProgress: _groupProgress(
+        stageEntries: stageEntries,
+        running: running,
+        fixed: fixed,
+      ),
+      fixedCount: fixedCount,
+    );
+  }
+
+  GlobalWaitlistPlan _emptyPlan(int fixedCount) => GlobalWaitlistPlan(
+    fixed: const [],
+    skipped: const [],
+    dynamic: const [],
+    groupProgress: const [],
+    fixedCount: fixedCount.clamp(1, 12),
+  );
 
   bool _isPlayable(
     PlayEntry entry,
@@ -253,172 +383,41 @@ class GlobalWaitlistEngine {
     result.sort((a, b) {
       final score = a.balanceScore.compareTo(b.balanceScore);
       if (score != 0) return score;
+      final workload = b.remaining.compareTo(a.remaining);
+      if (workload != 0) return workload;
       final size = b.total.compareTo(a.total);
       return size != 0 ? size : a.label.compareTo(b.label);
     });
     return List<GlobalWaitlistGroupProgress>.unmodifiable(result);
   }
 
+  /// Greedily selects collision-free entries with the shared priority engine.
+  /// The context is rebuilt after each pick so projected group load and real
+  /// finishing times stay consistent across the whole preview.
   List<PlayEntry> _select({
     required List<PlayEntry> candidates,
     required int count,
-    required List<PlayEntry> locked,
-    required List<PlayEntry> running,
-    required List<PlayEntry> stageEntries,
-    required BoardSchedule schedule,
-    required Map<PlayEntry, int> order,
+    required Set<String> busy,
+    required SchedulePriorityContext Function(List<PlayEntry> added)
+    buildContext,
   }) {
     if (count <= 0 || candidates.isEmpty) return const [];
-
-    final finished = schedule.finished
-        .where((entry) => entry.stageIndex == candidates.first.stageIndex)
-        .toList();
-    final played = <String, int>{};
-    final lastPlayed = <String, int>{};
-    for (var index = 0; index < finished.length; index++) {
-      for (final player in finished[index].players) {
-        played[player] = (played[player] ?? 0) + 1;
-        lastPlayed[player] = index - finished.length;
-      }
-    }
-    for (final entry in running) {
-      for (final player in entry.players) {
-        played[player] = (played[player] ?? 0) + 1;
-        lastPlayed[player] = 0;
-      }
-    }
-
-    final groupStats = <String, _GroupCounters>{};
-    for (final entry in stageEntries) {
-      final key = _groupKey(entry);
-      final stats = groupStats.putIfAbsent(key, () => _GroupCounters());
-      if (!entry.match.hasPlayers) continue;
-      stats.total++;
-      if (entry.match.isResolved) stats.completed++;
-    }
-    for (final entry in running) {
-      groupStats
-          .putIfAbsent(_groupKey(entry), () => _GroupCounters())
-          .running++;
-    }
-    for (final entry in locked) {
-      final stats = groupStats.putIfAbsent(
-        _groupKey(entry),
-        () => _GroupCounters(),
-      );
-      stats.fixed++;
-      for (final player in entry.players) {
-        played[player] = (played[player] ?? 0) + 1;
-        lastPlayed[player] = 0;
-      }
-    }
-
-    final remainingCounts = <String, int>{};
-    for (final entry in stageEntries) {
-      if (entry.match.isResolved || !entry.match.hasPlayers) continue;
-      for (final player in entry.players) {
-        remainingCounts[player] = (remainingCounts[player] ?? 0) + 1;
-      }
-    }
-
-    final busy = <String>{for (final entry in locked) ...entry.players};
-    for (final entry in running) {
-      busy.addAll(entry.players);
-    }
+    const scorer = SchedulePriorityEngine();
     final selected = <PlayEntry>[];
+    final used = <String>{...busy};
     while (selected.length < count) {
       final available = candidates
           .where(
             (entry) =>
-                !selected.contains(entry) && !entry.players.any(busy.contains),
+                !selected.contains(entry) && !entry.players.any(used.contains),
           )
-          .toList();
+          .toList(growable: false);
       if (available.isEmpty) break;
-      final block = selected.length + 1;
-      available.sort(
-        (a, b) => _compare(
-          a,
-          b,
-          block: block,
-          groupStats: groupStats,
-          played: played,
-          lastPlayed: lastPlayed,
-          remainingCounts: remainingCounts,
-          order: order,
-        ),
-      );
-      final winner = available.first;
+      final winner = scorer.sorted(available, buildContext(selected)).first;
       selected.add(winner);
-      busy.addAll(winner.players);
-      groupStats[_groupKey(winner)]!.fixed++;
-      for (final player in winner.players) {
-        played[player] = (played[player] ?? 0) + 1;
-        lastPlayed[player] = block;
-        remainingCounts[player] = (remainingCounts[player] ?? 1) - 1;
-      }
+      used.addAll(winner.players);
     }
     return List<PlayEntry>.unmodifiable(selected);
-  }
-
-  int _compare(
-    PlayEntry a,
-    PlayEntry b, {
-    required int block,
-    required Map<String, _GroupCounters> groupStats,
-    required Map<String, int> played,
-    required Map<String, int> lastPlayed,
-    required Map<String, int> remainingCounts,
-    required Map<PlayEntry, int> order,
-  }) {
-    final aGroup = groupStats[_groupKey(a)] ?? _GroupCounters();
-    final bGroup = groupStats[_groupKey(b)] ?? _GroupCounters();
-    final progress = aGroup.balanceScore.compareTo(bGroup.balanceScore);
-    if (progress != 0) return progress;
-    final size = bGroup.total.compareTo(aGroup.total);
-    if (size != 0) return size;
-
-    final aCounts =
-        a.players.map((player) => (played[player] ?? 0) + 1).toList()..sort();
-    final bCounts =
-        b.players.map((player) => (played[player] ?? 0) + 1).toList()..sort();
-    final aMax = aCounts.isEmpty ? 0 : aCounts.last;
-    final bMax = bCounts.isEmpty ? 0 : bCounts.last;
-    final maxPlayed = aMax.compareTo(bMax);
-    if (maxPlayed != 0) return maxPlayed;
-    final aSum = aCounts.fold<int>(0, (sum, value) => sum + value);
-    final bSum = bCounts.fold<int>(0, (sum, value) => sum + value);
-    final sumPlayed = aSum.compareTo(bSum);
-    if (sumPlayed != 0) return sumPlayed;
-
-    final aRest = _minimumRest(a, block, lastPlayed);
-    final bRest = _minimumRest(b, block, lastPlayed);
-    final rest = bRest.compareTo(aRest);
-    if (rest != 0) return rest;
-
-    final aRemaining = a.players.fold<int>(
-      0,
-      (sum, player) => sum + (remainingCounts[player] ?? 0),
-    );
-    final bRemaining = b.players.fold<int>(
-      0,
-      (sum, player) => sum + (remainingCounts[player] ?? 0),
-    );
-    final remaining = bRemaining.compareTo(aRemaining);
-    if (remaining != 0) return remaining;
-    return (order[a] ?? 1 << 30).compareTo(order[b] ?? 1 << 30);
-  }
-
-  int _minimumRest(PlayEntry entry, int block, Map<String, int> lastPlayed) {
-    if (entry.players.isEmpty) {
-      return BoardSchedulingEngine.preferredPlayerRestBlocks;
-    }
-    return entry.players
-        .map(
-          (player) => lastPlayed[player] == null
-              ? BoardSchedulingEngine.preferredPlayerRestBlocks
-              : block - lastPlayed[player]!,
-        )
-        .reduce((a, b) => a < b ? a : b);
   }
 
   Map<GroupMatch, String> _keyIndex(List<PlayEntry> stageEntries) {
@@ -452,14 +451,4 @@ class GlobalWaitlistEngine {
     final name = separator >= 0 ? key.substring(separator + 1) : key;
     return name.startsWith('Gruppe ') ? name : 'Gruppe $name';
   }
-}
-
-class _GroupCounters {
-  int total = 0;
-  int completed = 0;
-  int running = 0;
-  int fixed = 0;
-
-  double get balanceScore =>
-      total == 0 ? 0 : (completed + running * 0.5 + fixed * 0.5) / total;
 }

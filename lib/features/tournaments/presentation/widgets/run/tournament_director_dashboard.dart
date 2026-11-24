@@ -449,7 +449,7 @@ class _TournamentDirectorDashboardState
     )) {
       return null;
     }
-    if (snapshot.schedule.running.any(
+    if (snapshot.schedule.blockingRunning.any(
       (running) => running.players.any(entry.players.contains),
     )) {
       return null;
@@ -571,6 +571,14 @@ class _TournamentDirectorDashboardState
       runSpacing: 8,
       children: [
         Text(title, style: Theme.of(context).textTheme.titleLarge),
+        if (title == 'Spielplan' &&
+            widget.tournament.fixedScheduleManuallyAdjusted)
+          Text(
+            'Manuell angepasst',
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
         if (title == 'Spielplan' &&
             (_canRecomputeSchedule || _canEditFixedSchedule))
           _fixedScheduleActions('queue'),
@@ -1647,7 +1655,7 @@ class _TournamentDirectorDashboardState
       if (waiting > 0)
         Text('$waiting Paarungen warten auf vorherige Ergebnisse.'),
       if (state.freeBoards.isEmpty &&
-          state.schedule.running.isEmpty &&
+          state.schedule.blockingRunning.isEmpty &&
           state.ready.isNotEmpty)
         const Text(
           'Alle Boards sind gesperrt. Ein Board freigeben, um fortzufahren.',

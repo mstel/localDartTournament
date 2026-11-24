@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../app/app_theme.dart';
 import '../../application/home_overview_service.dart';
+import 'home_win_rate_chart.dart';
 import '../../../settings/data/app_presentation_preferences.dart';
 
 class HomeActivityPanel extends StatefulWidget {
@@ -120,7 +121,13 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
         final carouselCards = !_dashboardEnabled
             ? const <HomeOverviewCard>[]
             : overview.cards.where((card) => card != latest).toList();
-        if (carouselCards.isEmpty && active == null && latest == null) {
+        final winRateChart = overview.winRateSeries.isEmpty
+            ? null
+            : HomeWinRateChart(points: overview.winRateSeries);
+        if (carouselCards.isEmpty &&
+            active == null &&
+            latest == null &&
+            winRateChart == null) {
           return const SizedBox.shrink();
         }
         if (carouselCards.length > 1) {
@@ -152,6 +159,11 @@ class _HomeActivityPanelState extends State<HomeActivityPanel> {
             if (carousel != null) ...[
               if (active != null || latest != null) const SizedBox(height: 12),
               carousel,
+            ],
+            if (winRateChart != null) ...[
+              if (active != null || latest != null || carousel != null)
+                const SizedBox(height: 12),
+              winRateChart,
             ],
           ],
         );

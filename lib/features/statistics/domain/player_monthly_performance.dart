@@ -13,6 +13,7 @@ class PlayerMonthlyPerformance {
     this.scoring,
     this.average,
     this.checkoutRate,
+    this.source = 'manual',
   });
 
   factory PlayerMonthlyPerformance.fromRow(Map<String, Object?> row) =>
@@ -27,6 +28,7 @@ class PlayerMonthlyPerformance {
         scoring: (row['scoring'] as num?)?.toDouble(),
         average: (row['average'] as num?)?.toDouble(),
         checkoutRate: (row['checkout_rate'] as num?)?.toDouble(),
+        source: row['source'] as String? ?? 'manual',
       );
 
   final String playerId;
@@ -39,6 +41,10 @@ class PlayerMonthlyPerformance {
   final double? scoring;
   final double? average;
   final double? checkoutRate;
+
+  /// `manual` for historically imported or directly entered months,
+  /// `scolia_cumulative` for months derived from cumulative Scolia snapshots.
+  final String source;
 
   double get winRate => matches == 0 ? 0 : wins * 100 / matches;
 
@@ -57,6 +63,12 @@ List<PlayerMonthlyPerformance> combineMonthlyPlayerPerformances({
   for (final entry in imported) {
     final year = int.parse(entry.month.substring(0, 4));
     final month = int.parse(entry.month.substring(5, 7));
+    // From October 2026 onwards the cumulative Scolia path is authoritative.
+    // Older imported history stays authoritative as before.
+    if ((year > 2026 || year == 2026 && month >= 10) &&
+        byPeriod.containsKey((entry.playerProfileId, year, month))) {
+      continue;
+    }
     // Imported history is authoritative for a matching player-month; never
     // count the same month twice when both storage paths contain a value.
     byPeriod[(entry.playerProfileId, year, month)] = PlayerMonthlyPerformance(
@@ -85,14 +97,16 @@ List<PlayerMonthlyPerformance> combineMonthlyPlayerPerformances({
         playerId: base.playerId,
         year: base.year,
         month: base.month,
-        weightedLegs:
-            recordedLegs > 0 ? recordedLegs : result?.weightedLegs ?? 0,
+        weightedLegs: recordedLegs > 0
+            ? recordedLegs
+            : result?.weightedLegs ?? 0,
         matches: result?.matches ?? 0,
         wins: result?.wins ?? 0,
         losses: result?.losses ?? 0,
         scoring: base.scoring,
         average: base.average,
         checkoutRate: base.checkoutRate,
+        source: base.source,
       );
     }
     for (final result in derived.values) {
@@ -246,7 +260,9 @@ CurrentFormPerformance calculateCurrentFormPerformance(
   for (final period in periods) {
     if (remainingWeight <= 0) break;
     final totals = byPeriod[period]!;
-    final weightTaken = remainingWeight.clamp(0, totals.selectionWeight).toInt();
+    final weightTaken = remainingWeight
+        .clamp(0, totals.selectionWeight)
+        .toInt();
     if (totals.selectionWeight <= 0) continue;
     final fraction = weightTaken / totals.selectionWeight;
     weightedLegs += (totals.weightedLegs * fraction).round();

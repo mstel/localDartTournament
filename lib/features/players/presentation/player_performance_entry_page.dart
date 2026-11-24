@@ -1,7 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../../statistics/domain/performance_snapshot.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
 import '../../tournaments/data/app_database.dart';
+
+enum _PerformanceEntryMode { direct, scolia }
+
+class _PerformanceEntryData {
+  const _PerformanceEntryData({required this.direct, required this.snapshots});
+
+  final PlayerMonthlyPerformance? direct;
+  final List<PerformanceSnapshot> snapshots;
+
+  PerformanceSnapshot? snapshotFor(int year, int month) {
+    for (final snapshot in snapshots) {
+      if (snapshot.year == year && snapshot.month == month) return snapshot;
+    }
+    return null;
+  }
+}
 
 class PlayerPerformanceEntryPage extends StatefulWidget {
   const PlayerPerformanceEntryPage({
@@ -40,11 +57,17 @@ class _PlayerPerformanceEntryPageState
   late int _year = DateTime.now().year;
   late int _month = DateTime.now().month;
   final _legsController = TextEditingController();
+  final _matchesController = TextEditingController();
+  final _newLegsController = TextEditingController();
   final _scoringController = TextEditingController();
   final _averageController = TextEditingController();
   final _checkoutController = TextEditingController();
-  late Future<PlayerMonthlyPerformance?> _entry;
+  late Future<_PerformanceEntryData> _entry;
+  _PerformanceEntryData? _loadedData;
   PlayerMonthlyPerformance? _loadedEntry;
+  PerformanceSnapshot? _loadedSnapshot;
+  _PerformanceEntryMode _mode = _PerformanceEntryMode.direct;
+  bool _needsNewLegsOverride = false;
   bool _saving = false;
   String? _error;
 
@@ -55,34 +78,79 @@ class _PlayerPerformanceEntryPageState
     _entry.then(_populate, onError: (Object _) {});
   }
 
-  Future<PlayerMonthlyPerformance?> _loadEntry() async {
+  Future<_PerformanceEntryData> _loadEntry() async {
     final entries = await _database.loadPlayerMonthlyPerformance(
       widget.player.id,
       year: _year,
     );
-    return entries.where((entry) => entry.month == _month).firstOrNull;
+    final snapshots = await _database.loadPerformanceSnapshots(
+      widget.player.id,
+    );
+    return _PerformanceEntryData(
+      direct: entries.where((entry) => entry.month == _month).firstOrNull,
+      snapshots: snapshots,
+    );
   }
 
-  void _selectPeriod({int? year, int? month}) {
-    late final Future<PlayerMonthlyPerformance?> entry;
+  void _reload() {
+    final entry = _loadEntry();
     setState(() {
-      _year = year ?? _year;
-      _month = month ?? _month;
-      entry = _loadEntry();
       _entry = entry;
-      _error = null;
     });
     entry.then((value) {
       if (mounted && identical(_entry, entry)) _populate(value);
     }, onError: (Object _) {});
   }
 
-  void _populate(PlayerMonthlyPerformance? entry) {
-    _loadedEntry = entry;
-    _legsController.text = '${entry?.weightedLegs ?? 0}';
-    _scoringController.text = entry?.scoring?.toString() ?? '';
-    _averageController.text = entry?.average?.toString() ?? '';
-    _checkoutController.text = entry?.checkoutRate?.toString() ?? '';
+  void _selectPeriod({int? year, int? month}) {
+    setState(() {
+      _year = year ?? _year;
+      _month = month ?? _month;
+      _error = null;
+    });
+    _reload();
+  }
+
+  void _selectMode(_PerformanceEntryMode mode) {
+    setState(() => _mode = mode);
+    final data = _loadedData;
+    if (data != null) _populate(data);
+  }
+
+  void _populate(_PerformanceEntryData data) {
+    _loadedData = data;
+    _loadedEntry = data.direct;
+    _loadedSnapshot = data.snapshotFor(_year, _month);
+    if (_loadedSnapshot != null) _mode = _PerformanceEntryMode.scolia;
+
+    _needsNewLegsOverride = false;
+    if (_mode == _PerformanceEntryMode.scolia) {
+      final snapshot = _loadedSnapshot;
+      _legsController.text =
+          '${snapshot?.windowLegs ?? data.direct?.weightedLegs ?? 0}';
+      _matchesController.text =
+          '${snapshot?.matches ?? data.direct?.matches ?? 0}';
+      _scoringController.text =
+          (snapshot?.scoring ?? data.direct?.scoring)?.toString() ?? '';
+      _averageController.text =
+          (snapshot?.average ?? data.direct?.average)?.toString() ?? '';
+      _checkoutController.text =
+          (snapshot?.checkoutRate ?? data.direct?.checkoutRate)?.toString() ??
+          '';
+      final derived = derivePerformanceMonths(
+        data.snapshots,
+      ).monthFor('$_year-${_month.toString().padLeft(2, '0')}');
+      _needsNewLegsOverride = derived?.isEstimated ?? false;
+      _newLegsController.text = _needsNewLegsOverride
+          ? derived!.weightedLegs.toString()
+          : '';
+      return;
+    }
+
+    _legsController.text = '${data.direct?.weightedLegs ?? 0}';
+    _scoringController.text = data.direct?.scoring?.toString() ?? '';
+    _averageController.text = data.direct?.average?.toString() ?? '';
+    _checkoutController.text = data.direct?.checkoutRate?.toString() ?? '';
   }
 
   double? _optionalNumber(TextEditingController controller) {
@@ -117,10 +185,18 @@ class _PlayerPerformanceEntryPageState
 
   Future<void> _save() async {
     final legs = _nonNegativeInt(_legsController);
+    final matches = _nonNegativeInt(_matchesController);
+    final newLegs = _newLegsController.text.trim().isEmpty
+        ? null
+        : _nonNegativeInt(_newLegsController);
     final scoring = _optionalNumber(_scoringController);
     final average = _optionalNumber(_averageController);
     final checkout = _optionalNumber(_checkoutController);
+    final isScolia = _mode == _PerformanceEntryMode.scolia;
     if (legs == null ||
+        isScolia && legs > 100 ||
+        isScolia && (matches == null || matches > 100) ||
+        _needsNewLegsOverride && (newLegs == null || newLegs < 1) ||
         _scoringController.text.trim().isNotEmpty && scoring == null ||
         _averageController.text.trim().isNotEmpty && average == null ||
         _checkoutController.text.trim().isNotEmpty && checkout == null ||
@@ -129,9 +205,12 @@ class _PlayerPerformanceEntryPageState
         checkout != null &&
             (!checkout.isFinite || checkout < 0 || checkout > 100)) {
       setState(
-        () => _error =
-            'Bitte gültige, nicht negative ganze Zahlen für die gewerteten '
-            'Legs eingeben. Die Checkout-Quote muss zwischen 0 und 100 liegen.',
+        () => _error = isScolia
+            ? 'Bitte gültige Scolia-Werte eingeben: 0 bis 100 Legs, '
+                  'nicht negative Partien und eine Checkout-Quote zwischen 0 '
+                  'und 100 %. Bei vollem Fenster bitte die neuen Legs angeben.'
+            : 'Bitte gültige, nicht negative ganze Zahlen für die gewerteten '
+                  'Legs eingeben. Die Checkout-Quote muss zwischen 0 und 100 liegen.',
       );
       return;
     }
@@ -141,6 +220,47 @@ class _PlayerPerformanceEntryPageState
       _error = null;
     });
     try {
+      if (isScolia) {
+        final snapshot = PerformanceSnapshot.create(
+          id:
+              _loadedSnapshot?.id ??
+              '${widget.player.id}-$_year-${_month.toString().padLeft(2, '0')}',
+          playerId: widget.player.id,
+          year: _year,
+          month: _month,
+          windowLegs: legs,
+          matches: matches ?? 0,
+          scoring: scoring,
+          average: average,
+          checkoutRate: checkout,
+          newLegsOverride: _needsNewLegsOverride ? newLegs : null,
+          note: _needsNewLegsOverride
+              ? 'Monatstrennung bei vollem Scolia-Fenster bestätigt.'
+              : '',
+          updatedAt: DateTime.now(),
+        );
+        final derived = await _database.savePerformanceSnapshotAndRebuild(
+          snapshot,
+        );
+        if (!mounted) return;
+        _reload();
+        final month = derived
+            .where((entry) => entry.year == _year && entry.month == _month)
+            .firstOrNull;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              month == null
+                  ? 'Scolia-Messpunkt gespeichert. Es gab keine neuen Legs.'
+                  : 'Monatswert abgeleitet: ${month.weightedLegs} Legs'
+                        '${month.average == null ? '' : ', Average ${month.average!.toStringAsFixed(2)}'}'
+                        '${month.isEstimated ? ' (geschätzt)' : ''}.',
+            ),
+          ),
+        );
+        return;
+      }
+
       final entry = PlayerMonthlyPerformance(
         playerId: widget.player.id,
         year: _year,
@@ -154,11 +274,12 @@ class _PlayerPerformanceEntryPageState
         scoring: scoring,
         average: average,
         checkoutRate: checkout,
+        source: _loadedEntry?.source ?? 'manual',
       );
       await _database.savePlayerMonthlyPerformance(entry);
       if (!mounted) return;
       _loadedEntry = entry;
-      setState(() => _entry = _loadEntry());
+      _reload();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -176,6 +297,8 @@ class _PlayerPerformanceEntryPageState
   @override
   void dispose() {
     _legsController.dispose();
+    _matchesController.dispose();
+    _newLegsController.dispose();
     _scoringController.dispose();
     _averageController.dispose();
     _checkoutController.dispose();
@@ -187,7 +310,7 @@ class _PlayerPerformanceEntryPageState
     appBar: AppBar(
       title: Text('Performance Stats · ${widget.player.displayName}'),
     ),
-    body: FutureBuilder<PlayerMonthlyPerformance?>(
+    body: FutureBuilder<_PerformanceEntryData>(
       future: _entry,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -200,16 +323,46 @@ class _PlayerPerformanceEntryPageState
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        final data = snapshot.data!;
+        final derivedForPeriod = _mode == _PerformanceEntryMode.scolia
+            ? derivePerformanceMonths(
+                data.snapshots,
+              ).monthFor('$_year-${_month.toString().padLeft(2, '0')}')
+            : null;
+        final needsOverride = derivedForPeriod?.isEstimated ?? false;
         final years = [
           for (var year = DateTime.now().year; year >= 2000; year--) year,
         ];
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            SegmentedButton<_PerformanceEntryMode>(
+              key: const ValueKey('performance-entry-mode'),
+              segments: const [
+                ButtonSegment(
+                  value: _PerformanceEntryMode.direct,
+                  label: Text('Monatswerte'),
+                  icon: Icon(Icons.calendar_month_outlined),
+                ),
+                ButtonSegment(
+                  value: _PerformanceEntryMode.scolia,
+                  label: Text('Scolia kumulativ'),
+                  icon: Icon(Icons.trending_up_outlined),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (selection) => _selectMode(selection.first),
+            ),
+            const SizedBox(height: 12),
             Text(
-              'Gewertete Legs und Durchschnittswerte manuell erfassen. Partien, '
-              'Gewonnen, Verloren und Siegesrate werden automatisch aus den '
-              'zugewiesenen Turnieren und ihren Ergebnissen berechnet.',
+              _mode == _PerformanceEntryMode.scolia
+                  ? 'Ab Oktober 2026 die aktuell in Scolia angezeigten '
+                        'Gesamtwerte eintragen. Die App speichert jeden Messpunkt '
+                        'und berechnet daraus den eigenständigen Monatswert. '
+                        'Bestehende Monate bis September 2026 bleiben unverändert.'
+                  : 'Gewertete Legs und Durchschnittswerte manuell erfassen. '
+                        'Partien, Gewonnen, Verloren und Siegesrate werden '
+                        'automatisch aus den zugewiesenen Turnieren berechnet.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -217,6 +370,7 @@ class _PlayerPerformanceEntryPageState
               builder: (context, constraints) {
                 final selectors = [
                   DropdownButtonFormField<int>(
+                    key: const ValueKey('performance-month'),
                     initialValue: _month,
                     isExpanded: true,
                     decoration: const InputDecoration(
@@ -235,6 +389,7 @@ class _PlayerPerformanceEntryPageState
                     },
                   ),
                   DropdownButtonFormField<int>(
+                    key: const ValueKey('performance-year'),
                     initialValue: _year,
                     isExpanded: true,
                     decoration: const InputDecoration(
@@ -270,7 +425,11 @@ class _PlayerPerformanceEntryPageState
             ),
             const SizedBox(height: 16),
             Text(
-              snapshot.data == null
+              _mode == _PerformanceEntryMode.scolia
+                  ? _loadedSnapshot == null
+                        ? 'Neuer kumulierter Messpunkt für diesen Monat.'
+                        : 'Vorhandenen Messpunkt bearbeiten.'
+                  : data.direct == null
                   ? 'Für diesen Monat sind noch keine Daten erfasst.'
                   : 'Vorhandene Monatsdaten bearbeiten.',
               style: Theme.of(context).textTheme.titleSmall,
@@ -278,6 +437,7 @@ class _PlayerPerformanceEntryPageState
             const SizedBox(height: 12),
             LayoutBuilder(
               builder: (context, constraints) {
+                final isScolia = _mode == _PerformanceEntryMode.scolia;
                 final columns = constraints.maxWidth >= 900
                     ? 4
                     : constraints.maxWidth >= 600
@@ -290,11 +450,22 @@ class _PlayerPerformanceEntryPageState
                   spacing: gap,
                   runSpacing: gap,
                   children: [
+                    if (isScolia)
+                      SizedBox(
+                        width: fieldWidth,
+                        child: _numberField(
+                          fieldKey: 'performance-scolia-matches',
+                          label: 'Gespielte Spiele',
+                          controller: _matchesController,
+                        ),
+                      ),
                     SizedBox(
                       width: fieldWidth,
                       child: _numberField(
                         fieldKey: 'performance-weighted-legs',
-                        label: 'Gewertete Legs',
+                        label: isScolia
+                            ? 'Legs (Scolia-Fenster)'
+                            : 'Gewertete Legs',
                         controller: _legsController,
                       ),
                     ),
@@ -302,7 +473,7 @@ class _PlayerPerformanceEntryPageState
                       width: fieldWidth,
                       child: _numberField(
                         fieldKey: 'performance-scoring',
-                        label: 'Scoring',
+                        label: isScolia ? 'Scoring (bis 101)' : 'Scoring',
                         controller: _scoringController,
                         decimal: true,
                       ),
@@ -311,7 +482,7 @@ class _PlayerPerformanceEntryPageState
                       width: fieldWidth,
                       child: _numberField(
                         fieldKey: 'performance-average',
-                        label: 'Average',
+                        label: isScolia ? 'Average (inkl. Finish)' : 'Average',
                         controller: _averageController,
                         decimal: true,
                       ),
@@ -330,6 +501,42 @@ class _PlayerPerformanceEntryPageState
                 );
               },
             ),
+            if (_mode == _PerformanceEntryMode.scolia && needsOverride) ...[
+              const SizedBox(height: 12),
+              Container(
+                key: const ValueKey('performance-scolia-window-info'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Das Scolia-Fenster umfasst 100 Legs. Ältere Legs sind bereits '
+                  'herausgefallen, deshalb ist die Monatstrennung nicht mehr '
+                  'eindeutig. Bitte prüfe die geschätzten neuen Legs.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: _numberField(
+                  fieldKey: 'performance-scolia-new-legs',
+                  label: 'Neue Legs im Monat',
+                  controller: _newLegsController,
+                ),
+              ),
+            ],
+            if (derivedForPeriod case final derived?)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Abgeleiteter Monatswert: ${derived.weightedLegs} Legs'
+                  '${derived.average == null ? '' : ', Average ${derived.average!.toStringAsFixed(2)}'}'
+                  '${derived.isEstimated ? ' (geschätzt)' : ''}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -342,9 +549,7 @@ class _PlayerPerformanceEntryPageState
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
                 onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(48, 48),
-                ),
+                style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
                 icon: _saving
                     ? const SizedBox.square(
                         dimension: 18,

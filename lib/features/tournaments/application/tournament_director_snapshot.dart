@@ -6,6 +6,7 @@ import 'order_of_play/order_of_play_controller.dart';
 import 'order_of_play/global_order_of_play_service.dart';
 import '../domain/engines/group_board_assignment.dart';
 import '../domain/engines/global_waitlist_engine.dart';
+import '../domain/engines/schedule_priority_engine.dart';
 
 /// A read-only view of the production queue. Does not predict future winners.
 class TournamentDirectorSnapshot {
@@ -26,15 +27,17 @@ class TournamentDirectorSnapshot {
               e.match.hasPlayers &&
               !e.match.isResolved &&
               isPreviewableMatch(e.match) &&
-              !schedule.running.any((r) => identical(r.match, e.match)),
+              !schedule.blockingRunning.any((r) => identical(r.match, e.match)),
         )
         .toList();
     _assignedQueueByBoard = _buildAssignedQueueByBoard();
   }
 
-  /// Shared waiting list of the dynamic global mode. Reading the snapshot also
-  /// materialises the persisted fixed preview so every consumer sees the same
-  /// order.
+  /// Pure, read-only preview of the shared waiting list in the dynamic mode.
+  ///
+  /// Reading the snapshot (including this getter) never persists state. The
+  /// fixed preview is initialised and updated explicitly by the controller;
+  /// every consumer of this snapshot sees the same plan for the same state.
   late final GlobalWaitlistPlan globalWaitlist = const GlobalWaitlistEngine()
       .plan(
         tournament,
@@ -79,47 +82,68 @@ class TournamentDirectorSnapshot {
   bool get isGlobalStrategy =>
       tournament.directorSchedulingStrategy == 'global';
 
+  /// The dynamic mode is tournament-wide by definition, even if legacy data
+  /// still carries a group strategy. Fixed modes keep their stored strategy.
+  bool get usesGlobalBoardPool => isDynamicSchedule || isGlobalStrategy;
+
   bool get isFixedSchedule =>
       tournament.directorPlayOrderMode == 'fixed_schedule';
 
   bool get isDynamicSchedule => tournament.directorPlayOrderMode == 'dynamic';
 
-  /// True only for the newly redesigned variant. All other modes keep their
-  /// existing presentation and planning behaviour.
+  /// The only dynamic mode is "dynamisch + turnierweit". Legacy dynamic + group
+  /// data is normalised to this mode before it reaches the app.
   bool get usesGlobalWaitlist =>
-      isDirectorManagedNormalRanking && isDynamicSchedule && isGlobalStrategy;
+      isDirectorManagedNormalRanking && isDynamicSchedule;
 
   /// Fixed + global: the board is freely selectable, so fixed schedule tiles
   /// must not show a board label.
   bool get hideScheduleBoardLabels =>
       isDirectorManagedNormalRanking && isFixedSchedule && isGlobalStrategy;
 
-  /// Flat, tournament-wide fixed suggestions for the free boards. The engine's
-  /// first block is collision free; a colliding follow-up is deferred into the
-  /// remaining queue instead of being fixed on a second board.
+  /// Flat, tournament-wide fixed suggestions for all free boards.
+  ///
+  /// The simulated board of an assignment is only a planning aid: a match from
+  /// any later block can be started now if its players are free. All such
+  /// entries are offered, collisions are filtered greedily in the persisted
+  /// `fixedScheduleOrder` (the shared priority engine breaks ties).
   List<BoardAssignment> flatGlobalFixedSuggestions({int limit = 16}) {
     if (!isDirectorManagedNormalRanking ||
         !isFixedSchedule ||
-        !isGlobalStrategy) {
+        !isGlobalStrategy ||
+        limit <= 0) {
       return const [];
     }
-    final runningBoards = {
-      for (final entry in schedule.running) entry.match.boardNumber,
-    };
+    final stageEntries = entries
+        .where((entry) => entry.stageIndex == stage && entry.match.hasPlayers)
+        .toList(growable: false);
+    final priorityContext = SchedulePriorityContext.build(
+      all: stageEntries,
+      finished: schedule.finished.where((e) => e.stageIndex == stage).toList(),
+      running: schedule.blockingRunning,
+    );
+    const priority = SchedulePriorityEngine();
+    final candidates = <BoardAssignment>[
+      for (final assignment in schedule.planned)
+        if (assignment.entry.stageIndex == stage &&
+            assignment.entry.match.hasPlayers &&
+            !assignment.entry.match.isResolved &&
+            isPreviewableMatch(assignment.entry.match))
+          assignment,
+    ];
+    candidates.sort((a, b) {
+      final fixedOrder = (a.entry.match.fixedScheduleOrder ?? 1 << 30)
+          .compareTo(b.entry.match.fixedScheduleOrder ?? 1 << 30);
+      return fixedOrder != 0
+          ? fixedOrder
+          : priority.compare(a.entry, b.entry, context: priorityContext);
+    });
+
     final used = <String>{
-      for (final entry in schedule.running) ...entry.players,
+      for (final entry in schedule.blockingRunning) ...entry.players,
     };
     final result = <BoardAssignment>[];
-    for (final assignment in schedule.planned) {
-      if (assignment.entry.stageIndex != stage || assignment.block != 0) {
-        continue;
-      }
-      if (runningBoards.contains(assignment.board)) continue;
-      if (assignment.entry.match.isResolved ||
-          !assignment.entry.match.hasPlayers ||
-          !isPreviewableMatch(assignment.entry.match)) {
-        continue;
-      }
+    for (final assignment in candidates) {
       if (assignment.entry.players.any(used.contains)) continue;
       result.add(assignment);
       used.addAll(assignment.entry.players);
@@ -133,7 +157,7 @@ class TournamentDirectorSnapshot {
   Map<int, BoardAssignment> globalBoardAssignments() {
     if (!isDirectorManagedNormalRanking ||
         !isDynamicSchedule ||
-        !isGlobalStrategy) {
+        !usesGlobalBoardPool) {
       return const {};
     }
     final cached = GlobalOrderOfPlayService.instance.boardAssignments(
@@ -141,10 +165,10 @@ class TournamentDirectorSnapshot {
       stage,
     );
     final runningBoards = {
-      for (final entry in schedule.running) entry.match.boardNumber,
+      for (final entry in schedule.blockingRunning) entry.match.boardNumber,
     };
     final used = <String>{
-      for (final entry in schedule.running) ...entry.players,
+      for (final entry in schedule.blockingRunning) ...entry.players,
     };
     final result = <int, BoardAssignment>{};
     final boards = cached.keys.toList()..sort();
@@ -173,7 +197,7 @@ class TournamentDirectorSnapshot {
   List<GroupMatch> remainingGlobalQueue() {
     if (!isDirectorManagedNormalRanking ||
         !isDynamicSchedule ||
-        !isGlobalStrategy) {
+        !usesGlobalBoardPool) {
       return const [];
     }
     return GlobalOrderOfPlayService.instance.remainingQueue(tournament, stage);
@@ -198,7 +222,7 @@ class TournamentDirectorSnapshot {
         names.putIfAbsent(id, () => player.name);
       }
     }
-    for (final played in [...schedule.finished, ...schedule.running]) {
+    for (final played in [...schedule.finished, ...schedule.blockingRunning]) {
       if (played.stageIndex != stage) continue;
       for (final player in played.players) {
         counts[player] = (counts[player] ?? 0) + 1;
@@ -235,54 +259,50 @@ class TournamentDirectorSnapshot {
       );
     }
     if (usesGlobalWaitlist) {
-      final entries = globalWaitlist.queue
+      final waitlist = globalWaitlist;
+      final entries = waitlist.queue
           .asMap()
           .entries
           .map((item) => BoardAssignment(item.value, item.key, 0))
           .toList(growable: false);
+      final preview = waitlistPreviewEntries();
+      final skippedMatches = <GroupMatch>{
+        for (final entry in waitlist.skipped) entry.match,
+        for (final entry in [...waitlist.fixed, ...waitlist.dynamic])
+          if (waitlist.isSkipped(entry)) entry.match,
+      };
       return DirectorScheduleOverview(
         presentation: DirectorSchedulePresentation.globalWaitlist,
         suggestions: entries,
         note: 'Die nächste Begegnung kommt an das nächste freie Board.',
         showBoardLabels: false,
-        fixedCount: globalWaitlist.fixedCount,
-        waitlist: globalWaitlist,
+        fixedCount: waitlist.fixedCount,
+        waitlist: waitlist,
+        waitlistPreview: preview,
+        waitlistPreviewFlags: {
+          for (final assignment in preview)
+            assignment.entry.match: skippedMatches.contains(
+              assignment.entry.match,
+            ),
+        },
       );
     }
+    // Only fixed + group remains here: the dynamic mode is always the shared
+    // waitlist, there is no separate dynamic + group presentation any more.
     final boardsByGroup = configuredBoardsByGroup();
     final groups = <String, List<BoardAssignment>>{
       for (final key in boardsByGroup.keys) key: <BoardAssignment>[],
     };
-    final seen = <GroupMatch>{};
     for (final group in boardsByGroup.entries) {
       for (final board in group.value) {
-        final candidates = upcomingForBoard(board);
-        if (isDynamicSchedule) {
-          if (candidates.isEmpty || !seen.add(candidates.first.entry.match)) {
-            continue;
-          }
-          groups[group.key]!.add(candidates.first);
-          continue;
-        }
-        for (final assignment in candidates) {
-          groups[group.key]!.add(assignment);
-        }
+        groups[group.key]!.addAll(upcomingForBoard(board));
       }
-      if (!isDynamicSchedule) {
-        groups[group.key]!.sort((a, b) {
-          final order = (a.entry.match.fixedScheduleOrder ?? 1 << 30).compareTo(
-            b.entry.match.fixedScheduleOrder ?? 1 << 30,
-          );
-          return order != 0 ? order : a.board.compareTo(b.board);
-        });
-      }
-    }
-    if (isDynamicSchedule) {
-      return DirectorScheduleOverview(
-        presentation: DirectorSchedulePresentation.groupFirstOnly,
-        groups: groups,
-        note: 'Rest wird dynamisch berechnet',
-      );
+      groups[group.key]!.sort((a, b) {
+        final order = (a.entry.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+          b.entry.match.fixedScheduleOrder ?? 1 << 30,
+        );
+        return order != 0 ? order : a.board.compareTo(b.board);
+      });
     }
     return DirectorScheduleOverview(
       presentation: DirectorSchedulePresentation.groupFull,
@@ -484,13 +504,28 @@ class TournamentDirectorSnapshot {
   List<BoardAssignment> suggestionsForBoard(int board, {int limit = 3}) {
     if (tournament.blockedBoards.contains(board)) return const [];
     if (usesGlobalWaitlist) {
-      // The board is not fixed in advance: every free board may take the top
-      // entry of the shared list. The board number here is only the tile the
-      // suggestion is rendered on, not a pre-assignment.
-      return globalWaitlist.fixed
-          .take(limit.clamp(1, 1))
-          .map((entry) => BoardAssignment(entry, 0, board))
-          .toList(growable: false);
+      // The board is not fixed in advance: every free board may take the next
+      // playable entry of the shared list. The board number is only the tile
+      // the suggestion is rendered on, not a pre-assignment. Temporarily busy
+      // preview entries stay visible in [waitlistPreviewEntries] but are never
+      // offered for an actual start here.
+      if (runningOn(board) != null) return const [];
+      final waitlist = globalWaitlist;
+      final busy = <String>{
+        for (final entry in schedule.blockingRunning) ...entry.players,
+      };
+      for (final entry in [...waitlist.fixed, ...waitlist.dynamic]) {
+        if (waitlist.isSkipped(entry)) continue;
+        if (entry.stageIndex != stage ||
+            !entry.match.hasPlayers ||
+            entry.match.isResolved ||
+            !isPreviewableMatch(entry.match) ||
+            entry.players.any(busy.contains)) {
+          continue;
+        }
+        return [BoardAssignment(entry, 0, board)];
+      }
+      return const [];
     }
     if (isDirectorManagedNormalRanking && isGlobalStrategy) {
       if (isFixedSchedule) {
@@ -510,14 +545,29 @@ class TournamentDirectorSnapshot {
       final stable = globalBoardAssignments()[board];
       return stable == null ? const [] : [stable];
     }
-    if (isDirectorManagedNormalRanking && isDynamicSchedule) {
-      // Gruppenmodus: nur die nächste feste Empfehlung, keine 2./3. Variante.
-      return _selectableAssignments().take(limit > 0 ? 1 : 0).toList();
-    }
     final assignments = isFixedSchedule
         ? upcomingForBoard(board)
         : _selectableAssignments();
     return assignments.take(limit).toList();
+  }
+
+  /// Every entry shown in the shared waitlist, including entries that are
+  /// temporarily blocked by a running match. Those entries remain visible as
+  /// "vorläufig übersprungen" but are not offered by [suggestionsForBoard].
+  List<BoardAssignment> waitlistPreviewEntries() {
+    if (!usesGlobalWaitlist) return const [];
+    final waitlist = globalWaitlist;
+    final seen = <GroupMatch>{};
+    final result = <BoardAssignment>[];
+    for (final entry in [
+      ...waitlist.fixed,
+      ...waitlist.dynamic,
+      ...waitlist.skipped,
+    ]) {
+      if (!seen.add(entry.match)) continue;
+      result.add(BoardAssignment(entry, 0, 0));
+    }
+    return List<BoardAssignment>.unmodifiable(result);
   }
 
   Map<String, List<int>> mergedGroupBoards() {
@@ -641,7 +691,9 @@ class TournamentDirectorSnapshot {
   List<BoardAssignment> _selectableAssignments({Set<String>? busyPlayers}) {
     final busy =
         busyPlayers ??
-        <String>{for (final running in schedule.running) ...running.players};
+        <String>{
+          for (final running in schedule.blockingRunning) ...running.players,
+        };
     final assignments = schedule.planned
         .where(
           (assignment) =>
@@ -694,12 +746,15 @@ class TournamentDirectorSnapshot {
     for (var b = 1; b <= tournament.boardCount; b++)
       if (!tournament.blockedBoards.contains(b) && runningOn(b) == null) b,
   ];
-  PlayEntry? runningOn(int board) =>
-      schedule.running.where((e) => e.match.boardNumber == board).firstOrNull;
+  PlayEntry? runningOn(int board) => schedule.blockingRunning
+      .where((e) => e.match.boardNumber == board)
+      .firstOrNull;
   bool canStart(PlayEntry entry) =>
       freeBoards.isNotEmpty &&
       !tournament.completedStageIndexes.contains(stage) &&
-      !schedule.running.any((r) => r.players.any(entry.players.contains));
+      !schedule.blockingRunning.any(
+        (r) => r.players.any(entry.players.contains),
+      );
 
   List<BoardAssignment> visibleRecommendations({
     TournamentSettings settings = const TournamentSettings(),
@@ -808,8 +863,8 @@ enum DirectorSchedulePresentation {
   /// Fixed order + group strategy: complete group-wise schedule.
   groupFull,
 
-  /// Dynamic order + group strategy: group view with the first fixed
-  /// suggestion only; the rest is recalculated.
+  /// Obsolete legacy value: dynamic order is always the shared waitlist now.
+  /// Kept only so persisted screenshots and old callers still compile.
   groupFirstOnly,
 
   /// Fixed order + global strategy: one flat fixed list, free board choice.
@@ -838,6 +893,8 @@ class DirectorScheduleOverview {
     this.showBoardLabels = true,
     this.fixedCount = 0,
     this.waitlist,
+    this.waitlistPreview,
+    this.waitlistPreviewFlags,
   });
 
   final DirectorSchedulePresentation presentation;
@@ -847,6 +904,28 @@ class DirectorScheduleOverview {
   final bool showBoardLabels;
   final int fixedCount;
   final GlobalWaitlistPlan? waitlist;
+
+  /// All waitlist entries, including temporarily busy ones. Board numbers are
+  /// zero because the next free board is chosen only when the match starts.
+  final List<BoardAssignment>? waitlistPreview;
+
+  /// `true` means "vorläufig übersprungen" (blocked/running), `false` means the
+  /// preview entry can be started right now.
+  final Map<GroupMatch, bool>? waitlistPreviewFlags;
+
+  Set<GroupMatch> get skippedPreviewMatches {
+    final flags = waitlistPreviewFlags;
+    if (flags == null) return const {};
+    return {
+      for (final item in flags.entries)
+        if (item.value) item.key,
+    };
+  }
+
+  bool get hasSkippedPreview => skippedPreviewMatches.isNotEmpty;
+
+  String? get skippedPreviewNote =>
+      hasSkippedPreview ? 'vorläufig übersprungen' : null;
 
   bool get isFlat =>
       presentation == DirectorSchedulePresentation.globalFlat ||

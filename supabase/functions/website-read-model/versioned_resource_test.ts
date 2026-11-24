@@ -105,6 +105,75 @@ Deno.test('accepts a versioned resource slice and rejects bundled data', () => {
   }
 });
 
+Deno.test('accepts explicit win-rate series and rejects malformed points', () => {
+  const request = { resource: 'performance' as const };
+  const payload = {
+    schemaVersion: 2,
+    resource: 'performance',
+    generatedAt: '2026-10-28T00:00:00.000Z',
+    monthlyPerformance: [{
+      playerId: 'player-1',
+      period: '2026-10',
+      year: 2026,
+      month: 10,
+      matches: 3,
+      wins: 2,
+      losses: 1,
+      winRate: 66.67,
+      weightedLegs: 18,
+    }],
+    monthlyClubPerformance: [{
+      period: '2026-10',
+      year: 2026,
+      month: 10,
+      matches: 1,
+      wins: 1,
+      losses: 0,
+      winRate: 100,
+      weightedLegs: 9,
+    }],
+    winRateSeries: [{
+      playerId: 'player-1',
+      period: '2026-10',
+      year: 2026,
+      month: 10,
+      matches: 3,
+      wins: 2,
+      losses: 1,
+      winRate: 66.67,
+    }],
+    clubWinRateSeries: [{
+      period: '2026-10',
+      year: 2026,
+      month: 10,
+      matches: 1,
+      wins: 1,
+      losses: 0,
+      winRate: 100,
+    }],
+    currentForm: [],
+  };
+  if (!isWebsiteResourcePayload(payload, request)) {
+    throw new Error('Explicit win-rate series were rejected');
+  }
+  if (
+    isWebsiteResourcePayload(
+      { ...payload, winRateSeries: [{ ...payload.winRateSeries[0], playerId: 7 }] },
+      request,
+    )
+  ) {
+    throw new Error('Win-rate series without a player ID were accepted');
+  }
+  if (
+    isWebsiteResourcePayload(
+      { ...payload, clubWinRateSeries: [{ ...payload.clubWinRateSeries[0], wins: '2' }] },
+      request,
+    )
+  ) {
+    throw new Error('Malformed club win-rate series were accepted');
+  }
+});
+
 Deno.test('accepts achievement standings with player progress', () => {
   const request = parseWebsiteResourceRequest(
     new URLSearchParams('resource=achievements'),

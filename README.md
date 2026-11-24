@@ -1,6 +1,6 @@
 # 🎯 DartTournamentPro (Dart Turnierverwaltung)
 
-[![Version](https://img.shields.io/badge/version-3.1.1%2B103-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.0.0%2B130-blue.svg)](CHANGELOG.md)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
 [![Plattformen](https://img.shields.io/badge/Plattformen-Windows%20|%20Android%20|%20Linux%20|%20macOS-success.svg)]()
@@ -38,7 +38,7 @@ DartTournamentPro ist eine moderne, hochflexible Dartturnier- und Vereinsverwalt
 - **Vielseitige Spielsysteme:** Kombination von bis zu 3 Etappen (Gruppenphasen, Single KO, Double KO, Triple KO, Kratzer mit Bonusleben, Schweizer System, Ligaspiele und Freundschaftsspiele).
 - **KI-gestützter Turnierformfinder:** Berechnet anhand von Spieleranzahl, Scheiben und Zieldauer automatisch das optimale Turniermodell inklusive Leg-Distanzen.
 - **Turnierleiter-Dashboard:** Intelligente Scheibenzuweisung, automatisches Nachrücken freier Boards, Prioritätssteuerung bei Spielrückständen und Match-Empfehlungen.
-- **Einheitlicher Spielplan:** Dynamische Empfehlungen oder feste, bearbeitbare Reihenfolge mit gruppenbasierter oder turnierweit optimierter Board-Zuweisung.
+- **Einheitlicher Spielplan:** Drei Turnierleiter-Modi – `Dynamisch` mit turnierweiter Neubewertung ohne Board-Zuweisung, `Fest – Gruppenbasiert` mit verbindlichen Gruppen-Boards und `Fest – Turnierweit` als frei kombinierbare Empfehlungsreihenfolge.
 - **Turniersimulation:** Reproduzierbare Simulation mit Seed, Einzel- oder Zufallsschritten, manuellen Starts, automatischer Planung, Undo und Ereignislog – ohne Einfluss auf echte Spielerstatistiken.
 - **Turniernotizen:** Freitext-Notizen in der Übersicht, die gespeichert bleiben und auch nach Turnierabschluss verfügbar sind.
 - **Text-to-Speech & Soundeffekte:** Automatische Audio-Ausrufe für aufgerufene Begegnungen ("Spieler A gegen Spieler B an Board X") und Erinnerungen bei freien Boards.
@@ -49,7 +49,7 @@ DartTournamentPro ist eine moderne, hochflexible Dartturnier- und Vereinsverwalt
 - **Zentrale Spielerverwaltung:** Spielerprofile mit Averages, aufklappbaren Bestleistungen mit Turnierlink, Monatsstatistiken und Performance-Diagrammen.
 - **Challonge-Import:** Nahtloser Import von Challonge-Turnieren inklusive Zuordnung zu Spielerkatalogen und rückwirkender Ranglistenberechnung.
 - **Supabase Cloud-Sync & Backups:** Kontobasierte Cloud-Sicherung, versionsbezogene SQLite-Sicherungen und lokaler Sicherheits-Reset.
-- **Website Read-Only API (v1 & v2):** Schreibgeschütztes Bereitstellen von Ranglisten, Profilen, Turnieren und Achievements für Vereinshomepages via Supabase Edge Function.
+- **Website Read-Only API (v1 & v2):** Schreibgeschütztes Bereitstellen von Ranglisten, Profilen, Turnieren, Siegern, Phasenansichten, Win-Rate-Serien und Achievements für Vereinshomepages via Supabase Edge Function.
 - **Smart-Home-Licht (Govee):** Lichteffekte im Vereinsheim bei Aufrufen, Siegen oder Bestleistungen.
 - **In-App-Update:** Direkte Update-Installation für Windows und Android.
 
@@ -100,11 +100,12 @@ Während des Turniers stehen dem Turnierleiter spezialisierte Ansichten zur Verf
   - Schnelle Zuweisung und Überwachung aller Scheiben.
   - Automatisches Nachrücken freier Boards.
   - Prioritätssteuerung: Erkennt Gruppen mit Spielrückständen und empfiehlt Partien zur Vermeidung von Verzögerungen (absolut oder prozentual).
-  - **Dynamischer Spielplan:** Offene Partien werden nach jedem Ergebnis anhand der gewählten Board-Strategie neu priorisiert.
-  - **Fester Spielplan:** Speichert auch noch nicht entschiedene Paarungen in einer bearbeitbaren Reihenfolge. Partien können vorgezogen, zurückgestellt oder neu sortiert werden; ein eigener Knopf berechnet den Plan neu.
+  - **Dynamisch:** Alle offenen Partien werden turnierweit neu bewertet; die Board-Zuweisung entfällt. Kurzzeitig belegte Partien bleiben in der Vorschau sichtbar und werden als übersprungen markiert.
+  - **Fest – Gruppenbasiert:** Die Reihenfolge wird gespeichert und ist bearbeitbar. Gruppen spielen verbindlich auf ihren zugewiesenen Boards; ohne spielbare Partie bleibt ein Board frei.
+  - **Fest – Turnierweit:** Die Reihenfolge ist eine Empfehlung. Partien dürfen vorgezogen werden, ohne die übrige Reihenfolge zu zerstören; Boards sind frei wählbar.
+  - Manuell angepasste feste Reihenfolgen werden gekennzeichnet. Vor einem vollständigen Neuaufbau ist eine Bestätigung erforderlich.
   - **Mehrfach-Boardzuweisung:** Gruppen können ihre Vorschläge auf mehreren Boards spiegeln, aufteilen oder in einer gemeinsamen Zweitmonitor-Kachel mit bis zu sechs Begegnungen zusammenführen.
   - Laufende Partien sind im festen Spielplan grün markiert und gegen Umordnen geschützt.
-  - **Board-Strategie:** Gruppenbasiert weist Gruppen bevorzugte Boards zu; turnierweit optimiert plant offene Partien gemeinsam. Reihenfolge und Empfehlungen werden in Übersicht, Ergebnissen, Leitung, Zweitmonitor und Sprachausgabe einheitlich dargestellt.
   - Zeitverschiebung: Bei nachträglichen Datumskorrekturen werden Match-Zeitstempel konsistent verschoben, ohne Uhrzeiten oder Reihenfolge zu beeinträchtigen.
   - Spieler-Rückzug (Player Withdrawal) mit konfigurierbarer Wertung (kampflos oder Streichung).
 - **Turniernotizen:** In der Übersicht Freitext festhalten und speichern. Die Notizen bleiben am Turnier gespeichert und auch nach dessen Abschluss lesbar.
@@ -136,7 +137,7 @@ Direkt an den Spielpaarungen werden situative Badges eingeblendet:
 - **Zweitmonitor-Modus (`TournamentSecondScreenView`):** Vollbildanzeige für Großbildschirme und Beamer.
 - **Standalone-App (`SecondScreenStandaloneApp`):** Kann unabhängig für reine Display-Terminals gestartet werden.
 - Zeigt bis zu **4 aktive Partien nebeneinander**, nächste Aufrufe und Brackets.
-- Zeigt bei Turnierabschluss 60 Sekunden lang die Turnierübersicht und schließt anschließend die Standalone-Anzeige.
+- Zeigt bei Turnierabschluss dauerhaft die Turnierübersicht mit Platzierungen, Ranglistenänderungen und Bestleistungen; die Standalone-Anzeige schließt nicht automatisch.
 - Player Insights erscheinen dezent beim Hover über Spielernamen.
 - QR-Code zur Anzeige des mobilen Live-Tickers für Besucher.
 
@@ -150,7 +151,8 @@ Direkt an den Spielpaarungen werden situative Badges eingeblendet:
   - Gesamtbilanz (Spiele, Legs, Siege, Quoten).
   - Aufklappbare Bestleistungen mit Direktlink zum Turnier.
   - Monatsstatistiken mit Jahresfiltern, Jahressummen und Monatsnamen.
-  - Performance-Diagramme (Average-Kurven, Bestleistungen, Leistungsentwicklung).
+  - Kumulierte Scolia-Messpunkte ab Oktober 2026 mit automatisch abgeleiteten Monatswerten im 100-Leg-Fenster.
+  - Performance-Diagramme (Average-Kurven, Win-Rate pro Monat, Bestleistungen, Leistungsentwicklung).
   - Achievement-Status mit Level und XP-Balken.
   - Head-to-Head Spieler-Vergleichsseite.
 
@@ -164,6 +166,8 @@ Direkt an den Spielpaarungen werden situative Badges eingeblendet:
 - **Historischer Statistik-Import:**
   - Import historischer Monatsstatistiken (z. B. aus Excel-Archiven).
   - Saubere Trennung von importierten Monatsaggregaten und tatsächlichen Einzelspielen.
+- **Scolia-Messpunkte:** Kumulierte Monatswerte ab Oktober 2026 werden aus den Gesamtsummen abgeleitet; ältere importierte Monate bleiben unberührt.
+- **Startseite:** Sieger des letzten Turniers und kompakte Siegesrate pro Monat auf einen Blick.
 - **Bestleistungs-Katalog:** Strukturierte Übersicht aller 180er, Shortlegs und High Finishes mit Filter- und Suchfunktionen.
 
 ---

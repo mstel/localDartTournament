@@ -195,6 +195,7 @@ void main() {
 
     expect(find.text('Nächste Begegnungen'), findsOneWidget);
     expect(find.byKey(const ValueKey('global-waitlist-panel')), findsOneWidget);
+    expect(find.text('Gemeinsame Warteliste'), findsOneWidget);
     expect(find.text('Fest eingeplant'), findsOneWidget);
     expect(find.text('Dynamisch optimiert'), findsOneWidget);
     expect(
@@ -202,6 +203,63 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Nächstes freies Board'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dynamic waitlist marks temporarily busy preview entries', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = _tournament()
+      ..directorModeEnabled = true
+      ..directorSchedulingStrategy = 'global'
+      ..directorPlayOrderMode = 'dynamic'
+      ..boardCount = 3;
+    const controller = OrderOfPlayController();
+    controller.initializeGlobalWaitlist(
+      tournament,
+      0,
+      allEntries: controller.entries(tournament),
+      schedule: controller.plan(tournament, 0),
+      isPreviewable: (match) => !match.hasTeamParticipant,
+    );
+    final preview = TournamentDirectorSnapshot(tournament, 0).globalWaitlist;
+    final previewed = preview.fixed.first;
+    final fixedMatches = preview.fixed.map((entry) => entry.match).toSet();
+    final outOfOrder = controller
+        .entries(tournament)
+        .firstWhere(
+          (entry) =>
+              entry.stageIndex == 0 &&
+              entry.match.hasPlayers &&
+              !entry.match.isResolved &&
+              !fixedMatches.contains(entry.match) &&
+              entry.players.any(previewed.players.contains),
+        )
+        .match;
+    expect(controller.start(tournament, 0, outOfOrder, 1), isTrue);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TournamentSecondScreenView(
+            tournament: tournament,
+            isStandaloneWindow: true,
+            storage: _MemoryTournamentStorage([tournament]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('global-waitlist-panel')), findsOneWidget);
+    expect(find.text('Nächstes freies Board'), findsOneWidget);
+    final overview = TournamentDirectorSnapshot(tournament, 0).scheduleOverview;
+    expect(overview.skippedPreviewMatches, contains(previewed.match));
+    expect(overview.skippedPreviewNote, 'vorläufig übersprungen');
+    expect(find.textContaining('vorläufig übersprungen'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -810,6 +868,14 @@ void main() {
     await tester.pump();
 
     expect(find.text('Aktuelles'), findsOneWidget);
+    expect(
+      find.text('Heimmannschaft: 2 von 2 Auswechselungen verfügbar'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Gastmannschaft: 2 von 2 Auswechselungen verfügbar'),
+      findsOneWidget,
+    );
     expect(find.text(message), findsOneWidget);
     expect(find.text(budgetMessage), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -1222,6 +1288,8 @@ void main() {
       stages: const [],
       boardCount: 4,
       directorModeEnabled: true,
+      directorSchedulingStrategy: 'group',
+      directorPlayOrderMode: 'fixed_schedule',
       runStages: [
         GroupTournamentRunStage(
           name: 'Gruppenphase',
@@ -1322,6 +1390,8 @@ void main() {
         stages: const [],
         boardCount: 4,
         directorModeEnabled: true,
+        directorSchedulingStrategy: 'group',
+        directorPlayOrderMode: 'fixed_schedule',
         runStages: [
           GroupTournamentRunStage(
             name: 'Gruppenphase',
@@ -4681,6 +4751,8 @@ CreatedTournament _tournament() {
   return CreatedTournament(
     name: 'Testturnier',
     players: [a, b, c, d],
+    directorSchedulingStrategy: 'group',
+    directorPlayOrderMode: 'fixed_schedule',
     stages: const [
       TournamentStage(
         name: 'Gruppenphase',
@@ -4745,6 +4817,8 @@ CreatedTournament _tournamentWithPlayerInsights() {
     createdAt: date,
     tournamentDate: date,
     players: [marvin, opponent, nextOpponent],
+    directorSchedulingStrategy: 'group',
+    directorPlayOrderMode: 'fixed_schedule',
     stages: const [TournamentStage(name: 'Gruppe', type: 'groups')],
     runStages: [
       GroupTournamentRunStage(

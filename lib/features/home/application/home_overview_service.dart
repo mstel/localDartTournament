@@ -2,11 +2,14 @@ import '../../rankings/application/local_ranking_elo_service.dart';
 import '../../rankings/domain/local_elo_calculator.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../statistics/domain/best_performance.dart';
+import '../../statistics/domain/player_monthly_performance.dart';
+import '../../statistics/domain/tournament_monthly_results.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/application/tournament_timing.dart';
 import '../../tournaments/domain/engines/placement_engine.dart';
+import '../../tournaments/domain/tournament_winner.dart';
 import '../../../shared/utils/match_display.dart';
 
 abstract interface class HomeOverviewDataSource {
@@ -18,7 +21,21 @@ abstract interface class HomeOverviewDataSource {
   );
 }
 
-class LocalHomeOverviewDataSource implements HomeOverviewDataSource {
+/// Optional capability for sources that can provide the combined player-month
+/// performances used by the compact home win-rate chart.
+///
+/// Kept separate from [HomeOverviewDataSource] so existing simple test doubles
+/// do not have to implement it.
+abstract interface class HomeMonthlyPerformanceDataSource
+    extends HomeOverviewDataSource {
+  Future<List<PlayerMonthlyPerformance>> loadMonthlyPerformances(
+    Set<String> playerIds,
+    List<CreatedTournament> completedTournaments,
+  );
+}
+
+class LocalHomeOverviewDataSource
+    implements HomeOverviewDataSource, HomeMonthlyPerformanceDataSource {
   LocalHomeOverviewDataSource({
     TournamentStorage? tournamentStorage,
     LocalAppDatabase? database,
@@ -47,6 +64,25 @@ class LocalHomeOverviewDataSource implements HomeOverviewDataSource {
       database: _database,
       tournamentStorage: _tournamentStorage,
     ).calculate(ranking, tournaments: tournaments);
+  }
+
+  @override
+  Future<List<PlayerMonthlyPerformance>> loadMonthlyPerformances(
+    Set<String> playerIds,
+    List<CreatedTournament> completedTournaments,
+  ) async {
+    final catalogIds = (await _database.loadPlayerProfiles())
+        .map((profile) => profile.id)
+        .toSet();
+    final ids = {...playerIds, ...catalogIds};
+    return combineMonthlyPlayerPerformances(
+      recorded: await _database.loadPlayerMonthlyPerformanceForPlayers(ids),
+      imported: await _database.loadMonthlyPlayerPerformances(ids),
+      tournamentResults: const TournamentMonthlyResultCalculator().calculate(
+        completedTournaments,
+        playerIds: ids,
+      ),
+    );
   }
 }
 
@@ -82,16 +118,43 @@ class HomeOverviewCard {
   final String icon;
 }
 
+/// One month of the club-wide win-rate trend shown on the homepage.
+class HomeWinRatePoint {
+  const HomeWinRatePoint({
+    required this.year,
+    required this.month,
+    required this.winRate,
+    required this.matches,
+    required this.wins,
+    required this.losses,
+  });
+
+  final int year;
+  final int month;
+  final double winRate;
+  final int matches;
+  final int wins;
+  final int losses;
+}
+
 class HomeOverviewSnapshot {
   const HomeOverviewSnapshot({
     this.activeTournament,
     this.latestTournament,
     this.cards = const [],
+    this.winnerName,
+    this.winnerId,
+    this.winRateSeries = const [],
   });
 
   final HomeOverviewActiveTournament? activeTournament;
   final HomeOverviewCard? latestTournament;
   final List<HomeOverviewCard> cards;
+
+  /// Winner of the most recent completed tournament shown in the card.
+  final String? winnerName;
+  final String? winnerId;
+  final List<HomeWinRatePoint> winRateSeries;
 }
 
 class HomeOverviewService {
@@ -116,6 +179,19 @@ class HomeOverviewService {
       for (final tournament in tournaments)
         tournament.id: TournamentTiming.matches(tournament),
     };
+    final completed = _completedTournaments(tournaments, matchesByTournament);
+    final playerIds = tournaments
+        .expand((tournament) => tournament.players)
+        .expand((player) => player.individuals)
+        .map((player) => player.profileId)
+        .whereType<String>()
+        .toSet();
+    final source = _source;
+    final winRateSeries = _winRateSeries(
+      source is HomeMonthlyPerformanceDataSource
+          ? await source.loadMonthlyPerformances(playerIds, completed)
+          : const <PlayerMonthlyPerformance>[],
+    );
     HomeOverviewActiveTournament? activeSummary;
     for (final tournament in active) {
       final matches =
@@ -128,34 +204,66 @@ class HomeOverviewService {
         break;
       }
     }
-    if (activeSummary != null) {
-      final cards = _cards(
-        const LocalRanking(id: 'all-tournaments', name: 'Alle Turniere'),
-        tournaments,
-        tournaments,
+
+    HomeOverviewSnapshot finish({
+      required HomeOverviewActiveTournament? activeTournament,
+      required List<CreatedTournament> recentTournaments,
+      required List<CreatedTournament> rankingTournaments,
+      required LocalRanking ranking,
+      required LocalEloSnapshot? elo,
+    }) {
+      final winnerTournament = _completedTournaments(
+        recentTournaments,
         matchesByTournament,
-        null,
+      ).lastOrNull;
+      final winnerName = winnerTournament == null
+          ? null
+          : TournamentWinner.name(winnerTournament);
+      final winnerId = winnerTournament == null
+          ? null
+          : TournamentWinner.profileId(winnerTournament);
+      final cards = _cards(
+        ranking,
+        recentTournaments,
+        rankingTournaments,
+        matchesByTournament,
+        elo,
+        winnerName,
       );
       return HomeOverviewSnapshot(
-        activeTournament: activeSummary,
+        activeTournament: activeTournament,
         latestTournament: cards[1],
         cards: cards,
+        winnerName: winnerName,
+        winnerId: winnerId,
+        winRateSeries: winRateSeries,
+      );
+    }
+
+    if (activeSummary != null) {
+      return finish(
+        activeTournament: activeSummary,
+        recentTournaments: tournaments,
+        rankingTournaments: tournaments,
+        ranking: const LocalRanking(
+          id: 'all-tournaments',
+          name: 'Alle Turniere',
+        ),
+        elo: null,
       );
     }
 
     final rankings = await _source.loadRankings();
     if (rankings.isEmpty) {
-      final cards = _cards(
-        const LocalRanking(id: 'all-tournaments', name: 'Alle Turniere'),
-        tournaments,
-        tournaments,
-        matchesByTournament,
-        null,
-      );
-      return HomeOverviewSnapshot(
-        activeTournament: activeSummary,
-        latestTournament: cards[1],
-        cards: cards,
+      return finish(
+        activeTournament: null,
+        recentTournaments: tournaments,
+        rankingTournaments: tournaments,
+        ranking: const LocalRanking(
+          id: 'all-tournaments',
+          name: 'Alle Turniere',
+        ),
+        elo: null,
       );
     }
     final ranking = rankings.firstWhere(
@@ -173,18 +281,48 @@ class HomeOverviewService {
             .toList()
           ..sort(_compareTournaments);
     final elo = await _source.loadEloSnapshot(ranking, eligible);
-    final cards = _cards(
-      ranking,
-      eligible.isEmpty ? tournaments : eligible,
-      eligible,
-      matchesByTournament,
-      elo,
+    return finish(
+      activeTournament: null,
+      recentTournaments: eligible.isEmpty ? tournaments : eligible,
+      rankingTournaments: eligible,
+      ranking: ranking,
+      elo: elo,
     );
-    return HomeOverviewSnapshot(
-      activeTournament: activeSummary,
-      latestTournament: cards[1],
-      cards: cards,
-    );
+  }
+
+  List<HomeWinRatePoint> _winRateSeries(
+    List<PlayerMonthlyPerformance> performances,
+  ) {
+    final byMonth = <(int, int), ({int wins, int losses, int matches})>{};
+    for (final entry in performances) {
+      if (entry.matches <= 0) continue;
+      final period = (entry.year, entry.month);
+      final totals = byMonth.putIfAbsent(
+        period,
+        () => (wins: 0, losses: 0, matches: 0),
+      );
+      byMonth[period] = (
+        wins: totals.wins + entry.wins,
+        losses: totals.losses + entry.losses,
+        matches: totals.matches + entry.matches,
+      );
+    }
+    final periods = byMonth.keys.toList()
+      ..sort((left, right) {
+        final byYear = left.$1.compareTo(right.$1);
+        return byYear != 0 ? byYear : left.$2.compareTo(right.$2);
+      });
+    return [
+      for (final period in periods)
+        HomeWinRatePoint(
+          year: period.$1,
+          month: period.$2,
+          winRate: byMonth[period]!.wins * 100 / byMonth[period]!.matches,
+          matches: byMonth[period]!.matches,
+          wins: byMonth[period]!.wins,
+          losses: byMonth[period]!.losses,
+        ),
+    ];
   }
 
   List<HomeOverviewCard> _cards(
@@ -193,9 +331,10 @@ class HomeOverviewService {
     List<CreatedTournament> rankingTournaments,
     Map<String, List<GroupMatch>> matchesByTournament,
     LocalEloSnapshot? elo,
+    String? winnerName,
   ) => [
     _recentMatchesCard(recentTournaments, matchesByTournament, elo: elo),
-    _lastTournamentCard(recentTournaments, matchesByTournament),
+    _lastTournamentCard(recentTournaments, matchesByTournament, winnerName),
     _rankingSummaryCard(ranking, rankingTournaments, matchesByTournament),
     _rankingChangesCard(ranking, rankingTournaments, matchesByTournament, elo),
     _bestPerformanceCard(rankingTournaments, matchesByTournament),
@@ -281,6 +420,7 @@ class HomeOverviewService {
   HomeOverviewCard _lastTournamentCard(
     List<CreatedTournament> tournaments,
     Map<String, List<GroupMatch>> matchesByTournament,
+    String? winnerName,
   ) {
     final completed =
         tournaments
@@ -333,6 +473,8 @@ class HomeOverviewService {
         for (var index = 0; index < podium.length; index++)
           '${index + 1}. ${podium[index].player.name} (${podium[index].wins}:${podium[index].losses})',
         'Datum: ${_formatDate(tournament.effectiveDate)}',
+        if (winnerName != null && winnerName.trim().isNotEmpty)
+          'Sieger: $winnerName',
         if (podium.isEmpty) 'Noch keine Ergebnisse eingetragen.',
       ],
     );
@@ -782,6 +924,20 @@ class HomeOverviewService {
         .toList();
     return matches.isNotEmpty && matches.every((match) => match.isResolved);
   }
+
+  List<CreatedTournament> _completedTournaments(
+    List<CreatedTournament> tournaments,
+    Map<String, List<GroupMatch>> matchesByTournament,
+  ) =>
+      tournaments
+          .where(
+            (tournament) => _isCompleted(
+              tournament,
+              matchesByTournament[tournament.id] ?? const [],
+            ),
+          )
+          .toList()
+        ..sort(_compareTournaments);
 
   DateTime _activityDate(CreatedTournament tournament) =>
       tournament.startedAt ?? tournament.updatedAt;

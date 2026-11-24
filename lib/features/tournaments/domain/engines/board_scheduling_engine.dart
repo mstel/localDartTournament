@@ -1,5 +1,6 @@
 import '../tournament_models.dart';
 import 'group_board_assignment.dart';
+import 'schedule_priority_engine.dart';
 
 class PlayEntry {
   const PlayEntry(this.match, this.stageIndex, this.origin, [this.groupKey]);
@@ -28,11 +29,23 @@ class BoardAssignment {
 }
 
 class BoardSchedule {
-  const BoardSchedule(this.planned, this.running, this.finished, this.waiting);
+  const BoardSchedule(
+    this.planned,
+    this.running,
+    this.finished,
+    this.waiting, {
+    this.blockingRunning = const [],
+  });
   final List<BoardAssignment> planned;
+
+  /// Running matches of the currently active stage, for display.
   final List<PlayEntry> running;
   final List<PlayEntry> finished;
   final List<PlayEntry> waiting;
+
+  /// All running matches, including other stages. They still occupy boards and
+  /// block their players until they are finished.
+  final List<PlayEntry> blockingRunning;
 }
 
 class BoardSchedulingEngine {
@@ -52,6 +65,8 @@ class BoardSchedulingEngine {
     bool assignGroupsToBoards = false,
     Map<String, Set<int>> groupBoardAssignments = const {},
     bool allowGroupBoardExpansion = false,
+    SchedulePriorityContext? priorityContext,
+    bool bindGroupBoards = false,
   }) {
     if (boardCount < 1) throw ArgumentError.value(boardCount, 'boardCount');
     if (List.generate(boardCount, (i) => i + 1).every(blockedBoards.contains)) {
@@ -98,13 +113,12 @@ class BoardSchedulingEngine {
           .toList();
       final defaults = GroupBoardAssignment.defaultsForStage(
         stageIndex: activeStage ?? 0,
-        groupNames:
-            groupKeys
-                .map(
-                  (key) =>
-                      key.contains(':') ? key.substring(key.indexOf(':') + 1) : key,
-                )
-                .toList(),
+        groupNames: groupKeys
+            .map(
+              (key) =>
+                  key.contains(':') ? key.substring(key.indexOf(':') + 1) : key,
+            )
+            .toList(),
         boardCount: boardCount,
       );
       for (final groupKey in groupKeys) {
@@ -120,10 +134,10 @@ class BoardSchedulingEngine {
                     : preferred.isNotEmpty
                     ? preferred
                     : GroupBoardAssignment.lookup(
-                      defaults,
-                      activeStage ?? 0,
-                      groupKey,
-                    ))
+                        defaults,
+                        activeStage ?? 0,
+                        groupKey,
+                      ))
                 .where(
                   (board) =>
                       board >= 1 &&
@@ -133,6 +147,7 @@ class BoardSchedulingEngine {
                 .toSet();
       }
     }
+    const priorityEngine = SchedulePriorityEngine();
     var block = 0;
     while (pending.isNotEmpty) {
       final busy = block == 0
@@ -186,6 +201,9 @@ class BoardSchedulingEngine {
                 b.groupKey ?? '',
               );
               if (groupCompare != 0) return groupCompare;
+            }
+            if (priorityContext != null) {
+              return priorityEngine.compare(a, b, context: priorityContext);
             }
 
             final lowest = lowestPlayedAfter(a).compareTo(lowestPlayedAfter(b));
@@ -252,37 +270,36 @@ class BoardSchedulingEngine {
         selected.add((entry: remaining.removeAt(preferredIndex), board: board));
         selectedBoards.add(board);
       }
-      final reservedBoards = {
-        for (final entry in available) ...?groupBoards[entry.groupKey],
-      };
-      for (final board in boards) {
-        if (remaining.isEmpty) break;
-        if (selectedBoards.contains(board) ||
-            (useGroupAssignments &&
-                !allowGroupBoardExpansion &&
-                reservedBoards.contains(board))) {
-          continue;
+      if (!bindGroupBoards) {
+        final reservedBoards = {
+          for (final entry in available) ...?groupBoards[entry.groupKey],
+        };
+        for (final board in boards) {
+          if (remaining.isEmpty) break;
+          if (selectedBoards.contains(board) ||
+              (useGroupAssignments &&
+                  !allowGroupBoardExpansion &&
+                  reservedBoards.contains(board))) {
+            continue;
+          }
+          selected.add((entry: remaining.removeAt(0), board: board));
+          selectedBoards.add(board);
         }
-        selected.add((entry: remaining.removeAt(0), board: board));
-        selectedBoards.add(board);
       }
 
       if (selected.isEmpty) {
         if (block == 0) {
-          if (useGroupAssignments &&
+          if ((useGroupAssignments || bindGroupBoards) &&
               groupBoards.values.every((boards) => boards.isEmpty)) {
             break;
           }
           block++;
           continue;
         }
-        if (useGroupAssignments) break;
-        if (block > 0) {
-          throw StateError(
-            'Unable to assign a ready match to an available board.',
-          );
-        }
-        break;
+        if (useGroupAssignments || bindGroupBoards) break;
+        throw StateError(
+          'Unable to assign a ready match to an available board.',
+        );
       }
 
       for (final assignment in selected) {

@@ -3,6 +3,7 @@ import 'package:dart_tournament_manager/features/league/domain/league_match.dart
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/global_order_of_play_service.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/order_of_play/order_of_play_controller.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_director_snapshot.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/engines/global_waitlist_engine.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 
 CreatedTournament oneStageFixture({int boards = 3}) {
@@ -83,6 +84,17 @@ CreatedTournament twoGroupFixture({int boards = 3, LeagueMatch? leagueMatch}) {
   );
 }
 
+void _initializeWaitlist(CreatedTournament t, int stage) {
+  final snapshot = TournamentDirectorSnapshot(t, stage);
+  const OrderOfPlayController().initializeGlobalWaitlist(
+    t,
+    stage,
+    allEntries: snapshot.entries,
+    schedule: snapshot.schedule,
+    isPreviewable: snapshot.isPreviewableMatch,
+  );
+}
+
 void main() {
   const controller = OrderOfPlayController();
 
@@ -133,21 +145,19 @@ void main() {
     expect(overview.suggestions, isEmpty);
   });
 
-  test('dynamic + group only exposes the first suggestion per board', () {
+  test('legacy dynamic + group is evaluated as the global waitlist', () {
     final t = twoGroupFixture(boards: 3)
       ..directorModeEnabled = true
       ..directorSchedulingStrategy = 'group'
       ..directorPlayOrderMode = 'dynamic';
-    final snapshot = TournamentDirectorSnapshot(t, 0);
+    expect(const GlobalWaitlistEngine().applies(t), isTrue);
 
-    expect(snapshot.suggestionsForBoard(1, limit: 5), hasLength(1));
-    final overview = snapshot.scheduleOverview;
-    expect(overview.presentation, DirectorSchedulePresentation.groupFirstOnly);
-    expect(overview.note, 'Rest wird dynamisch berechnet');
-    expect(overview.groups.keys, contains('0:A'));
-    for (final assignments in overview.groups.values) {
-      expect(assignments.length, lessThanOrEqualTo(2));
-    }
+    _initializeWaitlist(t, 0);
+    final waitlist = TournamentDirectorSnapshot(t, 0).globalWaitlist;
+    // Only one stage with four players is open, so at most two disjoint
+    // pairings can form the collision-free preview.
+    expect(waitlist.fixed, hasLength(2));
+    expect(waitlist.fixed.map((entry) => entry.match).toSet(), hasLength(2));
   });
 
   test(
@@ -157,6 +167,7 @@ void main() {
         ..directorModeEnabled = true
         ..directorSchedulingStrategy = 'global'
         ..directorPlayOrderMode = 'dynamic';
+      _initializeWaitlist(t, 0);
       final before = TournamentDirectorSnapshot(t, 0);
       final overview = before.scheduleOverview;
       expect(

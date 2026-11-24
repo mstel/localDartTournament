@@ -47,6 +47,22 @@ const hasRequiredAndOptionalKeys = (
     Object.keys(value).every((key) => expected.has(key));
 };
 
+const isWinRatePoint = (
+  value: unknown,
+  requirePlayerId: boolean,
+): boolean =>
+  isRecord(value) &&
+  (requirePlayerId
+    ? typeof value.playerId === 'string'
+    : value.playerId === undefined || typeof value.playerId === 'string') &&
+  typeof value.period === 'string' &&
+  typeof value.year === 'number' &&
+  typeof value.month === 'number' &&
+  typeof value.matches === 'number' &&
+  typeof value.wins === 'number' &&
+  typeof value.losses === 'number' &&
+  typeof value.winRate === 'number';
+
 const isAchievementStanding = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) &&
   typeof value.rankingId === 'string' &&
@@ -158,7 +174,12 @@ export function isWebsiteResourcePayload(
       return hasRequiredAndOptionalKeys(
         value,
         ['monthlyPerformance', 'currentForm'],
-        ['monthlyClubPerformance', 'importedMonthlyStatistics'],
+        [
+          'monthlyClubPerformance',
+          'winRateSeries',
+          'clubWinRateSeries',
+          'importedMonthlyStatistics',
+        ],
       ) &&
         Array.isArray(value.monthlyPerformance) &&
         value.monthlyPerformance.every((entry) =>
@@ -180,6 +201,14 @@ export function isWebsiteResourcePayload(
             typeof entry.month === 'number' &&
             typeof entry.matches === 'number' &&
             typeof entry.weightedLegs === 'number'
+          )) &&
+        (value.winRateSeries === undefined ||
+          Array.isArray(value.winRateSeries) &&
+          value.winRateSeries.every((entry) => isWinRatePoint(entry, true))) &&
+        (value.clubWinRateSeries === undefined ||
+          Array.isArray(value.clubWinRateSeries) &&
+          value.clubWinRateSeries.every(
+            (entry) => isWinRatePoint(entry, false),
           )) &&
         (value.importedMonthlyStatistics === undefined ||
           Array.isArray(value.importedMonthlyStatistics) &&

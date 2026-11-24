@@ -5528,7 +5528,7 @@ class _TournamentSecondScreenViewState
                     activeIndex,
                   );
                   final busyPlayers = {
-                    for (final entry in snapshot.schedule.running)
+                    for (final entry in snapshot.schedule.blockingRunning)
                       ...entry.players,
                   };
                   final hasAvailableMatches = snapshot.ready.any(
@@ -6319,8 +6319,10 @@ class _TournamentSecondScreenViewState
                                       : '';
                                   final upcoming = recommendations
                                       .where(
-                                        (assignment) =>
-                                            !snapshot.schedule.running.any(
+                                        (assignment) => !snapshot
+                                            .schedule
+                                            .blockingRunning
+                                            .any(
                                               (active) => identical(
                                                 active.match,
                                                 assignment.entry.match,
@@ -6669,6 +6671,24 @@ class _TournamentSecondScreenViewState
           ],
         ),
         const SizedBox(height: 10),
+        if (t.leagueMatch case final league?)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 4,
+              children: [
+                for (var teamSide = 0; teamSide < 2; teamSide++)
+                  Text(
+                    '${teamSide == 0 ? league.homeTeam : league.awayTeam}: '
+                    '${league.substitutionBudgetRemaining(teamSide)} von '
+                    '${league.substitutionLimitFor(teamSide)} '
+                    'Auswechselungen verfügbar',
+                    style: TextStyle(color: colors.mutedText, fontSize: 12),
+                  ),
+              ],
+            ),
+          ),
         Builder(
           builder: (context) {
             final recentList =

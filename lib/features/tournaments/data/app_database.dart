@@ -13,13 +13,14 @@ import 'package:sqlite3/sqlite3.dart';
 import '../domain/tournament_models.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../statistics/domain/monthly_player_performance.dart';
+import '../../statistics/domain/performance_snapshot.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
 import '../application/result_entry_performance_trace.dart';
 
 class LocalAppDatabase {
   LocalAppDatabase({Directory? baseDirectory}) : _baseDirectory = baseDirectory;
 
-  static const schemaVersion = 17;
+  static const schemaVersion = 18;
 
   final Directory? _baseDirectory;
 
@@ -283,7 +284,7 @@ class LocalAppDatabase {
     try {
       final rows = database.select(
         '''SELECT player_profile_id, year, month, weighted_legs, matches, wins, losses,
-                  scoring, average, checkout_rate
+                  scoring, average, checkout_rate, source
            FROM player_monthly_performance
            WHERE player_profile_id = ?${year == null ? '' : ' AND year = ?'}
            ORDER BY year, month''',
@@ -311,7 +312,7 @@ class LocalAppDatabase {
         final batch = ids.skip(start).take(900).toList();
         final rows = database.select(
           '''SELECT player_profile_id, year, month, weighted_legs, matches, wins, losses,
-                    scoring, average, checkout_rate
+                    scoring, average, checkout_rate, source
              FROM player_monthly_performance
              WHERE player_profile_id IN (${List.filled(batch.length, '?').join(',')})
              ${year == null ? '' : 'AND year = ?'}
@@ -356,8 +357,8 @@ class LocalAppDatabase {
       database.execute(
         '''INSERT INTO player_monthly_performance(
              player_profile_id, year, month, weighted_legs, matches, wins, losses,
-             scoring, average, checkout_rate
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             scoring, average, checkout_rate, source
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(player_profile_id, year, month) DO UPDATE SET
              weighted_legs = excluded.weighted_legs,
              matches = excluded.matches,
@@ -365,7 +366,8 @@ class LocalAppDatabase {
              losses = excluded.losses,
              scoring = excluded.scoring,
              average = excluded.average,
-             checkout_rate = excluded.checkout_rate''',
+             checkout_rate = excluded.checkout_rate,
+             source = excluded.source''',
         [
           performance.playerId,
           performance.year,
@@ -377,6 +379,7 @@ class LocalAppDatabase {
           performance.scoring,
           performance.average,
           performance.checkoutRate,
+          performance.source,
         ],
       );
       StorageAccess.markLocalDataChanged();
@@ -384,6 +387,172 @@ class LocalAppDatabase {
       database.close();
     }
   });
+
+  Future<List<PerformanceSnapshot>> loadPerformanceSnapshots(String playerId) =>
+      StorageAccess.run(() async {
+        final database = await _openDatabase();
+        try {
+          return _loadPerformanceSnapshots(database, playerId);
+        } finally {
+          database.close();
+        }
+      });
+
+  /// Speichert einen kumulierten Scolia-Messpunkt und berechnet anschließend
+  /// alle abhängigen Monatswerte des Spielers neu. Bestehende manuelle und
+  /// importierte Monate bleiben unberührt.
+  Future<List<DerivedPerformanceMonth>> savePerformanceSnapshotAndRebuild(
+    PerformanceSnapshot snapshot,
+  ) => StorageAccess.run(() async {
+    if (snapshot.playerId.isEmpty ||
+        snapshot.year < 2000 ||
+        snapshot.month < 1 ||
+        snapshot.month > 12 ||
+        snapshot.windowLegs < 0 ||
+        snapshot.windowLegs > 100 ||
+        snapshot.matches < 0 ||
+        snapshot.newLegsOverride != null && snapshot.newLegsOverride! < 0 ||
+        [
+          snapshot.scoring,
+          snapshot.average,
+          snapshot.checkoutRate,
+        ].any((value) => value != null && (!value.isFinite || value < 0)) ||
+        snapshot.checkoutRate != null && snapshot.checkoutRate! > 100) {
+      throw ArgumentError('Ungültiger kumulierter Performance-Messpunkt.');
+    }
+    final database = await _openDatabase();
+    try {
+      database.execute('BEGIN');
+      try {
+        final profile = database.select(
+          'SELECT is_active FROM player_profiles WHERE id = ?',
+          [snapshot.playerId],
+        );
+        if (profile.isEmpty || profile.single['is_active'] != 1) {
+          throw StateError('Der zugeordnete Teilnehmer ist nicht mehr aktiv.');
+        }
+        database.execute(
+          '''INSERT INTO player_performance_snapshot(
+               id, player_profile_id, year, month, window_legs, matches,
+               scoring, average, checkout_rate, scoring_total, average_total,
+               checkout_total, new_legs_override, is_estimated, note, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(player_profile_id, year, month) DO UPDATE SET
+               window_legs = excluded.window_legs,
+               matches = excluded.matches,
+               scoring = excluded.scoring,
+               average = excluded.average,
+               checkout_rate = excluded.checkout_rate,
+               scoring_total = excluded.scoring_total,
+               average_total = excluded.average_total,
+               checkout_total = excluded.checkout_total,
+               new_legs_override = excluded.new_legs_override,
+               is_estimated = excluded.is_estimated,
+               note = excluded.note,
+               updated_at = excluded.updated_at''',
+          [
+            snapshot.id,
+            snapshot.playerId,
+            snapshot.year,
+            snapshot.month,
+            snapshot.windowLegs,
+            snapshot.matches,
+            snapshot.scoring,
+            snapshot.average,
+            snapshot.checkoutRate,
+            snapshot.scoringTotal,
+            snapshot.averageTotal,
+            snapshot.checkoutTotal,
+            snapshot.newLegsOverride,
+            snapshot.isEstimated ? 1 : 0,
+            snapshot.note,
+            (snapshot.updatedAt ?? DateTime.now()).toIso8601String(),
+          ],
+        );
+
+        final derivation = derivePerformanceMonths(
+          _loadPerformanceSnapshots(database, snapshot.playerId),
+        );
+        database.execute(
+          '''DELETE FROM player_monthly_performance
+             WHERE player_profile_id = ? AND source = ?''',
+          [snapshot.playerId, 'scolia_cumulative'],
+        );
+        for (final month in derivation.months) {
+          database.execute(
+            '''INSERT INTO player_monthly_performance(
+                 player_profile_id, year, month, weighted_legs, matches, wins,
+                 losses, scoring, average, checkout_rate, source
+               ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+               ON CONFLICT(player_profile_id, year, month) DO UPDATE SET
+                 weighted_legs = excluded.weighted_legs,
+                 matches = excluded.matches,
+                 wins = excluded.wins,
+                 losses = excluded.losses,
+                 scoring = excluded.scoring,
+                 average = excluded.average,
+                 checkout_rate = excluded.checkout_rate,
+                 source = excluded.source''',
+            [
+              snapshot.playerId,
+              month.year,
+              month.month,
+              month.weightedLegs,
+              month.matches,
+              month.scoring,
+              month.average,
+              month.checkoutRate,
+              'scolia_cumulative',
+            ],
+          );
+        }
+        database.execute('COMMIT');
+        StorageAccess.markLocalDataChanged();
+        return derivation.months;
+      } catch (_) {
+        database.execute('ROLLBACK');
+        rethrow;
+      }
+    } finally {
+      database.close();
+    }
+  });
+
+  List<PerformanceSnapshot> _loadPerformanceSnapshots(
+    Database database,
+    String playerId,
+  ) {
+    final rows = database.select(
+      '''SELECT id, player_profile_id, year, month, window_legs, matches,
+                scoring, average, checkout_rate, scoring_total, average_total,
+                checkout_total, new_legs_override, is_estimated, note, updated_at
+         FROM player_performance_snapshot
+         WHERE player_profile_id = ?
+         ORDER BY year, month''',
+      [playerId],
+    );
+    return [
+      for (final row in rows)
+        PerformanceSnapshot(
+          id: row['id'] as String,
+          playerId: row['player_profile_id'] as String,
+          year: row['year'] as int,
+          month: row['month'] as int,
+          windowLegs: row['window_legs'] as int,
+          matches: row['matches'] as int,
+          scoring: (row['scoring'] as num?)?.toDouble(),
+          average: (row['average'] as num?)?.toDouble(),
+          checkoutRate: (row['checkout_rate'] as num?)?.toDouble(),
+          scoringTotal: (row['scoring_total'] as num?)?.toDouble() ?? 0,
+          averageTotal: (row['average_total'] as num?)?.toDouble() ?? 0,
+          checkoutTotal: (row['checkout_total'] as num?)?.toDouble() ?? 0,
+          newLegsOverride: (row['new_legs_override'] as num?)?.toInt(),
+          isEstimated: (row['is_estimated'] as int?) == 1,
+          note: row['note'] as String? ?? '',
+          updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? ''),
+        ),
+    ];
+  }
 
   Future<void> saveLocalRanking(
     LocalRanking ranking,
@@ -872,7 +1041,10 @@ class LocalAppDatabase {
     database.execute('PRAGMA foreign_keys = OFF');
     database.execute('BEGIN');
     try {
-      if (currentVersion == 16) {
+      if (currentVersion == 17) {
+        // Nur die kumulierten Scolia-Messpunkte und die Quellspalte ergänzen;
+        // vorhandene Monatswerte bleiben unverändert.
+      } else if (currentVersion == 16) {
         database.execute(
           'ALTER TABLE player_monthly_performance ADD COLUMN matches INTEGER NOT NULL DEFAULT 0',
         );
@@ -970,6 +1142,16 @@ class LocalAppDatabase {
         }
         _createSchema(database);
       }
+      final performanceColumns = database
+          .select('PRAGMA table_info(player_monthly_performance)')
+          .map((row) => row['name'] as String)
+          .toSet();
+      if (!performanceColumns.contains('source')) {
+        database.execute(
+          "ALTER TABLE player_monthly_performance ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'",
+        );
+      }
+      _createPerformanceSnapshotTable(database);
       _createActiveTournamentCopiesTable(database);
       database.execute('PRAGMA user_version = $schemaVersion');
       database.execute('COMMIT');
@@ -1030,6 +1212,7 @@ class LocalAppDatabase {
     _createPlayerMonthlyPerformanceTable(database);
     _createRankingAchievementProgressTable(database);
     _createMonthlyPlayerStatisticsTable(database);
+    _createPerformanceSnapshotTable(database);
     _createActiveTournamentCopiesTable(database);
   }
 
@@ -1088,7 +1271,39 @@ class LocalAppDatabase {
         checkout_rate REAL CHECK (
           checkout_rate IS NULL OR checkout_rate BETWEEN 0 AND 100
         ),
+        source TEXT NOT NULL DEFAULT 'manual',
         PRIMARY KEY (player_profile_id, year, month)
+      )
+    ''');
+  }
+
+  void _createPerformanceSnapshotTable(Database database) {
+    database.execute('''
+      CREATE TABLE IF NOT EXISTS player_performance_snapshot (
+        id TEXT PRIMARY KEY,
+        player_profile_id TEXT NOT NULL
+          REFERENCES player_profiles(id) ON DELETE CASCADE,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+        window_legs INTEGER NOT NULL CHECK (
+          window_legs >= 0 AND window_legs <= 100
+        ),
+        matches INTEGER NOT NULL DEFAULT 0 CHECK (matches >= 0),
+        scoring REAL,
+        average REAL,
+        checkout_rate REAL CHECK (
+          checkout_rate IS NULL OR checkout_rate BETWEEN 0 AND 100
+        ),
+        scoring_total REAL NOT NULL DEFAULT 0,
+        average_total REAL NOT NULL DEFAULT 0,
+        checkout_total REAL NOT NULL DEFAULT 0,
+        new_legs_override INTEGER CHECK (
+          new_legs_override IS NULL OR new_legs_override >= 0
+        ),
+        is_estimated INTEGER NOT NULL DEFAULT 0,
+        note TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL,
+        UNIQUE (player_profile_id, year, month)
       )
     ''');
   }

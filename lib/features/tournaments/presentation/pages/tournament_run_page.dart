@@ -454,7 +454,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             Align(
               alignment: AlignmentDirectional.centerStart,
               child: Text(
-                '${league.substitutionsRemaining(teamSide)} Auswechselungen verfügbar',
+                '${league.substitutionBudgetRemaining(teamSide)} von '
+                '${league.substitutionLimitFor(teamSide)} Auswechselungen '
+                'verfügbar',
               ),
             ),
             const SizedBox(height: 8),
@@ -488,11 +490,17 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                           ? 'league-add-substitution-home'
                           : 'league-add-substitution-away',
                     ),
-                    onPressed: _savingLeagueSettings
+                    onPressed:
+                        _savingLeagueSettings ||
+                            !league.canAddSubstitutionBudget(teamSide)
                         ? null
                         : () => _addLeagueSubstitution(teamSide),
                     icon: const Icon(Icons.swap_vert_outlined),
-                    label: const Text('Auswechselung hinzufügen'),
+                    label: Text(
+                      league.canAddSubstitutionBudget(teamSide)
+                          ? 'Auswechselung hinzufügen'
+                          : 'Maximum erreicht',
+                    ),
                   ),
                 ],
               ],
@@ -1044,6 +1052,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       throw StateError('Board nicht mehr verfügbar.');
     }
     final wasBlocked = widget.tournament.blockedBoards.contains(board);
+    final previousWaitlist = widget.tournament.directorGlobalWaitlist.copy();
     if (!wasBlocked &&
         TournamentDirectorSnapshot(
           widget.tournament,
@@ -1057,7 +1066,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       widget.tournament,
       _activeStageIndex,
     );
-    if (schedule.running.any((e) => e.match.boardNumber == board)) {
+    if (schedule.blockingRunning.any((e) => e.match.boardNumber == board)) {
       throw StateError('Ein laufendes Board kann nicht gesperrt werden.');
     }
     setState(() {
@@ -1076,6 +1085,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           activeStage.rounds.last.isEmpty) {
         _advanceKratzerRound(activeStage);
       }
+      _initializeGlobalWaitlist();
     });
     try {
       await _checkpoint();
@@ -1085,6 +1095,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       } else {
         widget.tournament.blockedBoards.remove(board);
       }
+      widget.tournament.directorGlobalWaitlist = previousWaitlist;
       if (mounted) setState(() {});
       rethrow;
     }
@@ -1333,6 +1344,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         entry.key: List<int>.from(entry.value),
     };
     final previousOrders = _fixedScheduleOrders();
+    final previousWaitlist = tournament.directorGlobalWaitlist.copy();
     setState(() {
       tournament.boardCount = boardCount;
       tournament.blockedBoards.removeWhere((board) => board > boardCount);
@@ -1346,10 +1358,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         (board, _) => board > boardCount,
       );
       _reinitializeFixedSchedule();
+      _initializeGlobalWaitlist();
     });
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
+      tournament.directorGlobalWaitlist = previousWaitlist;
       tournament.boardCount = previousCount;
       tournament.blockedBoards
         ..clear()
@@ -1426,18 +1440,69 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
   }
 
+  Future<bool> _confirmFixedScheduleRebuild() async {
+    if (!widget.tournament.fixedScheduleManuallyAdjusted) return true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manuell angepassten Spielplan neu berechnen?'),
+        content: const Text(
+          'Die aktuelle Reihenfolge wurde manuell angepasst und wird durch die automatische Berechnung ersetzt.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Neu berechnen'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   void _reinitializeFixedSchedule() {
     if (widget.tournament.directorPlayOrderMode != 'fixed_schedule') return;
     final controller = const OrderOfPlayController();
     for (final entry in controller.entries(widget.tournament)) {
       entry.match.fixedScheduleOrder = null;
     }
+    widget.tournament.fixedScheduleManuallyAdjusted = false;
     controller.initializeFixedSchedule(widget.tournament);
   }
 
+  /// Persists the compact dynamic preview explicitly. Reading a snapshot never
+  /// writes tournament state, so every lifecycle change that can alter the
+  /// preview calls this method instead.
+  void _initializeGlobalWaitlist() {
+    final tournament = widget.tournament;
+    if (tournament.leagueMatch != null ||
+        !tournament.directorModeEnabled ||
+        tournament.directorPlayOrderMode != 'dynamic') {
+      return;
+    }
+    const controller = OrderOfPlayController();
+    final stage = _activeStageIndex;
+    final entries = controller.entries(tournament);
+    final previewGate = TournamentDirectorSnapshot(tournament, stage);
+    controller.initializeGlobalWaitlist(
+      tournament,
+      stage,
+      allEntries: entries,
+      schedule: controller.plan(tournament, stage),
+      isPreviewable: previewGate.isPreviewableMatch,
+    );
+  }
+
   Future<void> _setMultiBoardAssignmentBehavior(String behavior) async {
+    if (!await _confirmFixedScheduleRebuild()) return;
     final previous = widget.tournament.directorMultiBoardAssignmentBehavior;
     final previousOrders = _fixedScheduleOrders();
+    final previousManuallyAdjusted =
+        widget.tournament.fixedScheduleManuallyAdjusted;
     setState(() {
       widget.tournament.directorMultiBoardAssignmentBehavior = behavior;
       _reinitializeFixedSchedule();
@@ -1446,6 +1511,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
       widget.tournament.directorMultiBoardAssignmentBehavior = previous;
+      widget.tournament.fixedScheduleManuallyAdjusted =
+          previousManuallyAdjusted;
       _restoreFixedScheduleOrders(previousOrders);
       if (mounted) setState(() {});
       rethrow;
@@ -1453,8 +1520,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _setDirectorSchedulingStrategy(String strategy) async {
+    if (!await _confirmFixedScheduleRebuild()) return;
     final previous = widget.tournament.directorSchedulingStrategy;
     final previousOrders = _fixedScheduleOrders();
+    final previousManuallyAdjusted =
+        widget.tournament.fixedScheduleManuallyAdjusted;
     setState(() {
       widget.tournament.directorSchedulingStrategy = strategy;
       _reinitializeFixedSchedule();
@@ -1463,6 +1533,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
       widget.tournament.directorSchedulingStrategy = previous;
+      widget.tournament.fixedScheduleManuallyAdjusted =
+          previousManuallyAdjusted;
       _restoreFixedScheduleOrders(previousOrders);
       if (mounted) setState(() {});
       rethrow;
@@ -1472,12 +1544,18 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   Future<void> _setGlobalWaitlistFixedCount(int count) async {
     final previous = widget.tournament.directorGlobalWaitlist.copy();
     if (previous.fixedCount == count) return;
-    setState(() => widget.tournament.directorGlobalWaitlist.fixedCount = count);
+    setState(() {
+      widget.tournament.directorGlobalWaitlist.fixedCount = count;
+      _initializeGlobalWaitlist();
+    });
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
       widget.tournament.directorGlobalWaitlist = previous;
-      if (mounted) setState(() {});
+      if (mounted) {
+        _initializeGlobalWaitlist();
+        setState(() {});
+      }
       rethrow;
     }
   }
@@ -1578,6 +1656,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     _ensureGroupDeciders();
     if (widget.tournament.directorPlayOrderMode == 'fixed_schedule') {
       const OrderOfPlayController().initializeFixedSchedule(widget.tournament);
+    } else {
+      _initializeGlobalWaitlist();
     }
     _lastAchievementResultSignature = _achievementResultSignature();
     unawaited(_loadTieBreakEloRatings());
@@ -2198,14 +2278,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           onShiftMatchDates: _shiftTournamentMatchDates,
           showCollapsibleHeader: false,
         ),
-        const Divider(height: 32),
-        LiveTournamentSettingsPanel(
-          tournament: widget.tournament,
-          publisher: _livePublisher,
-          profiles: _liveProfiles,
-          onLiveVisibleChanged: _setLiveVisible,
-        ),
       ],
+    ),
+  );
+
+  Widget _liveVisibilitySettingsCard() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: LiveTournamentSettingsPanel(
+        tournament: widget.tournament,
+        publisher: _livePublisher,
+        profiles: _liveProfiles,
+        onLiveVisibleChanged: _setLiveVisible,
+      ),
     ),
   );
 
@@ -2686,7 +2771,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         outPlayerIndex: choice.$1,
         inPlayerIndex: choice.$2,
       );
-      final remainingAfter = league.substitutionsRemaining(teamSide);
+      final remainingAfter = league.substitutionBudgetRemaining(teamSide);
       widget.tournament.addActivity(
         'substitution',
         '$teamName hat ${roster[choice.$1]} gegen ${roster[choice.$2]} '
@@ -2801,20 +2886,45 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       return;
     }
     final teamName = teamSide == 0 ? league.homeTeam : league.awayTeam;
-    _leagueRuntime?.writeTo(widget.tournament);
+    // Vorab prüfen, damit eine abgelehnte Änderung keine Runtime-Rebuilds und
+    // kein Flackern der Mannschaftslisten auslöst.
+    if (!league.canAddSubstitutionBudget(teamSide)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Maximale Auswechselungen für $teamName erreicht '
+            '(${league.maximumSubstitutionBudget(teamSide)}).',
+          ),
+        ),
+      );
+      return;
+    }
+    // Kontingentänderungen berühren keine Partie-Ergebnisse; ein Write-Back
+    // würde nur die bereits projizierten Boards unnötig neu erzeugen.
     setState(() => _savingLeagueSettings = true);
     try {
       league.addSubstitutionBudget(teamSide: teamSide);
+      final budgetRemaining = league.substitutionBudgetRemaining(teamSide);
       widget.tournament.addActivity(
         'substitution_budget',
         'Auswechselung hinzugefügt: $teamName hat eine zusätzliche '
-            'Auswechselung erhalten. Verfügbar: '
-            '${league.substitutionsRemaining(teamSide)}',
+            'Auswechselung erhalten. Verfügbar: $budgetRemaining',
       );
-      _leagueRuntime = LeagueBoardRuntime(widget.tournament)
-        ..installOn(widget.tournament);
+      // Nur das Kontingent hat sich geändert: Keine neue LeagueBoardRuntime
+      // erzeugen und keine Boards neu installieren, sonst flackern die
+      // Heim-/Gastteam-Listen bei jedem Klick auf „Auswechselung hinzufügen“.
       setState(() {});
       await _saveTournamentProgress(propagateError: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Auswechselung hinzugefügt. Für $teamName sind noch '
+              '$budgetRemaining verfügbar.',
+            ),
+          ),
+        );
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3364,10 +3474,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     required bool enabled,
     String strategy = 'group',
   }) async {
+    if (enabled && !await _confirmFixedScheduleRebuild()) return;
     final previousEnabled = widget.tournament.directorModeEnabled;
     final previousStrategy = widget.tournament.directorSchedulingStrategy;
     final previousViewMode = _stageViewMode;
     final previousOrders = _fixedScheduleOrders();
+    final previousWaitlist = widget.tournament.directorGlobalWaitlist.copy();
+    final previousManuallyAdjusted =
+        widget.tournament.fixedScheduleManuallyAdjusted;
     setState(() {
       widget.tournament.directorModeEnabled = enabled;
       widget.tournament.directorSchedulingStrategy = enabled
@@ -3380,12 +3494,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         _stageViewMode = StageViewMode.director;
       }
       _reinitializeFixedSchedule();
+      _initializeGlobalWaitlist();
     });
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
       widget.tournament.directorModeEnabled = previousEnabled;
       widget.tournament.directorSchedulingStrategy = previousStrategy;
+      widget.tournament.fixedScheduleManuallyAdjusted =
+          previousManuallyAdjusted;
+      widget.tournament.directorGlobalWaitlist = previousWaitlist;
       _stageViewMode = previousViewMode;
       _restoreFixedScheduleOrders(previousOrders);
       if (mounted) setState(() {});
@@ -3394,19 +3512,35 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   Future<void> _saveDirectorPlayOrderMode(String mode) async {
+    if (mode == 'fixed_schedule' &&
+        widget.tournament.fixedScheduleManuallyAdjusted &&
+        !await _confirmFixedScheduleRebuild()) {
+      return;
+    }
     final previous = widget.tournament.directorPlayOrderMode;
+    final previousStrategy = widget.tournament.directorSchedulingStrategy;
+    final previousWaitlist = widget.tournament.directorGlobalWaitlist.copy();
     final entries = const OrderOfPlayController().entries(widget.tournament);
     final previousOrders = {
       for (final entry in entries) entry.match: entry.match.fixedScheduleOrder,
     };
-    setState(() => widget.tournament.directorPlayOrderMode = mode);
+    setState(() {
+      widget.tournament.directorPlayOrderMode = mode;
+      widget.tournament.directorSchedulingStrategy =
+          DirectorScheduleModes.schedulingStrategy(previousStrategy, mode);
+    });
     if (mode != 'dynamic') {
+      widget.tournament.fixedScheduleManuallyAdjusted = false;
       const OrderOfPlayController().initializeFixedSchedule(widget.tournament);
+    } else {
+      _initializeGlobalWaitlist();
     }
     try {
       await _saveTournamentProgress(propagateError: true);
     } catch (_) {
       widget.tournament.directorPlayOrderMode = previous;
+      widget.tournament.directorSchedulingStrategy = previousStrategy;
+      widget.tournament.directorGlobalWaitlist = previousWaitlist;
       for (final entry in entries) {
         entry.match.fixedScheduleOrder = previousOrders[entry.match];
       }
@@ -3438,6 +3572,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           )
         : controller.deferFixedScheduleMatch(widget.tournament, match);
     if (!moved) return;
+    widget.tournament.fixedScheduleManuallyAdjusted = true;
     setState(() {});
     try {
       await _saveTournamentProgress(propagateError: true);
@@ -3553,9 +3688,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final previous = {
       for (final entry in entries) entry.match: entry.match.fixedScheduleOrder,
     };
+    final previousManuallyAdjusted =
+        widget.tournament.fixedScheduleManuallyAdjusted;
     for (final entry in entries) {
       entry.match.fixedScheduleOrder = null;
     }
+    widget.tournament.fixedScheduleManuallyAdjusted = false;
     const OrderOfPlayController().initializeFixedSchedule(widget.tournament);
     setState(() {});
     try {
@@ -3565,6 +3703,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       for (final entry in entries) {
         entry.match.fixedScheduleOrder = previous[entry.match];
       }
+      widget.tournament.fixedScheduleManuallyAdjusted =
+          previousManuallyAdjusted;
       setState(() {});
     }
   }
@@ -3572,6 +3712,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   Future<void> _openFixedScheduleEditor(FixedScheduleEditorScope scope) async {
     if (widget.tournament.directorPlayOrderMode != 'fixed_schedule') return;
     final previousOrders = _fixedScheduleOrders();
+    final previousManuallyAdjusted =
+        widget.tournament.fixedScheduleManuallyAdjusted;
     final applied = await showDialog<bool>(
       context: context,
       builder: (context) => FixedScheduleEditorDialog(
@@ -3586,10 +3728,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         onApply: () => _saveTournamentProgress(propagateError: true),
       ),
     );
-    if (applied != true && mounted) {
+    if (applied == true && mounted) {
+      widget.tournament.fixedScheduleManuallyAdjusted = true;
+    } else if (mounted) {
       _restoreFixedScheduleOrders(previousOrders);
-      setState(() {});
+      widget.tournament.fixedScheduleManuallyAdjusted =
+          previousManuallyAdjusted;
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _saveRankingSelection({
@@ -4114,6 +4260,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         _advanceKnockoutWinners(startStageIndex: _activeStageIndex);
         _ensureGroupDeciders(startStageIndex: _activeStageIndex);
         const OrderOfPlayController().resultRecorded(match);
+        _initializeGlobalWaitlist();
         final stageName = widget.tournament.runStages[_activeStageIndex].name;
         final description = match.isKratzer
             ? 'Verlierer ${result.scratchedPlayer?.name ?? 'ermittelt'}'
@@ -7501,51 +7648,73 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                             padding: const EdgeInsets.only(
                                               top: 8,
                                             ),
-                                            child: Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
-                                                OutlinedButton.icon(
-                                                  onPressed:
-                                                      _recomputeFixedSchedule,
-                                                  icon: const Icon(
-                                                    Icons.replay_outlined,
-                                                  ),
-                                                  label: const Text(
-                                                    'Spielplan neu berechnen',
-                                                  ),
-                                                ),
-                                                OutlinedButton.icon(
-                                                  key: const ValueKey(
-                                                    'edit-fixed-schedule-per-board',
-                                                  ),
-                                                  onPressed: () =>
-                                                      _openFixedScheduleEditor(
-                                                        FixedScheduleEditorScope
-                                                            .perBoard,
+                                                if (widget
+                                                    .tournament
+                                                    .fixedScheduleManuallyAdjusted)
+                                                  const Padding(
+                                                    padding: EdgeInsets.only(
+                                                      bottom: 8,
+                                                    ),
+                                                    child: Text(
+                                                      'Reihenfolge manuell angepasst',
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w600,
                                                       ),
-                                                  icon: const Icon(
-                                                    Icons.grid_view_outlined,
+                                                    ),
                                                   ),
-                                                  label: const Text(
-                                                    'Spielplan je Board bearbeiten',
-                                                  ),
-                                                ),
-                                                OutlinedButton.icon(
-                                                  key: const ValueKey(
-                                                    'edit-fixed-schedule-overall',
-                                                  ),
-                                                  onPressed: () =>
-                                                      _openFixedScheduleEditor(
-                                                        FixedScheduleEditorScope
-                                                            .overall,
+                                                Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 8,
+                                                  children: [
+                                                    OutlinedButton.icon(
+                                                      onPressed:
+                                                          _recomputeFixedSchedule,
+                                                      icon: const Icon(
+                                                        Icons.replay_outlined,
                                                       ),
-                                                  icon: const Icon(
-                                                    Icons.list_alt,
-                                                  ),
-                                                  label: const Text(
-                                                    'Gesamten Spielplan bearbeiten',
-                                                  ),
+                                                      label: const Text(
+                                                        'Spielplan neu berechnen',
+                                                      ),
+                                                    ),
+                                                    OutlinedButton.icon(
+                                                      key: const ValueKey(
+                                                        'edit-fixed-schedule-per-board',
+                                                      ),
+                                                      onPressed: () =>
+                                                          _openFixedScheduleEditor(
+                                                            FixedScheduleEditorScope
+                                                                .perBoard,
+                                                          ),
+                                                      icon: const Icon(
+                                                        Icons
+                                                            .grid_view_outlined,
+                                                      ),
+                                                      label: const Text(
+                                                        'Spielplan je Board bearbeiten',
+                                                      ),
+                                                    ),
+                                                    OutlinedButton.icon(
+                                                      key: const ValueKey(
+                                                        'edit-fixed-schedule-overall',
+                                                      ),
+                                                      onPressed: () =>
+                                                          _openFixedScheduleEditor(
+                                                            FixedScheduleEditorScope
+                                                                .overall,
+                                                          ),
+                                                      icon: const Icon(
+                                                        Icons.list_alt,
+                                                      ),
+                                                      label: const Text(
+                                                        'Gesamten Spielplan bearbeiten',
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ],
                                             ),
@@ -7554,7 +7723,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                                 .tournament
                                                 .directorModeEnabled &&
                                             widget.tournament.leagueMatch ==
-                                                null)
+                                                null &&
+                                            widget
+                                                    .tournament
+                                                    .directorPlayOrderMode ==
+                                                DirectorScheduleModes
+                                                    .fixedSchedule)
                                           Padding(
                                             padding: const EdgeInsets.only(
                                               top: 8,
@@ -7610,12 +7784,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                                 null &&
                                             widget
                                                     .tournament
-                                                    .directorSchedulingStrategy ==
-                                                'global' &&
-                                            widget
-                                                    .tournament
                                                     .directorPlayOrderMode ==
-                                                'dynamic')
+                                                DirectorScheduleModes
+                                                    .dynamicMode)
                                           Padding(
                                             padding: const EdgeInsets.only(
                                               top: 8,
@@ -8136,6 +8307,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                             ],
                             const SizedBox(height: 12),
                             _tournamentTimingSettingsCard(),
+                            const SizedBox(height: 12),
+                            _liveVisibilitySettingsCard(),
                             const SizedBox(height: 12),
                             if (_canStartSimulation) ...[
                               Card(

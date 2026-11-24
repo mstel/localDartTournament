@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../tournaments/domain/director_schedule_modes.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/domain/tournament_settings.dart';
 
@@ -63,14 +64,13 @@ class DirectorAudioDefaults {
     'alternativeRecommendationCount': alternativeRecommendationCount,
   };
 
-  TournamentSettings applyTo(TournamentSettings settings) =>
-      settings.copyWith(
-        soundModeEnabled: soundModeEnabled,
-        announcementNameFormat: nameFormat,
-        speakNicknameWhenAvailable: speakNicknameWhenAvailable,
-        readAlternativeRecommendations: readAlternativeRecommendations,
-        alternativeRecommendationCount: alternativeRecommendationCount,
-      );
+  TournamentSettings applyTo(TournamentSettings settings) => settings.copyWith(
+    soundModeEnabled: soundModeEnabled,
+    announcementNameFormat: nameFormat,
+    speakNicknameWhenAvailable: speakNicknameWhenAvailable,
+    readAlternativeRecommendations: readAlternativeRecommendations,
+    alternativeRecommendationCount: alternativeRecommendationCount,
+  );
 }
 
 class DirectorModeDefaults {
@@ -133,32 +133,28 @@ class DirectorModeDefaults {
     final league = Map<String, dynamic>.from(
       json['league'] as Map? ?? const {},
     );
+    final scheduleMode = DirectorScheduleModes.playOrderMode(
+      tournament['scheduleMode'],
+    );
     return DirectorModeDefaults(
       tournamentsEnabled: tournament['enabled'] as bool? ?? true,
-      tournamentScheduleMode: _oneOf(
-        tournament['scheduleMode'],
-        const ['fixed_schedule', 'dynamic'],
-        'fixed_schedule',
-      ),
-      tournamentBoardAssignment: _oneOf(
+      tournamentScheduleMode: scheduleMode,
+      tournamentBoardAssignment: DirectorScheduleModes.schedulingStrategy(
         tournament['boardAssignment'],
-        const ['group', 'global'],
-        'group',
+        scheduleMode,
       ),
       tournamentAudio: DirectorAudioDefaults.fromJson(
         Map<String, dynamic>.from(tournament['audio'] as Map? ?? const {}),
       ),
       tournamentPlayerInsights: tournament['playerInsights'] as bool? ?? false,
-      leagueScheduleMode: _oneOf(
-        league['scheduleMode'],
-        const ['fixed_schedule', 'dynamic'],
+      leagueScheduleMode: _oneOf(league['scheduleMode'], const [
         'fixed_schedule',
-      ),
-      leagueSuggestionMode: _oneOf(
-        league['suggestionMode'],
-        const ['mirror', 'assigned'],
+        'dynamic',
+      ], 'fixed_schedule'),
+      leagueSuggestionMode: _oneOf(league['suggestionMode'], const [
+        'mirror',
         'assigned',
-      ),
+      ], 'assigned'),
       leagueAudio: DirectorAudioDefaults.fromJson(
         Map<String, dynamic>.from(league['audio'] as Map? ?? const {}),
       ),
@@ -186,7 +182,10 @@ class DirectorModeDefaults {
     tournament
       ..directorModeEnabled = tournamentsEnabled
       ..directorPlayOrderMode = tournamentScheduleMode
-      ..directorSchedulingStrategy = tournamentBoardAssignment
+      ..directorSchedulingStrategy = DirectorScheduleModes.schedulingStrategy(
+        tournamentBoardAssignment,
+        tournamentScheduleMode,
+      )
       ..showPlayerInsights = tournamentPlayerInsights
       ..tournamentSettings = tournamentAudio.applyTo(
         tournament.tournamentSettings,
@@ -205,11 +204,8 @@ class DirectorModeDefaults {
     return tournament;
   }
 
-  static String _oneOf(
-    Object? value,
-    List<String> allowed,
-    String fallback,
-  ) => allowed.contains(value) ? value! as String : fallback;
+  static String _oneOf(Object? value, List<String> allowed, String fallback) =>
+      allowed.contains(value) ? value! as String : fallback;
 }
 
 class DirectorModeDefaultsStorage {
@@ -221,7 +217,9 @@ class DirectorModeDefaultsStorage {
     try {
       final preferences = await SharedPreferences.getInstance();
       final raw = preferences.getString(_key);
-      if (raw == null || raw.trim().isEmpty) return DirectorModeDefaults.defaults;
+      if (raw == null || raw.trim().isEmpty) {
+        return DirectorModeDefaults.defaults;
+      }
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return DirectorModeDefaults.defaults;
       return DirectorModeDefaults.fromJson(Map<String, dynamic>.from(decoded));

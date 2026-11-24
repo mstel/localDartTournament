@@ -152,6 +152,8 @@ void main() {
     addTearDown(tester.view.reset);
     final tournament = fixture()
       ..directorModeEnabled = true
+      ..directorSchedulingStrategy = 'group'
+      ..directorPlayOrderMode = 'fixed_schedule'
       ..completedStageIndexes.add(0);
     tournament.stages.add(
       const TournamentStage(name: 'Gruppen', type: 'groups'),

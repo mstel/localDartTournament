@@ -10,6 +10,9 @@ export type TournamentSummary = {
   matchCount: number;
   mode: string;
   hasImportedArchive: boolean;
+  winnerId?: string | null;
+  winnerName?: string | null;
+  phaseKinds?: string[];
 };
 
 export type TournamentIndex = {
@@ -48,7 +51,7 @@ export function isTournamentIndex(
   return value.completedTournaments.every(isTournamentSummary);
 }
 
-function isTournamentSummary(value: unknown): value is TournamentSummary {
+export function isTournamentSummary(value: unknown): value is TournamentSummary {
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&
@@ -63,7 +66,16 @@ function isTournamentSummary(value: unknown): value is TournamentSummary {
     Number.isSafeInteger(value.matchCount) &&
     value.matchCount >= 0 &&
     typeof value.mode === 'string' &&
-    typeof value.hasImportedArchive === 'boolean'
+    typeof value.hasImportedArchive === 'boolean' &&
+    (value.winnerId === undefined ||
+      value.winnerId === null ||
+      typeof value.winnerId === 'string') &&
+    (value.winnerName === undefined ||
+      value.winnerName === null ||
+      typeof value.winnerName === 'string') &&
+    (value.phaseKinds === undefined ||
+      Array.isArray(value.phaseKinds) &&
+      value.phaseKinds.every((kind) => typeof kind === 'string'))
   );
 }
 
@@ -88,6 +100,15 @@ export function pageTournamentIndex(
       matchCount: tournament.matchCount,
       mode: tournament.mode,
       hasImportedArchive: tournament.hasImportedArchive,
+      ...(tournament.winnerId !== undefined
+        ? { winnerId: tournament.winnerId }
+        : {}),
+      ...(tournament.winnerName !== undefined
+        ? { winnerName: tournament.winnerName }
+        : {}),
+      ...(tournament.phaseKinds !== undefined
+        ? { phaseKinds: tournament.phaseKinds }
+        : {}),
     })),
     tournamentPage: {
       page,
@@ -106,6 +127,9 @@ export function summarizeFullTournament(
   const createdAt = tournament.createdAt;
   const finishedAt = tournament.finishedAt;
   const startedAt = tournament.startedAt;
+  const winnerId = tournament.winnerId;
+  const winnerName = tournament.winnerName;
+  const phaseKinds = tournament.phaseKinds;
   let normalizedStartedAt: string | null = null;
   if (startedAt !== null && startedAt !== undefined) {
     if (!isDateString(startedAt)) return null;
@@ -170,7 +194,7 @@ export function summarizeFullTournament(
     }
   }
 
-  return {
+  const summary: TournamentSummary = {
     id: tournament.id,
     name: tournament.name,
     finishedAt,
@@ -181,4 +205,25 @@ export function summarizeFullTournament(
     mode,
     hasImportedArchive: tournament.importedArchive != null,
   };
+  if (
+    winnerId === undefined ||
+    winnerId === null ||
+    typeof winnerId === 'string'
+  ) {
+    summary.winnerId = winnerId;
+  }
+  if (
+    winnerName === undefined ||
+    winnerName === null ||
+    typeof winnerName === 'string'
+  ) {
+    summary.winnerName = winnerName;
+  }
+  if (
+    Array.isArray(phaseKinds) &&
+    phaseKinds.every((kind) => typeof kind === 'string')
+  ) {
+    summary.phaseKinds = phaseKinds;
+  }
+  return summary;
 }

@@ -51,7 +51,9 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
             tournament.tournamentSettings.usePercentageForGroups,
       ),
     );
-    final occupied = {for (final e in schedule.running) e.match.boardNumber};
+    final occupied = {
+      for (final e in schedule.blockingRunning) e.match.boardNumber,
+    };
     Widget title(String text) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Text(text, style: Theme.of(context).textTheme.titleLarge),
@@ -96,7 +98,7 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
           PopupMenuButton<int>(
             tooltip: 'Starten / vorziehen',
             enabled:
-                !schedule.running.any(
+                !schedule.blockingRunning.any(
                   (e) => e.players.any(assignment.entry.players.contains),
                 ) &&
                 occupied.length < tournament.boardCount,
@@ -359,7 +361,8 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
                 key: ValueKey('play-block-$block'),
                 number: block + 1,
                 next: block == firstBlock,
-                waitingForBoards: block > 0 && schedule.running.isNotEmpty,
+                waitingForBoards:
+                    block > 0 && schedule.blockingRunning.isNotEmpty,
                 parallelCount: blocks[block]!.length,
                 children: [
                   for (final assignment in blocks[block]!)

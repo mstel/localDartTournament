@@ -372,7 +372,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Auswechseln bestätigen?'), findsOneWidget);
     expect(
-      find.textContaining('Ihre Mannschaft hat danach noch 1 Auswechselungen'),
+      find.textContaining('Ihre Mannschaft hat danach noch 3 Auswechselungen'),
       findsOneWidget,
     );
     await tester.tap(find.text('Ja, auswechseln'));
@@ -383,11 +383,129 @@ void main() {
     expect(storage.saved!.leagueMatch!.substitutionsRemaining(0), 1);
     expect(
       storage.saved!.activityLog.last.message,
-      'Heim hat H1 gegen H5 ausgewechselt. Übrige Auswechselungen: 1',
+      'Heim hat H1 gegen H5 ausgewechselt. Übrige Auswechselungen: 3',
     );
-    expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
+    expect(find.text('3 von 4 Auswechselungen verfügbar'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'repeated add-substitution clicks count visibly and stop at maximum',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final storage = _MemoryStorage();
+      final league = LeagueMatch.adjusted(
+        homeTeam: 'Heim',
+        awayTeam: 'Gast',
+        homePlayers: const ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'],
+        awayPlayers: const ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'],
+        starterCount: 4,
+        maxReservePlayers: 2,
+        singlesPerPlayer: 1,
+        doublesCount: 1,
+        substitutionLimit: 2,
+      );
+      final tournament = CreatedTournament(
+        name: 'Freundschaft',
+        players: [
+          for (final name in [...league.homePlayers, ...league.awayPlayers])
+            TournamentPlayer(name: name, isGenerated: false),
+        ],
+        stages: [],
+        runStages: [],
+        leagueMatch: league,
+        directorModeEnabled: true,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TournamentRunPage(
+            tournament: tournament,
+            tournamentStorage: storage,
+            runController: TournamentRunController(storage: storage),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Einstellungen'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Teamoptionen'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Teamoptionen'));
+      await tester.pumpAndSettle();
+      final addBudget = find.byKey(
+        const ValueKey('league-add-substitution-home'),
+      );
+      await tester.scrollUntilVisible(
+        addBudget,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      // Fünf Klicks führen von 2 auf sichtbare 7; es entsteht kein verstecktes
+      // Kontingent hinter der alten Anzeige „2 verfügbar“.
+      for (var expected = 3; expected <= 7; expected++) {
+        await tester.tap(addBudget);
+        await tester.pumpAndSettle();
+        expect(storage.saved!.leagueMatch!.substitutionLimitFor(0), expected);
+        expect(
+          find.text('$expected von $expected Auswechselungen verfügbar'),
+          findsOneWidget,
+        );
+        expect(storage.saved!.leagueMatch!.substitutions, isEmpty);
+        expect(
+          storage.saved!.activityLog.last.message,
+          contains('Verfügbar: $expected'),
+        );
+      }
+
+      // Weitere Klicks bis zur festen Obergrenze 10; danach ist der Button
+      // deaktiviert und es gibt kein weiteres Kontingent.
+      for (var click = 0; click < 3; click++) {
+        await tester.tap(addBudget);
+        await tester.pumpAndSettle();
+      }
+      expect(storage.saved!.leagueMatch!.substitutionLimitFor(0), 10);
+      expect(tester.widget<OutlinedButton>(addBudget).onPressed, isNull);
+
+      // Eine Auswechselung verbraucht genau ein Kontingent und zeigt den Stand.
+      final substitute = find.byKey(
+        const ValueKey('league-substitutions-home'),
+      );
+      await tester.scrollUntilVisible(
+        substitute,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(substitute);
+      await tester.pumpAndSettle();
+      final dialog = find.byType(AlertDialog).last;
+      await tester.tap(find.descendant(of: dialog, matching: find.text('H1')));
+      await tester.tap(find.descendant(of: dialog, matching: find.text('H5')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Auswechseln')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ja, auswechseln'));
+      await tester.pumpAndSettle();
+      expect(storage.saved!.leagueMatch!.substitutionLimitFor(0), 10);
+      expect(storage.saved!.leagueMatch!.substitutionsUsed(0), 1);
+      expect(find.text('9 von 10 Auswechselungen verfügbar'), findsOneWidget);
+      expect(
+        storage.saved!.activityLog.last.message,
+        contains('Übrige Auswechselungen: 9'),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('traditional setup allows choosing the board count', (
     tester,
@@ -472,7 +590,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Teamoptionen'));
     await tester.pumpAndSettle();
-    final addBudget = find.byKey(const ValueKey('league-add-substitution-home'));
+    final addBudget = find.byKey(
+      const ValueKey('league-add-substitution-home'),
+    );
     await tester.scrollUntilVisible(
       addBudget,
       300,
@@ -492,8 +612,8 @@ void main() {
       storage.saved!.activityLog.last.message,
       contains('Auswechselung hinzugefügt'),
     );
-    expect(find.text('2 Auswechselungen verfügbar'), findsOneWidget);
-    expect(find.text('1 Auswechselungen verfügbar'), findsOneWidget);
+    expect(find.text('2 von 2 Auswechselungen verfügbar'), findsOneWidget);
+    expect(find.text('1 von 1 Auswechselungen verfügbar'), findsOneWidget);
 
     final substitutions = find.byKey(
       const ValueKey('league-substitutions-home'),
@@ -524,7 +644,7 @@ void main() {
       storage.saved!.activityLog.last.message,
       contains('Heim hat H1 gegen H5 ausgewechselt'),
     );
-    expect(find.text('1 Auswechselungen verfügbar'), findsNWidgets(2));
+    expect(find.text('1 von 2 Auswechselungen verfügbar'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

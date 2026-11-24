@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../tournaments/domain/director_schedule_modes.dart';
 import '../../tournaments/domain/tournament_settings.dart';
 import '../data/director_mode_defaults.dart';
 
@@ -12,9 +13,9 @@ Future<void> showDirectorModeDefaultsDialog(BuildContext context) async {
     builder: (context) => DirectorModeDefaultsDialog(initial: initial),
   );
   if (saved == true && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Standardwerte gespeichert.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Standardwerte gespeichert.')));
   }
 }
 
@@ -28,7 +29,8 @@ class DirectorModeDefaultsDialog extends StatefulWidget {
       _DirectorModeDefaultsDialogState();
 }
 
-class _DirectorModeDefaultsDialogState extends State<DirectorModeDefaultsDialog> {
+class _DirectorModeDefaultsDialogState
+    extends State<DirectorModeDefaultsDialog> {
   late DirectorModeDefaults _value = widget.initial;
   bool _saving = false;
 
@@ -57,155 +59,164 @@ class _DirectorModeDefaultsDialogState extends State<DirectorModeDefaultsDialog>
           maxHeight: MediaQuery.sizeOf(context).height * 0.75,
         ),
         child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Die Werte gelten für neu erstellte Turniere und Ligaspiele. Bestehende Turniere bleiben unverändert.',
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Turniere',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Spielleiter-Modus aktivieren'),
-                      subtitle: const Text('Standard: Ja'),
-                      value: _value.tournamentsEnabled,
-                      onChanged: _saving
-                          ? null
-                          : (enabled) => setState(
-                              () => _value = _value.copyWith(
-                                tournamentsEnabled: enabled,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Die Werte gelten für neu erstellte Turniere und Ligaspiele. Bestehende Turniere bleiben unverändert.',
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Turniere',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Spielleiter-Modus aktivieren'),
+                        subtitle: const Text('Standard: Ja'),
+                        value: _value.tournamentsEnabled,
+                        onChanged: _saving
+                            ? null
+                            : (enabled) => setState(
+                                () => _value = _value.copyWith(
+                                  tournamentsEnabled: enabled,
+                                ),
                               ),
+                      ),
+                      _dropdown<String>(
+                        label: 'Spielplanmodus',
+                        value: _value.tournamentScheduleMode,
+                        items: const [
+                          ('fixed_schedule', 'Fester Spielplan'),
+                          ('dynamic', 'Dynamisch'),
+                        ],
+                        onChanged: (mode) => setState(
+                          () => _value = _value.copyWith(
+                            tournamentScheduleMode: mode,
+                            tournamentBoardAssignment:
+                                DirectorScheduleModes.schedulingStrategy(
+                                  _value.tournamentBoardAssignment,
+                                  mode,
+                                ),
+                          ),
+                        ),
+                      ),
+                      if (_value.tournamentScheduleMode !=
+                          DirectorScheduleModes.dynamicMode)
+                        _dropdown<String>(
+                          label: 'Boardzuweisung',
+                          value: _value.tournamentBoardAssignment,
+                          items: const [
+                            ('group', 'Gruppenbasiert'),
+                            ('global', 'Turnierweit optimiert'),
+                          ],
+                          onChanged: (mode) => setState(
+                            () => _value = _value.copyWith(
+                              tournamentBoardAssignment: mode,
                             ),
-                    ),
-                    _dropdown<String>(
-                      label: 'Spielplanmodus',
-                      value: _value.tournamentScheduleMode,
-                      items: const [
-                        (
-                          'fixed_schedule',
-                          'Fester Spielplan',
+                          ),
                         ),
-                        ('dynamic', 'Dynamisch aus Vorschlägen'),
-                      ],
-                      onChanged: (mode) => setState(
-                        () => _value = _value.copyWith(
-                          tournamentScheduleMode: mode,
-                        ),
-                      ),
-                    ),
-                    _dropdown<String>(
-                      label: 'Boardzuweisung',
-                      value: _value.tournamentBoardAssignment,
-                      items: const [
-                        ('group', 'Gruppenbasiert'),
-                        ('global', 'Turnierweit optimiert'),
-                      ],
-                      onChanged: (mode) => setState(
-                        () => _value = _value.copyWith(
-                          tournamentBoardAssignment: mode,
-                        ),
-                      ),
-                    ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Player Insights anzeigen'),
-                      subtitle: const Text('Standard: Aus'),
-                      value: _value.tournamentPlayerInsights,
-                      onChanged: _saving
-                          ? null
-                          : (enabled) => setState(
-                              () => _value = _value.copyWith(
-                                tournamentPlayerInsights: enabled,
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Player Insights anzeigen'),
+                        subtitle: const Text('Standard: Aus'),
+                        value: _value.tournamentPlayerInsights,
+                        onChanged: _saving
+                            ? null
+                            : (enabled) => setState(
+                                () => _value = _value.copyWith(
+                                  tournamentPlayerInsights: enabled,
+                                ),
                               ),
-                            ),
-                    ),
-                    const Divider(),
-                    _AudioDefaultsEditor(
-                      title: 'Sprachausgabe für Turniere',
-                      enabled: !_saving,
-                      value: _value.tournamentAudio,
-                      onChanged: (audio) => setState(
-                        () => _value = _value.copyWith(tournamentAudio: audio),
                       ),
-                    ),
-                  ],
+                      const Divider(),
+                      _AudioDefaultsEditor(
+                        title: 'Sprachausgabe für Turniere',
+                        enabled: !_saving,
+                        value: _value.tournamentAudio,
+                        onChanged: (audio) => setState(
+                          () =>
+                              _value = _value.copyWith(tournamentAudio: audio),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Liga & Freundschaft',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Spielleiter-Modus'),
-                      subtitle: const Text(
-                        'Für Ligaspiele immer aktiv und nicht änderbar.',
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Liga & Freundschaft',
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      value: true,
-                      onChanged: null,
-                    ),
-                    _dropdown<String>(
-                      label: 'Spielplanmodus',
-                      value: _value.leagueScheduleMode,
-                      items: const [
-                        ('fixed_schedule', 'Fester Spielplan'),
-                        ('dynamic', 'Dynamisch aus Vorschlägen'),
-                      ],
-                      onChanged: (mode) => setState(
-                        () => _value = _value.copyWith(leagueScheduleMode: mode),
-                      ),
-                    ),
-                    _dropdown<String>(
-                      label: 'Partievorschläge',
-                      value: _value.leagueSuggestionMode,
-                      items: const [
-                        (
-                          'mirror',
-                          'Flexible Boardwahl - Gespiegelte Partievorschläge',
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Spielleiter-Modus'),
+                        subtitle: const Text(
+                          'Für Ligaspiele immer aktiv und nicht änderbar.',
                         ),
-                        (
-                          'assigned',
-                          'Fest zugewiesene Partien - Keine Doppelungen',
+                        value: true,
+                        onChanged: null,
+                      ),
+                      _dropdown<String>(
+                        label: 'Spielplanmodus',
+                        value: _value.leagueScheduleMode,
+                        items: const [
+                          ('fixed_schedule', 'Fester Spielplan'),
+                          ('dynamic', 'Dynamisch aus Vorschlägen'),
+                        ],
+                        onChanged: (mode) => setState(
+                          () => _value = _value.copyWith(
+                            leagueScheduleMode: mode,
+                          ),
                         ),
-                      ],
-                      onChanged: (mode) => setState(
-                        () => _value = _value.copyWith(leagueSuggestionMode: mode),
                       ),
-                    ),
-                    const Divider(),
-                    _AudioDefaultsEditor(
-                      title: 'Sprachausgabe für Liga & Freundschaft',
-                      enabled: !_saving,
-                      value: _value.leagueAudio,
-                      onChanged: (audio) => setState(
-                        () => _value = _value.copyWith(leagueAudio: audio),
+                      _dropdown<String>(
+                        label: 'Partievorschläge',
+                        value: _value.leagueSuggestionMode,
+                        items: const [
+                          (
+                            'mirror',
+                            'Flexible Boardwahl - Gespiegelte Partievorschläge',
+                          ),
+                          (
+                            'assigned',
+                            'Fest zugewiesene Partien - Keine Doppelungen',
+                          ),
+                        ],
+                        onChanged: (mode) => setState(
+                          () => _value = _value.copyWith(
+                            leagueSuggestionMode: mode,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      const Divider(),
+                      _AudioDefaultsEditor(
+                        title: 'Sprachausgabe für Liga & Freundschaft',
+                        enabled: !_saving,
+                        value: _value.leagueAudio,
+                        onChanged: (audio) => setState(
+                          () => _value = _value.copyWith(leagueAudio: audio),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
     ),
     actions: [
       TextButton(
@@ -230,7 +241,10 @@ class _DirectorModeDefaultsDialogState extends State<DirectorModeDefaultsDialog>
     child: DropdownButtonFormField<T>(
       initialValue: value,
       isExpanded: true,
-      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
       items: [
         for (final item in items)
           DropdownMenuItem<T>(value: item.$1, child: Text(item.$2)),
@@ -302,7 +316,7 @@ class _AudioDefaultsEditor extends StatelessWidget {
         value: value.speakNicknameWhenAvailable,
         onChanged: enabled
             ? (next) =>
-                onChanged(value.copyWith(speakNicknameWhenAvailable: next))
+                  onChanged(value.copyWith(speakNicknameWhenAvailable: next))
             : null,
       ),
       SwitchListTile.adaptive(
@@ -310,8 +324,9 @@ class _AudioDefaultsEditor extends StatelessWidget {
         title: const Text('Weitere Vorschläge vorlesen'),
         value: value.readAlternativeRecommendations,
         onChanged: enabled
-            ? (next) =>
-                onChanged(value.copyWith(readAlternativeRecommendations: next))
+            ? (next) => onChanged(
+                value.copyWith(readAlternativeRecommendations: next),
+              )
             : null,
       ),
       if (value.readAlternativeRecommendations)
