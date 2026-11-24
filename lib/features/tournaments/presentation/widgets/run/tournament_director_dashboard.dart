@@ -555,12 +555,39 @@ class _TournamentDirectorDashboardState
   Future<void> _setGlobalWaitlistCount(int count) async {
     if (count == widget.tournament.directorGlobalWaitlist.fixedCount) return;
     final previous = widget.tournament.directorGlobalWaitlist.copy();
-    setState(() => widget.tournament.directorGlobalWaitlist.fixedCount = count);
+    final snapshot = TournamentDirectorSnapshot(
+      widget.tournament,
+      widget.activeStage,
+    );
+    setState(() {
+      widget.tournament.directorGlobalWaitlist.fixedCount = count;
+      const controller = OrderOfPlayController();
+      controller.initializeGlobalWaitlist(
+        widget.tournament,
+        widget.activeStage,
+        allEntries: snapshot.entries,
+        schedule: snapshot.schedule,
+        isPreviewable: snapshot.isPreviewableMatch,
+      );
+    });
     try {
       await widget.onChange();
     } catch (_) {
-      widget.tournament.directorGlobalWaitlist = previous;
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          widget.tournament.directorGlobalWaitlist = previous;
+          const controller = OrderOfPlayController();
+          controller.initializeGlobalWaitlist(
+            widget.tournament,
+            widget.activeStage,
+            allEntries: snapshot.entries,
+            schedule: snapshot.schedule,
+            isPreviewable: snapshot.isPreviewableMatch,
+          );
+        });
+      } else {
+        widget.tournament.directorGlobalWaitlist = previous;
+      }
       rethrow;
     }
   }
@@ -575,39 +602,41 @@ class _TournamentDirectorDashboardState
     Set<GroupMatch> lockedMatches = const {},
     Map<GroupMatch, int> plannedBoards = const {},
     bool hideBoardLabels = false,
+    bool showTitle = true,
     VoidCallback? onUndoLastMatch,
   }) => _box([
-    Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 12,
-      runSpacing: 8,
-      children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        if (title == 'Spielplan' &&
-            widget.tournament.fixedScheduleManuallyAdjusted)
-          Text(
-            'Manuell angepasst',
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-        if (title == 'Spielplan' &&
-            (_canRecomputeSchedule || _canEditFixedSchedule))
-          _fixedScheduleActions('queue'),
-        if (onUndoLastMatch != null && entries.isNotEmpty)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              key: const ValueKey('director-recent-results-undo-last-match'),
-              onPressed: onUndoLastMatch,
-              icon: const Icon(Icons.undo, size: 18),
-              label: const Text('Letzte Partie rückgängig'),
+    if (showTitle)
+      Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          if (title == 'Spielplan' &&
+              widget.tournament.fixedScheduleManuallyAdjusted)
+            Text(
+              'Manuell angepasst',
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
-          ),
-      ],
-    ),
-    const SizedBox(height: 8),
+          if (title == 'Spielplan' &&
+              (_canRecomputeSchedule || _canEditFixedSchedule))
+            _fixedScheduleActions('queue'),
+          if (onUndoLastMatch != null && entries.isNotEmpty)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const ValueKey('director-recent-results-undo-last-match'),
+                onPressed: onUndoLastMatch,
+                icon: const Icon(Icons.undo, size: 18),
+                label: const Text('Letzte Partie rückgängig'),
+              ),
+            ),
+        ],
+      ),
+    if (showTitle) const SizedBox(height: 8),
     if (entries.isEmpty)
       Text(emptyMessage)
     else
@@ -966,6 +995,9 @@ class _TournamentDirectorDashboardState
     final directorPlan = activeStageEntries
         .where((entry) => entry.match.hasPlayers && !entry.match.isResolved)
         .toList();
+    final displayedDirectorPlan = state.usesGlobalWaitlist
+        ? state.globalWaitlist.queue
+        : directorPlan;
     final runningMatches = state.schedule.running
         .map((entry) => entry.match)
         .toSet();
@@ -1005,9 +1037,26 @@ class _TournamentDirectorDashboardState
         return pendingOrder[a.match]!.compareTo(pendingOrder[b.match]!);
       });
     }
+    final fixedGlobalSchedule =
+        t.directorModeEnabled &&
+        t.directorPlayOrderMode == 'fixed_schedule' &&
+        t.directorSchedulingStrategy == 'global';
+    final fixedGlobalEntries = directorPlan
+        .where(
+          (entry) =>
+              !runningMatches.contains(entry.match) &&
+              state.isPreviewableMatch(entry.match),
+        )
+        .take(3)
+        .toList();
     final boardAssignments = <int, List<BoardAssignment>>{
       for (var board = 1; board <= t.boardCount; board++)
-        board: state.suggestionsForBoard(board),
+        board: fixedGlobalSchedule
+            ? [
+                for (var index = 0; index < fixedGlobalEntries.length; index++)
+                  BoardAssignment(fixedGlobalEntries[index], index, board),
+              ]
+            : state.suggestionsForBoard(board),
     };
     final mergedBoards = state
         .mergedGroupBoards()
@@ -1254,7 +1303,8 @@ class _TournamentDirectorDashboardState
                                             ),
                                       ),
                                     ),
-                                  if (widget.onStartOnBoard != null)
+                                  if (widget.onStartOnBoard != null &&
+                                      running == null)
                                     Tooltip(
                                       message:
                                           'Partie auf ${t.boardDisplayName(board)} starten',
@@ -1730,6 +1780,8 @@ class _TournamentDirectorDashboardState
           ],
         ],
         if (widget.directorModeEnabled) ...[
+          boardOverview,
+          const SizedBox(height: 12),
           if (state.usesGlobalWaitlist) ...[
             _box([
               GlobalWaitlistPanel(
@@ -1741,8 +1793,6 @@ class _TournamentDirectorDashboardState
             ]),
             const SizedBox(height: 12),
           ],
-          boardOverview,
-          const SizedBox(height: 12),
           if (!isCustomLeague)
             if (t.leagueMatch case final league?) ...[
               LeagueOverview(league: league),
@@ -1750,20 +1800,45 @@ class _TournamentDirectorDashboardState
               clock,
               const SizedBox(height: 12),
             ],
-          _matchQueue(
-            'Spielplan',
-            directorPlan,
-            emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
-            prioritizedMatches: flowPriority.prioritizedMatches,
-            lockedMatches: runningMatches,
-            plannedBoards: _hideScheduleBoardLabels
-                ? const {}
-                : {
-                    for (final assignment in upcoming)
-                      assignment.entry.match: assignment.board,
-                  },
-            hideBoardLabels: _hideScheduleBoardLabels,
-          ),
+          if (state.usesGlobalWaitlist)
+            _box([
+              ExpansionTile(
+                key: const ValueKey('dynamic-director-schedule-expansion'),
+                initiallyExpanded: false,
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  'Spielplan',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                children: [
+                  _matchQueue(
+                    'Spielplan',
+                    displayedDirectorPlan,
+                    showTitle: false,
+                    emptyMessage:
+                        'Keine weiteren Paarungen in der aktiven Phase.',
+                    prioritizedMatches: flowPriority.prioritizedMatches,
+                    lockedMatches: runningMatches,
+                    hideBoardLabels: true,
+                  ),
+                ],
+              ),
+            ])
+          else
+            _matchQueue(
+              'Spielplan',
+              displayedDirectorPlan,
+              emptyMessage: 'Keine weiteren Paarungen in der aktiven Phase.',
+              prioritizedMatches: flowPriority.prioritizedMatches,
+              lockedMatches: runningMatches,
+              plannedBoards: _hideScheduleBoardLabels
+                  ? const {}
+                  : {
+                      for (final assignment in upcoming)
+                        assignment.entry.match: assignment.board,
+                    },
+              hideBoardLabels: _hideScheduleBoardLabels,
+            ),
         ] else ...[
           _box([
             Wrap(

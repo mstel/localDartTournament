@@ -1113,6 +1113,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             ?.entry
             .match;
     if (targetMatch == null || !mounted) return;
+    if (!await _confirmUnassignedGroupsBeforeFirstMatch()) return;
     final previousBoard = targetMatch.boardNumber;
     final previousStartedAt = targetMatch.startedAt;
     final previousStartedPlayers = targetMatch.startedPlayers;
@@ -1136,6 +1137,65 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       if (mounted) setState(() {});
       rethrow;
     }
+  }
+
+  bool _hasPendingManualGroupAssignment(int stageIndex) {
+    if (stageIndex < 0 || stageIndex >= widget.tournament.stages.length) {
+      return false;
+    }
+    final stage = widget.tournament.stages[stageIndex];
+    return stage.isGroupStage &&
+        stage.groupAssignmentMode == 'manual' &&
+        stage.groupSlotOrder.isEmpty &&
+        !stage.groupDrawCompleted &&
+        !stage.groupDrawOnStart;
+  }
+
+  Future<bool> _confirmUnassignedGroupsBeforeFirstMatch() async {
+    final stageIndex = _activeStageIndex;
+    if (!_hasPendingManualGroupAssignment(stageIndex) ||
+        widget.tournament.activityLog.any(
+          (entry) => entry.type == 'group_assignment_acknowledged:$stageIndex',
+        )) {
+      return true;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Gruppen noch nicht zugewiesen'),
+        content: const Text(
+          'Die Gruppen sind noch nicht zugewiesen worden, sind Sie sich sicher?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Nein'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Ja'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return false;
+    final acknowledgementTimestamp = DateTime.now();
+    widget.tournament.addActivity(
+      'group_assignment_acknowledged:$stageIndex',
+      'Vorläufige Gruppenzuweisung für Phase ${stageIndex + 1} bestätigt.',
+      timestamp: acknowledgementTimestamp,
+    );
+    try {
+      await _saveTournamentProgress(propagateError: true);
+    } catch (_) {
+      widget.tournament.activityLog.removeWhere(
+        (entry) =>
+            entry.type == 'group_assignment_acknowledged:$stageIndex' &&
+            entry.timestamp == acknowledgementTimestamp,
+      );
+      rethrow;
+    }
+    return true;
   }
 
   Future<void> _resetRunningMatch(GroupMatch match) async {
@@ -4134,6 +4194,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }) async {
     if (_simulation != null) return;
     final correctingExistingResult = match.hasResult;
+    if (!correctingExistingResult &&
+        !await _confirmUnassignedGroupsBeforeFirstMatch()) {
+      return;
+    }
+    if (!mounted) return;
     if (match.withdrawalSignature != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -7792,8 +7857,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                               top: 8,
                                             ),
                                             child: DropdownButtonFormField<int>(
-                                              key: const ValueKey(
-                                                'global-waitlist-fixed-count',
+                                              key: ValueKey(
+                                                'global-waitlist-fixed-count-${widget.tournament.directorGlobalWaitlist.fixedCount}',
                                               ),
                                               initialValue: widget
                                                   .tournament

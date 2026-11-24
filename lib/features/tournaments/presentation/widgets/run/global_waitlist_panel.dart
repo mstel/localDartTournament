@@ -66,6 +66,9 @@ class GlobalWaitlistPanel extends StatelessWidget {
                   SizedBox(
                     width: 190,
                     child: DropdownButtonFormField<int>(
+                      key: ValueKey(
+                        'global-waitlist-panel-fixed-count-${plan.fixedCount}',
+                      ),
                       initialValue: plan.fixedCount,
                       isExpanded: true,
                       decoration: const InputDecoration(
@@ -118,9 +121,11 @@ class GlobalWaitlistPanel extends StatelessWidget {
                 ),
               )
             else
-              for (var index = 0;
-                  index < plan.fixed.length + plan.dynamic.length;
-                  index++)
+              for (
+                var index = 0;
+                index < plan.fixed.length + plan.dynamic.length;
+                index++
+              )
                 _MatchRow(
                   key: ValueKey('global-waitlist-entry-$index'),
                   number: index + 1,
@@ -141,7 +146,6 @@ class GlobalWaitlistPanel extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _MatchRow extends StatelessWidget {

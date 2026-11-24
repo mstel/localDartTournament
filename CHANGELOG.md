@@ -1,3 +1,11 @@
+# 4.0.2+132
+
+- Feste turnierweite Spielpläne behalten ihre Vorschläge in Leitung und Zweitmonitor auch bei belegten Boards sichtbar.
+- Im dynamischen Modus stehen die Boards über der gemeinsamen Warteliste. Der Spielplan ist einklappbar, startet geschlossen und zeigt nur die Begegnungen der Warteliste; doppelte Live-Board-Kacheln auf dem Zweitmonitor entfallen.
+- Die Gruppenzuweisungswarnung verschwindet nach dem ersten Start oder Ergebnis. Vor der ersten Aktion wird die noch offene manuelle Zuweisung bestätigt; bei Ablehnung wird die Aktion abgebrochen.
+- Änderungen der Anzahl fixierter Vorschauen berechnen und speichern die Warteliste erneut.
+- Version 4.0.2+132; Turnier-JSON-Schema 50 und SQLite-Schema 18 bleiben unverändert. `dart analyze` ist ohne Befunde.
+
 # 4.0.1+131
 
 - Zweitmonitor und Turnierleitung zeigen in der gemeinsamen Warteliste nur noch die nächsten Begegnungen in einer durchgehenden Liste; „Nächstes freies Board“, boardbezogene Sondermarkierungen, Fortschrittsbalken, „Aufholbedarf“, „Spieler“ und die technischen Kategorien „Fest eingeplant“ / „Dynamisch optimiert“ sind entfernt. Der echte Rückstand erscheint weiterhin im Hinweis-Widget.

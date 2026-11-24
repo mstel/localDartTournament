@@ -1132,9 +1132,36 @@ class _TournamentSecondScreenViewState
   Widget? _buildGroupAssignmentNotice(BuildContext context) {
     final colors = _displayColors(context);
     final pending = _groupAssignmentPending(widget.tournament);
+    final pendingStageIndexes = [
+      for (var index = 0; index < widget.tournament.stages.length; index++)
+        if (widget.tournament.stages[index].isGroupStage &&
+            widget.tournament.stages[index].groupAssignmentMode == 'manual' &&
+            widget.tournament.stages[index].groupSlotOrder.isEmpty &&
+            !widget.tournament.stages[index].groupDrawCompleted &&
+            !widget.tournament.stages[index].groupDrawOnStart)
+          index,
+    ];
+    final warningDismissed =
+        pendingStageIndexes.isNotEmpty &&
+        pendingStageIndexes.every(
+          (index) => widget.tournament.activityLog.any(
+            (entry) => entry.type == 'group_assignment_acknowledged:$index',
+          ),
+        );
+    final hasStartedMatches = widget.tournament.runStages.any(
+      (stage) =>
+          stage is GroupTournamentRunStage &&
+          stage.groups.any(
+            (group) => group.matches.any(
+              (match) => match.hasResult || match.startedAt != null,
+            ),
+          ),
+    );
     // Sobald der Zuweisungsdialog auf dem Monitor erscheint, ist der Hinweis
     // überflüssig und soll verschwinden.
-    if (_groupAssignmentDialogOpen ||
+    if (hasStartedMatches ||
+        warningDismissed ||
+        _groupAssignmentDialogOpen ||
         (!pending && !_showGroupAssignmentSuccess)) {
       return null;
     }
@@ -6003,145 +6030,26 @@ class _TournamentSecondScreenViewState
 
   Widget _buildGlobalWaitlistSecondScreen(
     BuildContext context,
-    CreatedTournament tournament,
-    TournamentDirectorSnapshot snapshot,
-    TournamentDisplayColors colors, {
+    TournamentDirectorSnapshot snapshot, {
     Object? playerInsightsError,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 6.0;
-        final columns = ((constraints.maxWidth + spacing) / 220).floor().clamp(
-          1,
-          tournament.boardCount,
-        );
-        final cardWidth =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        return SingleChildScrollView(
-          key: const ValueKey('second-screen-global-waitlist-scroll'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (playerInsightsError != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'Player-Insights konnten nicht geladen werden: '
-                    '$playerInsightsError',
-                    style: const TextStyle(color: Colors.amber),
-                  ),
-                ),
-              GlobalWaitlistPanel(snapshot: snapshot, dense: true),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  for (var board = 1; board <= tournament.boardCount; board++)
-                    SizedBox(
-                      key: ValueKey('second-screen-director-board-$board'),
-                      width: cardWidth,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colors.card,
-                          border: Border.all(color: colors.border, width: 2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Builder(
-                          builder: (context) {
-                            final running = snapshot.runningOn(board);
-                            final blocked = tournament.blockedBoards.contains(
-                              board,
-                            );
-                            final status = running != null
-                                ? 'LIVE'
-                                : blocked
-                                ? 'GESPERRT'
-                                : 'FREI';
-                            final statusColor = running != null
-                                ? TournamentDisplayPalette.accent
-                                : blocked
-                                ? Colors.redAccent
-                                : const Color(0xFF4ED9A4);
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        tournament
-                                            .boardDisplayName(board)
-                                            .toUpperCase(),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: colors.text,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 5,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withValues(
-                                          alpha: 0.18,
-                                        ),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        status,
-                                        style: TextStyle(
-                                          color: statusColor,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (running != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      running.match.participantShortLabel,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: colors.text),
-                                    ),
-                                  )
-                                else if (blocked)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      'Manuell gesperrt',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: colors.mutedText,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                ],
+    return SingleChildScrollView(
+      key: const ValueKey('second-screen-global-waitlist-scroll'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (playerInsightsError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Player-Insights konnten nicht geladen werden: '
+                '$playerInsightsError',
+                style: const TextStyle(color: Colors.amber),
               ),
-            ],
-          ),
-        );
-      },
+            ),
+          GlobalWaitlistPanel(snapshot: snapshot, dense: true),
+        ],
+      ),
     );
   }
 
@@ -6157,9 +6065,7 @@ class _TournamentSecondScreenViewState
     if (snapshot.usesGlobalWaitlist) {
       return _buildGlobalWaitlistSecondScreen(
         context,
-        tournament,
         snapshot,
-        colors,
         playerInsightsError: playerInsightsError,
       );
     }
@@ -6174,6 +6080,25 @@ class _TournamentSecondScreenViewState
       for (final entry in mergedGroupBoards.entries)
         MapEntry(entry.value, entry.key),
     ]..sort((a, b) => a.key.first.compareTo(b.key.first));
+    final fixedGlobalSchedule =
+        tournament.directorPlayOrderMode == 'fixed_schedule' &&
+        tournament.directorSchedulingStrategy == 'global';
+    final fixedGlobalEntries =
+        snapshot.entries
+            .where(
+              (entry) =>
+                  entry.stageIndex == activeIndex &&
+                  entry.match.hasPlayers &&
+                  !entry.match.isResolved &&
+                  entry.match.startedAt == null &&
+                  snapshot.isPreviewableMatch(entry.match),
+            )
+            .toList()
+          ..sort(
+            (a, b) => (a.match.fixedScheduleOrder ?? 1 << 30).compareTo(
+              b.match.fixedScheduleOrder ?? 1 << 30,
+            ),
+          );
     final expandNumberOffsets = <int, int>{};
     if (tournament.directorModeEnabled &&
         tournament.directorPlayOrderMode == 'fixed_schedule' &&
@@ -6270,7 +6195,27 @@ class _TournamentSecondScreenViewState
                                       ? '${boardNames.first} & ${boardNames.skip(1).map((name) => name.substring('Board '.length)).join(' & ')}'
                                       : boardNames.join(' & ');
                                   final recommendations = mergedGroupKey == null
-                                      ? snapshot.suggestionsForBoard(board)
+                                      ? fixedGlobalSchedule
+                                            ? [
+                                                for (
+                                                  var index = 0;
+                                                  index <
+                                                      min(
+                                                        3,
+                                                        fixedGlobalEntries
+                                                            .length,
+                                                      );
+                                                  index++
+                                                )
+                                                  BoardAssignment(
+                                                    fixedGlobalEntries[index],
+                                                    index,
+                                                    board,
+                                                  ),
+                                              ]
+                                            : snapshot.suggestionsForBoard(
+                                                board,
+                                              )
                                       : snapshot
                                                 .scheduleOverview
                                                 .presentation ==
