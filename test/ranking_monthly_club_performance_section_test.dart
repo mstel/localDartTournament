@@ -63,11 +63,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Gesamt-Performance pro Monat'), findsOneWidget);
-      expect(find.textContaining('2026'), findsNWidgets(4));
-      expect(find.text('Siegesrate · 2026'), findsOneWidget);
+      expect(find.textContaining('2026'), findsNWidgets(3));
       final chart = tester.widget<PlayerPerformanceTrendChart>(
         find.byType(PlayerPerformanceTrendChart),
       );
+      expect(chart.showMatchOutcomeDetails, isFalse);
       expect(chart.entries.map((entry) => entry.wins), [7, 12]);
       expect(chart.entries.map((entry) => entry.losses), [3, 8]);
       expect(tester.takeException(), isNull);

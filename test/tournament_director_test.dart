@@ -183,6 +183,89 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('dynamic director applies an odd fixed waitlist count', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final tournament = fixture(boards: 3)
+      ..directorModeEnabled = true
+      ..directorSchedulingStrategy = 'global'
+      ..directorPlayOrderMode = 'dynamic';
+    final players = [
+      for (var index = 1; index <= 18; index++)
+        TournamentPlayer.generated(index),
+    ];
+    tournament.players
+      ..clear()
+      ..addAll(players);
+    final stage = tournament.runStages.single as GroupTournamentRunStage;
+    stage.groups
+      ..clear()
+      ..addAll([
+        for (var groupIndex = 0; groupIndex < 3; groupIndex++)
+          () {
+            final members = players.skip(groupIndex * 6).take(6).toList();
+            return TournamentGroup(
+              name: 'Gruppe ${String.fromCharCode(65 + groupIndex)}',
+              playType: 'round_robin',
+              players: members,
+              matches: [
+                for (var home = 0; home < members.length; home++)
+                  for (var away = home + 1; away < members.length; away++)
+                    GroupMatch(
+                      homePlayer: members[home],
+                      awayPlayer: members[away],
+                      round: 1,
+                    ),
+              ],
+            );
+          }(),
+      ]);
+    final initial = TournamentDirectorSnapshot(tournament, 0);
+    const OrderOfPlayController().initializeGlobalWaitlist(
+      tournament,
+      0,
+      allEntries: initial.entries,
+      schedule: initial.schedule,
+      isPreviewable: initial.isPreviewableMatch,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TournamentDirectorDashboard(
+              tournament: tournament,
+              activeStage: 0,
+              directorModeEnabled: true,
+              onChange: () async {},
+              onResult: (_) async {},
+              onBlock: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('global-waitlist-panel-fixed-count-4')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('7 Begegnungen').last);
+    await tester.pumpAndSettle();
+
+    expect(tournament.directorGlobalWaitlist.fixedCount, 7);
+    expect(tournament.directorGlobalWaitlist.fixedKeys(0), hasLength(7));
+    expect(
+      find.byKey(const ValueKey('global-waitlist-entry-8')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('global-waitlist-entry-9')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('fixed schedule actions open from the drag handle context menu', (
     tester,
   ) async {

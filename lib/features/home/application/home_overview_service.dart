@@ -2,8 +2,6 @@ import '../../rankings/application/local_ranking_elo_service.dart';
 import '../../rankings/domain/local_elo_calculator.dart';
 import '../../rankings/domain/local_ranking.dart';
 import '../../statistics/domain/best_performance.dart';
-import '../../statistics/domain/player_monthly_performance.dart';
-import '../../statistics/domain/tournament_monthly_results.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
 import '../../tournaments/domain/tournament_models.dart';
@@ -21,21 +19,7 @@ abstract interface class HomeOverviewDataSource {
   );
 }
 
-/// Optional capability for sources that can provide the combined player-month
-/// performances used by the compact home win-rate chart.
-///
-/// Kept separate from [HomeOverviewDataSource] so existing simple test doubles
-/// do not have to implement it.
-abstract interface class HomeMonthlyPerformanceDataSource
-    extends HomeOverviewDataSource {
-  Future<List<PlayerMonthlyPerformance>> loadMonthlyPerformances(
-    Set<String> playerIds,
-    List<CreatedTournament> completedTournaments,
-  );
-}
-
-class LocalHomeOverviewDataSource
-    implements HomeOverviewDataSource, HomeMonthlyPerformanceDataSource {
+class LocalHomeOverviewDataSource implements HomeOverviewDataSource {
   LocalHomeOverviewDataSource({
     TournamentStorage? tournamentStorage,
     LocalAppDatabase? database,
@@ -64,25 +48,6 @@ class LocalHomeOverviewDataSource
       database: _database,
       tournamentStorage: _tournamentStorage,
     ).calculate(ranking, tournaments: tournaments);
-  }
-
-  @override
-  Future<List<PlayerMonthlyPerformance>> loadMonthlyPerformances(
-    Set<String> playerIds,
-    List<CreatedTournament> completedTournaments,
-  ) async {
-    final catalogIds = (await _database.loadPlayerProfiles())
-        .map((profile) => profile.id)
-        .toSet();
-    final ids = {...playerIds, ...catalogIds};
-    return combineMonthlyPlayerPerformances(
-      recorded: await _database.loadPlayerMonthlyPerformanceForPlayers(ids),
-      imported: await _database.loadMonthlyPlayerPerformances(ids),
-      tournamentResults: const TournamentMonthlyResultCalculator().calculate(
-        completedTournaments,
-        playerIds: ids,
-      ),
-    );
   }
 }
 
@@ -118,25 +83,6 @@ class HomeOverviewCard {
   final String icon;
 }
 
-/// One month of the club-wide win-rate trend shown on the homepage.
-class HomeWinRatePoint {
-  const HomeWinRatePoint({
-    required this.year,
-    required this.month,
-    required this.winRate,
-    required this.matches,
-    required this.wins,
-    required this.losses,
-  });
-
-  final int year;
-  final int month;
-  final double winRate;
-  final int matches;
-  final int wins;
-  final int losses;
-}
-
 class HomeOverviewSnapshot {
   const HomeOverviewSnapshot({
     this.activeTournament,
@@ -144,7 +90,6 @@ class HomeOverviewSnapshot {
     this.cards = const [],
     this.winnerName,
     this.winnerId,
-    this.winRateSeries = const [],
   });
 
   final HomeOverviewActiveTournament? activeTournament;
@@ -154,7 +99,6 @@ class HomeOverviewSnapshot {
   /// Winner of the most recent completed tournament shown in the card.
   final String? winnerName;
   final String? winnerId;
-  final List<HomeWinRatePoint> winRateSeries;
 }
 
 class HomeOverviewService {
@@ -179,19 +123,6 @@ class HomeOverviewService {
       for (final tournament in tournaments)
         tournament.id: TournamentTiming.matches(tournament),
     };
-    final completed = _completedTournaments(tournaments, matchesByTournament);
-    final playerIds = tournaments
-        .expand((tournament) => tournament.players)
-        .expand((player) => player.individuals)
-        .map((player) => player.profileId)
-        .whereType<String>()
-        .toSet();
-    final source = _source;
-    final winRateSeries = _winRateSeries(
-      source is HomeMonthlyPerformanceDataSource
-          ? await source.loadMonthlyPerformances(playerIds, completed)
-          : const <PlayerMonthlyPerformance>[],
-    );
     HomeOverviewActiveTournament? activeSummary;
     for (final tournament in active) {
       final matches =
@@ -236,7 +167,6 @@ class HomeOverviewService {
         cards: cards,
         winnerName: winnerName,
         winnerId: winnerId,
-        winRateSeries: winRateSeries,
       );
     }
 
@@ -288,41 +218,6 @@ class HomeOverviewService {
       ranking: ranking,
       elo: elo,
     );
-  }
-
-  List<HomeWinRatePoint> _winRateSeries(
-    List<PlayerMonthlyPerformance> performances,
-  ) {
-    final byMonth = <(int, int), ({int wins, int losses, int matches})>{};
-    for (final entry in performances) {
-      if (entry.matches <= 0) continue;
-      final period = (entry.year, entry.month);
-      final totals = byMonth.putIfAbsent(
-        period,
-        () => (wins: 0, losses: 0, matches: 0),
-      );
-      byMonth[period] = (
-        wins: totals.wins + entry.wins,
-        losses: totals.losses + entry.losses,
-        matches: totals.matches + entry.matches,
-      );
-    }
-    final periods = byMonth.keys.toList()
-      ..sort((left, right) {
-        final byYear = left.$1.compareTo(right.$1);
-        return byYear != 0 ? byYear : left.$2.compareTo(right.$2);
-      });
-    return [
-      for (final period in periods)
-        HomeWinRatePoint(
-          year: period.$1,
-          month: period.$2,
-          winRate: byMonth[period]!.wins * 100 / byMonth[period]!.matches,
-          matches: byMonth[period]!.matches,
-          wins: byMonth[period]!.wins,
-          losses: byMonth[period]!.losses,
-        ),
-    ];
   }
 
   List<HomeOverviewCard> _cards(

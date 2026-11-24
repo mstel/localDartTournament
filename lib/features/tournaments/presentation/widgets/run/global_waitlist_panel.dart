@@ -77,7 +77,7 @@ class GlobalWaitlistPanel extends StatelessWidget {
                         isDense: true,
                       ),
                       items: [
-                        for (final count in const [2, 4, 6, 8, 10, 12])
+                        for (var count = 1; count <= 12; count++)
                           DropdownMenuItem(
                             value: count,
                             child: Text('$count Begegnungen'),

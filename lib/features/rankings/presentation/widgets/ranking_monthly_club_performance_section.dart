@@ -30,6 +30,8 @@ class RankingMonthlyClubPerformanceSection extends StatelessWidget {
     return PlayerPerformanceTrendChart(
       title: 'Gesamt-Performance pro Monat',
       year: null,
+      seriesIndexes: const [0, 1, 2],
+      showMatchOutcomeDetails: false,
       entries: [
         for (final item in monthlyPerformance)
           PlayerMonthlyPerformance(

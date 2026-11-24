@@ -1,6 +1,6 @@
 # Dart Tournament Manager (DartTournamentPro) – Gesamtdokumentation
 
-**Version:** 4.0.2+132
+**Version:** 4.0.3+133
 **Stand:** November 2026
 **Zielgruppe:** Turnierleiter, Vereinsadministratoren, Spieler und Entwickler
 
@@ -183,9 +183,10 @@ Die Navigation basiert auf der responsiven `SportAppShell`:
 ### 3.4 Statistiken, Performance & Jahresrückblicke
 
 - **Startseite & Jahresrückblicke:**
-  - Startseite zeigt den Sieger des jüngsten abgeschlossenen Turniers und eine kompakte Siegesrate pro Monat.
+  - Startseite zeigt den Sieger des jüngsten abgeschlossenen Turniers und die rotierenden Übersichtskacheln; Spieler-Siegesraten bleiben in den Spielerstatistiken.
   - Auswertung nach Rangliste oder einzelnem Spieler für beliebige Jahre.
-  - Kennzahlen: Absolvierte Turniere, gespielte Legs, Monatsaktivität, Siegesraten und Bestleistungs-Kategorien.
+  - Der Teilnehmer-Jahresrückblick startet im Gesamtzeitraum wie der Spielerkatalog; Spielerquoten werden nicht als Vereinsquoten dargestellt.
+  - Kennzahlen: Absolvierte Turniere, gespielte Legs, Monatsaktivität, Spieler-Siegesraten und Bestleistungs-Kategorien.
   - Exportfunktion für die Jahresübersicht.
 - **Spieler-Vergleich (Head-to-Head):**
   - Direkter Vergleich zweier ausgewählter Spieler: Direkte Duelle, Siegquoten, Bestleistungen und Elo-Historie.

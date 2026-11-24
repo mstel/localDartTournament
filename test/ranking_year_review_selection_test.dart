@@ -334,6 +334,7 @@ void main() {
     expect(find.textContaining('Robin Teilnehmer (66.7 %)'), findsOneWidget);
     expect(find.text('Gesamt-Performance pro Monat'), findsOneWidget);
     expect(find.byType(PlayerPerformanceTrendChart), findsOneWidget);
+    expect(find.textContaining('Siegesrate ·'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -434,6 +435,76 @@ void main() {
     await tester.tap(find.text('Teilnehmer ohne Messwerte').last);
     await tester.pumpAndSettle();
     expect(find.text('–'), findsNWidgets(3));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('participant review defaults to catalog-wide win statistics', (
+    tester,
+  ) async {
+    final player = TournamentPlayer(
+      profileId: 'player',
+      name: 'Robin Teilnehmer',
+      isGenerated: false,
+    );
+    final opponent = TournamentPlayer(
+      profileId: 'empty-player',
+      name: 'Teilnehmer ohne Messwerte',
+      isGenerated: false,
+    );
+    final tournament = CreatedTournament(
+      id: 'review-win-rates',
+      name: 'Vereinsabend',
+      createdAt: DateTime(2025, 4, 3),
+      finishedAt: DateTime(2025, 4, 3),
+      players: [player, opponent],
+      stages: const [],
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppe',
+          groupPlayType: 'round_robin',
+          groups: [
+            TournamentGroup(
+              name: 'A',
+              playType: 'round_robin',
+              players: [player, opponent],
+              matches: [
+                GroupMatch(
+                  homePlayer: player,
+                  awayPlayer: opponent,
+                  round: 1,
+                  homeLegs: 3,
+                  awayLegs: 1,
+                  finishedAt: DateTime(2025, 4, 3),
+                ),
+              ],
+            ),
+          ],
+          qualificationPlan: null,
+          tieBreakers: const [],
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RankingYearReviewPage(
+          database: _YearReviewDatabase(),
+          tournamentStorage: _YearReviewStorage(tournaments: [tournament]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nach Teilnehmer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<PlayerProfile>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Robin Teilnehmer').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gesamter Zeitraum'), findsOneWidget);
+    expect(find.text('1'), findsWidgets);
+    expect(find.text('100.0 %'), findsOneWidget);
+    expect(find.text('75.0 %'), findsOneWidget);
+    expect(find.text('3 / 1'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

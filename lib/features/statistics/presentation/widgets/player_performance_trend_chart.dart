@@ -11,6 +11,7 @@ class PlayerPerformanceTrendChart extends StatefulWidget {
     required this.year,
     this.title = 'Performance-Entwicklung',
     this.seriesIndexes,
+    this.showMatchOutcomeDetails = true,
   });
 
   final List<PlayerMonthlyPerformance> entries;
@@ -19,6 +20,7 @@ class PlayerPerformanceTrendChart extends StatefulWidget {
 
   /// Optional filter, e.g. `const [3]` for a dedicated win-rate chart.
   final List<int>? seriesIndexes;
+  final bool showMatchOutcomeDetails;
 
   static const series = [
     (label: 'Scoring', color: Color(0xFF4FC3F7)),
@@ -57,6 +59,7 @@ class _PlayerPerformanceTrendChartState
               key: ValueKey('performance-chart-$chartYear-$series'),
               year: chartYear,
               series: series,
+              showMatchOutcomeDetails: widget.showMatchOutcomeDetails,
               entries: widget.entries
                   .where((entry) => entry.year == chartYear)
                   .toList(),
@@ -71,11 +74,13 @@ class _YearPerformanceChart extends StatefulWidget {
     super.key,
     required this.year,
     required this.series,
+    required this.showMatchOutcomeDetails,
     required this.entries,
   });
 
   final int year;
   final int series;
+  final bool showMatchOutcomeDetails;
   final List<PlayerMonthlyPerformance> entries;
 
   @override
@@ -115,7 +120,11 @@ class _YearPerformanceChartState extends State<_YearPerformanceChart> {
                 builder: (context, constraints) => Tooltip(
                   message: selected == null
                       ? ''
-                      : _performanceTooltipText(selected),
+                      : _performanceTooltipText(
+                          selected,
+                          showMatchOutcomeDetails:
+                              widget.showMatchOutcomeDetails,
+                        ),
                   child: MouseRegion(
                     onHover: (event) => _selectAt(
                       event.localPosition.dx,
@@ -185,7 +194,10 @@ class _YearPerformanceChartState extends State<_YearPerformanceChart> {
   }
 }
 
-String _performanceTooltipText(PlayerMonthlyPerformance entry) {
+String _performanceTooltipText(
+  PlayerMonthlyPerformance entry, {
+  required bool showMatchOutcomeDetails,
+}) {
   final month = const [
     'Januar',
     'Februar',
@@ -203,11 +215,13 @@ String _performanceTooltipText(PlayerMonthlyPerformance entry) {
   String format(double? value) => value?.toStringAsFixed(1) ?? '–';
   return [
     '$month ${entry.year}',
-    'Partien: ${entry.matches}',
-    'Gewonnen: ${entry.wins}',
-    'Verloren: ${entry.losses}',
-    'Siegesrate: ${format(entry.winRate)} %',
-    'Gewertete Legs: ${entry.weightedLegs}',
+    if (showMatchOutcomeDetails) ...[
+      'Partien: ${entry.matches}',
+      'Gewonnen: ${entry.wins}',
+      'Verloren: ${entry.losses}',
+      'Siegesrate: ${format(entry.winRate)} %',
+    ],
+    if (!showMatchOutcomeDetails) 'Gewertete Legs: ${entry.weightedLegs}',
     'Scoring: ${format(entry.scoring)}',
     'Average: ${format(entry.average)}',
     'Checkout Quote: ${entry.checkoutRate == null ? "–" : "${format(entry.checkoutRate)} %"}',

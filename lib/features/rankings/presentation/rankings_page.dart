@@ -73,6 +73,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
   LocalRanking? _selectedRanking;
   PlayerProfile? _selectedPlayer;
   int? _year = DateTime.now().year;
+  int? _playerYear;
   Future<RankingYearReview>? _rankingReview;
   Future<LocalPlayerStatistics>? _playerReview;
   Future<List<PlayerMonthlyPerformance>>? _playerPerformance;
@@ -105,10 +106,10 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
           : LocalStatisticsService(
               database: _database,
               storage: _tournamentStorage,
-            ).forPlayers({player.id}, year: _year);
+            ).forPlayers({player.id}, year: _playerYear);
       _playerPerformance = player == null
           ? null
-          : _loadPlayerPerformance(player.id, _year);
+          : _loadPlayerPerformance(player.id, _playerYear);
     });
   }
 
@@ -127,18 +128,22 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
 
   void _setYear(int? year) {
     setState(() {
-      _year = year;
-      if (_selectedRanking != null) {
-        _rankingReview = const RankingYearReviewService().calculate(
-          _selectedRanking!,
-          year,
-        );
+      if (_mode == _YearReviewMode.ranking) {
+        _year = year;
+      } else {
+        _playerYear = year;
       }
-      if (_selectedPlayer != null) {
+      if (_mode == _YearReviewMode.ranking && _selectedRanking != null) {
+        _rankingReview = RankingYearReviewService(
+          database: _database,
+          tournamentStorage: _tournamentStorage,
+        ).calculate(_selectedRanking!, year);
+      }
+      if (_mode == _YearReviewMode.player && _selectedPlayer != null) {
         _playerReview = LocalStatisticsService(
           database: _database,
           storage: _tournamentStorage,
-        ).forPlayers({_selectedPlayer!.id}, year: year);
+        ).forPlayers({_selectedPlayer!.id}, year: _playerYear);
         _playerPerformance = _loadPlayerPerformance(_selectedPlayer!.id, year);
       }
     });
@@ -190,6 +195,8 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
       for (var year = currentYear; year >= 2000; year--) year,
       if (_year != null && _year! < 2000) _year!,
       if (_year != null && _year! > currentYear) _year!,
+      if (_playerYear != null && _playerYear! < 2000) _playerYear!,
+      if (_playerYear != null && _playerYear! > currentYear) _playerYear!,
     }.toList()..sort((a, b) => b.compareTo(a));
 
     return Scaffold(
@@ -538,7 +545,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                 const Text('Jahr'),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int?>(
-                  initialValue: _year,
+                  initialValue: _playerYear,
                   menuMaxHeight: 320,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -582,7 +589,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${p.displayName} · ${_year == null ? "Gesamter Zeitraum" : "$_year"}',
+                            '${p.displayName} · ${_playerYear == null ? "Gesamter Zeitraum" : "$_playerYear"}',
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
@@ -593,7 +600,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                             children: [
                               _StatMiniCard(
                                 label:
-                                    'Turniere ${_year == null ? "gesamt" : "in $_year"}',
+                                    'Turniere ${_playerYear == null ? "gesamt" : "in $_playerYear"}',
                                 value: '${stats.tournaments}',
                               ),
                               _StatMiniCard(
@@ -722,7 +729,7 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
                                         padding: const EdgeInsets.only(top: 20),
                                         child: PlayerPerformanceTrendChart(
                                           entries: entries,
-                                          year: _year,
+                                          year: _playerYear,
                                         ),
                                       ),
                                   ],

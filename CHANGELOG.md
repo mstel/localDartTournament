@@ -1,3 +1,11 @@
+# 4.0.3+133
+
+- Entfernt die Siegesraten-Kachel und deren Statistikabfrage von der Startseite.
+- Entfernt Sieg-/Niederlagenwerte und Siegesraten aus der monatlichen Vereins-Performance im Jahresrückblick nach Rangliste.
+- Der Jahresrückblick nach Teilnehmer startet im Gesamtzeitraum wie der Spielerkatalog; Jahresfilter bleiben verfügbar. Jahreswechsel laden Ranglistenwerte weiter aus der aktiven Datenquelle.
+- Die dynamische gemeinsame Warteliste lässt nun alle Fixvorschauwerte von 1 bis 12 zu. Erhöhte Werte füllen die feste Vorschau und erweitern die angezeigten, kollisionsfreien Begegnungen.
+- Ergänzt Funktionstests für 18 Teilnehmer, 45 offene Partien, drei Boards und ungerade Fixzahlen. Es wurden keine Datenbank-Synchronisationen oder Live-Sichtbarkeitsfunktionen ausgeführt.
+
 # 4.0.2+132
 
 - Feste turnierweite Spielpläne behalten ihre Vorschläge in Leitung und Zweitmonitor auch bei belegten Boards sichtbar.
