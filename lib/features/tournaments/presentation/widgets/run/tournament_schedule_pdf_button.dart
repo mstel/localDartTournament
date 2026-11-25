@@ -243,6 +243,7 @@ class TournamentSchedulePdfButton extends StatelessWidget {
               tournament.tournamentSettings.groupMatchDeficitThreshold,
           usePercentageForGroups:
               tournament.tournamentSettings.usePercentageForGroups,
+          enabled: tournament.tournamentSettings.priorityHintsEnabled,
         ),
       );
       final orderedEntries = stageIndex < 0

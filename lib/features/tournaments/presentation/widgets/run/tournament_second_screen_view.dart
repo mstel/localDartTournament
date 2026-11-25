@@ -179,6 +179,7 @@ class _TournamentSecondScreenViewState
       playerMatchDeficitThreshold: settings.playerMatchDeficitThreshold,
       groupMatchDeficitThreshold: settings.groupMatchDeficitThreshold,
       usePercentageForGroups: settings.usePercentageForGroups,
+      enabled: settings.priorityHintsEnabled,
     );
   }
 

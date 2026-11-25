@@ -1,3 +1,9 @@
+# 4.0.5+135
+
+- Angepasste Freundschafts- und Ligaspiele berücksichtigen bei Rückstandshinweisen nur Spieler, die tatsächlich im Spielplan vorkommen. Die Hinweise lassen sich in den Turniereinstellungen aktivieren und sind für angepasste Spiele standardmäßig ausgeschaltet.
+- Die dynamische gemeinsame Warteliste zeigt genau die eingestellte Anzahl fixierter Begegnungen. Die Fixierungskennzeichnung ist im Zweitmonitor dieselbe wie in der Turnierleitung.
+- Regressionserwartungen für die exakte Länge der Warteliste aktualisiert. Turnier-JSON-Schema 50 und SQLite-Schema 18 bleiben unverändert.
+
 # 4.0.4+134
 
 - Dynamische gemeinsame Wartelisten werden auch bei vollständig belegten Teilnehmern aufgefüllt. Vorschläge für laufend gebundene Spieler bleiben sichtbar und als vorläufig übersprungen markiert.

@@ -20,7 +20,9 @@ class TournamentFlowPriority {
     TournamentRunStage? stage, {
     TournamentFlowPrioritySettings settings = defaultSettings,
   }) {
-    if (stage is! GroupTournamentRunStage || stage.groups.isEmpty) {
+    if (!settings.enabled ||
+        stage is! GroupTournamentRunStage ||
+        stage.groups.isEmpty) {
       return const TournamentFlowPriority(
         prioritizedMatches: {},
         deprioritizedMatches: {},

@@ -116,9 +116,9 @@ void main() {
     expect(tournament.directorGlobalWaitlist.fixedKeys(0), hasLength(7));
     expect(
       find.byKey(const ValueKey('global-waitlist-entry-8')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.byKey(const ValueKey('global-waitlist-entry-9')), findsOneWidget);
+    expect(find.byKey(const ValueKey('global-waitlist-entry-7')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

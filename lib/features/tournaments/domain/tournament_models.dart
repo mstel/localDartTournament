@@ -922,7 +922,11 @@ class CreatedTournament {
     Set<int>? completedStageIndexes,
     Set<String>? acknowledgedGroupEndReviews,
   }) : tournamentSettings = tournamentSettings == null
-           ? TournamentSettings(soundModeEnabled: soundModeEnabled ?? false)
+           ? TournamentSettings(
+               soundModeEnabled: soundModeEnabled ?? false,
+               priorityHintsEnabled:
+                   leagueMatch?.variant != LeagueMatchVariant.adjusted,
+             )
            : soundModeEnabled == null
            ? tournamentSettings
            : tournamentSettings.copyWith(soundModeEnabled: soundModeEnabled),
@@ -973,6 +977,11 @@ class CreatedTournament {
   }
 
   factory CreatedTournament.fromJson(Map<String, dynamic> json) {
+    final leagueMatch = json['leagueMatch'] == null
+        ? null
+        : LeagueMatch.fromJson(
+            Map<String, dynamic>.from(json['leagueMatch'] as Map),
+          );
     return CreatedTournament(
       id: json['id'] as String?,
       createdAt: _dateTimeFromJson(json['createdAt']),
@@ -983,11 +992,7 @@ class CreatedTournament {
       players: _mapListFromJson(json['players'], TournamentPlayer.fromJson),
       stages: _mapListFromJson(json['stages'], TournamentStage.fromJson),
       runStages: _runStageListFromJson(json['runStages']),
-      leagueMatch: json['leagueMatch'] == null
-          ? null
-          : LeagueMatch.fromJson(
-              Map<String, dynamic>.from(json['leagueMatch'] as Map),
-            ),
+      leagueMatch: leagueMatch,
       importedArchive: json['importedArchive'] == null
           ? null
           : ImportedTournamentArchive.fromJson(
@@ -1036,6 +1041,8 @@ class CreatedTournament {
       tournamentSettings: json['tournamentSettings'] is Map
           ? TournamentSettings.fromJson(
               Map<String, dynamic>.from(json['tournamentSettings'] as Map),
+              defaultPriorityHintsEnabled:
+                  leagueMatch?.variant != LeagueMatchVariant.adjusted,
             )
           : null,
       directorGroupBoardAssignments: {

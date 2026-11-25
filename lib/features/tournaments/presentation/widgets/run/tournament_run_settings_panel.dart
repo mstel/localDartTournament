@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../../shared/widgets/adaptive_content.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/tournament_settings.dart';
+import '../../../../league/domain/league_match.dart';
 
 class TournamentRunSettingsPanel extends StatefulWidget {
   const TournamentRunSettingsPanel({
@@ -226,6 +227,21 @@ class _TournamentRunSettingsPanelState
             'Spielplan Priorisierung',
             style: Theme.of(context).textTheme.titleMedium,
           ),
+          if (widget.tournament.leagueMatch?.variant ==
+              LeagueMatchVariant.adjusted)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Rückstandshinweise aktivieren'),
+              subtitle: const Text(
+                'Zeigt Hinweise zu Spielern mit Rückstand im Spielplan. Bei angepassten Freundschafts- und Ligaspielen standardmäßig deaktiviert.',
+              ),
+              value: settings.priorityHintsEnabled,
+              onChanged: _saving
+                  ? null
+                  : (enabled) => _save(
+                      settings.copyWith(priorityHintsEnabled: enabled),
+                    ),
+            ),
           const SizedBox(height: 6),
           const Text(
             'Zeigt offene Partien bevorzugt an, wenn Teilnehmer oder Gruppen im Spielplan zurückliegen.',

@@ -63,6 +63,7 @@ class TournamentDirectorSnapshot {
               tournament.tournamentSettings.groupMatchDeficitThreshold,
           usePercentageForGroups:
               tournament.tournamentSettings.usePercentageForGroups,
+          enabled: tournament.tournamentSettings.priorityHintsEnabled,
         ),
       );
   late final Set<GroupMatch> _prioritizedMatches =
@@ -171,6 +172,9 @@ class TournamentDirectorSnapshot {
   /// Names of players who trail the most-played participant by at least the
   /// configured backlog threshold after [entry] is counted.
   List<String> fewestMatchesPlayerNames(PlayEntry entry) {
+    if (!tournament.tournamentSettings.priorityHintsEnabled) {
+      return const [];
+    }
     final counts = <String, int>{};
     final names = <String, String>{};
     for (final candidate in entries.where(
@@ -179,12 +183,13 @@ class TournamentDirectorSnapshot {
       for (final player in [
         candidate.match.homePlayer,
         candidate.match.awayPlayer,
-        ...candidate.match.players,
       ]) {
         if (player == null) continue;
-        final id = player.profileId ?? player.name;
-        counts.putIfAbsent(id, () => 0);
-        names.putIfAbsent(id, () => player.name);
+        for (final individual in player.individuals) {
+          final id = individual.profileId ?? individual.name;
+          counts.putIfAbsent(id, () => 0);
+          names.putIfAbsent(id, () => individual.name);
+        }
       }
     }
     for (final played in [...schedule.finished, ...schedule.blockingRunning]) {
@@ -742,6 +747,7 @@ class TournamentDirectorSnapshot {
         playerMatchDeficitThreshold: settings.playerMatchDeficitThreshold,
         groupMatchDeficitThreshold: settings.groupMatchDeficitThreshold,
         usePercentageForGroups: settings.usePercentageForGroups,
+        enabled: settings.priorityHintsEnabled,
       ),
     );
     final prioritized = priority.prioritizedMatches;

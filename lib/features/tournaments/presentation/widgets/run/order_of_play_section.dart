@@ -49,6 +49,7 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
             tournament.tournamentSettings.groupMatchDeficitThreshold,
         usePercentageForGroups:
             tournament.tournamentSettings.usePercentageForGroups,
+        enabled: tournament.tournamentSettings.priorityHintsEnabled,
       ),
     );
     final occupied = {

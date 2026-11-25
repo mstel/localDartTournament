@@ -133,7 +133,7 @@ class GlobalWaitlistPanel extends StatelessWidget {
                       ? plan.fixed[index]
                       : plan.dynamic[index - plan.fixed.length],
                   fixed: index < plan.fixed.length,
-                  showFixedIndicator: onFixedCountChanged != null,
+                  showFixedIndicator: true,
                   skipped: plan.isSkipped(
                     index < plan.fixed.length
                         ? plan.fixed[index]

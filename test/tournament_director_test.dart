@@ -261,12 +261,16 @@ void main() {
     expect(tournament.directorGlobalWaitlist.fixedCount, 7);
     expect(tournament.directorGlobalWaitlist.fixedKeys(0), hasLength(7));
     expect(
-      find.byKey(const ValueKey('global-waitlist-entry-8')),
+      find.byKey(const ValueKey('global-waitlist-entry-7')),
       findsOneWidget,
     );
     expect(
+      find.byKey(const ValueKey('global-waitlist-entry-8')),
+      findsNothing,
+    );
+    expect(
       find.byKey(const ValueKey('global-waitlist-entry-9')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });

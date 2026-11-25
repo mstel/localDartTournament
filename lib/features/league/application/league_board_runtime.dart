@@ -41,13 +41,29 @@ class LeagueBoardRuntime {
           'awaySets': league.games[i].awaySets,
         }),
     ];
+    final scheduledPlayers = <String, TournamentPlayer>{};
+    for (final match in matches) {
+      for (final player in [match.homePlayer, match.awayPlayer]) {
+        if (player == null) continue;
+        for (final individual in player.individuals) {
+          scheduledPlayers.putIfAbsent(
+            individual.profileId ?? individual.name,
+            () => individual,
+          );
+        }
+      }
+    }
+    final groupPlayers = league.variant.name == 'adjusted'
+        ? scheduledPlayers.values.toList(growable: false)
+        : source.players;
     tournament = CreatedTournament(
       id: source.id,
       name: source.name,
       countsForRanking: source.countsForRanking,
       rankingIds: source.rankingIds,
       boardCount: source.boardCount,
-      players: source.players,
+      players: groupPlayers,
+      tournamentSettings: source.tournamentSettings,
       stages: [
         TournamentStage(
           name: 'Ligaspiel',
@@ -65,7 +81,7 @@ class LeagueBoardRuntime {
             TournamentGroup(
               name: 'Spielplan',
               playType: 'round_robin',
-              players: source.players,
+              players: groupPlayers,
               matches: matches,
             ),
           ],

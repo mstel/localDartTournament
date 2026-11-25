@@ -269,7 +269,7 @@ void main() {
     );
   });
 
-  test('increasing fixed encounters beyond four refills the preview', () {
+  test('increasing fixed encounters fills only the selected queue length', () {
     final t = _largeGlobalFixture();
     t.directorGlobalWaitlist.fixedCount = 9;
     t.directorGlobalWaitlist.setFixedKeys(0, const []);
@@ -278,8 +278,8 @@ void main() {
     final plan = TournamentDirectorSnapshot(t, 0).globalWaitlist;
     expect(plan.fixedCount, 9);
     expect(plan.fixed, hasLength(9));
-    expect(plan.dynamic, hasLength(GlobalWaitlistEngine.dynamicPreviewCount));
-    expect(plan.queue, hasLength(9 + GlobalWaitlistEngine.dynamicPreviewCount));
+    expect(plan.dynamic, isEmpty);
+    expect(plan.queue, hasLength(9));
     expect(t.directorGlobalWaitlist.fixedKeys(0), hasLength(9));
   });
 
@@ -321,7 +321,7 @@ void main() {
   );
 
   test(
-    'reducing fixed count releases overflow keys back to dynamic preview',
+    'reducing fixed count removes overflow keys and queue entries',
     () {
       final t = _largeGlobalFixture();
       t.directorGlobalWaitlist.fixedCount = 8;
@@ -335,7 +335,7 @@ void main() {
 
       expect(plan.fixed, hasLength(5));
       expect(t.directorGlobalWaitlist.fixedKeys(0), hasLength(5));
-      expect(plan.queue, hasLength(9));
+      expect(plan.queue, hasLength(5));
     },
   );
 

@@ -2,6 +2,7 @@ enum AnnouncementNameFormat { fullName, firstNameLastInitial }
 
 class TournamentSettings {
   const TournamentSettings({
+    this.priorityHintsEnabled = true,
     this.playerMatchDeficitThreshold = 2,
     this.groupMatchDeficitThreshold = 3,
     this.usePercentageForGroups = false,
@@ -22,6 +23,7 @@ class TournamentSettings {
   static const maximumThreshold = 999;
 
   final int playerMatchDeficitThreshold;
+  final bool priorityHintsEnabled;
   final int groupMatchDeficitThreshold;
   final bool usePercentageForGroups;
   final bool soundModeEnabled;
@@ -52,6 +54,7 @@ class TournamentSettings {
 
   TournamentSettings copyWith({
     int? playerMatchDeficitThreshold,
+    bool? priorityHintsEnabled,
     int? groupMatchDeficitThreshold,
     bool? usePercentageForGroups,
     bool? soundModeEnabled,
@@ -67,6 +70,7 @@ class TournamentSettings {
   }) => TournamentSettings(
     playerMatchDeficitThreshold:
         playerMatchDeficitThreshold ?? this.playerMatchDeficitThreshold,
+    priorityHintsEnabled: priorityHintsEnabled ?? this.priorityHintsEnabled,
     groupMatchDeficitThreshold:
         groupMatchDeficitThreshold ?? this.groupMatchDeficitThreshold,
     usePercentageForGroups:
@@ -89,7 +93,10 @@ class TournamentSettings {
     liveVisible: liveVisible ?? this.liveVisible,
   );
 
-  factory TournamentSettings.fromJson(Map<String, dynamic> json) {
+  factory TournamentSettings.fromJson(
+    Map<String, dynamic> json, {
+    bool defaultPriorityHintsEnabled = true,
+  }) {
     final storedNameFormat = json['announcementNameFormat'];
     final settings = TournamentSettings(
       playerMatchDeficitThreshold: _boundedInt(
@@ -98,6 +105,9 @@ class TournamentSettings {
         minimum: minimumThreshold,
         maximum: maximumThreshold,
       ),
+      priorityHintsEnabled:
+          json['priorityHintsEnabled'] as bool? ??
+          defaultPriorityHintsEnabled,
       groupMatchDeficitThreshold: _boundedInt(
         json['groupMatchDeficitThreshold'],
         fallback: 3,
@@ -147,6 +157,7 @@ class TournamentSettings {
   Map<String, dynamic> toJson() => {
     'version': schemaVersion,
     'playerMatchDeficitThreshold': playerMatchDeficitThreshold,
+    'priorityHintsEnabled': priorityHintsEnabled,
     'groupMatchDeficitThreshold': groupMatchDeficitThreshold,
     'usePercentageForGroups': usePercentageForGroups,
     'soundModeEnabled': soundModeEnabled,
@@ -175,6 +186,7 @@ class TournamentSettings {
   bool operator ==(Object other) =>
       other is TournamentSettings &&
       other.playerMatchDeficitThreshold == playerMatchDeficitThreshold &&
+      other.priorityHintsEnabled == priorityHintsEnabled &&
       other.groupMatchDeficitThreshold == groupMatchDeficitThreshold &&
       other.usePercentageForGroups == usePercentageForGroups &&
       other.soundModeEnabled == soundModeEnabled &&
@@ -191,6 +203,7 @@ class TournamentSettings {
   @override
   int get hashCode => Object.hash(
     playerMatchDeficitThreshold,
+    priorityHintsEnabled,
     groupMatchDeficitThreshold,
     usePercentageForGroups,
     soundModeEnabled,

@@ -213,6 +213,7 @@ class _GroupStageRunSectionState extends State<GroupStageRunSection> {
             tournament.tournamentSettings.groupMatchDeficitThreshold,
         usePercentageForGroups:
             tournament.tournamentSettings.usePercentageForGroups,
+        enabled: tournament.tournamentSettings.priorityHintsEnabled,
       ),
     );
     final orderedEntries = const OrderOfPlayController().orderedEntriesForStage(

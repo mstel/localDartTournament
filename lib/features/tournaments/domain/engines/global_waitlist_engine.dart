@@ -91,8 +91,9 @@ class GlobalWaitlistPlan {
 class GlobalWaitlistEngine {
   const GlobalWaitlistEngine();
 
-  /// The number of recalculated entries shown after the fixed preview.
-  static const dynamicPreviewCount = 4;
+  /// The dynamic preview is used only to calculate/persist fixed encounters;
+  /// it is not appended to the user-configured, fixed-length queue.
+  static const dynamicPreviewCount = 0;
 
   /// Dynamic play order is always global. A persisted legacy "dynamic +
   /// group" selection is normalised by the model layer, but accepting it here
