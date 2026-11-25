@@ -19,6 +19,7 @@ class TournamentFlowPriority {
   factory TournamentFlowPriority.forStage(
     TournamentRunStage? stage, {
     TournamentFlowPrioritySettings settings = defaultSettings,
+    CreatedTournament? tournament,
   }) {
     if (!settings.enabled ||
         stage is! GroupTournamentRunStage ||
@@ -35,52 +36,58 @@ class TournamentFlowPriority {
     final deprioritized = <GroupMatch>{};
     final delayedGroups = <String>{};
     final notices = <String>[];
-    final groupProgress = [
-      for (final group in stage.groups)
-        _GroupProgress(
-          played: _playedMatches(group.matches),
-          possible: _possibleMatches(group),
-        ),
-    ];
-    final referenceMatches = groupProgress
-        .map((progress) => progress.possible)
-        .reduce((a, b) => a > b ? a : b);
-    final leadingProgress = groupProgress
-        .map((progress) => progress.fraction)
-        .reduce((a, b) => a > b ? a : b);
-    // Keep the configured match threshold meaningful using the longest group schedule.
-    final groupDeficits = <int>[
-      for (final progress in groupProgress)
-        settings.usePercentageForGroups && referenceMatches > 0
-            ? ((leadingProgress - progress.fraction) * referenceMatches).round()
-            : groupProgress
-                      .map((item) => item.played)
-                      .reduce((a, b) => a > b ? a : b) -
-                  progress.played,
-    ];
-    final maximumGroupDeficit = groupDeficits.reduce((a, b) => a > b ? a : b);
-    if (maximumGroupDeficit >= settings.groupMatchDeficitThreshold) {
-      final trailingGroups = <String>[];
-      for (var index = 0; index < stage.groups.length; index++) {
-        if (groupDeficits[index] < settings.groupMatchDeficitThreshold) {
-          continue;
+    final leagueScope = _leaguePlayerScope(tournament);
+    if (leagueScope == null) {
+      final groupProgress = [
+        for (final group in stage.groups)
+          _GroupProgress(
+            played: _playedMatches(group.matches),
+            possible: _possibleMatches(group),
+          ),
+      ];
+      final referenceMatches = groupProgress
+          .map((progress) => progress.possible)
+          .reduce((a, b) => a > b ? a : b);
+      final leadingProgress = groupProgress
+          .map((progress) => progress.fraction)
+          .reduce((a, b) => a > b ? a : b);
+      // Keep the configured match threshold meaningful using the longest group schedule.
+      final groupDeficits = <int>[
+        for (final progress in groupProgress)
+          settings.usePercentageForGroups && referenceMatches > 0
+              ? ((leadingProgress - progress.fraction) * referenceMatches)
+                    .round()
+              : groupProgress
+                        .map((item) => item.played)
+                        .reduce((a, b) => a > b ? a : b) -
+                    progress.played,
+      ];
+      final maximumGroupDeficit = groupDeficits.reduce(
+        (a, b) => a > b ? a : b,
+      );
+      if (maximumGroupDeficit >= settings.groupMatchDeficitThreshold) {
+        final trailingGroups = <String>[];
+        for (var index = 0; index < stage.groups.length; index++) {
+          if (groupDeficits[index] < settings.groupMatchDeficitThreshold) {
+            continue;
+          }
+          final group = stage.groups[index];
+          delayedGroups.add(group.name);
+          trailingGroups.add(group.name);
+          priorities.addAll(group.matches.where(_isPrioritizable));
         }
-        final group = stage.groups[index];
-        delayedGroups.add(group.name);
-        trailingGroups.add(group.name);
-        priorities.addAll(group.matches.where(_isPrioritizable));
-      }
-      if (trailingGroups.isNotEmpty) {
-        notices.add(
-          settings.usePercentageForGroups
-              ? 'Priorität: ${trailingGroups.join(', ')} liegen im Spielplanfortschritt '
-                    'mindestens ${settings.groupMatchDeficitThreshold} von '
-                    '$referenceMatches möglichen Partien zurück. Offene Partien '
-                    'dieser Gruppen bevorzugt ansetzen.'
-              : 'Priorität: ${trailingGroups.join(', ')} liegen bei den gespielten Partien '
-                    'mindestens $maximumGroupDeficit Partien zurück. Offene Partien '
-                    'dieser Gruppen bevorzugt ansetzen.',
-        );
+        if (trailingGroups.isNotEmpty) {
+          notices.add(
+            settings.usePercentageForGroups
+                ? 'Priorität: ${trailingGroups.join(', ')} liegen im Spielplanfortschritt '
+                      'mindestens ${settings.groupMatchDeficitThreshold} von '
+                      '$referenceMatches möglichen Partien zurück. Offene Partien '
+                      'dieser Gruppen bevorzugt ansetzen.'
+                : 'Priorität: ${trailingGroups.join(', ')} liegen bei den gespielten Partien '
+                      'mindestens $maximumGroupDeficit Partien zurück. Offene Partien '
+                      'dieser Gruppen bevorzugt ansetzen.',
+          );
+        }
       }
     }
 
@@ -88,12 +95,19 @@ class TournamentFlowPriority {
     for (final group in stage.groups) {
       final playedByPlayer = <String, int>{};
       final namesByPlayer = <String, String>{};
-      for (final player in group.players) {
-        for (final individual in player.individuals) {
-          final id = individual.profileId ?? individual.name;
-          playedByPlayer.putIfAbsent(id, () => 0);
-          namesByPlayer[id] = individual.name;
+      if (leagueScope == null) {
+        for (final player in group.players) {
+          for (final individual in player.individuals) {
+            final id = individual.profileId ?? individual.name;
+            playedByPlayer.putIfAbsent(id, () => 0);
+            namesByPlayer[id] = individual.name;
+          }
         }
+      } else {
+        playedByPlayer.addAll({
+          for (final entry in leagueScope.activePlayers.entries) entry.key: 0,
+        });
+        namesByPlayer.addAll(leagueScope.activePlayers);
       }
       for (final match in group.matches) {
         if (!_countsAsPlayed(match)) continue;
@@ -101,6 +115,10 @@ class TournamentFlowPriority {
           if (player == null) continue;
           for (final individual in player.individuals) {
             final id = individual.profileId ?? individual.name;
+            if (leagueScope != null &&
+                !leagueScope.activePlayers.containsKey(id)) {
+              continue;
+            }
             playedByPlayer.update(id, (count) => count + 1, ifAbsent: () => 1);
           }
         }
@@ -114,7 +132,9 @@ class TournamentFlowPriority {
           .where(
             (entry) =>
                 mostPlayedPlayer - entry.value >=
-                settings.playerMatchDeficitThreshold,
+                    settings.playerMatchDeficitThreshold &&
+                (leagueScope == null ||
+                    leagueScope.substitutedPlayers.contains(entry.key)),
           )
           .map((entry) => entry.key)
           .toSet();
@@ -147,7 +167,7 @@ class TournamentFlowPriority {
     }
     // Group-level delays can prioritize every open match; keep matches involving
     // a caught-up player behind opportunities for lagging players to catch up.
-    for (final group in stage.groups) {
+    for (final group in leagueScope == null ? stage.groups : const <TournamentGroup>[]) {
       final playedByPlayer = <String, int>{};
       for (final player in group.players) {
         for (final individual in player.individuals) {
@@ -209,6 +229,39 @@ class TournamentFlowPriority {
       !match.isResolved &&
       match.startedAt == null &&
       match.boardNumber == null;
+
+  static _LeaguePlayerScope? _leaguePlayerScope(
+    CreatedTournament? tournament,
+  ) {
+    final league = tournament?.leagueMatch;
+    if (league == null || tournament == null) return null;
+    final activePlayers = <String, String>{};
+    final substitutedPlayers = <String>{};
+    for (var side = 0; side < 2; side++) {
+      final roster = side == 0 ? league.homePlayers : league.awayPlayers;
+      final offset = side == 0 ? 0 : league.homePlayers.length;
+      final substitutedIndexes = league.substitutions
+          .where((event) => event.teamSide == side)
+          .map((event) => event.inPlayerIndex)
+          .toSet();
+      for (final index in league.activePlayers(side)) {
+        if (index < 0 || index >= roster.length) continue;
+        final sourceIndex = offset + index;
+        final hasSourcePlayer = tournament.players.length > sourceIndex &&
+            tournament.players[sourceIndex].name == roster[index];
+        final id = hasSourcePlayer
+            ? tournament.players[sourceIndex].profileId ??
+                  'league:${tournament.id}:$side:$index'
+            : 'league:${tournament.id}:$side:$index';
+        activePlayers[id] = roster[index];
+        if (substitutedIndexes.contains(index)) substitutedPlayers.add(id);
+      }
+    }
+    return _LeaguePlayerScope(
+      activePlayers: activePlayers,
+      substitutedPlayers: substitutedPlayers,
+    );
+  }
 }
 
 class _GroupProgress {
@@ -218,4 +271,14 @@ class _GroupProgress {
   final int possible;
 
   double get fraction => possible == 0 ? 0 : played / possible;
+}
+
+class _LeaguePlayerScope {
+  const _LeaguePlayerScope({
+    required this.activePlayers,
+    required this.substitutedPlayers,
+  });
+
+  final Map<String, String> activePlayers;
+  final Set<String> substitutedPlayers;
 }

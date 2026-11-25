@@ -1015,6 +1015,7 @@ class _TournamentDirectorDashboardState
     final flowPriority = TournamentFlowPriority.forStage(
       t.runStages[widget.activeStage],
       settings: _prioritySettings,
+      tournament: t,
     );
     pendingMatches.sort((a, b) {
       if (t.directorPlayOrderMode != 'dynamic') {
@@ -1053,7 +1054,7 @@ class _TournamentDirectorDashboardState
     final boardAssignments = <int, List<BoardAssignment>>{
       for (var board = 1; board <= t.boardCount; board++)
         board: state.usesGlobalWaitlist
-            ? const <BoardAssignment>[]
+            ? state.suggestionsForBoard(board)
             : fixedGlobalSchedule
             ? [
                 for (var index = 0; index < fixedGlobalEntries.length; index++)
@@ -1075,9 +1076,7 @@ class _TournamentDirectorDashboardState
                   final running = state.runningOn(board);
                   final blocked = t.blockedBoards.contains(board);
                   final upcomingForBoard = boardAssignments[board]!;
-                  final recommendation = state.usesGlobalWaitlist
-                      ? null
-                      : state.recommendationForBoard(board);
+                  final recommendation = state.recommendationForBoard(board);
                   final suggestion = recommendation?.next;
                   final alternative = recommendation?.alternative;
                   final boardSuggestions = <BoardAssignment>[];
@@ -1476,6 +1475,17 @@ class _TournamentDirectorDashboardState
     final flowNotices = flowPriority.notices;
     _observeNotices(flowNotices);
 
+    final hasOperationalNotice =
+        widget.saveError != null ||
+        _actionError != null ||
+        waiting > 0 ||
+        (state.freeBoards.isEmpty &&
+            state.schedule.blockingRunning.isEmpty &&
+            state.ready.isNotEmpty) ||
+        (active.isNotEmpty && completed == active.length);
+    final showNoticePanel =
+        t.tournamentSettings.priorityHintsEnabled || hasOperationalNotice;
+
     final totalGames = active.length;
     final totalTournamentGames = state.entries
         .where((entry) => entry.match.hasPlayers)
@@ -1750,7 +1760,8 @@ class _TournamentDirectorDashboardState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.simulationControls != null)
-          LayoutBuilder(
+          if (showNoticePanel)
+            LayoutBuilder(
             builder: (context, constraints) {
               if (constraints.maxWidth >= 1100) {
                 return Row(
@@ -1771,10 +1782,14 @@ class _TournamentDirectorDashboardState
                 ],
               );
             },
-          )
+            )
+          else
+            widget.simulationControls!
         else ...[
-          notices,
-          const SizedBox(height: 12),
+          if (showNoticePanel) ...[
+            notices,
+            const SizedBox(height: 12),
+          ],
         ],
         if (!widget.directorModeEnabled) ...[
           status,

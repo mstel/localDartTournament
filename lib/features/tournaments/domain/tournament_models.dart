@@ -924,8 +924,7 @@ class CreatedTournament {
   }) : tournamentSettings = tournamentSettings == null
            ? TournamentSettings(
                soundModeEnabled: soundModeEnabled ?? false,
-               priorityHintsEnabled:
-                   leagueMatch?.variant != LeagueMatchVariant.adjusted,
+               priorityHintsEnabled: leagueMatch == null,
              )
            : soundModeEnabled == null
            ? tournamentSettings
@@ -1041,8 +1040,8 @@ class CreatedTournament {
       tournamentSettings: json['tournamentSettings'] is Map
           ? TournamentSettings.fromJson(
               Map<String, dynamic>.from(json['tournamentSettings'] as Map),
-              defaultPriorityHintsEnabled:
-                  leagueMatch?.variant != LeagueMatchVariant.adjusted,
+              defaultPriorityHintsEnabled: leagueMatch == null,
+              disableLegacyPriorityHints: leagueMatch != null,
             )
           : null,
       directorGroupBoardAssignments: {

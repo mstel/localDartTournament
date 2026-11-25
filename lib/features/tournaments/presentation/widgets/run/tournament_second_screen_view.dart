@@ -238,7 +238,7 @@ class _TournamentSecondScreenViewState
     _useCustomLayout = _loadedLayoutName != null;
     _monitorPlacements = _savedLayoutOrDefault();
     _initializeLiveAnimationBaseline(widget.tournament);
-    unawaited(_removeUnavailableRankingWidgets());
+    unawaited(_removeUnavailableMonitorWidgets());
     _refreshEloChanges();
     _refreshPlayerInsights();
     _refreshRankingStandings();
@@ -331,6 +331,9 @@ class _TournamentSecondScreenViewState
           widget.tournament.countsForRanking &&
           widget.tournament.rankingIds.isNotEmpty;
     }
+    if (placement.widgetId == 'hints') {
+      return widget.tournament.tournamentSettings.priorityHintsEnabled;
+    }
     if (placement.widgetId == 'teamComparison') {
       return widget.tournament.leagueMatch != null;
     }
@@ -385,7 +388,7 @@ class _TournamentSecondScreenViewState
     _monitorPlacements = _monitorPlacements
         .where(_isMonitorWidgetAvailable)
         .toList();
-    unawaited(_removeUnavailableRankingWidgets());
+    unawaited(_removeUnavailableMonitorWidgets());
     final resultFingerprint = _resultsInputFingerprint(widget.tournament);
     if (resultFingerprint != _eloInputFingerprint) {
       _refreshEloChanges(fingerprint: resultFingerprint);
@@ -471,30 +474,21 @@ class _TournamentSecondScreenViewState
     ],
   });
 
-  Future<void> _removeUnavailableRankingWidgets() async {
-    if (widget.tournament.leagueMatch == null &&
-        widget.tournament.countsForRanking &&
-        widget.tournament.rankingIds.isNotEmpty) {
-      return;
-    }
-
+  Future<void> _removeUnavailableMonitorWidgets() async {
     final changedLayouts = <String, List<SecondScreenWidgetPlacement>>{};
     for (final entry in widget.tournament.secondScreenLayouts.entries) {
       final filtered = entry.value
-          .where((placement) => placement.widgetId != 'ranking')
+          .where(_isMonitorWidgetAvailable)
           .toList();
       if (filtered.length != entry.value.length) {
         changedLayouts[entry.key] = filtered;
       }
     }
     final activeLayout = widget.tournament.secondScreenActiveLayout;
-    if (activeLayout != null &&
-        _monitorPlacements.any(
-          (placement) => placement.widgetId == 'ranking',
-        )) {
-      _monitorPlacements = _monitorPlacements
-          .where((placement) => placement.widgetId != 'ranking')
-          .toList();
+    if (activeLayout != null && changedLayouts.containsKey(activeLayout)) {
+      _monitorPlacements = _withIndependentColumns(
+        changedLayouts[activeLayout]!,
+      );
       changedLayouts[activeLayout] = List.of(_monitorPlacements);
     }
     try {
@@ -510,7 +504,7 @@ class _TournamentSecondScreenViewState
       if (mounted) {
         setState(
           () => _prioritySettingsError =
-              'Das inaktive Ranglisten-Widget konnte nicht aus dem Zweitmonitor-Layout entfernt werden: $error',
+              'Nicht verfügbare Widgets konnten nicht aus dem Zweitmonitor-Layout entfernt werden: $error',
         );
       }
     }
@@ -5281,6 +5275,7 @@ class _TournamentSecondScreenViewState
     final flowPriority = TournamentFlowPriority.forStage(
       stage,
       settings: _prioritySettings,
+      tournament: t,
     );
     final orderedEntries = const OrderOfPlayController().orderedEntriesForStage(
       t,
@@ -6034,11 +6029,30 @@ class _TournamentSecondScreenViewState
     TournamentDirectorSnapshot snapshot, {
     Object? playerInsightsError,
   }) {
+    final priority = TournamentFlowPriority.forStage(
+      snapshot.tournament.runStages[snapshot.stage],
+      settings: _prioritySettings,
+      tournament: snapshot.tournament,
+    );
     return SingleChildScrollView(
       key: const ValueKey('second-screen-global-waitlist-scroll'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          for (final notice in priority.notices)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.priority_high),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(notice)),
+                  ],
+                ),
+              ),
+            ),
           if (playerInsightsError != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -6070,6 +6084,11 @@ class _TournamentSecondScreenViewState
         playerInsightsError: playerInsightsError,
       );
     }
+    final flowPriority = TournamentFlowPriority.forStage(
+      tournament.runStages[activeIndex],
+      settings: _prioritySettings,
+      tournament: tournament,
+    );
     final mergedGroupBoards = snapshot.mergedGroupBoards();
     final boardToMergedGroup = <int, String>{
       for (final entry in mergedGroupBoards.entries)
@@ -6123,6 +6142,20 @@ class _TournamentSecondScreenViewState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              for (final notice in flowPriority.notices)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.priority_high),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(notice)),
+                      ],
+                    ),
+                  ),
+                ),
               if (playerInsightsError != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -6740,6 +6773,7 @@ class _TournamentSecondScreenViewState
     final priority = TournamentFlowPriority.forStage(
       stage,
       settings: _prioritySettings,
+      tournament: widget.tournament,
     );
     if (priority.notices.isEmpty && _prioritySettingsError == null) {
       return const Center(child: Text('Keine aktuellen Hinweise.'));

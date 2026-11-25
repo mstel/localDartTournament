@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../../shared/widgets/adaptive_content.dart';
 import '../../../domain/tournament_models.dart';
 import '../../../domain/tournament_settings.dart';
-import '../../../../league/domain/league_match.dart';
 
 class TournamentRunSettingsPanel extends StatefulWidget {
   const TournamentRunSettingsPanel({
@@ -224,24 +223,22 @@ class _TournamentRunSettingsPanelState
         ],
         if (widget.showPrioritySettings) ...[
           Text(
-            'Spielplan Priorisierung',
+            'Rückstandshinweise',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          if (widget.tournament.leagueMatch?.variant ==
-              LeagueMatchVariant.adjusted)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Rückstandshinweise aktivieren'),
-              subtitle: const Text(
-                'Zeigt Hinweise zu Spielern mit Rückstand im Spielplan. Bei angepassten Freundschafts- und Ligaspielen standardmäßig deaktiviert.',
-              ),
-              value: settings.priorityHintsEnabled,
-              onChanged: _saving
-                  ? null
-                  : (enabled) => _save(
-                      settings.copyWith(priorityHintsEnabled: enabled),
-                    ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Hinweise aktivieren'),
+            subtitle: const Text(
+              'Steuert Rückstandshinweise und das Hinweis-Widget auf dem Zweitmonitor. Bei Freundschafts- und Ligaspielen standardmäßig deaktiviert.',
             ),
+            value: settings.priorityHintsEnabled,
+            onChanged: _saving
+                ? null
+                : (enabled) => _save(
+                    settings.copyWith(priorityHintsEnabled: enabled),
+                  ),
+          ),
           const SizedBox(height: 6),
           const Text(
             'Zeigt offene Partien bevorzugt an, wenn Teilnehmer oder Gruppen im Spielplan zurückliegen.',
@@ -268,37 +265,40 @@ class _TournamentRunSettingsPanelState
                     maximum: TournamentSettings.maximumThreshold,
                   ),
                 ),
-                TextFormField(
-                  key: const ValueKey('group-match-deficit-threshold'),
-                  controller: _groupThreshold,
-                  enabled: !_saving,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Gruppenrückstand ab',
-                    suffixText: 'Partien',
-                    border: OutlineInputBorder(),
+                if (widget.tournament.leagueMatch == null)
+                  TextFormField(
+                    key: const ValueKey('group-match-deficit-threshold'),
+                    controller: _groupThreshold,
+                    enabled: !_saving,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Gruppenrückstand ab',
+                      suffixText: 'Partien',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => _validateRange(
+                      value,
+                      minimum: TournamentSettings.minimumThreshold,
+                      maximum: TournamentSettings.maximumThreshold,
+                    ),
                   ),
-                  validator: (value) => _validateRange(
-                    value,
-                    minimum: TournamentSettings.minimumThreshold,
-                    maximum: TournamentSettings.maximumThreshold,
-                  ),
-                ),
               ],
             ),
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Gruppenfortschritt relativ vergleichen'),
-            subtitle: const Text(
-              'Vergleicht den Anteil gespielter Partien und rechnet den Abstand auf die mögliche Partienzahl der größten Gruppe um.',
+          if (widget.tournament.leagueMatch == null)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Gruppenfortschritt relativ vergleichen'),
+              subtitle: const Text(
+                'Vergleicht den Anteil gespielter Partien und rechnet den Abstand auf die mögliche Partienzahl der größten Gruppe um.',
+              ),
+              value: settings.usePercentageForGroups,
+              onChanged: _saving
+                  ? null
+                  : (enabled) => _save(
+                      settings.copyWith(usePercentageForGroups: enabled),
+                    ),
             ),
-            value: settings.usePercentageForGroups,
-            onChanged: _saving
-                ? null
-                : (enabled) =>
-                      _save(settings.copyWith(usePercentageForGroups: enabled)),
-          ),
           const SizedBox(height: 8),
         ],
         if (widget.showHintAudioSettings) ...[

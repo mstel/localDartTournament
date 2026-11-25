@@ -8368,10 +8368,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                               const SizedBox(height: 12),
                               _achievementSettingsCard(),
                             ],
-                            if (widget.tournament.leagueMatch == null) ...[
-                              const SizedBox(height: 12),
-                              _hintSettingsCard(),
-                            ],
+                            const SizedBox(height: 12),
+                            _hintSettingsCard(),
                             const SizedBox(height: 12),
                             _tournamentTimingSettingsCard(),
                             const SizedBox(height: 12),

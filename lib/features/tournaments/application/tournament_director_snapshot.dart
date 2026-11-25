@@ -56,6 +56,7 @@ class TournamentDirectorSnapshot {
   late final TournamentFlowPriority _flowPriority =
       TournamentFlowPriority.forStage(
         tournament.runStages[stage],
+        tournament: tournament,
         settings: TournamentFlowPrioritySettings(
           playerMatchDeficitThreshold:
               tournament.tournamentSettings.playerMatchDeficitThreshold,
@@ -477,28 +478,7 @@ class TournamentDirectorSnapshot {
   List<BoardAssignment> suggestionsForBoard(int board, {int limit = 3}) {
     if (tournament.blockedBoards.contains(board)) return const [];
     if (usesGlobalWaitlist) {
-      // The board is not fixed in advance: every free board may take the next
-      // playable entry of the shared list. The board number is only the tile
-      // the suggestion is rendered on, not a pre-assignment. Temporarily busy
-      // preview entries stay visible in [waitlistPreviewEntries] but are never
-      // offered for an actual start here.
-      if (runningOn(board) != null) return const [];
-      final waitlist = globalWaitlist;
-      final busy = <String>{
-        for (final entry in schedule.blockingRunning) ...entry.players,
-      };
-      for (final entry in [...waitlist.fixed, ...waitlist.dynamic]) {
-        if (waitlist.isSkipped(entry)) continue;
-        if (entry.stageIndex != stage ||
-            !entry.match.hasPlayers ||
-            entry.match.isResolved ||
-            !isPreviewableMatch(entry.match) ||
-            entry.players.any(busy.contains)) {
-          continue;
-        }
-        return [BoardAssignment(entry, 0, board)];
-      }
-      return const [];
+      return _globalWaitlistBoardSuggestions(limit: limit)[board] ?? const [];
     }
     if (isDirectorManagedNormalRanking && isGlobalStrategy) {
       if (isFixedSchedule) {
@@ -658,6 +638,12 @@ class TournamentDirectorSnapshot {
 
   List<BoardAssignment> selectableForBoard(int board) {
     if (!freeBoards.contains(board)) return [];
+    if (usesGlobalWaitlist) {
+      return [
+        for (final entry in _globalWaitlistSelectableEntries().indexed)
+          BoardAssignment(entry.$2, entry.$1 ~/ tournament.boardCount, board),
+      ];
+    }
     if (hideScheduleBoardLabels && isFixedSchedule) {
       return flatGlobalFixedSuggestions(limit: 32)
           .map(
@@ -667,6 +653,87 @@ class TournamentDirectorSnapshot {
           .toList(growable: false);
     }
     return _selectableAssignments();
+  }
+
+  List<PlayEntry> _globalWaitlistSelectableEntries() {
+    final runningPlayers = <String>{
+      for (final running in schedule.blockingRunning) ...running.players,
+    };
+    final eligible = ready
+        .where(
+          (entry) =>
+              entry.stageIndex == stage &&
+              !entry.players.any(runningPlayers.contains),
+        )
+        .toList();
+    final order = {
+      for (var index = 0; index < entries.length; index++) entries[index]: index,
+    };
+    eligible.sort((a, b) {
+      final aPriority = _prioritizedMatches.contains(a.match);
+      final bPriority = _prioritizedMatches.contains(b.match);
+      if (aPriority != bPriority) return aPriority ? -1 : 1;
+      final aDeprioritized = _deprioritizedMatches.contains(a.match);
+      final bDeprioritized = _deprioritizedMatches.contains(b.match);
+      if (aDeprioritized != bDeprioritized) return aDeprioritized ? 1 : -1;
+      return (order[a] ?? 1 << 30).compareTo(order[b] ?? 1 << 30);
+    });
+
+    final selected = <PlayEntry>[];
+    final seen = <GroupMatch>{};
+    final waitlist = globalWaitlist;
+    for (final entry in [...waitlist.fixed, ...eligible]) {
+      if (waitlist.isSkipped(entry) ||
+          entry.stageIndex != stage ||
+          !entry.match.hasPlayers ||
+          entry.match.isResolved ||
+          !isPreviewableMatch(entry.match) ||
+          entry.players.any(runningPlayers.contains) ||
+          !seen.add(entry.match)) {
+        continue;
+      }
+      selected.add(entry);
+    }
+    return selected;
+  }
+
+  /// Distributes collision-free next-up suggestions over currently free
+  /// boards. The persisted waitlist keeps its configured size; this fallback
+  /// pool keeps every free board usable when that size is smaller than the
+  /// board count or its fixed entries collide.
+  Map<int, List<BoardAssignment>> _globalWaitlistBoardSuggestions({
+    required int limit,
+  }) {
+    if (limit < 1 || freeBoards.isEmpty) return const {};
+    final candidates = _globalWaitlistSelectableEntries();
+    final runningPlayers = <String>{
+      for (final running in schedule.blockingRunning) ...running.players,
+    };
+    final selectedMatches = <GroupMatch>{};
+    final result = <int, List<BoardAssignment>>{
+      for (final board in freeBoards) board: <BoardAssignment>[],
+    };
+    for (var wave = 0; wave < limit; wave++) {
+      final busyThisWave = <String>{...runningPlayers};
+      for (final board in freeBoards) {
+        final next = candidates
+            .where(
+              (entry) =>
+                  !selectedMatches.contains(entry.match) &&
+                  !entry.players.any(busyThisWave.contains),
+            )
+            .firstOrNull;
+        if (next == null) continue;
+        result[board]!.add(BoardAssignment(next, wave, board));
+        selectedMatches.add(next.match);
+        busyThisWave.addAll(next.players);
+      }
+    }
+    return {
+      for (final entry in result.entries)
+        if (entry.value.isNotEmpty)
+          entry.key: List<BoardAssignment>.unmodifiable(entry.value),
+    };
   }
 
   List<BoardAssignment> _selectableAssignments({Set<String>? busyPlayers}) {
@@ -743,6 +810,7 @@ class TournamentDirectorSnapshot {
   }) {
     final priority = TournamentFlowPriority.forStage(
       tournament.runStages[stage],
+      tournament: tournament,
       settings: TournamentFlowPrioritySettings(
         playerMatchDeficitThreshold: settings.playerMatchDeficitThreshold,
         groupMatchDeficitThreshold: settings.groupMatchDeficitThreshold,

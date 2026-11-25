@@ -276,6 +276,7 @@ class _StageResultsSplitViewState extends State<StageResultsSplitView> {
 
     final priority = TournamentFlowPriority.forStage(
       stage,
+      tournament: tournament,
       settings: TournamentFlowPrioritySettings(
         playerMatchDeficitThreshold:
             tournament.tournamentSettings.playerMatchDeficitThreshold,

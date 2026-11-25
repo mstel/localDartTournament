@@ -42,6 +42,7 @@ class _OrderOfPlaySectionState extends State<OrderOfPlaySection> {
         : null;
     final flowPriority = TournamentFlowPriority.forStage(
       activeStageData,
+      tournament: tournament,
       settings: TournamentFlowPrioritySettings(
         playerMatchDeficitThreshold:
             tournament.tournamentSettings.playerMatchDeficitThreshold,

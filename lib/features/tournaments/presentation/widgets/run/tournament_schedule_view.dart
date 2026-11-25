@@ -54,6 +54,7 @@ class TournamentScheduleView extends StatelessWidget {
         : null;
     final priority = TournamentFlowPriority.forStage(
       stage,
+      tournament: tournament,
       settings: TournamentFlowPrioritySettings(
         playerMatchDeficitThreshold:
             tournament.tournamentSettings.playerMatchDeficitThreshold,

@@ -206,6 +206,7 @@ class _GroupStageRunSectionState extends State<GroupStageRunSection> {
     if (tournament == null || stageIndex < 0) return group.matches;
     final priority = TournamentFlowPriority.forStage(
       stage,
+      tournament: tournament,
       settings: TournamentFlowPrioritySettings(
         playerMatchDeficitThreshold:
             tournament.tournamentSettings.playerMatchDeficitThreshold,

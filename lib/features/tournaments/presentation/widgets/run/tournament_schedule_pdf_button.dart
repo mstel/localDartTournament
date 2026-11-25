@@ -236,6 +236,7 @@ class TournamentSchedulePdfButton extends StatelessWidget {
       final stageIndex = tournament.runStages.indexOf(stage);
       final priority = TournamentFlowPriority.forStage(
         stage,
+        tournament: tournament,
         settings: TournamentFlowPrioritySettings(
           playerMatchDeficitThreshold:
               tournament.tournamentSettings.playerMatchDeficitThreshold,

@@ -18,7 +18,7 @@ class TournamentSettings {
     this.liveVisible = false,
   });
 
-  static const schemaVersion = 1;
+  static const schemaVersion = 2;
   static const minimumThreshold = 1;
   static const maximumThreshold = 999;
 
@@ -36,8 +36,8 @@ class TournamentSettings {
   final AnnouncementNameFormat announcementNameFormat;
   final bool speakNicknameWhenAvailable;
 
-  /// Publishes a slim spectator view of the running tournament. Additive to
-  /// schema version 1 so older app versions can still read tournaments.
+  /// Publishes a slim spectator view of the running tournament. This optional
+  /// field remains backward-compatible with earlier settings versions.
   final bool liveVisible;
 
   bool get isValid =>
@@ -96,7 +96,14 @@ class TournamentSettings {
   factory TournamentSettings.fromJson(
     Map<String, dynamic> json, {
     bool defaultPriorityHintsEnabled = true,
+    bool disableLegacyPriorityHints = false,
   }) {
+    final storedVersion = json['version'] as int? ?? 1;
+    if (storedVersion < 1 || storedVersion > schemaVersion) {
+      throw FormatException(
+        'Turniereinstellungen-Version $storedVersion wird nicht unterstützt.',
+      );
+    }
     final storedNameFormat = json['announcementNameFormat'];
     final settings = TournamentSettings(
       playerMatchDeficitThreshold: _boundedInt(
@@ -106,8 +113,10 @@ class TournamentSettings {
         maximum: maximumThreshold,
       ),
       priorityHintsEnabled:
-          json['priorityHintsEnabled'] as bool? ??
-          defaultPriorityHintsEnabled,
+          disableLegacyPriorityHints && storedVersion < schemaVersion
+          ? false
+          : json['priorityHintsEnabled'] as bool? ??
+                defaultPriorityHintsEnabled,
       groupMatchDeficitThreshold: _boundedInt(
         json['groupMatchDeficitThreshold'],
         fallback: 3,
@@ -146,11 +155,6 @@ class TournamentSettings {
           json['speakNicknameWhenAvailable'] as bool? ?? false,
       liveVisible: json['liveVisible'] as bool? ?? false,
     );
-    if (json['version'] != null && json['version'] != schemaVersion) {
-      throw FormatException(
-        'Turniereinstellungen-Version ${json['version']} wird nicht unterstützt.',
-      );
-    }
     return settings;
   }
 
