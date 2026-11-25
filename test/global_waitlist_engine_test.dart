@@ -177,14 +177,11 @@ void main() {
     expect(players.toSet(), hasLength(players.length));
   });
 
-  test('starting the top match refills the preview from the dynamic area', () {
+  test('starting the top match refills the fixed-length queue', () {
     final t = dynamicGlobal();
     _initializeWaitlist(t, 0);
     final snapshot = TournamentDirectorSnapshot(t, 0);
     final previous = snapshot.globalWaitlist.fixed.map((e) => e.match).toList();
-    final dynamicMatches = snapshot.globalWaitlist.dynamic
-        .map((entry) => entry.match)
-        .toList();
     final started = previous.first;
     expect(controller.start(t, 0, started, 1), isTrue);
 
@@ -200,11 +197,7 @@ void main() {
         refreshed.fixed.map((entry) => entry.match).last,
       }),
     );
-    expect(
-      dynamicMatches,
-      contains(refreshed.fixed.last.match),
-      reason: 'Der Nachschub kommt aus dem dynamisch optimierten Bereich.',
-    );
+    expect(refreshed.dynamic, isEmpty);
     final players = refreshed.fixed.expand((entry) => entry.players).toList();
     expect(players.toSet(), hasLength(players.length));
   });

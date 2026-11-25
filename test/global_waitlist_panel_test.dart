@@ -103,9 +103,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('global-waitlist-entry-7')),
+      find.byKey(const ValueKey('global-waitlist-entry-3')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('global-waitlist-entry-4')), findsNothing);
 
     await tester.tap(find.byType(DropdownButtonFormField<int>));
     await tester.pumpAndSettle();
@@ -115,10 +116,10 @@ void main() {
     expect(tournament.directorGlobalWaitlist.fixedCount, 7);
     expect(tournament.directorGlobalWaitlist.fixedKeys(0), hasLength(7));
     expect(
-      find.byKey(const ValueKey('global-waitlist-entry-8')),
+      find.byKey(const ValueKey('global-waitlist-entry-7')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('global-waitlist-entry-7')), findsOneWidget);
+    expect(find.byKey(const ValueKey('global-waitlist-entry-6')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
