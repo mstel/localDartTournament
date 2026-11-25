@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dart_tournament_manager/features/league/domain/league_match.dart';
 import 'package:dart_tournament_manager/features/tournaments/application/tournament_flow_priority.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_models.dart';
 import 'package:dart_tournament_manager/features/tournaments/domain/tournament_flow_priority_settings.dart';
+import 'package:dart_tournament_manager/features/tournaments/domain/tournament_settings.dart';
 
 void main() {
   test('one match behind does not trigger player prioritization', () {
@@ -177,6 +179,205 @@ void main() {
 
     expect(priority.notices, contains(contains('Gruppe B')));
   });
+
+  test(
+    'league backlog counts substituted-out starters and flags only substitutes',
+    () {
+      final h1 = TournamentPlayer(
+        profileId: 'h1',
+        name: 'H1',
+        isGenerated: false,
+      );
+      final h2 = TournamentPlayer(
+        profileId: 'h2',
+        name: 'H2',
+        isGenerated: false,
+      );
+      final h3 = TournamentPlayer(
+        profileId: 'h3',
+        name: 'H3',
+        isGenerated: false,
+      );
+      final h4 = TournamentPlayer(
+        profileId: 'h4',
+        name: 'H4',
+        isGenerated: false,
+      );
+      final h5 = TournamentPlayer(
+        profileId: 'h5',
+        name: 'H5',
+        isGenerated: false,
+      );
+      final away = [
+        TournamentPlayer(profileId: 'g1', name: 'G1', isGenerated: false),
+        TournamentPlayer(profileId: 'g2', name: 'G2', isGenerated: false),
+        TournamentPlayer(profileId: 'g3', name: 'G3', isGenerated: false),
+        TournamentPlayer(profileId: 'g4', name: 'G4', isGenerated: false),
+      ];
+      final matches = [
+        for (final opponent in away)
+          GroupMatch(
+            homePlayer: h1,
+            awayPlayer: opponent,
+            round: 1,
+            homeLegs: 3,
+            awayLegs: 0,
+          ),
+        for (final opponent in away)
+          GroupMatch(
+            homePlayer: h2,
+            awayPlayer: opponent,
+            round: 2,
+            homeLegs: 3,
+            awayLegs: 0,
+          ),
+      ];
+      final tournament = _leagueTournament(
+        home: [h1, h2, h3, h4, h5],
+        away: away,
+        matches: matches,
+        substitutions: [
+          LeagueSubstitution(
+            teamSide: 0,
+            outPlayerIndex: 0,
+            inPlayerIndex: 4,
+            occurredAt: DateTime(2026, 1, 1),
+          ),
+        ],
+      );
+
+      final priority = TournamentFlowPriority.forStage(
+        tournament.runStages.single,
+        tournament: tournament,
+      );
+
+      expect(priority.notices, hasLength(1));
+      expect(priority.notices.single, contains('H5'));
+      expect(priority.notices.single, contains('Ligaspiel'));
+      expect(priority.notices.single, isNot(contains('Gruppe')));
+      expect(priority.delayedGroups, isEmpty);
+    },
+  );
+
+  test('a substituted-out player no longer receives a backlog hint', () {
+    final h1 = TournamentPlayer(
+      profileId: 'h1',
+      name: 'H1',
+      isGenerated: false,
+    );
+    final h2 = TournamentPlayer(
+      profileId: 'h2',
+      name: 'H2',
+      isGenerated: false,
+    );
+    final h3 = TournamentPlayer(
+      profileId: 'h3',
+      name: 'H3',
+      isGenerated: false,
+    );
+    final h4 = TournamentPlayer(
+      profileId: 'h4',
+      name: 'H4',
+      isGenerated: false,
+    );
+    final h5 = TournamentPlayer(
+      profileId: 'h5',
+      name: 'H5',
+      isGenerated: false,
+    );
+    final away = [
+      TournamentPlayer(profileId: 'g1', name: 'G1', isGenerated: false),
+      TournamentPlayer(profileId: 'g2', name: 'G2', isGenerated: false),
+      TournamentPlayer(profileId: 'g3', name: 'G3', isGenerated: false),
+      TournamentPlayer(profileId: 'g4', name: 'G4', isGenerated: false),
+    ];
+    final matches = [
+      for (final opponent in away)
+        GroupMatch(
+          homePlayer: h1,
+          awayPlayer: opponent,
+          round: 1,
+          homeLegs: 3,
+          awayLegs: 0,
+        ),
+      for (final opponent in away)
+        GroupMatch(
+          homePlayer: h2,
+          awayPlayer: opponent,
+          round: 2,
+          homeLegs: 3,
+          awayLegs: 0,
+        ),
+    ];
+    final tournament = _leagueTournament(
+      home: [h1, h2, h3, h4, h5],
+      away: away,
+      matches: matches,
+      substitutions: [
+        LeagueSubstitution(
+          teamSide: 0,
+          outPlayerIndex: 0,
+          inPlayerIndex: 4,
+          occurredAt: DateTime(2026, 1, 1),
+        ),
+        LeagueSubstitution(
+          teamSide: 0,
+          outPlayerIndex: 4,
+          inPlayerIndex: 1,
+          occurredAt: DateTime(2026, 1, 2),
+        ),
+      ],
+    );
+
+    final priority = TournamentFlowPriority.forStage(
+      tournament.runStages.single,
+      tournament: tournament,
+    );
+
+    expect(priority.notices, isEmpty);
+  });
+}
+
+CreatedTournament _leagueTournament({
+  required List<TournamentPlayer> home,
+  required List<TournamentPlayer> away,
+  required List<GroupMatch> matches,
+  required List<LeagueSubstitution> substitutions,
+}) {
+  final league = LeagueMatch(
+    homeTeam: 'Heim',
+    awayTeam: 'Gast',
+    homePlayers: home.map((player) => player.name).toList(),
+    awayPlayers: away.map((player) => player.name).toList(),
+    games: const [],
+    substitutions: substitutions,
+  );
+  return CreatedTournament(
+    name: 'Ligaspiel',
+    players: [...home, ...away],
+    stages: const [],
+    leagueMatch: league,
+    tournamentSettings: const TournamentSettings(
+      priorityHintsEnabled: true,
+      playerMatchDeficitThreshold: 2,
+    ),
+    runStages: [
+      GroupTournamentRunStage(
+        name: 'Ligaspiel',
+        groupPlayType: 'round_robin',
+        groups: [
+          TournamentGroup(
+            name: 'Liga',
+            playType: 'round_robin',
+            players: [...home, ...away],
+            matches: matches,
+          ),
+        ],
+        qualificationPlan: null,
+        tieBreakers: defaultGroupTieBreakers,
+      ),
+    ],
+  );
 }
 
 void _finish(GroupMatch match) {

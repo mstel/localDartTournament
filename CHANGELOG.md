@@ -2,7 +2,7 @@
 
 - Dynamische Boards zeigen wieder kollisionsfreie Vorschläge und erlauben die manuelle Auswahl offener, spielbarer Begegnungen.
 - Rückstandshinweise lassen sich für alle Turnierformen aktivieren oder deaktivieren. Bei deaktivierten Hinweisen wird das Zweitmonitor-Widget entfernt; bei aktivierten Hinweisen erscheinen sie oben in Leitung und Zweitmonitor.
-- Freundschafts- und Ligaspiele starten standardmäßig mit deaktivierten Hinweisen. Sind sie aktiviert, vergleichen sie aktive Aufstellungen ohne Gruppenfortschritt und nennen nur aktuell eingewechselte Spieler mit Rückstand.
+- Freundschafts- und Ligaspiele starten standardmäßig mit deaktivierten Hinweisen. Sind sie aktiviert, zählen alle Kaderpartien als Vergleichswert, auch die von bereits ausgewechselten Stammspielern; Gruppenfortschritt wird nicht verglichen. Genannt werden nur aktuell eingewechselte Spieler mit Rückstand. Bei deaktivierten Hinweisen verschwinden auch die Rückstandstexte in Leitungs- und Zweitmonitor-Kacheln.
 - Turnier-JSON-Schema 50 und SQLite-Schema 18 bleiben unverändert; die Version der Turniereinstellungen steigt auf 2.
 
 # 4.0.5+135

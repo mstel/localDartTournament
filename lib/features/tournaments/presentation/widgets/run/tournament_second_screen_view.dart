@@ -6271,7 +6271,9 @@ class _TournamentSecondScreenViewState
                                                 .groups[mergedGroupKey] ??
                                             const <BoardAssignment>[];
                                   final fewestMatchesHint =
-                                      snapshot.isDirectorManagedNormalRanking &&
+                                      _prioritySettings.enabled &&
+                                          snapshot
+                                              .isDirectorManagedNormalRanking &&
                                           snapshot.isDynamicSchedule &&
                                           recommendations.isNotEmpty
                                       ? snapshot.fewestMatchesLabel(

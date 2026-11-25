@@ -250,7 +250,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('Nächste Partie:'), findsNWidgets(3));
-    expect(find.textContaining('Wenigste Spiele:'), findsNothing);
+    expect(find.textContaining('Wenigste Spiele:'), findsNWidgets(3));
     expect(
       find.byKey(const ValueKey('global-waitlist-entry-3')),
       findsOneWidget,
@@ -269,14 +269,8 @@ void main() {
       find.byKey(const ValueKey('global-waitlist-entry-6')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const ValueKey('global-waitlist-entry-7')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('global-waitlist-entry-8')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('global-waitlist-entry-7')), findsNothing);
+    expect(find.byKey(const ValueKey('global-waitlist-entry-8')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

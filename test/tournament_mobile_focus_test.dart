@@ -362,7 +362,7 @@ void main() {
       await tester.tap(find.text('Einstellungen'));
       await tester.pumpAndSettle();
       expect(find.text('Errungenschaften'), findsNothing);
-      expect(find.text('Hinweiseinstellungen'), findsNothing);
+      expect(find.text('Hinweiseinstellungen'), findsOneWidget);
       expect(find.text('Uhr & Zeiteinstellungen'), findsOneWidget);
       expect(find.text('Turnierlog anzeigen'), findsOneWidget);
       expect(tester.takeException(), isNull);

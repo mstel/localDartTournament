@@ -62,9 +62,7 @@ class TournamentFlowPriority {
                         .reduce((a, b) => a > b ? a : b) -
                     progress.played,
       ];
-      final maximumGroupDeficit = groupDeficits.reduce(
-        (a, b) => a > b ? a : b,
-      );
+      final maximumGroupDeficit = groupDeficits.reduce((a, b) => a > b ? a : b);
       if (maximumGroupDeficit >= settings.groupMatchDeficitThreshold) {
         final trailingGroups = <String>[];
         for (var index = 0; index < stage.groups.length; index++) {
@@ -105,9 +103,9 @@ class TournamentFlowPriority {
         }
       } else {
         playedByPlayer.addAll({
-          for (final entry in leagueScope.activePlayers.entries) entry.key: 0,
+          for (final entry in leagueScope.rosterPlayers.entries) entry.key: 0,
         });
-        namesByPlayer.addAll(leagueScope.activePlayers);
+        namesByPlayer.addAll(leagueScope.rosterPlayers);
       }
       for (final match in group.matches) {
         if (!_countsAsPlayed(match)) continue;
@@ -116,7 +114,7 @@ class TournamentFlowPriority {
           for (final individual in player.individuals) {
             final id = individual.profileId ?? individual.name;
             if (leagueScope != null &&
-                !leagueScope.activePlayers.containsKey(id)) {
+                !leagueScope.rosterPlayers.containsKey(id)) {
               continue;
             }
             playedByPlayer.update(id, (count) => count + 1, ifAbsent: () => 1);
@@ -134,7 +132,8 @@ class TournamentFlowPriority {
                 mostPlayedPlayer - entry.value >=
                     settings.playerMatchDeficitThreshold &&
                 (leagueScope == null ||
-                    leagueScope.substitutedPlayers.contains(entry.key)),
+                    (leagueScope.activePlayers.containsKey(entry.key) &&
+                        leagueScope.substitutedPlayers.contains(entry.key))),
           )
           .map((entry) => entry.key)
           .toSet();
@@ -147,9 +146,13 @@ class TournamentFlowPriority {
       final names = laggingPlayers.map((id) => namesByPlayer[id] ?? id).toList()
         ..sort();
       playerNotices.add(
-        'Priorität: ${names.join(', ')} haben in ${group.name} mindestens '
-        '${settings.playerMatchDeficitThreshold} Partien Rückstand. Offene Partien mit '
-        'diesen Teilnehmern bevorzugt ansetzen.',
+        leagueScope == null
+            ? 'Priorität: ${names.join(', ')} haben in ${group.name} mindestens '
+                  '${settings.playerMatchDeficitThreshold} Partien Rückstand. Offene Partien mit '
+                  'diesen Teilnehmern bevorzugt ansetzen.'
+            : 'Priorität: ${names.join(', ')} haben im Ligaspiel mindestens '
+                  '${settings.playerMatchDeficitThreshold} Partien Rückstand. Offene Partien mit '
+                  'diesen Teilnehmern bevorzugt ansetzen.',
       );
       for (final match in group.matches.where(_isPrioritizable)) {
         final matchPlayers = {
@@ -167,7 +170,8 @@ class TournamentFlowPriority {
     }
     // Group-level delays can prioritize every open match; keep matches involving
     // a caught-up player behind opportunities for lagging players to catch up.
-    for (final group in leagueScope == null ? stage.groups : const <TournamentGroup>[]) {
+    for (final group
+        in leagueScope == null ? stage.groups : const <TournamentGroup>[]) {
       final playedByPlayer = <String, int>{};
       for (final player in group.players) {
         for (final individual in player.individuals) {
@@ -230,34 +234,37 @@ class TournamentFlowPriority {
       match.startedAt == null &&
       match.boardNumber == null;
 
-  static _LeaguePlayerScope? _leaguePlayerScope(
-    CreatedTournament? tournament,
-  ) {
+  static _LeaguePlayerScope? _leaguePlayerScope(CreatedTournament? tournament) {
     final league = tournament?.leagueMatch;
     if (league == null || tournament == null) return null;
+    final rosterPlayers = <String, String>{};
     final activePlayers = <String, String>{};
     final substitutedPlayers = <String>{};
     for (var side = 0; side < 2; side++) {
       final roster = side == 0 ? league.homePlayers : league.awayPlayers;
       final offset = side == 0 ? 0 : league.homePlayers.length;
+      final activeIndexes = league.activePlayers(side).toSet();
       final substitutedIndexes = league.substitutions
           .where((event) => event.teamSide == side)
           .map((event) => event.inPlayerIndex)
           .toSet();
-      for (final index in league.activePlayers(side)) {
-        if (index < 0 || index >= roster.length) continue;
+      for (var index = 0; index < roster.length; index++) {
         final sourceIndex = offset + index;
-        final hasSourcePlayer = tournament.players.length > sourceIndex &&
+        final hasSourcePlayer =
+            tournament.players.length > sourceIndex &&
             tournament.players[sourceIndex].name == roster[index];
         final id = hasSourcePlayer
             ? tournament.players[sourceIndex].profileId ??
                   'league:${tournament.id}:$side:$index'
             : 'league:${tournament.id}:$side:$index';
+        rosterPlayers[id] = roster[index];
+        if (!activeIndexes.contains(index)) continue;
         activePlayers[id] = roster[index];
         if (substitutedIndexes.contains(index)) substitutedPlayers.add(id);
       }
     }
     return _LeaguePlayerScope(
+      rosterPlayers: rosterPlayers,
       activePlayers: activePlayers,
       substitutedPlayers: substitutedPlayers,
     );
@@ -275,10 +282,19 @@ class _GroupProgress {
 
 class _LeaguePlayerScope {
   const _LeaguePlayerScope({
+    required this.rosterPlayers,
     required this.activePlayers,
     required this.substitutedPlayers,
   });
 
+  /// Every player currently listed in the league roster, including players
+  /// who have already been substituted out. Their played matches still form
+  /// the reference point for a substitute's backlog.
+  final Map<String, String> rosterPlayers;
+
+  /// Players currently on the floor. Only these can receive a hint.
   final Map<String, String> activePlayers;
+
+  /// Currently active players who entered through a substitution.
   final Set<String> substitutedPlayers;
 }

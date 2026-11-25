@@ -1293,7 +1293,8 @@ class _TournamentDirectorDashboardState
                                       context,
                                     ).textTheme.bodySmall,
                                   ),
-                                  if (t.directorPlayOrderMode == 'dynamic' &&
+                                  if (_prioritySettings.enabled &&
+                                      t.directorPlayOrderMode == 'dynamic' &&
                                       t.leagueMatch == null)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 2),
@@ -1762,34 +1763,31 @@ class _TournamentDirectorDashboardState
         if (widget.simulationControls != null)
           if (showNoticePanel)
             LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth >= 1100) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              builder: (context, constraints) {
+                if (constraints.maxWidth >= 1100) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 2, child: widget.simulationControls!),
+                      const SizedBox(width: 12),
+                      Expanded(child: notices),
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(flex: 2, child: widget.simulationControls!),
-                    const SizedBox(width: 12),
-                    Expanded(child: notices),
+                    widget.simulationControls!,
+                    const SizedBox(height: 12),
+                    notices,
                   ],
                 );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  widget.simulationControls!,
-                  const SizedBox(height: 12),
-                  notices,
-                ],
-              );
-            },
+              },
             )
           else
             widget.simulationControls!
         else ...[
-          if (showNoticePanel) ...[
-            notices,
-            const SizedBox(height: 12),
-          ],
+          if (showNoticePanel) ...[notices, const SizedBox(height: 12)],
         ],
         if (!widget.directorModeEnabled) ...[
           status,

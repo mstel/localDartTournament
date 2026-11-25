@@ -19,6 +19,16 @@ Partien. Damit bleibt die konfigurierbare Schwelle vergleichbar, ohne Gruppen
 mit gleichem relativen Fortschritt wegen ihrer unterschiedlichen Größe zu
 priorisieren. Die Spielerschwelle bleibt in beiden Modi absolut.
 
+Freundschafts- und Ligaspiele vergleichen keinen Gruppenfortschritt. Als
+Vergleichswert zählen alle Partien des Kaders, auch die von Spielern, die in
+zwischen ausgewechselt wurden. Hinweise erscheinen nur für Spieler, die aktuell
+eingewechselt sind und die konfigurierte Partienschwelle unterschreiten. Wird
+ein solcher Spieler wieder ausgewechselt, verschwindet sein Hinweis. Die
+Hinweise sind in diesen Turnierformen standardmäßig deaktiviert und lassen sich
+in den Turnieroptionen aktivieren. Werden Hinweise deaktiviert, verschwinden
+sowohl die Hinweiskacheln in der Turnierleitung als auch das Hinweis-Widget auf
+dem Zweitmonitor; die Turnierplanung bleibt dadurch unblockiert.
+
 Seit 4.0 verwenden feste und dynamische Spielpläne dieselbe Prioritäts-Engine.
 Spielerkollisionen werden zuerst hart ausgeschlossen; danach entscheiden die
 Wartezeit seit dem letzten Spielende, der Gruppenfortschritt (abgeschlossen =
