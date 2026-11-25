@@ -507,6 +507,177 @@ class WebsiteReadModelService {
     return objectName;
   }
 
+  static int _phaseParticipantCount(Map<String, dynamic> view) {
+    final keys = <String>{};
+
+    void addPlayer(dynamic player) {
+      if (player is! Map) return;
+      final id = player['profileId'] ?? player['playerId'];
+      final name = player['name'] ?? player['player'];
+      final key = id is String && id.trim().isNotEmpty
+          ? id.trim()
+          : name is String
+              ? name.trim()
+              : '';
+      if (key.isNotEmpty) keys.add(key);
+    }
+
+    void addMatch(dynamic match) {
+      if (match is! Map) return;
+      addPlayer(match['homePlayer']);
+      addPlayer(match['awayPlayer']);
+      addPlayer(match['scratchedPlayer']);
+      for (final player in match['players'] as List<dynamic>? ?? const []) {
+        addPlayer(player);
+      }
+    }
+
+    for (final group in view['groups'] as List<dynamic>? ?? const []) {
+      if (group is! Map) continue;
+      for (final player in group['players'] as List<dynamic>? ?? const []) {
+        addPlayer(player);
+      }
+      for (final standing in group['standings'] as List<dynamic>? ?? const []) {
+        addPlayer(standing);
+      }
+      for (final match in group['matches'] as List<dynamic>? ?? const []) {
+        addMatch(match);
+      }
+      for (final match
+          in group['placementMatches'] as List<dynamic>? ?? const []) {
+        addMatch(match);
+      }
+      for (final round
+          in group['knockoutRounds'] as List<dynamic>? ?? const []) {
+        for (final match in round as List<dynamic>? ?? const []) {
+          addMatch(match);
+        }
+      }
+    }
+    for (final round in view['rounds'] as List<dynamic>? ?? const []) {
+      for (final match in round as List<dynamic>? ?? const []) {
+        addMatch(match);
+      }
+    }
+    for (final match
+        in view['placementMatches'] as List<dynamic>? ?? const []) {
+      addMatch(match);
+    }
+    for (final key
+        in (view['livesRemaining'] as Map<dynamic, dynamic>? ?? const <dynamic, dynamic>{}).keys) {
+      final name = key.toString().trim();
+      if (name.isNotEmpty) keys.add(name);
+    }
+    return keys.length;
+  }
+
+  static List<Map<String, dynamic>> _phaseSummaries(
+    Map<String, dynamic> tournament,
+  ) {
+    final views = (tournament['phaseViews'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    if (views.length < 2) return const [];
+    return [
+      for (var index = 0; index < 2; index++)
+        <String, dynamic>{
+          'kind': views[index]['type'] ?? 'table',
+          if (views[index]['type'] == 'knockout') 'mode': 'single_knockout',
+          if (views[index]['playType'] != null)
+            'playType': views[index]['playType'],
+          if (index == 0) 'qualifierCount': _phaseParticipantCount(views.last),
+        },
+    ];
+  }
+
+  static ({String name, String? profileId})? _podiumWinner(
+    Map<String, dynamic> tournament,
+  ) {
+    final archive = tournament['importedArchive'];
+    if (archive is Map) {
+      final winners = (archive['participants'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .where((participant) => _intValue(participant['finalRank']) == 1)
+          .toList();
+      if (winners.isNotEmpty) {
+        final winner = _playerIdentity(winners.first);
+        if (winner != null) return winner;
+      }
+    }
+
+    final views = (tournament['phaseViews'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    for (final view in views.reversed) {
+      final type = view['type'];
+      if (type == 'knockout' || type == 'kratzer') {
+        final rounds = view['rounds'] as List<dynamic>? ?? const [];
+        if (rounds.isEmpty || rounds.last is! List) continue;
+        final lastRound = rounds.last as List<dynamic>;
+        if (lastRound.isEmpty || lastRound.last is! Map) continue;
+        final winner = _matchWinnerIdentity(lastRound.last as Map<dynamic, dynamic>);
+        if (winner != null) return winner;
+        continue;
+      }
+      for (final group in view['groups'] as List<dynamic>? ?? const []) {
+        if (group is! Map) continue;
+        for (final standing in group['standings'] as List<dynamic>? ?? const []) {
+          if (standing is! Map || _intValue(standing['rank']) != 1) continue;
+          final winner = _playerIdentity(standing);
+          if (winner != null) return winner;
+        }
+      }
+    }
+
+    final name = tournament['winnerName'];
+    if (name is String && name.trim().isNotEmpty) {
+      final id = tournament['winnerId'];
+      return (
+        name: name.trim(),
+        profileId: id is String && id.trim().isNotEmpty ? id.trim() : null,
+      );
+    }
+    return null;
+  }
+
+  static ({String name, String? profileId})? _playerIdentity(Map<dynamic, dynamic> player) {
+    final name = player['name'] ?? player['player'];
+    if (name is! String || name.trim().isEmpty) return null;
+    final id = player['profileId'] ?? player['playerId'];
+    return (
+      name: name.trim(),
+      profileId: id is String && id.trim().isNotEmpty ? id.trim() : null,
+    );
+  }
+
+  static ({String name, String? profileId})? _matchWinnerIdentity(
+    Map<dynamic, dynamic> match,
+  ) {
+    if (match['withdrawalIgnored'] == true || match['isAnnulled'] == true) {
+      return null;
+    }
+    final left = _scoreValue(
+      match['homeSets'] ?? match['homeLegs'] ?? match['homeScore'],
+    );
+    final right = _scoreValue(
+      match['awaySets'] ?? match['awayLegs'] ?? match['awayScore'],
+    );
+    if (left == null || right == null || left == right) return null;
+    final player = left > right ? match['homePlayer'] : match['awayPlayer'];
+    return player is Map ? _playerIdentity(player) : null;
+  }
+
+  static int? _intValue(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return null;
+  }
+
+  static num? _scoreValue(dynamic value) {
+    if (value is num) return value;
+    return null;
+  }
+
   static Map<String, dynamic> createTournamentIndex(
     Map<String, dynamic> readModel,
   ) {
@@ -515,28 +686,34 @@ class WebsiteReadModelService {
     return {
       'schemaVersion': tournamentIndexSchemaVersion,
       'generatedAt': readModel['generatedAt'],
-      'completedTournaments': [
-        for (final tournament in tournaments.cast<Map<String, dynamic>>())
-          {
-            'id': tournament['id'],
-            'name': tournament['name'],
-            'finishedAt': tournament['finishedAt'],
-            'startedAt': tournament['startedAt'],
-            'createdAt': tournament['createdAt'],
-            'playerCount':
-                (tournament['players'] as List<dynamic>? ?? const []).length,
-            'matchCount': _matchCount(tournament),
-            'mode': _mode(tournament),
-            'hasImportedArchive': tournament['importedArchive'] != null,
-            'winnerId': tournament['winnerId'],
-            'winnerName': tournament['winnerName'],
-            'phaseKinds': [
-              for (final kind
-                  in tournament['phaseKinds'] as List<dynamic>? ?? const [])
-                if (kind is String) kind,
-            ],
-          },
-      ],
+      'completedTournaments': tournaments
+          .cast<Map<String, dynamic>>()
+          .map((tournament) {
+        final phaseSummaries = _phaseSummaries(tournament);
+        final podiumWinner = _podiumWinner(tournament);
+        return <String, dynamic>{
+          'id': tournament['id'],
+          'name': tournament['name'],
+          'finishedAt': tournament['finishedAt'],
+          'startedAt': tournament['startedAt'],
+          'createdAt': tournament['createdAt'],
+          'playerCount':
+              (tournament['players'] as List<dynamic>? ?? const []).length,
+          'matchCount': _matchCount(tournament),
+          'mode': _mode(tournament),
+          'hasImportedArchive': tournament['importedArchive'] != null,
+          // The overview winner is the first-place podium entry, derived from
+          // the same archive/final match/standings data used on the detail page.
+          'winnerId': podiumWinner?.profileId ?? tournament['winnerId'],
+          'winnerName': podiumWinner?.name ?? tournament['winnerName'],
+          'phaseKinds': [
+            for (final kind
+                in tournament['phaseKinds'] as List<dynamic>? ?? const [])
+              if (kind is String) kind,
+          ],
+          if (phaseSummaries.isNotEmpty) 'phaseSummaries': phaseSummaries,
+        };
+      }).toList(),
     };
   }
 

@@ -195,10 +195,10 @@ void main() {
             'matchCount': 1,
             'mode': 'groups:round_robin',
             'hasImportedArchive': false,
-            // No tie-breakers are configured, so the shared winner derivation
-            // cannot resolve a group winner for this fixture.
-            'winnerId': null,
-            'winnerName': null,
+            // The overview uses the first podium place even when the generic
+            // winner derivation cannot break a group tie.
+            'winnerId': player.id,
+            'winnerName': 'Ada Dart',
             'phaseKinds': ['table'],
           },
         ],
@@ -395,8 +395,8 @@ void main() {
           'matchCount': 1,
           'mode': 'groups:round_robin',
           'hasImportedArchive': false,
-          'winnerId': null,
-          'winnerName': null,
+          'winnerId': player.id,
+          'winnerName': 'Ada Dart',
           'phaseKinds': ['table'],
         },
       ]);
@@ -1099,6 +1099,14 @@ void main() {
       expect(indexed['winnerId'], champion.id);
       expect(indexed['winnerName'], champion.displayName);
       expect(indexed['phaseKinds'], ['table', 'knockout']);
+      expect(indexed['phaseSummaries'], [
+        {
+          'kind': 'table',
+          'playType': 'round_robin',
+          'qualifierCount': 2,
+        },
+        {'kind': 'knockout', 'mode': 'single_knockout'},
+      ]);
       expect(indexed, isNot(containsPair('phaseViews', anything)));
 
       final resources = await service.createVersion2Resources(model);
@@ -1108,6 +1116,7 @@ void main() {
       expect(paged['winnerId'], champion.id);
       expect(paged['winnerName'], champion.displayName);
       expect(paged['phaseKinds'], ['table', 'knockout']);
+      expect(paged['phaseSummaries'], indexed['phaseSummaries']);
       expect(paged, isNot(containsPair('phaseViews', anything)));
     },
   );
