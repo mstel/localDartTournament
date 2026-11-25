@@ -478,7 +478,9 @@ class TournamentDirectorSnapshot {
   List<BoardAssignment> suggestionsForBoard(int board, {int limit = 3}) {
     if (tournament.blockedBoards.contains(board)) return const [];
     if (usesGlobalWaitlist) {
-      return _globalWaitlistBoardSuggestions(limit: limit)[board] ?? const [];
+      return (_globalWaitlistBoardSuggestions(limit: limit)[board] ?? const [])
+          .take(1)
+          .toList(growable: false);
     }
     if (isDirectorManagedNormalRanking && isGlobalStrategy) {
       if (isFixedSchedule) {

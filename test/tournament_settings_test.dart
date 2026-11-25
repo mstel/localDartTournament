@@ -36,7 +36,7 @@ void main() {
     expect(restored.tournamentSettings, tournament.tournamentSettings);
     final settingsJson =
         tournament.toJson()['tournamentSettings'] as Map<String, dynamic>;
-    expect(settingsJson['version'], 1);
+    expect(settingsJson['version'], TournamentSettings.schemaVersion);
   });
 
   test('group deficit defaults to three scaled matches', () {

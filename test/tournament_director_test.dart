@@ -249,7 +249,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('Nächste Partie:'), findsNothing);
+    expect(find.textContaining('Nächste Partie:'), findsNWidgets(3));
     expect(find.textContaining('Wenigste Spiele:'), findsNothing);
     expect(
       find.byKey(const ValueKey('global-waitlist-entry-3')),

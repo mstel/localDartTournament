@@ -478,7 +478,12 @@ class _TournamentSecondScreenViewState
     final changedLayouts = <String, List<SecondScreenWidgetPlacement>>{};
     for (final entry in widget.tournament.secondScreenLayouts.entries) {
       final filtered = entry.value
-          .where(_isMonitorWidgetAvailable)
+          .where(
+            (placement) =>
+                placement.widgetId == 'standings' ||
+                placement.widgetId == 'forecast' ||
+                _isMonitorWidgetAvailable(placement),
+          )
           .toList();
       if (filtered.length != entry.value.length) {
         changedLayouts[entry.key] = filtered;
@@ -486,9 +491,7 @@ class _TournamentSecondScreenViewState
     }
     final activeLayout = widget.tournament.secondScreenActiveLayout;
     if (activeLayout != null && changedLayouts.containsKey(activeLayout)) {
-      _monitorPlacements = _withIndependentColumns(
-        changedLayouts[activeLayout]!,
-      );
+      _monitorPlacements = _savedLayoutOrDefault();
       changedLayouts[activeLayout] = List.of(_monitorPlacements);
     }
     try {
