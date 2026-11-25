@@ -154,10 +154,10 @@ void main() {
 
     _initializeWaitlist(t, 0);
     final waitlist = TournamentDirectorSnapshot(t, 0).globalWaitlist;
-    // Only one stage with four players is open, so at most two disjoint
-    // pairings can form the collision-free preview.
-    expect(waitlist.fixed, hasLength(2));
-    expect(waitlist.fixed.map((entry) => entry.match).toSet(), hasLength(2));
+    // The preview fills its configured count with sequential follow-ups even
+    // when every remaining player is already represented earlier in the list.
+    expect(waitlist.fixed, hasLength(waitlist.fixedCount));
+    expect(waitlist.fixed.map((entry) => entry.match).toSet(), hasLength(4));
   });
 
   test(
@@ -272,7 +272,10 @@ void main() {
       final staleBoard = snapshot.freeBoards.firstWhere(
         (board) => snapshot.schedule.planned
             .where((assignment) => assignment.board == board)
-            .every((assignment) => assignment.entry.players.any(busyPlayers.contains)),
+            .every(
+              (assignment) =>
+                  assignment.entry.players.any(busyPlayers.contains),
+            ),
         orElse: () => throw StateError('Kein veraltetes Board gefunden'),
       );
       final displayed = snapshot.suggestionsForBoard(staleBoard).first;
@@ -296,8 +299,15 @@ void main() {
       ..directorModeEnabled = true
       ..directorSchedulingStrategy = 'group'
       ..directorPlayOrderMode = 'dynamic';
+    final entry = TournamentDirectorSnapshot(t, 0).schedule.planned.first.entry;
+    expect(
+      TournamentDirectorSnapshot(t, 0).fewestMatchesPlayerNames(entry),
+      isEmpty,
+    );
+    t.tournamentSettings = t.tournamentSettings.copyWith(
+      playerMatchDeficitThreshold: 1,
+    );
     final snapshot = TournamentDirectorSnapshot(t, 0);
-    final entry = snapshot.schedule.planned.first.entry;
     final names = snapshot.fewestMatchesPlayerNames(entry);
     expect(names, isNotEmpty);
     expect(snapshot.fewestMatchesLabel(entry), names.join(', '));

@@ -27,6 +27,7 @@ import '../../statistics/domain/local_statistics.dart';
 import '../../statistics/presentation/local_player_statistics_page.dart';
 import '../../statistics/presentation/widgets/structured_best_performances_view.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
+import '../../statistics/domain/tournament_monthly_results.dart';
 import '../../statistics/presentation/widgets/player_performance_trend_chart.dart';
 
 class RankingsPage extends StatefulWidget {
@@ -116,15 +117,24 @@ class _RankingYearReviewPageState extends State<RankingYearReviewPage> {
   Future<List<PlayerMonthlyPerformance>> _loadPlayerPerformance(
     String playerId,
     int? year,
-  ) async => combineMonthlyPlayerPerformances(
-    recorded: await _database.loadPlayerMonthlyPerformance(
-      playerId,
-      year: year,
-    ),
-    imported: await _database.loadMonthlyPlayerPerformances({
-      playerId,
-    }, year: year),
-  );
+  ) async {
+    final playerIds = {playerId};
+    final tournaments = await _tournamentStorage.loadTournaments();
+    return combineMonthlyPlayerPerformances(
+      recorded: await _database.loadPlayerMonthlyPerformance(
+        playerId,
+        year: year,
+      ),
+      imported: await _database.loadMonthlyPlayerPerformances(
+        playerIds,
+        year: year,
+      ),
+      tournamentResults: const TournamentMonthlyResultCalculator().calculate(
+        tournaments,
+        playerIds: playerIds,
+      ),
+    );
+  }
 
   void _setYear(int? year) {
     setState(() {

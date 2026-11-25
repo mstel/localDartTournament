@@ -1,6 +1,6 @@
 # Dart Tournament Manager (DartTournamentPro) – Gesamtdokumentation
 
-**Version:** 4.0.3+133
+**Version:** 4.0.4+134
 **Stand:** November 2026
 **Zielgruppe:** Turnierleiter, Vereinsadministratoren, Spieler und Entwickler
 

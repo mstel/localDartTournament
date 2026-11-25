@@ -1051,7 +1051,9 @@ class _TournamentDirectorDashboardState
         .toList();
     final boardAssignments = <int, List<BoardAssignment>>{
       for (var board = 1; board <= t.boardCount; board++)
-        board: fixedGlobalSchedule
+        board: state.usesGlobalWaitlist
+            ? const <BoardAssignment>[]
+            : fixedGlobalSchedule
             ? [
                 for (var index = 0; index < fixedGlobalEntries.length; index++)
                   BoardAssignment(fixedGlobalEntries[index], index, board),
@@ -1072,7 +1074,9 @@ class _TournamentDirectorDashboardState
                   final running = state.runningOn(board);
                   final blocked = t.blockedBoards.contains(board);
                   final upcomingForBoard = boardAssignments[board]!;
-                  final recommendation = state.recommendationForBoard(board);
+                  final recommendation = state.usesGlobalWaitlist
+                      ? null
+                      : state.recommendationForBoard(board);
                   final suggestion = recommendation?.next;
                   final alternative = recommendation?.alternative;
                   final boardSuggestions = <BoardAssignment>[];
@@ -1099,14 +1103,14 @@ class _TournamentDirectorDashboardState
                       ? 'Läuft'
                       : blocked
                       ? 'Gesperrt'
-                      : suggestion != null
+                      : state.usesGlobalWaitlist || suggestion != null
                       ? 'Frei'
                       : 'Reserve';
                   final accent = running != null
                       ? _palette.accent
                       : blocked
                       ? Theme.of(context).colorScheme.error
-                      : suggestion != null
+                      : state.usesGlobalWaitlist || suggestion != null
                       ? Colors.green.shade700
                       : _palette.mutedText;
                   final assignedGroups =

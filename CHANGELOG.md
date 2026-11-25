@@ -1,3 +1,11 @@
+# 4.0.4+134
+
+- Dynamische gemeinsame Wartelisten werden auch bei vollständig belegten Teilnehmern aufgefüllt. Vorschläge für laufend gebundene Spieler bleiben sichtbar und als vorläufig übersprungen markiert.
+- Erhöhen der Fixvorschau füllt die gewünschte Anzahl sequentieller Begegnungen auch dann, wenn nicht alle Spieler gleichzeitig frei sind. Beim Reduzieren werden überzählige Fixierungen aus dem gespeicherten festen Teil gelöst und neu berechnet.
+- Im dynamischen Modus zeigen Leiter- und Zweitmonitor-Boardkacheln keine redundante nächste Begegnung mehr; dafür bleibt die gemeinsame Warteliste die zentrale Vorschau. Hinweise auf die wenigsten Spiele erscheinen nur ab der konfigurierten Rückstandsschwelle.
+- Teilnehmer-Performance im Jahresrückblick bezieht Turnierergebnisse wie der Spielerkatalog ein; Siege, Niederlagen und Siegesrate werden in der Performance-Entwicklung aus den tatsächlichen Ergebnissen berechnet.
+- Regressionstest für 8 gleichzeitig spielende Teilnehmer auf 4 Boards, Fixvorschau von 8, Freigabe überzähliger Fixierungen sowie passende Chartwerte. Keine Synchronisation und keine Live-Sichtbarkeitsfunktion ausgeführt.
+
 # 4.0.3+133
 
 - Entfernt die Siegesraten-Kachel und deren Statistikabfrage von der Startseite.

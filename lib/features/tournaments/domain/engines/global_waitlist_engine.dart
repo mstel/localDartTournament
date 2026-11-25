@@ -241,7 +241,6 @@ class GlobalWaitlistEngine {
     // Resolve persisted keys. Finished/invalid entries are dropped; entries
     // whose players are busy elsewhere stay in the preview as SKIPPED.
     final fixed = <PlayEntry>[];
-    final skipped = <PlayEntry>[];
     final previewPlayers = <String>{};
     for (final key in fixedKeys) {
       if (fixed.length >= fixedCount) break;
@@ -250,13 +249,8 @@ class GlobalWaitlistEngine {
       if (entry == null || !_isPlayable(entry, runningMatches, previewable)) {
         continue;
       }
-      final busy = entry.players.any(
-        (player) =>
-            runningPlayers.contains(player) || previewPlayers.contains(player),
-      );
       fixed.add(entry);
       previewPlayers.addAll(entry.players);
-      if (busy) skipped.add(entry);
     }
 
     SchedulePriorityContext contextFor(Iterable<PlayEntry> projected) =>
@@ -323,6 +317,10 @@ class GlobalWaitlistEngine {
       fixed,
     );
 
+    final skipped = <PlayEntry>[
+      for (final entry in [...fixed, ...dynamicPreview])
+        if (entry.players.any(runningPlayers.contains)) entry,
+    ];
     return GlobalWaitlistPlan(
       fixed: List<PlayEntry>.unmodifiable(fixed),
       skipped: List<PlayEntry>.unmodifiable(skipped),
@@ -391,9 +389,10 @@ class GlobalWaitlistEngine {
     return List<GlobalWaitlistGroupProgress>.unmodifiable(result);
   }
 
-  /// Greedily selects collision-free entries with the shared priority engine.
-  /// The context is rebuilt after each pick so projected group load and real
-  /// finishing times stay consistent across the whole preview.
+  /// Selects entries with the shared priority engine. It first prefers matches
+  /// whose players are free, then fills the sequential queue with the best
+  /// remaining matches even when all players are currently busy. Those rows
+  /// are marked skipped until their running games finish.
   List<PlayEntry> _select({
     required List<PlayEntry> candidates,
     required int count,
@@ -412,8 +411,13 @@ class GlobalWaitlistEngine {
                 !selected.contains(entry) && !entry.players.any(used.contains),
           )
           .toList(growable: false);
-      if (available.isEmpty) break;
-      final winner = scorer.sorted(available, buildContext(selected)).first;
+      final pool = available.isEmpty
+          ? candidates
+                .where((entry) => !selected.contains(entry))
+                .toList(growable: false)
+          : available;
+      if (pool.isEmpty) break;
+      final winner = scorer.sorted(pool, buildContext(selected)).first;
       selected.add(winner);
       used.addAll(winner.players);
     }

@@ -168,8 +168,8 @@ class TournamentDirectorSnapshot {
     return GlobalOrderOfPlayService.instance.remainingQueue(tournament, stage);
   }
 
-  /// Names of the players with the fewest completed matches once [entry] and
-  /// the currently running matches are counted (dynamic board hint).
+  /// Names of players who trail the most-played participant by at least the
+  /// configured backlog threshold after [entry] is counted.
   List<String> fewestMatchesPlayerNames(PlayEntry entry) {
     final counts = <String, int>{};
     final names = <String, String>{};
@@ -197,9 +197,12 @@ class TournamentDirectorSnapshot {
       counts[player] = (counts[player] ?? 0) + 1;
     }
     if (counts.isEmpty) return const [];
+    final highest = counts.values.reduce((a, b) => a > b ? a : b);
+    final threshold = tournament.tournamentSettings.playerMatchDeficitThreshold;
     final lowest = counts.values.reduce((a, b) => a < b ? a : b);
+    if (highest - lowest < threshold) return const [];
     return counts.entries
-        .where((item) => item.value == lowest)
+        .where((item) => highest - item.value >= threshold)
         .map((item) => names[item.key] ?? item.key)
         .toList()
       ..sort();

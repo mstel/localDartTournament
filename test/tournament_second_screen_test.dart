@@ -200,6 +200,10 @@ void main() {
     expect(find.text('Fest eingeplant'), findsNothing);
     expect(find.text('Dynamisch optimiert'), findsNothing);
     expect(
+      find.byKey(const ValueKey('second-screen-director-recommendation-1-0')),
+      findsNothing,
+    );
+    expect(
       find.text('Die nächste Begegnung startet an einem freien Board.'),
       findsOneWidget,
     );
@@ -208,10 +212,7 @@ void main() {
       findsNothing,
     );
     expect(
-      find.descendant(
-        of: waitlist,
-        matching: find.textContaining(' Spieler'),
-      ),
+      find.descendant(of: waitlist, matching: find.textContaining(' Spieler')),
       findsNothing,
     );
     expect(
@@ -237,6 +238,7 @@ void main() {
       ..directorSchedulingStrategy = 'global'
       ..directorPlayOrderMode = 'dynamic'
       ..boardCount = 3;
+    tournament.directorGlobalWaitlist.fixedCount = 1;
     const controller = OrderOfPlayController();
     controller.initializeGlobalWaitlist(
       tournament,
@@ -505,9 +507,9 @@ void main() {
       TournamentGroup group(String name, int firstPlayer) {
         final players = [
           for (var index = 0; index < 4; index++)
-            TournamentPlayer.generated(firstPlayer + index).copyWith(
-              name: 'Spieler ${firstPlayer + index}',
-            ),
+            TournamentPlayer.generated(
+              firstPlayer + index,
+            ).copyWith(name: 'Spieler ${firstPlayer + index}'),
         ];
         return TournamentGroup(
           name: name,
@@ -1112,7 +1114,10 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final players = [for (var index = 1; index <= 12; index++) TournamentPlayer.generated(index)];
+    final players = [
+      for (var index = 1; index <= 12; index++)
+        TournamentPlayer.generated(index),
+    ];
     TournamentGroup group(String name, List<TournamentPlayer> members) =>
         TournamentGroup(
           name: name,
@@ -1177,9 +1182,7 @@ void main() {
     expect(find.text('Nächste Begegnungen'), findsOneWidget);
     for (final board in [2, 3, 4]) {
       expect(
-        find.byKey(
-          ValueKey('second-screen-director-recommendation-$board-0'),
-        ),
+        find.byKey(ValueKey('second-screen-director-recommendation-$board-0')),
         findsOneWidget,
       );
     }

@@ -505,6 +505,16 @@ void main() {
     expect(find.text('100.0 %'), findsOneWidget);
     expect(find.text('75.0 %'), findsOneWidget);
     expect(find.text('3 / 1'), findsOneWidget);
+    final chart = tester.widget<PlayerPerformanceTrendChart>(
+      find.byType(PlayerPerformanceTrendChart),
+    );
+    final tournamentMonth = chart.entries.singleWhere(
+      (entry) => entry.year == 2025,
+    );
+    expect(tournamentMonth.matches, 1);
+    expect(tournamentMonth.wins, 1);
+    expect(tournamentMonth.losses, 0);
+    expect(tournamentMonth.winRate, 100);
     expect(tester.takeException(), isNull);
   });
 

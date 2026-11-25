@@ -118,7 +118,7 @@ void main() {
       find.byKey(const ValueKey('global-waitlist-entry-8')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('global-waitlist-entry-9')), findsNothing);
+    expect(find.byKey(const ValueKey('global-waitlist-entry-9')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

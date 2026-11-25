@@ -88,6 +88,43 @@ CreatedTournament _largeGlobalFixture() {
     ..directorPlayOrderMode = 'dynamic';
 }
 
+CreatedTournament _eightPlayerGlobalFixture() {
+  final players = [for (var i = 1; i <= 8; i++) TournamentPlayer.generated(i)];
+  final group = TournamentGroup(
+    name: 'A',
+    playType: 'round_robin',
+    players: players,
+    matches: [
+      for (var home = 0; home < players.length; home++)
+        for (var away = home + 1; away < players.length; away++)
+          GroupMatch(
+            homePlayer: players[home],
+            awayPlayer: players[away],
+            round: 1,
+          ),
+    ],
+  );
+  return CreatedTournament(
+      id: 'global-waitlist-eight-active-test',
+      name: 'Acht aktive Teilnehmer',
+      players: players,
+      stages: const [],
+      boardCount: 4,
+      runStages: [
+        GroupTournamentRunStage(
+          name: 'Gruppenphase',
+          groupPlayType: 'round_robin',
+          qualificationPlan: null,
+          tieBreakers: defaultGroupTieBreakers,
+          groups: [group],
+        ),
+      ],
+    )
+    ..directorModeEnabled = true
+    ..directorSchedulingStrategy = 'global'
+    ..directorPlayOrderMode = 'dynamic';
+}
+
 List<GroupMatch> _groupMatches(CreatedTournament t, String groupName) {
   final stage = t.runStages.single as GroupTournamentRunStage;
   return stage.groups.singleWhere((group) => group.name == groupName).matches;
@@ -241,10 +278,66 @@ void main() {
     final plan = TournamentDirectorSnapshot(t, 0).globalWaitlist;
     expect(plan.fixedCount, 9);
     expect(plan.fixed, hasLength(9));
-    expect(plan.dynamic, isEmpty);
-    expect(plan.queue, hasLength(9));
+    expect(plan.dynamic, hasLength(GlobalWaitlistEngine.dynamicPreviewCount));
+    expect(plan.queue, hasLength(9 + GlobalWaitlistEngine.dynamicPreviewCount));
     expect(t.directorGlobalWaitlist.fixedKeys(0), hasLength(9));
   });
+
+  test(
+    'the shared queue stays populated while every participant is playing',
+    () {
+      final t = _eightPlayerGlobalFixture();
+      final matches = _groupMatches(t, 'A');
+      final usedPlayers = <String>{};
+      final runningMatches = <GroupMatch>[];
+      for (final match in matches) {
+        final players = {match.homePlayer!.name, match.awayPlayer!.name};
+        if (players.any(usedPlayers.contains)) continue;
+        usedPlayers.addAll(players);
+        runningMatches.add(match);
+        if (runningMatches.length == t.boardCount) break;
+      }
+      expect(runningMatches, hasLength(4));
+      for (var board = 1; board <= runningMatches.length; board++) {
+        expect(
+          controller.start(t, 0, runningMatches[board - 1], board),
+          isTrue,
+        );
+      }
+
+      t.directorGlobalWaitlist.fixedCount = 8;
+      t.directorGlobalWaitlist.setFixedKeys(0, const []);
+      _initializeWaitlist(t, 0);
+      final plan = TournamentDirectorSnapshot(t, 0).globalWaitlist;
+
+      expect(plan.fixed, hasLength(8));
+      expect(
+        plan.queue,
+        hasLength(8 + GlobalWaitlistEngine.dynamicPreviewCount),
+      );
+      expect(plan.skipped, hasLength(plan.fixed.length + plan.dynamic.length));
+      expect(plan.fixed.every(plan.isSkipped), isTrue);
+    },
+  );
+
+  test(
+    'reducing fixed count releases overflow keys back to dynamic preview',
+    () {
+      final t = _largeGlobalFixture();
+      t.directorGlobalWaitlist.fixedCount = 8;
+      t.directorGlobalWaitlist.setFixedKeys(0, const []);
+      _initializeWaitlist(t, 0);
+      expect(t.directorGlobalWaitlist.fixedKeys(0), hasLength(8));
+
+      t.directorGlobalWaitlist.fixedCount = 5;
+      _initializeWaitlist(t, 0);
+      final plan = TournamentDirectorSnapshot(t, 0).globalWaitlist;
+
+      expect(plan.fixed, hasLength(5));
+      expect(t.directorGlobalWaitlist.fixedKeys(0), hasLength(5));
+      expect(plan.queue, hasLength(9));
+    },
+  );
 
   test(
     'relative group progress prioritises the group with the largest deficit',

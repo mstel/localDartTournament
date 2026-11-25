@@ -6194,7 +6194,10 @@ class _TournamentSecondScreenViewState
                                         )
                                       ? '${boardNames.first} & ${boardNames.skip(1).map((name) => name.substring('Board '.length)).join(' & ')}'
                                       : boardNames.join(' & ');
-                                  final recommendations = mergedGroupKey == null
+                                  final recommendations =
+                                      snapshot.usesGlobalWaitlist
+                                      ? const <BoardAssignment>[]
+                                      : mergedGroupKey == null
                                       ? fixedGlobalSchedule
                                             ? [
                                                 for (
