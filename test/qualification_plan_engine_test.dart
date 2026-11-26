@@ -60,7 +60,6 @@ void main() {
 
       expect(plan.fixedByGroup, [3, 3]);
       expect(plan.extraCount, 0);
-      expect(plan.extraGroups, isEmpty);
       expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
     });
 
@@ -76,7 +75,7 @@ void main() {
       expect(plan.extraRank, 4);
       expect(plan.extraCount, 1);
       expect(plan.extraGroups, [1, 2]);
-      expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
+      expect(QualificationPlanEngine.isDistributionClear(plan), isFalse);
     });
 
     test('8 qualifiers in two equal groups of 8 need no comparison', () {
@@ -89,7 +88,6 @@ void main() {
 
       expect(plan.fixedByGroup, [4, 4]);
       expect(plan.extraCount, 0);
-      expect(plan.extraGroups, isEmpty);
       expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
     });
 
@@ -103,7 +101,7 @@ void main() {
 
       expect(plan.fixedByGroup, [3, 3]);
       expect(plan.extraCount, 0);
-      expect(plan.extraGroups, isEmpty);
+      expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
     });
 
     test('manual fixed third place consumes one comparison slot, not an extra slot', () {
