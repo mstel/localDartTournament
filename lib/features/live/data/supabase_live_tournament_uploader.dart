@@ -73,8 +73,28 @@ class SupabaseLiveTournamentUploader implements LiveTournamentUploader {
       // Best effort: upload below will still attempt to replace/create.
     }
 
+    final headers = <String, String>{...storage.headers};
+    final session = client.auth.currentSession;
+    final hasAuthorization = headers.keys.any(
+      (k) => k.toLowerCase() == 'authorization',
+    );
+    if (!hasAuthorization && session?.accessToken != null) {
+      headers['Authorization'] = 'Bearer ${session!.accessToken}';
+    }
+    if (!headers.keys.any((k) => k.toLowerCase() == 'apikey')) {
+      final anonKey = SupabaseAccountConfig.anonKey;
+      if (anonKey.isNotEmpty) {
+        headers['apikey'] = anonKey;
+      }
+    }
+    if (!headers.keys.any((k) => k.toLowerCase() == 'authorization')) {
+      throw StateError(
+        'Live-Viewer Upload fehlgeschlagen: fehlende Anmeldung/Authorization.',
+      );
+    }
+
     final request = http.MultipartRequest('POST', uri)
-      ..headers.addAll(storage.headers)
+      ..headers.addAll(headers)
       ..headers['x-upsert'] = 'true'
       ..fields['cacheControl'] = '60'
       ..files.add(
