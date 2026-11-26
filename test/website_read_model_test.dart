@@ -33,6 +33,7 @@ void main() {
     'publishes completed tournaments and derived private catalog data',
     () async {
       final player = await database.createPlayerProfile(
+        id: 'ada',
         firstName: 'Ada',
         lastName: 'Dart',
         country: 'DE',

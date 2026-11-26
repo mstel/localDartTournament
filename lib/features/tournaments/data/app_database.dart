@@ -909,6 +909,7 @@ class LocalAppDatabase {
   Future<File> databaseFile() => _databaseFile();
 
   Future<PlayerProfile> createPlayerProfile({
+    String? id,
     String? displayName,
     String? firstName,
     String lastName = '',
@@ -921,7 +922,7 @@ class LocalAppDatabase {
       try {
         final now = DateTime.now();
         final profile = PlayerProfile(
-          id: _newId(),
+          id: id ?? _newId(),
           firstName: (firstName ?? displayName ?? '').trim(),
           lastName: lastName.trim(),
           country: country.trim(),
