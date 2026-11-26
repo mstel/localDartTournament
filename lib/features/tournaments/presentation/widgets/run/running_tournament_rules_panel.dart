@@ -422,6 +422,10 @@ class _RunningTournamentRulesPanelState
     final canUseLargerGroup =
         QualificationPlanEngine.canUseLargerGroupPolicy(groupSizes);
     final totalQualifiers = widget.draft.parsedQualifierCount ?? 0;
+    final canUseBestRank = QualificationPlanEngine.canUseBestRankPolicy(
+      groupSizes: groupSizes,
+      totalQualifiers: totalQualifiers,
+    );
     final effectiveAutoValue =
         widget.draft.advancementPolicy == 'automatic'
         ? QualificationPlanEngine.recommendedAutomaticPolicy(
@@ -496,9 +500,14 @@ class _RunningTournamentRulesPanelState
                           : 'Größere Gruppe hat Vorrang (bei gleich großen Gruppen nicht nötig)',
                     ),
                   ),
-                  const DropdownMenuItem<String>(
+                  DropdownMenuItem<String>(
                     value: 'best_rank',
-                    child: Text('Beste X Plätze gruppenübergreifend vergleichen'),
+                    enabled: canUseBestRank,
+                    child: Text(
+                      canUseBestRank
+                          ? 'Beste X Plätze gruppenübergreifend vergleichen'
+                          : 'Beste X Plätze gruppenübergreifend vergleichen (bei klarer Verteilung nicht nötig)',
+                    ),
                   ),
                   const DropdownMenuItem<String>(
                     value: 'automatic',

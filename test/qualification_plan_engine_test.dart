@@ -102,6 +102,79 @@ void main() {
       expect(plan.fixedByGroup, [3, 3]);
       expect(plan.extraCount, 0);
       expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
+      expect(
+        QualificationPlanEngine.canUseBestRankPolicy(
+          groupSizes: const [8, 8],
+          totalQualifiers: 6,
+        ),
+        isFalse,
+      );
+    });
+
+    test('8 qualifiers in two 8er groups yields 4/4 with no comparison', () {
+      final plan = _engine.build(
+        groupSizes: const [8, 8],
+        totalQualifiers: 8,
+        autoAdjust: true,
+        advancementPolicy: 'automatic',
+      );
+
+      expect(plan.fixedByGroup, [4, 4]);
+      expect(plan.extraCount, 0);
+      expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
+      expect(
+        QualificationPlanEngine.canUseBestRankPolicy(
+          groupSizes: const [8, 8],
+          totalQualifiers: 8,
+        ),
+        isFalse,
+      );
+    });
+
+    test('7 qualifiers in two 8er groups needs comparison (3+3+1)', () {
+      final plan = _engine.build(
+        groupSizes: const [8, 8],
+        totalQualifiers: 7,
+        autoAdjust: true,
+        advancementPolicy: 'automatic',
+      );
+
+      expect(plan.fixedByGroup, [3, 3]);
+      expect(plan.extraRank, 4);
+      expect(plan.extraCount, 1);
+      expect(plan.extraGroups, [1, 2]);
+      expect(
+        QualificationPlanEngine.canUseBestRankPolicy(
+          groupSizes: const [8, 8],
+          totalQualifiers: 7,
+        ),
+        isTrue,
+      );
+      expect(
+        QualificationPlanEngine.recommendedAutomaticPolicy(
+          groupSizes: const [8, 8],
+          totalQualifiers: 7,
+        ),
+        'best_rank',
+      );
+    });
+
+    test('8 qualifiers in three groups uses cross-group comparison', () {
+      expect(
+        QualificationPlanEngine.canUseBestRankPolicy(
+          groupSizes: const [6, 6, 6],
+          totalQualifiers: 8,
+        ),
+        isTrue,
+      );
+      final plan = _engine.build(
+        groupSizes: const [6, 6, 6],
+        totalQualifiers: 8,
+        autoAdjust: true,
+        advancementPolicy: 'automatic',
+      );
+      expect(plan.totalQualifiers, 8);
+      expect(plan.fixedByGroup.fold<int>(0, (s, v) => s + v) + plan.extraCount, 8);
     });
 
     test('manual fixed third place consumes one comparison slot, not an extra slot', () {

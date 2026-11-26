@@ -903,6 +903,10 @@ class _GroupQualificationSetup extends StatelessWidget {
     final canUseLargerGroup =
         QualificationPlanEngine.canUseLargerGroupPolicy(groupSizes);
     final totalQualifiers = plan?.totalQualifiers ?? 0;
+    final canUseBestRank = QualificationPlanEngine.canUseBestRankPolicy(
+      groupSizes: groupSizes,
+      totalQualifiers: totalQualifiers,
+    );
     final effectiveAutoValue = advancementPolicy == 'automatic'
         ? QualificationPlanEngine.recommendedAutomaticPolicy(
             groupSizes: groupSizes,
@@ -950,9 +954,14 @@ class _GroupQualificationSetup extends StatelessWidget {
                       : 'Größere Gruppe hat Vorrang (bei gleich großen Gruppen nicht nötig)',
                 ),
               ),
-              const DropdownMenuItem<String>(
+              DropdownMenuItem<String>(
                 value: 'best_rank',
-                child: Text('Beste X Plätze gruppenübergreifend vergleichen'),
+                enabled: canUseBestRank,
+                child: Text(
+                  canUseBestRank
+                      ? 'Beste X Plätze gruppenübergreifend vergleichen'
+                      : 'Beste X Plätze gruppenübergreifend vergleichen (bei klarer Verteilung nicht nötig)',
+                ),
               ),
               const DropdownMenuItem<String>(
                 value: 'automatic',

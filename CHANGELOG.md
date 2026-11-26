@@ -1,7 +1,13 @@
+# 4.1.2+142
+
+- Qualifikation: Automatik verteilt klare Fälle korrekt. Bei 2 Gruppen à 8 und 6 Weiterkommenden gibt es 3/3 fest und keinen Vergleich; bei 8 Weiterkommenden 4/4 fest. Nur wenn die Weiterkommenszahl nicht sauber durch die Gruppenzahl teilbar ist (z. B. 7 in 2 Gruppen, 8 in 3 Gruppen), wird gruppenübergreifend verglichen. Die Option „Beste X Plätze gruppenübergreifend vergleichen“ ist bei klar teilbarer Verteilung deaktiviert.
+- Laufende Regeln: Der Übernehmen-Button kann nach Fehlern nicht mehr im Endlos-Puffer hängen bleiben; Saving-State wird sicher zurückgesetzt. Qualifikations-, Auslosungs- und Platzierungsspiel-Änderungen sind damit im laufenden Turnier wieder zuverlässig speicherbar.
+- Live-Turnier: Der Viewer wird per direktem Multipart-Upload mit `Content-Type: text/html; charset=utf-8` veröffentlicht (inkl. Best-Effort-Remove, `x-upsert`, Cache-Control), um hängende `text/plain`-Metadaten in Supabase Storage zu vermeiden. Nach Installation dieser Version muss Live einmal neu veröffentlicht werden.
+
 # 4.1.1+141
 
-- Qualifikation & laufende Regeln: Nachzug des 4.1.0+140-Redesigns mit gr�nem CI-Testfix (Widget-Test an neue Qualifikationsanzeige angepasst), damit Release-Artefakte gebaut und ver�ffentlicht werden k�nnen.
-- Live-Turnier: Viewer wird vor Upload entfernt und mit `Content-Type: text/html` neu hochgeladen. F�r bereits falsch ausgelieferte Viewer muss einmal die Objekt-Metadaten im Bucket korrigiert oder mit dem neuen Build neu ver�ffentlicht werden.
+- Qualifikation & laufende Regeln: Nachzug des 4.1.0+140-Redesigns mit gr�nem CI-Testfix (Widget-Test an neue Qualifikationsanzeige angepasst), damit Release-Artefakte gebaut und ver�ffentlicht werden k�nnen.
+- Live-Turnier: Viewer wird vor Upload entfernt und mit `Content-Type: text/html` neu hochgeladen. F�r bereits falsch ausgelieferte Viewer muss einmal die Objekt-Metadaten im Bucket korrigiert oder mit dem neuen Build neu ver�ffentlicht werden.
 
 # 4.1.0+140
 

@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
+// ignore: depend_on_referenced_packages
+import 'package:http_parser/http_parser.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../accounts/data/supabase_account_config.dart';
@@ -51,23 +54,46 @@ class SupabaseLiveTournamentUploader implements LiveTournamentUploader {
 
   @override
   Future<void> uploadViewer(String path, String html) async {
-    final storage = _requiredClient.storage.from(LiveTournamentConfig.bucket);
+    final client = _requiredClient;
+    final storage = client.storage;
+    final bucket = LiveTournamentConfig.bucket;
+    final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
+    final encodedPath = normalizedPath
+        .split('/')
+        .map(Uri.encodeComponent)
+        .join('/');
+    final uri = Uri.parse('${storage.url}/object/$bucket/$encodedPath');
+    final fileName = normalizedPath.split('/').last;
+
     // Supabase object metadata (especially content-type) can stick on upsert.
     // Replace the viewer object to ensure browsers receive text/html.
     try {
-      await storage.remove([path]);
+      await storage.from(bucket).remove([normalizedPath]);
     } catch (_) {
       // Best effort: upload below will still attempt to replace/create.
     }
-    await storage.uploadBinary(
-      path,
-      Uint8List.fromList(utf8.encode(html)),
-      fileOptions: const FileOptions(
-        upsert: true,
-        contentType: 'text/html',
-        cacheControl: '60',
-      ),
-    );
+
+    final request = http.MultipartRequest('POST', uri)
+      ..headers.addAll(storage.headers)
+      ..headers['x-upsert'] = 'true'
+      ..fields['cacheControl'] = '60'
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          '',
+          utf8.encode(html),
+          filename: fileName.isEmpty ? 'index.html' : fileName,
+          contentType: MediaType('text', 'html', {'charset': 'utf-8'}),
+        ),
+      );
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(
+        'Live-Viewer Upload fehlgeschlagen (${response.statusCode}): ${response.body}',
+      );
+    }
   }
 
   @override

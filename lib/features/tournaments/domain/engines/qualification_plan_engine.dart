@@ -76,20 +76,18 @@ class QualificationPlanEngine {
         fixed: fixed,
         extraRank: extraRank,
       );
-      final extraGroups = _applyExplicitExtraGroups(
-        groupSizes: groupSizes,
-        fixed: fixed,
-        extraRank: extraRank,
-        derivedGroups: derivedGroups,
-        explicit: placeStatuses,
-      );
-      final extraCount = min(remaining, extraGroups.length);
+      var extraGroups = derivedGroups;
+      var extraCount = min(remaining, extraGroups.length);
+      if (extraCount <= 0) {
+        extraCount = 0;
+        extraGroups = const <int>[];
+      }
       final statuses = _statusesFor(
         groupSizes: groupSizes,
         fixed: fixed,
         extraRank: extraRank,
         extraGroups: extraGroups,
-        explicit: placeStatuses,
+        explicit: null,
       );
       final eligibleGroupSize = extraGroups.isEmpty
           ? null
@@ -225,10 +223,18 @@ class QualificationPlanEngine {
         totalQualifiers: totalQualifiers,
       );
     }
-    return resolveAdvancementPolicy(
-      groupSizes: groupSizes,
-      advancementPolicy: advancementPolicy,
-    );
+    if (advancementPolicy == 'best_rank' &&
+        !canUseBestRankPolicy(
+          groupSizes: groupSizes,
+          totalQualifiers: totalQualifiers,
+        )) {
+      return 'automatic';
+    }
+    if (advancementPolicy == 'larger_group' &&
+        !canUseLargerGroupPolicy(groupSizes)) {
+      return 'best_rank';
+    }
+    return advancementPolicy == 'best_rank' ? 'best_rank' : 'larger_group';
   }
 
   static bool canUseLargerGroupPolicy(List<int> groupSizes) =>
@@ -258,7 +264,7 @@ class QualificationPlanEngine {
     );
     if (groupCount == 0) return 'automatic';
     final divisible = cappedTotal % groupCount == 0;
-    final clearPlan = isDistributionClear(
+    final clearAutomaticPlan = isDistributionClear(
       const QualificationPlanEngine().build(
         groupSizes: groupSizes,
         totalQualifiers: cappedTotal,
@@ -266,10 +272,26 @@ class QualificationPlanEngine {
         advancementPolicy: 'automatic',
       ),
     );
-    if (divisible && clearPlan) return 'automatic';
+    if (divisible && clearAutomaticPlan) return 'automatic';
     if (!divisible) return 'best_rank';
     if (!hasEqualGroupSizes(groupSizes)) return 'larger_group';
     return 'automatic';
+  }
+
+  /// Cross-group comparison is only meaningful when there is a real rest slot
+  /// that cannot be distributed evenly by group count.
+  static bool canUseBestRankPolicy({
+    required List<int> groupSizes,
+    required int totalQualifiers,
+  }) {
+    if (groupSizes.isEmpty) return false;
+    final groupCount = groupSizes.length;
+    final cappedTotal = min(
+      max(0, totalQualifiers),
+      groupSizes.fold<int>(0, (sum, size) => sum + max(0, size)),
+    );
+    if (groupCount == 0 || cappedTotal == 0) return false;
+    return cappedTotal % groupCount != 0;
   }
 
   /// Concrete policy used when advancementPolicy is "automatic".
@@ -292,6 +314,7 @@ class QualificationPlanEngine {
         cappedTotal - baseFixed.fold<int>(0, (sum, value) => sum + value);
     if (remaining <= 0) return 'best_rank';
     if (hasEqualGroupSizes(groupSizes)) return 'best_rank';
+
     final largerFixed = _allocateLargerGroupBonusStatic(
       groupSizes: groupSizes,
       baseFixed: baseFixed,
@@ -300,6 +323,7 @@ class QualificationPlanEngine {
     final largerRemaining =
         cappedTotal - largerFixed.fold<int>(0, (sum, value) => sum + value);
     if (largerRemaining <= 0) return 'larger_group';
+
     final largerRank = _effectiveExtraRankStatic(
       groupSizes: groupSizes,
       fixed: largerFixed,
@@ -474,27 +498,7 @@ class QualificationPlanEngine {
     ];
   }
 
-  List<int> _applyExplicitExtraGroups({
-    required List<int> groupSizes,
-    required List<int> fixed,
-    required int extraRank,
-    required List<int> derivedGroups,
-    Map<String, QualificationPlaceStatus>? explicit,
-  }) {
-    if (explicit == null || explicit.isEmpty) return derivedGroups;
-    final groups = <int>{};
-    for (final groupNumber in derivedGroups) {
-      final index = groupNumber - 1;
-      final key = qualificationPlaceKey(groupNumber, extraRank);
-      final status = explicit[key] ?? QualificationPlaceStatus.comparison;
-      if (groupSizes[index] >= extraRank &&
-          fixed[index] < extraRank &&
-          status != QualificationPlaceStatus.eliminated) {
-        groups.add(groupNumber);
-      }
-    }
-    return groups.toList()..sort();
-  }
+
 
   Map<String, QualificationPlaceStatus> _statusesFor({
     required List<int> groupSizes,

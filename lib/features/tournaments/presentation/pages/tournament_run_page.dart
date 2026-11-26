@@ -4228,6 +4228,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     for (final entry in propagatedRunStages.entries) {
       previousRunStages[entry.key] = widget.tournament.runStages[entry.key];
     }
+    var activityAdded = false;
     setState(() {
       _savingRunningRulesSettings = true;
       widget.tournament.stages[index] = updatedStage;
@@ -4242,6 +4243,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         'running_rules_changed',
         'Regeln in Phase „${previousStage.name}“ geändert',
       );
+      activityAdded = true;
     });
     try {
       await _runController.saveProgress(
@@ -4268,13 +4270,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         for (final entry in previousRunStages.entries) {
           widget.tournament.runStages[entry.key] = entry.value;
         }
-        widget.tournament.activityLog.removeLast();
+        if (activityAdded && widget.tournament.activityLog.isNotEmpty) {
+          widget.tournament.activityLog.removeLast();
+        }
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Regeln konnten nicht gespeichert werden: $error'),
         ),
       );
+    } finally {
+      if (mounted && _savingRunningRulesSettings) {
+        setState(() => _savingRunningRulesSettings = false);
+      }
     }
   }
 
