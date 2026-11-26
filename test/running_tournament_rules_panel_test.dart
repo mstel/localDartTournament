@@ -641,7 +641,7 @@ void main() {
     expect(
       find.descendant(
         of: panel,
-        matching: find.text('Diese Phase kann nicht mehr geändert werden.'),
+        matching: find.textContaining('kann nicht mehr geändert werden'),
       ),
       findsOneWidget,
     );

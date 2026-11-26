@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../accounts/data/supabase_account_config.dart';
@@ -53,59 +52,36 @@ class SupabaseLiveTournamentUploader implements LiveTournamentUploader {
   @override
   Future<void> uploadViewer(String path, String html) async {
     final client = _requiredClient;
-    final storage = client.storage;
-    final bucket = LiveTournamentConfig.bucket;
+    final storage = client.storage.from(LiveTournamentConfig.bucket);
     final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
-    final encodedPath = normalizedPath
-        .split('/')
-        .map(Uri.encodeComponent)
-        .join('/');
-    final uri = Uri.parse('${storage.url}/object/$bucket/$encodedPath');
 
-    // Supabase object metadata (especially content-type) can stick on upsert.
-    // Replace the viewer object to ensure browsers receive text/html.
+    // Cache-busting stamp ensures ETag/content changes so stale CDN/object
+    // metadata is less likely to be reused.
+    final stamp = DateTime.now().toUtc().toIso8601String();
+    final bodyHtml = html.contains('</html>')
+        ? html.replaceFirst(
+            '</html>',
+            '<!-- live-published-at:$stamp -->\n</html>',
+          )
+        : '$html\n<!-- live-published-at:$stamp -->';
+    final bytes = Uint8List.fromList(utf8.encode(bodyHtml));
+    const options = FileOptions(
+      upsert: true,
+      contentType: 'text/html; charset=utf-8',
+      cacheControl: '60',
+    );
+
+    // Remove first to avoid stale metadata on backends that ignore metadata
+    // updates during upsert.
     try {
-      await storage.from(bucket).remove([normalizedPath]);
+      await storage.remove([normalizedPath]);
+    } catch (_) {}
+
+    try {
+      await storage.uploadBinary(normalizedPath, bytes, fileOptions: options);
     } catch (_) {
-      // Best effort: upload below will still attempt to replace/create.
-    }
-
-    final headers = <String, String>{...storage.headers};
-    final session = client.auth.currentSession;
-    final hasAuthorization = headers.keys.any(
-      (k) => k.toLowerCase() == 'authorization',
-    );
-    if (!hasAuthorization && session?.accessToken != null) {
-      headers['Authorization'] = 'Bearer ${session!.accessToken}';
-    }
-    if (!headers.keys.any((k) => k.toLowerCase() == 'apikey')) {
-      final anonKey = SupabaseAccountConfig.anonKey;
-      if (anonKey.isNotEmpty) {
-        headers['apikey'] = anonKey;
-      }
-    }
-    if (!headers.keys.any((k) => k.toLowerCase() == 'authorization')) {
-      throw StateError(
-        'Live-Viewer Upload fehlgeschlagen: fehlende Anmeldung/Authorization.',
-      );
-    }
-
-    // Raw upload: sets the object Content-Type metadata directly. Multipart
-    // uploads can leave stale/wrong mimetype metadata on Supabase Storage.
-    headers['Content-Type'] = 'text/html; charset=utf-8';
-    headers['x-upsert'] = 'true';
-    headers['cache-control'] = '60';
-
-    final response = await http.post(
-      uri,
-      headers: headers,
-      body: utf8.encode(html),
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError(
-        'Live-Viewer Upload fehlgeschlagen (${response.statusCode}): ${response.body}',
-      );
+      // Fallback for backends/permissions where replace via update is needed.
+      await storage.updateBinary(normalizedPath, bytes, fileOptions: options);
     }
   }
 

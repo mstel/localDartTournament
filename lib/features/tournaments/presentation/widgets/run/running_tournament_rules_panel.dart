@@ -386,6 +386,7 @@ class RunningTournamentRulesPanel extends StatefulWidget {
     required this.onChanged,
     this.followUpKnockoutStage,
     this.followUpKnockoutStageIndex = -1,
+    this.disabledReason,
   });
 
   final TournamentStage stage;
@@ -396,6 +397,7 @@ class RunningTournamentRulesPanel extends StatefulWidget {
   final bool saving;
   final VoidCallback onSave;
   final VoidCallback onChanged;
+  final String? disabledReason;
 
   @override
   State<RunningTournamentRulesPanel> createState() =>
@@ -780,7 +782,8 @@ class _RunningTournamentRulesPanelState
         subtitle: Text(
           widget.enabled
               ? 'Regeln der Phase „${widget.stage.name}“ anpassen'
-              : 'Diese Phase kann nicht mehr geändert werden.',
+              : widget.disabledReason ??
+                  'Diese Phase kann nicht mehr geändert werden.',
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
@@ -798,6 +801,7 @@ class _RunningTournamentRulesPanelState
                     widget.stage.qualifiedParticipantCount ??
                     followUp.knockoutParticipantCount ??
                     0,
+                allowPlayFully: false,
               ),
             ],
           ] else

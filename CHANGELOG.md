@@ -1,3 +1,8 @@
+# 4.1.5+145
+
+- Laufende Regeln: Deaktivierte Regelpanels zeigen jetzt den konkreten Grund an (z. B. gestartete Folgephase) statt nur „nicht mehr geändert werden“. Der „Folgephase: … Turnierform vollständig ausspielen“-Schalter wird im laufenden Turnier nicht mehr angezeigt.
+- Laufende Regeln: Übernehmen hat jetzt ein 15s-Speicher-Timeout und meldet Fehler per SnackBar, damit der Button nicht endlos puffert.
+
 # 4.1.4+144
 
 - Live-Turnier: Zweiter Hotfix für den Viewer-Upload. Der Viewer wird jetzt per raw `POST` mit `Content-Type: text/html; charset=utf-8` hochgeladen (statt Multipart), damit Supabase-Objektmetadaten nicht wieder als `text/plain` ausgeliefert werden. Nach Installation einmal Live neu veröffentlichen.

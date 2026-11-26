@@ -4023,32 +4023,42 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             match.awaySets != null,
       );
 
-  bool _canEditRunningRulesForStage(int index) {
-    if (widget.tournament.leagueMatch != null ||
-        widget.tournament.importedArchive != null ||
-        widget.tournament.isKratzerTournament ||
-        widget.tournament.players.any((player) => player.isTeam)) {
-      return false;
+  String? _runningRulesDisabledReasonForStage(int index) {
+    if (widget.tournament.leagueMatch != null) {
+      return 'Regeln sind in Ligaspielen nicht änderbar.';
+    }
+    if (widget.tournament.importedArchive != null) {
+      return 'Regeln sind in importierten Archiv-Turnieren nicht änderbar.';
+    }
+    if (widget.tournament.isKratzerTournament) {
+      return 'Regeln sind in Kratzer-Turnieren nicht änderbar.';
+    }
+    if (widget.tournament.players.any((player) => player.isTeam)) {
+      return 'Regeln sind in Team-Turnieren hier nicht änderbar.';
     }
     if (index < 0 ||
         index >= widget.tournament.stages.length ||
-        index >= widget.tournament.runStages.length ||
-        _completedStageIndexes.contains(index)) {
-      return false;
+        index >= widget.tournament.runStages.length) {
+      return 'Phase nicht gefunden.';
+    }
+    if (_completedStageIndexes.contains(index)) {
+      return 'Diese Phase ist abgeschlossen und kann nicht mehr geändert werden.';
     }
     final stage = widget.tournament.stages[index];
-    if (!stage.isGroupStage && !_isKnockoutStageType(stage.type)) return false;
-    // Während der Phase editierbar, auch wenn schon Ergebnisse vorliegen.
-    // Erst wenn eine Folgephase begonnen hat oder die Phase abgeschlossen ist,
-    // sperren. Beim erneuten Öffnen einer vorherigen Phase bleibt sie editierbar,
-    // solange keine Folgephase Fortschritt hat.
+    if (!stage.isGroupStage && !_isKnockoutStageType(stage.type)) {
+      return 'Für diesen Phasentyp sind laufende Regeländerungen nicht verfügbar.';
+    }
     for (var next = index + 1; next < widget.tournament.runStages.length; next++) {
       if (_runStageHasProgress(widget.tournament.runStages[next])) {
-        return false;
+        final nextName = widget.tournament.stages[next].name;
+        return 'Die Folgephase „$nextName“ hat bereits begonnen. Setze die Folgephase zurück, um diese Regeln wieder zu ändern.';
       }
     }
-    return true;
+    return null;
   }
+
+  bool _canEditRunningRulesForStage(int index) =>
+      _runningRulesDisabledReasonForStage(index) == null;
 
   List<TournamentPlayer> _playersForRunStage(TournamentRunStage stage) {
     final players = <TournamentPlayer>[];
@@ -4246,11 +4256,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       activityAdded = true;
     });
     try {
-      await _runController.saveProgress(
-        tournament: widget.tournament,
-        activeStageIndex: _activeStageIndex,
-        completedStageIndexes: _completedStageIndexes,
-      );
+      await _runController
+          .saveProgress(
+            tournament: widget.tournament,
+            activeStageIndex: _activeStageIndex,
+            completedStageIndexes: _completedStageIndexes,
+          )
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
       setState(() => _savingRunningRulesSettings = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4369,20 +4381,18 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       );
     });
     try {
-      await _runController.saveProgress(
-        tournament: widget.tournament,
-        activeStageIndex: _activeStageIndex,
-        completedStageIndexes: _completedStageIndexes,
-      );
+      await _runController
+          .saveProgress(
+            tournament: widget.tournament,
+            activeStageIndex: _activeStageIndex,
+            completedStageIndexes: _completedStageIndexes,
+          )
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      setState(() {
-        _savingTieBreakerSettings = false;
-      });
+      setState(() => _savingRunningRulesSettings = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Tie-Breaker übernommen. Tabelle und Prognose wurden aktualisiert.',
-          ),
+          content: Text('Regeln übernommen. Die Phase wurde neu geplant.'),
         ),
       );
     } catch (error) {
@@ -8657,6 +8667,10 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 followUpKnockoutStageIndex:
                                     _runningRulesDraft!.knockoutStageIndex,
                                 enabled: _canEditRunningRulesForStage(
+                                  _activeStageIndex,
+                                ),
+                                disabledReason:
+                                    _runningRulesDisabledReasonForStage(
                                   _activeStageIndex,
                                 ),
                                 saving: _savingRunningRulesSettings,
