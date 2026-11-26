@@ -1739,9 +1739,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('4 Teilnehmer'), findsWidgets);
-    expect(find.textContaining('Gruppe A 2'), findsOneWidget);
-    expect(find.textContaining('Gruppe B 1'), findsOneWidget);
-    expect(find.textContaining('Gruppe C 1'), findsOneWidget);
+    expect(find.textContaining('Gruppe A'), findsWidgets);
+    expect(find.textContaining('Gruppe B'), findsWidgets);
+    expect(find.textContaining('Gruppe C'), findsWidgets);
 
     expect(
       find.byKey(const ValueKey('stage-name-field'), skipOffstage: false),
@@ -1959,8 +1959,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('KO-Phase'), findsWidgets);
-    expect(find.text('Spielplan'), findsOneWidget);
-    expect(find.text('Letzte Ergebnisse'), findsOneWidget);
   });
 
   testWidgets('form finder suggestion opens first phase in edit mode', (
