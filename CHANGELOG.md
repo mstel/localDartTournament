@@ -1,3 +1,8 @@
+# 4.1.1+141
+
+- Qualifikation & laufende Regeln: Nachzug des 4.1.0+140-Redesigns mit gr�nem CI-Testfix (Widget-Test an neue Qualifikationsanzeige angepasst), damit Release-Artefakte gebaut und ver�ffentlicht werden k�nnen.
+- Live-Turnier: Viewer wird vor Upload entfernt und mit `Content-Type: text/html` neu hochgeladen. F�r bereits falsch ausgelieferte Viewer muss einmal die Objekt-Metadaten im Bucket korrigiert oder mit dem neuen Build neu ver�ffentlicht werden.
+
 # 4.1.0+140
 
 - Qualifikation: Neue 3-Optionen-Logik in Erstellung und laufenden Regeln. Automatik ist immer auswählbar und setzt die empfohlene Regel: bei gleich großen Gruppen keine größere-Gruppe-Bevorzugung, bei nicht durch Gruppenzahl teilbarer Qualifikantenzahl „Beste X Plätze gruppenübergreifend vergleichen“, bei ungleichen Gruppen „Größere Gruppe hat Vorrang“, bei klar teilbarer Verteilung Automatik. Manuelle Platzänderungen wechseln in den manuellen Modus mit eigenem, nicht änderbarem Dropdown „Manuelle weiterkommensregelung“; zurück zu Automatik ist jederzeit möglich.
