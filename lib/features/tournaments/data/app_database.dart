@@ -473,39 +473,11 @@ class LocalAppDatabase {
         final derivation = derivePerformanceMonths(
           _loadPerformanceSnapshots(database, snapshot.playerId),
         );
-        database.execute(
-          '''DELETE FROM player_monthly_performance
-             WHERE player_profile_id = ? AND source = ?''',
-          [snapshot.playerId, 'scolia_cumulative'],
+        _rebuildDerivedPerformanceMonths(
+          database,
+          snapshot.playerId,
+          derivation.months,
         );
-        for (final month in derivation.months) {
-          database.execute(
-            '''INSERT INTO player_monthly_performance(
-                 player_profile_id, year, month, weighted_legs, matches, wins,
-                 losses, scoring, average, checkout_rate, source
-               ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
-               ON CONFLICT(player_profile_id, year, month) DO UPDATE SET
-                 weighted_legs = excluded.weighted_legs,
-                 matches = excluded.matches,
-                 wins = excluded.wins,
-                 losses = excluded.losses,
-                 scoring = excluded.scoring,
-                 average = excluded.average,
-                 checkout_rate = excluded.checkout_rate,
-                 source = excluded.source''',
-            [
-              snapshot.playerId,
-              month.year,
-              month.month,
-              month.weightedLegs,
-              month.matches,
-              month.scoring,
-              month.average,
-              month.checkoutRate,
-              'scolia_cumulative',
-            ],
-          );
-        }
         database.execute('COMMIT');
         StorageAccess.markLocalDataChanged();
         return derivation.months;
@@ -517,6 +489,84 @@ class LocalAppDatabase {
       database.close();
     }
   });
+
+  /// Entfernt einen kumulierten Scolia-Messpunkt und berechnet alle
+  /// abhängigen Monatswerte des Spielers neu. Manuelle und importierte Monate
+  /// bleiben unberührt.
+  Future<List<DerivedPerformanceMonth>>
+  deletePerformanceSnapshotAndRebuild({
+    required String playerId,
+    required int year,
+    required int month,
+  }) => StorageAccess.run(() async {
+    final database = await _openDatabase();
+    try {
+      database.execute('BEGIN');
+      try {
+        database.execute(
+          '''DELETE FROM player_performance_snapshot
+             WHERE player_profile_id = ? AND year = ? AND month = ?''',
+          [playerId, year, month],
+        );
+        final derivation = derivePerformanceMonths(
+          _loadPerformanceSnapshots(database, playerId),
+        );
+        _rebuildDerivedPerformanceMonths(
+          database,
+          playerId,
+          derivation.months,
+        );
+        database.execute('COMMIT');
+        StorageAccess.markLocalDataChanged();
+        return derivation.months;
+      } catch (_) {
+        database.execute('ROLLBACK');
+        rethrow;
+      }
+    } finally {
+      database.close();
+    }
+  });
+
+  void _rebuildDerivedPerformanceMonths(
+    Database database,
+    String playerId,
+    List<DerivedPerformanceMonth> months,
+  ) {
+    database.execute(
+      '''DELETE FROM player_monthly_performance
+         WHERE player_profile_id = ? AND source = ?''',
+      [playerId, 'scolia_cumulative'],
+    );
+    for (final month in months) {
+      database.execute(
+        '''INSERT INTO player_monthly_performance(
+             player_profile_id, year, month, weighted_legs, matches, wins,
+             losses, scoring, average, checkout_rate, source
+           ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+           ON CONFLICT(player_profile_id, year, month) DO UPDATE SET
+             weighted_legs = excluded.weighted_legs,
+             matches = excluded.matches,
+             wins = excluded.wins,
+             losses = excluded.losses,
+             scoring = excluded.scoring,
+             average = excluded.average,
+             checkout_rate = excluded.checkout_rate,
+             source = excluded.source''',
+        [
+          playerId,
+          month.year,
+          month.month,
+          month.weightedLegs,
+          month.matches,
+          month.scoring,
+          month.average,
+          month.checkoutRate,
+          'scolia_cumulative',
+        ],
+      );
+    }
+  }
 
   List<PerformanceSnapshot> _loadPerformanceSnapshots(
     Database database,

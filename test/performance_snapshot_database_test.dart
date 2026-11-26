@@ -100,6 +100,64 @@ void main() {
     );
   });
 
+  testWidgets('deleting a snapshot rebuilds the remaining derived months', (
+    tester,
+  ) async {
+    final directory = (await tester.runAsync(_tempDirectory))!;
+    addTearDown(() => tester.runAsync(() => directory.delete(recursive: true)));
+    final database = LocalAppDatabase(baseDirectory: directory);
+    final profile = (await tester.runAsync(
+      () => database.createPlayerProfile(displayName: 'Testspieler'),
+    ))!;
+
+    await tester.runAsync(
+      () => database.savePlayerMonthlyPerformance(
+        PlayerMonthlyPerformance(
+          playerId: profile.id,
+          year: 2026,
+          month: 9,
+          weightedLegs: 12,
+          average: 55,
+        ),
+      ),
+    );
+    await tester.runAsync(
+      () => database.savePerformanceSnapshotAndRebuild(
+        _snapshot(profile.id, 2026, 10, 30, average: 42),
+      ),
+    );
+    await tester.runAsync(
+      () => database.savePerformanceSnapshotAndRebuild(
+        _snapshot(profile.id, 2026, 11, 60, average: 43),
+      ),
+    );
+
+    await tester.runAsync(
+      () => database.deletePerformanceSnapshotAndRebuild(
+        playerId: profile.id,
+        year: 2026,
+        month: 10,
+      ),
+    );
+
+    final snapshots = (await tester.runAsync(
+      () => database.loadPerformanceSnapshots(profile.id),
+    ))!;
+    expect(snapshots.map((entry) => entry.month), [11]);
+
+    final entries = (await tester.runAsync(
+      () => database.loadPlayerMonthlyPerformance(profile.id),
+    ))!;
+    expect(entries.map((entry) => entry.month), [9, 11]);
+    final september = entries.firstWhere((entry) => entry.month == 9);
+    expect(september.source, 'manual');
+    expect(september.average, 55);
+    final november = entries.firstWhere((entry) => entry.month == 11);
+    expect(november.source, 'scolia_cumulative');
+    expect(november.weightedLegs, 60);
+    expect(november.average, 43);
+  });
+
   testWidgets('schema 17 migration adds snapshot storage without data loss', (
     tester,
   ) async {

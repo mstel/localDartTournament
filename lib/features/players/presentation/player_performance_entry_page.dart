@@ -79,14 +79,22 @@ class _PlayerPerformanceEntryPageState
   PerformanceSnapshot? _loadedSnapshot;
   _PerformanceEntryMode _mode = _PerformanceEntryMode.direct;
   bool _needsNewLegsOverride = false;
+  bool _repairingEmptyWindowLegs = false;
   bool _saving = false;
+  bool _resetting = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _entry = _loadEntry();
-    _entry.then(_populate, onError: (Object _) {});
+    _entry.then((data) {
+      if (!mounted) return;
+      if (data.snapshotFor(_year, _month) != null) {
+        setState(() => _mode = _PerformanceEntryMode.scolia);
+      }
+      _populate(data);
+    }, onError: (Object _) {});
   }
 
   Future<_PerformanceEntryData> _loadEntry() async {
@@ -161,16 +169,24 @@ class _PlayerPerformanceEntryPageState
     _loadedData = data;
     _loadedEntry = data.direct;
     _loadedSnapshot = data.snapshotFor(_year, _month);
-    if (_loadedSnapshot != null) _mode = _PerformanceEntryMode.scolia;
 
     _needsNewLegsOverride = false;
+    _repairingEmptyWindowLegs = false;
     if (_mode == _PerformanceEntryMode.scolia) {
       final snapshot = _loadedSnapshot;
       final previous = _previousSnapshot(data.snapshots, _year, _month);
       final tournamentLegs = data.tournamentLegs;
-      final windowLegs =
-          snapshot?.windowLegs ??
-          _suggestedWindowLegs(previous, tournamentLegs);
+      final suggestedWindowLegs = _suggestedWindowLegs(
+        previous,
+        tournamentLegs,
+      );
+      _repairingEmptyWindowLegs =
+          snapshot != null &&
+          snapshot.windowLegs == 0 &&
+          suggestedWindowLegs > 0;
+      final windowLegs = _repairingEmptyWindowLegs
+          ? suggestedWindowLegs
+          : snapshot?.windowLegs ?? suggestedWindowLegs;
       _legsController.text = '$windowLegs';
       _matchesController.text =
           '${snapshot?.matches ?? data.direct?.matches ?? 0}';
@@ -230,7 +246,18 @@ class _PlayerPerformanceEntryPageState
         : TextInputType.number,
   );
 
+  bool get _manualBlockedBySnapshot =>
+      _mode == _PerformanceEntryMode.direct && _loadedSnapshot != null;
+
   Future<void> _save() async {
+    if (_manualBlockedBySnapshot) {
+      setState(
+        () => _error =
+            'Für diesen Monat existiert noch ein Scolia-Messpunkt. '
+            'Setze ihn zuerst zurück, bevor du Monatswerte manuell speicherst.',
+      );
+      return;
+    }
     final legs = _nonNegativeInt(_legsController);
     final matches = _nonNegativeInt(_matchesController);
     final newLegs = _newLegsController.text.trim().isEmpty
@@ -268,6 +295,12 @@ class _PlayerPerformanceEntryPageState
     });
     try {
       if (isScolia) {
+        final notes = [
+          if (_repairingEmptyWindowLegs)
+            'Früher leerer Messpunkt aus Turnierlegs korrigiert.',
+          if (_needsNewLegsOverride)
+            'Monatstrennung bei vollem Scolia-Fenster bestätigt.',
+        ];
         final snapshot = PerformanceSnapshot.create(
           id:
               _loadedSnapshot?.id ??
@@ -281,9 +314,7 @@ class _PlayerPerformanceEntryPageState
           average: average,
           checkoutRate: checkout,
           newLegsOverride: _needsNewLegsOverride ? newLegs : null,
-          note: _needsNewLegsOverride
-              ? 'Monatstrennung bei vollem Scolia-Fenster bestätigt.'
-              : '',
+          note: notes.join(' '),
           updatedAt: DateTime.now(),
         );
         final derived = await _database.savePerformanceSnapshotAndRebuild(
@@ -338,6 +369,62 @@ class _PlayerPerformanceEntryPageState
       if (mounted) setState(() => _error = 'Speichern fehlgeschlagen: $error');
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _resetSnapshot() async {
+    if (_loadedSnapshot == null || _saving || _resetting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Scolia-Messpunkt zurücksetzen?'),
+        content: Text(
+          'Der Messpunkt für ${_months[_month - 1]} $_year wird gelöscht '
+          'und die abhängigen Monatswerte werden neu berechnet. '
+          'Manuell erfasste Monatswerte bleiben unberührt.',
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            key: const ValueKey('performance-scolia-reset-confirm'),
+            style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Zurücksetzen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _resetting = true;
+      _error = null;
+    });
+    try {
+      await _database.deletePerformanceSnapshotAndRebuild(
+        playerId: widget.player.id,
+        year: _year,
+        month: _month,
+      );
+      if (!mounted) return;
+      setState(() => _mode = _PerformanceEntryMode.direct);
+      _reload();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Scolia-Messpunkt für ${_months[_month - 1]} $_year entfernt. '
+            'Monatswerte neu berechnet.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Zurücksetzen fehlgeschlagen: $error');
+    } finally {
+      if (mounted) setState(() => _resetting = false);
     }
   }
 
@@ -557,6 +644,42 @@ class _PlayerPerformanceEntryPageState
                 );
               },
             ),
+            if (_manualBlockedBySnapshot) ...[
+              const SizedBox(height: 12),
+              Container(
+                key: const ValueKey('performance-scolia-manual-blocked-info'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Für diesen Monat existiert noch ein Scolia-Messpunkt. '
+                  'Setze ihn zuerst zurück, bevor du die Monatswerte manuell '
+                  'überschreibst.',
+                ),
+              ),
+            ],
+            if (_mode == _PerformanceEntryMode.scolia &&
+                _repairingEmptyWindowLegs) ...[
+              const SizedBox(height: 12),
+              Container(
+                key: const ValueKey('performance-scolia-empty-legs-info'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Für diesen Monat wurde früher ein leerer Scolia-Messpunkt '
+                  'gespeichert. Die aus Turnieren geschätzten Legs werden beim '
+                  'Speichern übernommen. Du kannst den Messpunkt auch '
+                  'zurücksetzen.',
+                ),
+              ),
+            ],
             if (_mode == _PerformanceEntryMode.scolia && needsOverride) ...[
               const SizedBox(height: 12),
               Container(
@@ -600,11 +723,37 @@ class _PlayerPerformanceEntryPageState
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
+            if (_loadedSnapshot != null) ...[
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Tooltip(
+                  message: 'Scolia-Messpunkt für diesen Monat löschen und die '
+                      'abhängigen Monatswerte neu berechnen.',
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('performance-scolia-reset'),
+                    onPressed: _saving || _resetting ? null : _resetSnapshot,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    icon: const Icon(Icons.delete_outline),
+                    label: Text(
+                      _resetting
+                          ? 'Setzt zurück …'
+                          : 'Scolia-Monat zurücksetzen',
+                    ),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
-                onPressed: _saving ? null : _save,
+                onPressed:
+                    _saving || _resetting || _manualBlockedBySnapshot
+                    ? null
+                    : _save,
                 style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
                 icon: _saving
                     ? const SizedBox.square(

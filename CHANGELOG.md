@@ -1,3 +1,7 @@
+# Unreleased
+
+- Scolia: Ein vorhandener Messpunkt zwingt die Eingabemaske nicht mehr in den Scolia-Reiter; der Wechsel zurück zu „Monatswerte“ bleibt möglich. Dort wird manuelle Speicherung so lange gesperrt und erklärt, bis der zugehörige Messpunkt zurückgesetzt wurde. Früher leere Monatsdatensätze mit 0 Legs werden aus den bewerteten Turnierlegs des Monats vorgeschlagen und beim Speichern korrigiert. Pro Monat gibt es außerdem einen zurücksetzen-Button, der den Scolia-Messpunkt löscht und die abhängigen Monatswerte neu berechnet; manuell erfasste Monate bleiben unberührt.
+
 # 4.0.7+137
 
 - Website: „Erweiterte Gegnerbilanzen“ steht unter „Achievement-Fortschritt“; der Zusatz „Weitere Gegnerbilanz“ hinter Spielernamen entfällt. „+5“ ergänzt jeweils fünf weitere Zeilen direkt in der bestehenden Gegnerbilanz-Tabelle, auch mehrfach.

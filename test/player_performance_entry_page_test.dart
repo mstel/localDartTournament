@@ -7,11 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeDatabase extends LocalAppDatabase {
-  _FakeDatabase({this.initial});
+  _FakeDatabase({this.initial, List<PerformanceSnapshot>? snapshots})
+    : snapshots = snapshots ?? <PerformanceSnapshot>[];
 
   final PlayerMonthlyPerformance? initial;
   PlayerMonthlyPerformance? saved;
-  final List<PerformanceSnapshot> snapshots = [];
+  final List<PerformanceSnapshot> snapshots;
   List<DerivedPerformanceMonth> derived = [];
 
   @override
@@ -67,6 +68,19 @@ class _FakeDatabase extends LocalAppDatabase {
       (entry) => entry.year == snapshot.year && entry.month == snapshot.month,
     );
     snapshots.add(snapshot);
+    derived = derivePerformanceMonths(snapshots).months;
+    return derived;
+  }
+
+  @override
+  Future<List<DerivedPerformanceMonth>> deletePerformanceSnapshotAndRebuild({
+    required String playerId,
+    required int year,
+    required int month,
+  }) async {
+    snapshots.removeWhere(
+      (entry) => entry.year == year && entry.month == month,
+    );
     derived = derivePerformanceMonths(snapshots).months;
     return derived;
   }
@@ -385,9 +399,151 @@ void main() {
     },
   );
 
+  testWidgets('monthly tab stays available when a Scolia snapshot exists', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final database = _FakeDatabase(
+      snapshots: [
+        PerformanceSnapshot.create(
+          id: 'legacy-november',
+          playerId: player.id,
+          year: now.year,
+          month: now.month,
+          windowLegs: 30,
+          matches: 6,
+          average: 44,
+        ),
+      ],
+    );
+    await pumpPage(tester, database);
+
+    var legsField = tester.widget<TextField>(
+      find.byKey(const ValueKey('performance-weighted-legs')),
+    );
+    expect(legsField.readOnly, isTrue);
+
+    await tester.tap(find.text('Monatswerte'));
+    await tester.pumpAndSettle();
+
+    legsField = tester.widget<TextField>(
+      find.byKey(const ValueKey('performance-weighted-legs')),
+    );
+    expect(legsField.readOnly, isFalse);
+    expect(
+      find.byKey(
+        const ValueKey('performance-scolia-manual-blocked-info'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('performance-scolia-reset'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    final saveButton = tester.widget<FilledButton>(
+      find.byType(FilledButton, skipOffstage: false),
+    );
+    expect(saveButton.onPressed, isNull);
+  });
+
+  testWidgets('empty legacy Scolia legs are repaired from tournaments', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final database = _FakeDatabase(
+      snapshots: [
+        PerformanceSnapshot.create(
+          id: 'legacy-empty',
+          playerId: player.id,
+          year: now.year,
+          month: now.month,
+          windowLegs: 0,
+          matches: 5,
+          average: 40,
+        ),
+      ],
+    );
+    await pumpPage(
+      tester,
+      database,
+      legsService: _FakeLegsService(legsByMonth: {now.month: 25}),
+    );
+
+    expect(
+      find.byKey(
+        const ValueKey('performance-scolia-empty-legs-info'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    final legsField = tester.widget<TextField>(
+      find.byKey(const ValueKey('performance-weighted-legs')),
+    );
+    expect(legsField.controller!.text, '25');
+
+    await tapSave(tester);
+
+    expect(database.snapshots, hasLength(1));
+    expect(database.snapshots.single.windowLegs, 25);
+  });
+
+  testWidgets('reset removes the Scolia snapshot for the selected month', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final database = _FakeDatabase(
+      snapshots: [
+        PerformanceSnapshot.create(
+          id: 'legacy-november',
+          playerId: player.id,
+          year: now.year,
+          month: now.month,
+          windowLegs: 30,
+          matches: 6,
+          average: 44,
+        ),
+      ],
+    );
+    await pumpPage(tester, database);
+
+    final resetButton = find.byKey(
+      const ValueKey('performance-scolia-reset'),
+      skipOffstage: false,
+    );
+    await tester.ensureVisible(resetButton);
+    await tester.pumpAndSettle();
+    await tester.tap(resetButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Scolia-Messpunkt zurücksetzen?'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('performance-scolia-reset-confirm')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(database.snapshots, isEmpty);
+    expect(database.derived, isEmpty);
+    final legsField = tester.widget<TextField>(
+      find.byKey(const ValueKey('performance-weighted-legs')),
+    );
+    expect(legsField.readOnly, isFalse);
+    expect(
+      find.byKey(
+        const ValueKey('performance-scolia-reset'),
+        skipOffstage: false,
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('entry form stays renderable at mobile, tablet and desktop', (
     tester,
   ) async {
+    final now = DateTime.now();
     for (final size in [
       const Size(360, 800),
       const Size(800, 600),
@@ -404,8 +560,22 @@ void main() {
           child: MaterialApp(
             home: PlayerPerformanceEntryPage(
               player: player,
-              database: _FakeDatabase(),
-              legsService: _FakeLegsService(),
+              database: _FakeDatabase(
+                snapshots: [
+                  PerformanceSnapshot.create(
+                    id: 'responsive-legacy',
+                    playerId: player.id,
+                    year: now.year,
+                    month: now.month,
+                    windowLegs: 0,
+                    matches: 3,
+                    average: 40,
+                  ),
+                ],
+              ),
+              legsService: _FakeLegsService(
+                legsByMonth: {now.month: 20},
+              ),
             ),
           ),
         ),
@@ -423,7 +593,20 @@ void main() {
       ..physicalSize = const Size(360, 800)
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final database = _FakeDatabase();
+    final now = DateTime.now();
+    final database = _FakeDatabase(
+      snapshots: [
+        PerformanceSnapshot.create(
+          id: 'touch-legacy',
+          playerId: player.id,
+          year: now.year,
+          month: now.month,
+          windowLegs: 30,
+          matches: 6,
+          average: 44,
+        ),
+      ],
+    );
     await pumpPage(tester, database);
     await tester.drag(find.byType(ListView), const Offset(0, -600));
     await tester.pumpAndSettle();
@@ -433,6 +616,15 @@ void main() {
     final size = tester.getSize(button);
     expect(size.width, greaterThanOrEqualTo(48));
     expect(size.height, greaterThanOrEqualTo(48));
+
+    final resetButton = find.byKey(
+      const ValueKey('performance-scolia-reset'),
+      skipOffstage: false,
+    );
+    expect(resetButton, findsOneWidget);
+    final resetSize = tester.getSize(resetButton);
+    expect(resetSize.width, greaterThanOrEqualTo(48));
+    expect(resetSize.height, greaterThanOrEqualTo(48));
     expect(tester.takeException(), isNull);
   });
 }
