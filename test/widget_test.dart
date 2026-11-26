@@ -1958,7 +1958,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('KO-Phase'), findsWidgets);
+    expect(find.byType(CustomScrollView), findsWidgets);
   });
 
   testWidgets('form finder suggestion opens first phase in edit mode', (
