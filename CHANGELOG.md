@@ -1,3 +1,8 @@
+# 4.1.6+146
+
+- Laufende Regeln: Automatische Freilos-/Bye-Matches sperren die Phasenregeln nicht mehr f?lschlich. Dadurch bleiben Qualifikations- und Regel?nderungen m?glich, solange keine echte Folgephase begonnen hat.
+- Laufende Regeln: ?bernehmen meldet Sperrgr?nde direkt, setzt den Draft nach erfolgreichem Speichern sauber neu auf und hat weiterhin Timeout-/Fehlerabsicherung gegen endloses Puffern.
+
 # 4.1.5+145
 
 - Laufende Regeln: Deaktivierte Regelpanels zeigen jetzt den konkreten Grund an (z. B. gestartete Folgephase) statt nur „nicht mehr geändert werden“. Der „Folgephase: … Turnierform vollständig ausspielen“-Schalter wird im laufenden Turnier nicht mehr angezeigt.

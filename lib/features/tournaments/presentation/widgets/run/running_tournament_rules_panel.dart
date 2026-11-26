@@ -300,6 +300,10 @@ class RunningRulesDraft {
         ? const <String>[]
         : const QualificationPlanEngine().validationMessages(plan);
     final knockout = knockoutStage ?? stage;
+    final samePlaces = _sameStrings(
+      Map<String, String>.from(qualificationPlaceStatuses),
+      Map<String, String>.from(stage.qualificationPlaceStatuses),
+    );
     return parsedQualifierCount != stage.qualifiedParticipantCount ||
         autoAdjust != stage.qualificationAutoAdjust ||
         advancementPolicy != stage.qualificationAdvancementPolicy ||
@@ -307,10 +311,7 @@ class RunningRulesDraft {
         extraQualifierCount != stage.extraQualifierCount ||
         !_sameInts(qualifiersByGroup, stage.qualifiersByGroup) ||
         !_sameInts(fixedQualifiersByGroup, stage.fixedQualifiersByGroup) ||
-        !_sameStrings(
-          qualificationPlaceStatuses,
-          stage.qualificationPlaceStatuses,
-        ) ||
+        !samePlaces ||
         playsKnockoutFully != (knockout.knockoutAdvancingCount == null) ||
         parsedKnockoutAdvancingCount != knockout.knockoutAdvancingCount ||
         knockoutSeedingMode != knockout.knockoutSeedingMode ||

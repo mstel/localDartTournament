@@ -4012,16 +4012,25 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
   }
 
   bool _runStageHasProgress(TournamentRunStage stage) =>
-      _matchesForStage(stage).any(
-        (match) =>
-            match.isResolved ||
+      _matchesForStage(stage).any((match) {
+        final isAutoBye = match.allowsBye &&
+            !match.isAnnulled &&
+            match.startedAt == null &&
+            match.finishedAt == null &&
+            match.homeLegs == null &&
+            match.awayLegs == null &&
+            match.homeSets == null &&
+            match.awaySets == null &&
+            (match.winner != null || match.hasResult);
+        if (isAutoBye) return false;
+        return match.isResolved ||
             match.isAnnulled ||
             match.startedAt != null ||
             match.homeLegs != null ||
             match.awayLegs != null ||
             match.homeSets != null ||
-            match.awaySets != null,
-      );
+            match.awaySets != null;
+      });
 
   String? _runningRulesDisabledReasonForStage(int index) {
     if (widget.tournament.leagueMatch != null) {
@@ -4095,8 +4104,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     final index = _activeStageIndex;
     if (draft == null ||
         _runningRulesDraftStageIndex != index ||
-        _savingRunningRulesSettings ||
-        !_canEditRunningRulesForStage(index)) {
+        _savingRunningRulesSettings) {
+      return;
+    }
+    final disabledReason = _runningRulesDisabledReasonForStage(index);
+    if (disabledReason != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(disabledReason)),
+      );
       return;
     }
 
@@ -4264,10 +4279,16 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           )
           .timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      setState(() => _savingRunningRulesSettings = false);
+      setState(() {
+        _savingRunningRulesSettings = false;
+        _runningRulesDraft?.dispose();
+        _runningRulesDraft = null;
+        _runningRulesDraftStageIndex = null;
+      });
+      _ensureRunningRulesDraft();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Regeln übernommen. Die Phase wurde neu geplant.'),
+          content: Text('Regeln ?bernommen. Die Phase wurde neu geplant.'),
         ),
       );
     } catch (error) {
