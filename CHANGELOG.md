@@ -1,3 +1,7 @@
+# 4.1.3+143
+
+- Live-Turnier: Hotfix für 4.1.2+142 – der neue Multipart-Viewer-Upload ergänzt jetzt fehlende `Authorization`/`apikey`-Header aus der Supabase-Session/Config. Behebt „Live-Veröffentlichung fehlgeschlagen (400): headers must have required property authorization“.
+
 # 4.1.2+142
 
 - Qualifikation: Automatik verteilt klare Fälle korrekt. Bei 2 Gruppen à 8 und 6 Weiterkommenden gibt es 3/3 fest und keinen Vergleich; bei 8 Weiterkommenden 4/4 fest. Nur wenn die Weiterkommenszahl nicht sauber durch die Gruppenzahl teilbar ist (z. B. 7 in 2 Gruppen, 8 in 3 Gruppen), wird gruppenübergreifend verglichen. Die Option „Beste X Plätze gruppenübergreifend vergleichen“ ist bei klar teilbarer Verteilung deaktiviert.
