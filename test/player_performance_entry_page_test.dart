@@ -1,4 +1,5 @@
 import 'package:dart_tournament_manager/features/players/presentation/player_performance_entry_page.dart';
+import 'package:dart_tournament_manager/features/statistics/application/scolia_tournament_legs_service.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/performance_snapshot.dart';
 import 'package:dart_tournament_manager/features/statistics/domain/player_monthly_performance.dart';
 import 'package:dart_tournament_manager/features/tournaments/data/app_database.dart';
@@ -71,8 +72,22 @@ class _FakeDatabase extends LocalAppDatabase {
   }
 }
 
+class _FakeLegsService extends ScoliaTournamentLegsService {
+  _FakeLegsService({this.legsByMonth = const {}});
+
+  final Map<int, int> legsByMonth;
+
+  @override
+  Future<int> weightedLegsForMonth({
+    required String playerId,
+    required int year,
+    required int month,
+  }) async => legsByMonth[month] ?? 0;
+}
+
 Future<void> tapSave(WidgetTester tester) async {
-  final button = find.byType(FilledButton);
+  // The save button can be below the fold in Scolia mode.
+  final button = find.byType(FilledButton, skipOffstage: false);
   await tester.ensureVisible(button);
   await tester.pumpAndSettle();
   await tester.tap(button);
@@ -99,10 +114,18 @@ void main() {
     );
   });
 
-  Future<void> pumpPage(WidgetTester tester, LocalAppDatabase database) async {
+  Future<void> pumpPage(
+    WidgetTester tester,
+    LocalAppDatabase database, {
+    ScoliaTournamentLegsService? legsService,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: PlayerPerformanceEntryPage(player: player, database: database),
+        home: PlayerPerformanceEntryPage(
+          player: player,
+          database: database,
+          legsService: legsService ?? _FakeLegsService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -215,14 +238,14 @@ void main() {
     tester,
   ) async {
     final database = _FakeDatabase();
-    await pumpPage(tester, database);
+    await pumpPage(
+      tester,
+      database,
+      legsService: _FakeLegsService(legsByMonth: {10: 30, 11: 30}),
+    );
     await selectScoliaMode(tester);
 
     await selectMonth(tester, 'Oktober');
-    await tester.enterText(
-      find.byKey(const ValueKey('performance-weighted-legs')),
-      '30',
-    );
     await tester.enterText(
       find.byKey(const ValueKey('performance-scolia-matches')),
       '3',
@@ -241,10 +264,6 @@ void main() {
     await dismissSnackBars(tester);
 
     await selectMonth(tester, 'November');
-    await tester.enterText(
-      find.byKey(const ValueKey('performance-weighted-legs')),
-      '60',
-    );
     await tester.enterText(
       find.byKey(const ValueKey('performance-scolia-matches')),
       '6',
@@ -266,17 +285,60 @@ void main() {
   });
 
   testWidgets(
-    'full scolia window asks for the new legs and accepts a correction',
+    'scolia legs are filled from ranked tournaments while matches stay cumulative',
     (tester) async {
       final database = _FakeDatabase();
-      await pumpPage(tester, database);
+      await pumpPage(
+        tester,
+        database,
+        legsService: _FakeLegsService(legsByMonth: {10: 30, 11: 20}),
+      );
       await selectScoliaMode(tester);
 
       await selectMonth(tester, 'Oktober');
-      await tester.enterText(
+      final octoberLegs = tester.widget<TextField>(
         find.byKey(const ValueKey('performance-weighted-legs')),
-        '28',
       );
+      expect(octoberLegs.controller!.text, '30');
+      expect(octoberLegs.readOnly, isTrue);
+      await tester.enterText(
+        find.byKey(const ValueKey('performance-scolia-matches')),
+        '24',
+      );
+      await tapSave(tester);
+      await dismissSnackBars(tester);
+
+      await selectMonth(tester, 'November');
+      final novemberLegs = tester.widget<TextField>(
+        find.byKey(const ValueKey('performance-weighted-legs')),
+      );
+      expect(novemberLegs.controller!.text, '50');
+      await tester.enterText(
+        find.byKey(const ValueKey('performance-scolia-matches')),
+        '49',
+      );
+      await tapSave(tester);
+
+      final november = database.derived.singleWhere(
+        (month) => month.month == 11,
+      );
+      expect(november.weightedLegs, 20);
+      expect(november.matches, 25);
+    },
+  );
+
+  testWidgets(
+    'full scolia window asks for the new legs and accepts a correction',
+    (tester) async {
+      final database = _FakeDatabase();
+      await pumpPage(
+        tester,
+        database,
+        legsService: _FakeLegsService(legsByMonth: {10: 28, 11: 50, 12: 22}),
+      );
+      await selectScoliaMode(tester);
+
+      await selectMonth(tester, 'Oktober');
       await tester.enterText(
         find.byKey(const ValueKey('performance-average')),
         '42',
@@ -286,10 +348,6 @@ void main() {
 
       await selectMonth(tester, 'November');
       await tester.enterText(
-        find.byKey(const ValueKey('performance-weighted-legs')),
-        '78',
-      );
-      await tester.enterText(
         find.byKey(const ValueKey('performance-average')),
         '${(28 * 42 + 50 * 44) / 78}',
       );
@@ -297,24 +355,16 @@ void main() {
       await dismissSnackBars(tester);
 
       await selectMonth(tester, 'Dezember');
-      await tester.enterText(
-        find.byKey(const ValueKey('performance-weighted-legs')),
-        '100',
+      expect(
+        find.byKey(
+          const ValueKey('performance-scolia-window-info'),
+          skipOffstage: false,
+        ),
+        findsOneWidget,
       );
       await tester.enterText(
         find.byKey(const ValueKey('performance-average')),
         '${(10 * 42 + 50 * 44 + 40 * 46) / 100}',
-      );
-      await tapSave(tester);
-
-      expect(
-        database.derived.singleWhere((month) => month.month == 12).isEstimated,
-        isTrue,
-      );
-      await dismissSnackBars(tester);
-      expect(
-        find.byKey(const ValueKey('performance-scolia-window-info')),
-        findsOneWidget,
       );
       await tester.drag(find.byType(ListView), const Offset(0, -500));
       await tester.pumpAndSettle();
@@ -355,6 +405,7 @@ void main() {
             home: PlayerPerformanceEntryPage(
               player: player,
               database: _FakeDatabase(),
+              legsService: _FakeLegsService(),
             ),
           ),
         ),

@@ -13,6 +13,8 @@ class TournamentSimulationScenario {
     this.boards = 1,
     this.withdrawnPlayers = const [],
     this.withdrawalMode = WithdrawalResultMode.loseOpen,
+    this.directorPlayOrderMode,
+    this.directorSchedulingStrategy,
   });
 
   final String name;
@@ -21,6 +23,8 @@ class TournamentSimulationScenario {
   final int boards;
   final List<int> withdrawnPlayers;
   final WithdrawalResultMode withdrawalMode;
+  final String? directorPlayOrderMode;
+  final String? directorSchedulingStrategy;
   final List<SimulationStageSpec> stages;
 }
 
@@ -256,6 +260,9 @@ class TournamentSimulationEngine {
       stages: configs,
       runStages: [],
       boardCount: scenario.boards,
+      directorPlayOrderMode: scenario.directorPlayOrderMode ?? 'dynamic',
+      directorSchedulingStrategy:
+          scenario.directorSchedulingStrategy ?? 'group',
     );
     final runtime = ProductionTournamentRuntime(tournament);
     for (final index in scenario.withdrawnPlayers) {

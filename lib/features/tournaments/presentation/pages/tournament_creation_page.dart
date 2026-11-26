@@ -2629,50 +2629,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   List<TournamentStage> _preserveExistingGroupAssignment(
     CreatedTournament? existing,
     List<TournamentStage> stages,
-  ) {
-    if (existing == null ||
-        stages.isEmpty ||
-        !stages.first.isGroupStage ||
-        existing.runStages.isEmpty ||
-        existing.runStages.first is! GroupTournamentRunStage) {
-      return stages;
-    }
-    final oldStage = existing.runStages.first as GroupTournamentRunStage;
-    final ordered = oldStage.groups.expand((group) => group.players).toList();
-    String identity(TournamentPlayer player) =>
-        player.profileId ?? player.name.trim().toLowerCase();
-    final currentByIdentity = {
-      for (final player in _players) identity(player): player,
-    };
-    final preserved = <TournamentPlayer>[];
-    final seen = <String>{};
-    for (final player in ordered) {
-      final key = identity(player);
-      final current = currentByIdentity[key];
-      if (current != null && seen.add(key)) preserved.add(current);
-    }
-    final slotsNeeded = stages.first.groupSizes.fold<int>(
-      0,
-      (sum, size) => sum + size,
-    );
-    for (final player in _players) {
-      if (preserved.length >= slotsNeeded) break;
-      if (seen.add(identity(player))) preserved.add(player);
-    }
-    if (preserved.length != slotsNeeded) return stages;
-    final slotOrder = preserved
-        .map((player) => _players.indexOf(player) + 1)
-        .toList();
-    if (slotOrder.any((slot) => slot < 1) ||
-        slotOrder.toSet().length != slotOrder.length) {
-      return stages;
-    }
-    final firstStage = stages.first.copyWith(
-      groupDrawOnStart: false,
-      groupSlotOrder: List.unmodifiable(slotOrder),
-    );
-    return [firstStage, ...stages.skip(1)];
-  }
+  ) => preserveExistingGroupAssignment(
+    existing: existing,
+    stages: stages,
+    players: _players,
+  );
 
   List<TournamentRunStage> _buildRunStages({
     List<TournamentStage>? stages,

@@ -1,3 +1,4 @@
+import '../../tournaments/domain/director_schedule_modes.dart';
 import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/domain/player_withdrawal.dart';
 import 'tournament_simulation_engine.dart';
@@ -60,6 +61,22 @@ const tournamentDevelopmentScenarios = [
         lossLimit: 1,
         placementPlaces: [3],
       ),
+    ],
+  ),
+  TournamentSimulationScenario(
+    name: 'Boardzuweisung: gruppenbasiert wechselt beim KO auf turnierweit',
+    playerCount: 8,
+    boards: 4,
+    directorPlayOrderMode: DirectorScheduleModes.fixedSchedule,
+    directorSchedulingStrategy: DirectorScheduleModes.group,
+    stages: [
+      SimulationGroupStageSpec(
+        name: 'Gruppe',
+        qualifiers: 4,
+        groupSizes: [4, 4],
+        fixedPerGroup: 2,
+      ),
+      SimulationEliminationStageSpec(name: 'KO', qualifiers: 1, lossLimit: 1),
     ],
   ),
   TournamentSimulationScenario(

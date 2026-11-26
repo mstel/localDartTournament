@@ -269,6 +269,7 @@ class ExpandedFormatPlanner {
           count,
           cap,
           request.maximumLives,
+          request.boards,
           prefix.isEmpty ? request.manualQualifiers : null,
         )) {
           if (stage.type == 'kratzer' && prefix.isNotEmpty) continue;
@@ -355,7 +356,8 @@ class ExpandedFormatPlanner {
   Iterable<TournamentStage> _stages(
     int n,
     int maxGroups,
-    int maxLives, [
+    int maxLives,
+    int boards, [
     int? manualQualifiers,
   ]) sync* {
     var bracket = 1;
@@ -440,19 +442,37 @@ class ExpandedFormatPlanner {
             }
           }
         } else {
-          final qualifierOptions = <int>{
-            if (groups == 1) 1,
-            min(parameters.qualifiersPerGroup, sizes.last - 1),
-            if (groups > 1 && sizes.last >= 4)
-              min(sizes.last ~/ 2, sizes.last - 1),
-          };
-          qualifierPlans = [
-            for (final perGroup in qualifierOptions)
-              if (perGroup < sizes.last &&
-                  groups * perGroup < n &&
-                  groups * perGroup >= 1)
-                (groups * perGroup, List.filled(groups, perGroup)),
-          ];
+          final boardTarget = boards * 2;
+          if (boardTarget <= n - 2) {
+            // Fill both sides of every board, but never advance everybody.
+            final fixed = List.generate(
+              groups,
+              (i) => boardTarget ~/ groups + (i < boardTarget % groups ? 1 : 0),
+            );
+            qualifierPlans = [
+              if (groups == 1) (1, List.filled(groups, 1)),
+              if (fixed.every((qualifiers) => qualifiers >= 1) &&
+                  fixed.asMap().entries.every(
+                    (entry) => entry.value < sizes[entry.key],
+                  ) &&
+                  boardTarget < n)
+                (boardTarget, fixed),
+            ];
+          } else {
+            final qualifierOptions = <int>{
+              if (groups == 1) 1,
+              min(parameters.qualifiersPerGroup, sizes.last - 1),
+              if (groups > 1 && sizes.last >= 4)
+                min(sizes.last ~/ 2, sizes.last - 1),
+            };
+            qualifierPlans = [
+              for (final perGroup in qualifierOptions)
+                if (perGroup < sizes.last &&
+                    groups * perGroup < n &&
+                    groups * perGroup >= 1)
+                  (groups * perGroup, List.filled(groups, perGroup)),
+            ];
+          }
         }
         for (final plan in qualifierPlans) {
           final target = plan.$1;

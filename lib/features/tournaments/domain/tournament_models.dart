@@ -613,6 +613,18 @@ class TournamentStage {
   final String name;
   final String type;
   bool get isGroupStage => type == 'groups' || type == 'swiss';
+
+  /// Eine manuelle Gruppenzuordnung steht noch aus.
+  ///
+  /// Die vorläufig alphabetische Sortierung der Laufgruppen zählt bewusst
+  /// nicht als Zuweisung, damit der Zweitmonitor-Hinweis erhalten bleibt.
+  bool get hasPendingManualGroupAssignment =>
+      isGroupStage &&
+      groupAssignmentMode == 'manual' &&
+      groupSlotOrder.isEmpty &&
+      !groupDrawCompleted &&
+      !groupDrawOnStart;
+
   final bool finalEndsTournament;
   final int? knockoutLives;
   final int? kratzerPlayersPerBoard;
@@ -802,6 +814,71 @@ class TournamentStage {
     qualificationSummary: qualificationSummary,
     qualificationPlaceStatuses:
         qualificationPlaceStatuses ?? this.qualificationPlaceStatuses,
+    gameFormat: gameFormat,
+  );
+
+  /// Wendet die während des Laufs editierbaren Regeloptionen an.
+  ///
+  /// Anders als [copyWith] erlaubt diese Methode auch das bewusste Setzen
+  /// nullable Felder auf `null`, wenn z. B. der automatische Modus aktiviert
+  /// wird und damit ein manuell gesetzter Vergleichsrang entfällt.
+  TournamentStage withRunningRules({
+    required int? qualifiedParticipantCount,
+    required bool qualificationAutoAdjust,
+    required String qualificationAdvancementPolicy,
+    required List<int> qualifiersByGroup,
+    required List<int> fixedQualifiersByGroup,
+    required int? extraQualifierRank,
+    required int? extraQualifierCount,
+    required Map<String, String> qualificationPlaceStatuses,
+    required int? knockoutAdvancingCount,
+    required String knockoutSeedingMode,
+    required List<int> placementPlaces,
+  }) => TournamentStage(
+    name: name,
+    type: type,
+    finalEndsTournament: finalEndsTournament,
+    knockoutLives: knockoutLives,
+    kratzerPlayersPerBoard: kratzerPlayersPerBoard,
+    kratzerPreferSameScratchCount: kratzerPreferSameScratchCount,
+    kratzerPlayUntilElimination: kratzerPlayUntilElimination,
+    kratzerBonusLifeFor180: kratzerBonusLifeFor180,
+    kratzerBonusLifeForHighFinish: kratzerBonusLifeForHighFinish,
+    kratzerHandicapsEnabled: kratzerHandicapsEnabled,
+    kratzerHandicaps: kratzerHandicaps,
+    kratzerHandicapAssignments: kratzerHandicapAssignments,
+    placementPlaces: placementPlaces,
+    groupCount: groupCount,
+    groupSizes: groupSizes,
+    groupPlayType: groupPlayType,
+    groupPlayTypes: groupPlayTypes,
+    groupRoundRobinRepeats: groupRoundRobinRepeats,
+    groupMaxGamesPerPlayer: groupMaxGamesPerPlayer,
+    groupMatchmakingStrategies: groupMatchmakingStrategies,
+    groupMatchmakingRatings: groupMatchmakingRatings,
+    groupTieBreakers: groupTieBreakers,
+    allowGroupTieBreakDeciders: allowGroupTieBreakDeciders,
+    tieBreakGameFormat: tieBreakGameFormat,
+    groupDrawOnStart: groupDrawOnStart,
+    groupSlotOrder: groupSlotOrder,
+    groupDrawCompleted: groupDrawCompleted,
+    groupAssignmentMode: groupAssignmentMode,
+    knockoutParticipantCount: knockoutParticipantCount,
+    knockoutAdvancingCount: knockoutAdvancingCount,
+    knockoutBracketSize: knockoutBracketSize,
+    knockoutByeCount: knockoutByeCount,
+    knockoutSlotOrder: knockoutSlotOrder,
+    knockoutSeedingMode: knockoutSeedingMode,
+    knockoutDrawOnStart: knockoutDrawOnStart,
+    qualifiersByGroup: qualifiersByGroup,
+    fixedQualifiersByGroup: fixedQualifiersByGroup,
+    extraQualifierRank: extraQualifierRank,
+    extraQualifierCount: extraQualifierCount,
+    qualificationAutoAdjust: qualificationAutoAdjust,
+    qualificationAdvancementPolicy: qualificationAdvancementPolicy,
+    qualifiedParticipantCount: qualifiedParticipantCount,
+    qualificationSummary: qualificationSummary,
+    qualificationPlaceStatuses: qualificationPlaceStatuses,
     gameFormat: gameFormat,
   );
 }

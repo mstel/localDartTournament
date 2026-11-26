@@ -15,6 +15,7 @@ class ProductionTournamentRuntime implements TournamentSimulationRuntime {
   @override
   void activate(int index) {
     _state._activeStageIndex = index;
+    _state._syncBoardAssignmentForStageIndex(index);
   }
 
   @override

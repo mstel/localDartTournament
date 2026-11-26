@@ -1104,13 +1104,7 @@ class _TournamentSecondScreenViewState
 
   bool _groupAssignmentPending(CreatedTournament tournament) {
     for (final stage in tournament.stages) {
-      if (stage.isGroupStage &&
-          stage.groupAssignmentMode == 'manual' &&
-          stage.groupSlotOrder.isEmpty &&
-          !stage.groupDrawCompleted &&
-          !stage.groupDrawOnStart) {
-        return true;
-      }
+      if (stage.hasPendingManualGroupAssignment) return true;
     }
     return false;
   }
@@ -1132,11 +1126,7 @@ class _TournamentSecondScreenViewState
     final pending = _groupAssignmentPending(widget.tournament);
     final pendingStageIndexes = [
       for (var index = 0; index < widget.tournament.stages.length; index++)
-        if (widget.tournament.stages[index].isGroupStage &&
-            widget.tournament.stages[index].groupAssignmentMode == 'manual' &&
-            widget.tournament.stages[index].groupSlotOrder.isEmpty &&
-            !widget.tournament.stages[index].groupDrawCompleted &&
-            !widget.tournament.stages[index].groupDrawOnStart)
+        if (widget.tournament.stages[index].hasPendingManualGroupAssignment)
           index,
     ];
     final warningDismissed =

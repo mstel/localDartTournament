@@ -29,6 +29,31 @@ class DirectorScheduleModes {
     return playOrderMode == dynamicMode ? global : normalized;
   }
 
+  static bool isKnockoutStageType(String type) =>
+      type == 'single_knockout' ||
+      type == 'double_knockout' ||
+      type == 'triple_knockout' ||
+      type == 'kratzer';
+
+  /// KO-Phasen haben keine Gruppen, auf die Boards fest verteilt werden
+  /// könnten. Dort ist nur die turnierweite Zuweisung zulässig.
+  static bool allowsGroupBoardAssignment(String stageType) =>
+      !isKnockoutStageType(stageType);
+
+  /// Normalisiert die Boardzuweisung für die aktive Phase. Beim Wechsel in
+  /// eine KO-Phase wird `group` deshalb automatisch auf `global` korrigiert.
+  static String strategyForStage(
+    Object? value,
+    String playOrderMode,
+    String stageType,
+  ) {
+    final strategy = schedulingStrategy(value, playOrderMode);
+    if (strategy == group && !allowsGroupBoardAssignment(stageType)) {
+      return global;
+    }
+    return strategy;
+  }
+
   /// Normalises a persisted pair without allocating a new map when possible.
   static Map<String, dynamic> normalizeJson(Map<String, dynamic> json) {
     final mode = playOrderMode(json['directorPlayOrderMode']);

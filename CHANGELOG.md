@@ -1,3 +1,14 @@
+# 4.0.7+137
+
+- Website: „Erweiterte Gegnerbilanzen“ steht unter „Achievement-Fortschritt“; der Zusatz „Weitere Gegnerbilanz“ hinter Spielernamen entfällt. „+5“ ergänzt jeweils fünf weitere Zeilen direkt in der bestehenden Gegnerbilanz-Tabelle, auch mehrfach.
+- Website: Authentifizierte Storage-Read-Modelle werden vor dem Edge Function-Fallback gelesen.
+- Scolia: Nur kumulierte Partien werden manuell erfasst. Legs werden aus bewerteten Turnieren geschätzt, sind im Scolia-Modus schreibgeschützt und bleiben als Override für das gesamte Zeitfenster überschreibbar.
+- Turnierfinder: Bei ausreichend Teilnehmern werden genau `Boards × 2` Weiterkommende vorgeschlagen (14 Spieler/4 Boards → Top 8); bei 8 Spielern/4 Boards wird niemals das gesamte Feld weitergeleitet.
+- Laufendes Turnier: „Weiterkommensregeln, Auslosungsmethode & Optionale Platzierungsspiele“ ist in den Turniereinstellungen über den Tie-Breaker-Einstellungen editierbar, solange die Ausgangsphase bzw. KO-Phase noch keine Ergebnisse hat. Änderungen aktualisieren Planungs- und Laufphase und werden gespeichert.
+- Boardzuweisung: „Fester Spielplan – gruppenbasierte Boardzuweisung“ wechselt beim Einstieg in eine KO-Phase automatisch auf „Turnierweit optimiert“; die gruppenbasierte Option ist in KO-Phasen deaktiviert.
+- Zweitmonitor: Nachträgliche Konfigurationsänderungen markieren eine noch ausstehende manuelle Gruppenzuordnung nicht mehr als erledigt. Der Hinweis bleibt bestehen, bis die Zuweisungsmethode geändert oder die Gruppen tatsächlich manuell zugewiesen werden.
+- Turnier-JSON-Schema 50 und SQLite-Schema 18 bleiben unverändert.
+
 # 4.0.6+136
 
 - Dynamische Boards zeigen wieder kollisionsfreie Vorschläge und erlauben die manuelle Auswahl offener, spielbarer Begegnungen.

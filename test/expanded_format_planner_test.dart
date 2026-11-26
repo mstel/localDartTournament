@@ -409,4 +409,83 @@ void main() {
       }
     },
   );
+
+  TournamentPlanningRequest finderRequest({required int players}) =>
+      TournamentPlanningRequest(
+        players: players,
+        boards: 4,
+        minimumMatchesPerPlayer: 1,
+        minimumMinutes: 0,
+        maximumMinutes: 100000,
+        x01Selection: '501',
+        checkoutType: 'double_out',
+        maximumGroups: 2,
+        maximumStages: 2,
+        requireGroupPhase: true,
+        enabledModes: {'groups:round_robin', 'single_knockout'},
+      );
+
+  test(
+    'automatic qualification advances boards * 2 players (14 players / 4 boards => 8)',
+    () async {
+      final results = await ExpandedFormatPlanner(
+        parameters: parameters,
+      ).suggest(finderRequest(players: 14), allResults: true);
+
+      expect(results, isNotEmpty);
+      final groupStages = results
+          .map((suggestion) => suggestion.configurations.first)
+          .where((stage) => stage.isGroupStage)
+          .toList();
+      expect(groupStages, isNotEmpty);
+      final multiGroupTargets = groupStages
+          .where((stage) => (stage.groupCount ?? 0) > 1)
+          .map((stage) => stage.qualifiedParticipantCount)
+          .toSet();
+      expect(
+        multiGroupTargets,
+        {8},
+        reason: '14 players on 4 boards must advance two players per board.',
+      );
+      for (final stage in groupStages.where((s) => (s.groupCount ?? 0) > 1)) {
+        expect(stage.fixedQualifiersByGroup, [4, 4]);
+      }
+      expect(
+        groupStages.map((s) => s.qualifiedParticipantCount),
+        isNot(contains(6)),
+      );
+    },
+  );
+
+  test(
+    'automatic qualification never advances all players (8 players / 4 boards)',
+    () async {
+      final results = await ExpandedFormatPlanner(
+        parameters: parameters,
+      ).suggest(finderRequest(players: 8), allResults: true);
+
+      expect(results, isNotEmpty);
+      for (final suggestion in results) {
+        for (final stage in suggestion.configurations) {
+          expect(stage.qualifiedParticipantCount, isNot(8));
+          if (stage.isGroupStage) {
+            final qualified = stage.fixedQualifiersByGroup.fold<int>(
+              0,
+              (sum, count) => sum + count,
+            );
+            expect(stage.qualifiedParticipantCount, lessThan(8));
+            expect(qualified, lessThan(8));
+          }
+        }
+      }
+      expect(
+        results.any(
+          (suggestion) =>
+              suggestion.configurations.first.isGroupStage &&
+              suggestion.configurations.first.qualifiedParticipantCount == 4,
+        ),
+        isTrue,
+      );
+    },
+  );
 }

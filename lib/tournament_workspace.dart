@@ -12,6 +12,7 @@ import 'features/tournaments/presentation/widgets/run/tournament_run_header.dart
 import 'features/tournaments/presentation/widgets/run/tournament_director_dashboard.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_timing_panel.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_run_settings_panel.dart';
+import 'features/tournaments/presentation/widgets/run/running_tournament_rules_panel.dart';
 import 'features/tournaments/presentation/widgets/run/tournament_schedule_pdf_button.dart';
 import 'features/tournaments/presentation/widgets/run/fixed_schedule_editor.dart';
 import 'features/tournaments/presentation/utils/match_display_label.dart';
@@ -67,6 +68,7 @@ import 'features/tournaments/application/audio_announcement_preferences.dart';
 import 'features/tournaments/application/tournament_director_snapshot.dart';
 import 'features/tournaments/application/group_stage_preview_service.dart';
 import 'features/tournaments/application/group_end_review_service.dart';
+import 'features/tournaments/application/group_assignment_preservation.dart';
 import 'features/tournaments/application/tournament_info_summary.dart';
 import 'features/tournaments/domain/second_screen_dialog_requests.dart';
 import 'features/tournaments/presentation/widgets/run/brackets/knockout_seeding_mode_label.dart';

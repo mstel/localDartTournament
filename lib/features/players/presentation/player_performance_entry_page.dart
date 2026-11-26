@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../statistics/application/scolia_tournament_legs_service.dart';
 import '../../statistics/domain/performance_snapshot.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
 import '../../tournaments/data/app_database.dart';
@@ -7,10 +8,15 @@ import '../../tournaments/data/app_database.dart';
 enum _PerformanceEntryMode { direct, scolia }
 
 class _PerformanceEntryData {
-  const _PerformanceEntryData({required this.direct, required this.snapshots});
+  const _PerformanceEntryData({
+    required this.direct,
+    required this.snapshots,
+    required this.tournamentLegs,
+  });
 
   final PlayerMonthlyPerformance? direct;
   final List<PerformanceSnapshot> snapshots;
+  final int tournamentLegs;
 
   PerformanceSnapshot? snapshotFor(int year, int month) {
     for (final snapshot in snapshots) {
@@ -25,10 +31,13 @@ class PlayerPerformanceEntryPage extends StatefulWidget {
     super.key,
     required this.player,
     LocalAppDatabase? database,
-  }) : _database = database;
+    ScoliaTournamentLegsService? legsService,
+  }) : _database = database,
+       _legsService = legsService;
 
   final PlayerProfile player;
   final LocalAppDatabase? _database;
+  final ScoliaTournamentLegsService? _legsService;
 
   @override
   State<PlayerPerformanceEntryPage> createState() =>
@@ -54,6 +63,8 @@ class _PlayerPerformanceEntryPageState
 
   late final LocalAppDatabase _database =
       widget._database ?? LocalAppDatabase();
+  late final ScoliaTournamentLegsService _legsService =
+      widget._legsService ?? ScoliaTournamentLegsService();
   late int _year = DateTime.now().year;
   late int _month = DateTime.now().month;
   final _legsController = TextEditingController();
@@ -86,9 +97,15 @@ class _PlayerPerformanceEntryPageState
     final snapshots = await _database.loadPerformanceSnapshots(
       widget.player.id,
     );
+    final tournamentLegs = await _legsService.weightedLegsForMonth(
+      playerId: widget.player.id,
+      year: _year,
+      month: _month,
+    );
     return _PerformanceEntryData(
       direct: entries.where((entry) => entry.month == _month).firstOrNull,
       snapshots: snapshots,
+      tournamentLegs: tournamentLegs,
     );
   }
 
@@ -117,6 +134,29 @@ class _PlayerPerformanceEntryPageState
     if (data != null) _populate(data);
   }
 
+  PerformanceSnapshot? _previousSnapshot(
+    List<PerformanceSnapshot> snapshots,
+    int year,
+    int month,
+  ) {
+    final current = year * 12 + month;
+    PerformanceSnapshot? previous;
+    for (final snapshot in snapshots) {
+      final period = snapshot.year * 12 + snapshot.month;
+      if (period >= current) continue;
+      if (previous == null || period > previous.year * 12 + previous.month) {
+        previous = snapshot;
+      }
+    }
+    return previous;
+  }
+
+  int _suggestedWindowLegs(PerformanceSnapshot? previous, int tournamentLegs) {
+    if (tournamentLegs <= 0) return previous?.windowLegs ?? 0;
+    final combined = (previous?.windowLegs ?? 0) + tournamentLegs;
+    return combined > 100 ? 100 : combined;
+  }
+
   void _populate(_PerformanceEntryData data) {
     _loadedData = data;
     _loadedEntry = data.direct;
@@ -126,8 +166,12 @@ class _PlayerPerformanceEntryPageState
     _needsNewLegsOverride = false;
     if (_mode == _PerformanceEntryMode.scolia) {
       final snapshot = _loadedSnapshot;
-      _legsController.text =
-          '${snapshot?.windowLegs ?? data.direct?.weightedLegs ?? 0}';
+      final previous = _previousSnapshot(data.snapshots, _year, _month);
+      final tournamentLegs = data.tournamentLegs;
+      final windowLegs =
+          snapshot?.windowLegs ??
+          _suggestedWindowLegs(previous, tournamentLegs);
+      _legsController.text = '$windowLegs';
       _matchesController.text =
           '${snapshot?.matches ?? data.direct?.matches ?? 0}';
       _scoringController.text =
@@ -140,9 +184,10 @@ class _PlayerPerformanceEntryPageState
       final derived = derivePerformanceMonths(
         data.snapshots,
       ).monthFor('$_year-${_month.toString().padLeft(2, '0')}');
-      _needsNewLegsOverride = derived?.isEstimated ?? false;
+      final windowIsFull = windowLegs >= 100;
+      _needsNewLegsOverride = windowIsFull || derived?.isEstimated == true;
       _newLegsController.text = _needsNewLegsOverride
-          ? derived!.weightedLegs.toString()
+          ? derived?.weightedLegs.toString() ?? ''
           : '';
       return;
     }
@@ -169,10 +214,12 @@ class _PlayerPerformanceEntryPageState
     required String label,
     required TextEditingController controller,
     bool decimal = false,
+    bool readOnly = false,
     String? suffixText,
   }) => TextField(
     key: ValueKey(fieldKey),
     controller: controller,
+    readOnly: readOnly,
     decoration: InputDecoration(
       labelText: label,
       suffixText: suffixText,
@@ -320,16 +367,20 @@ class _PlayerPerformanceEntryPageState
             ),
           );
         }
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        // Keep the last loaded period visible while a reload is in flight.
+        // Otherwise changing month/year would briefly replace the form with
+        // a spinner and leave an open dropdown route dangling.
+        final data = snapshot.data ?? _loadedData;
+        if (data == null) {
           return const Center(child: CircularProgressIndicator());
         }
-        final data = snapshot.data!;
         final derivedForPeriod = _mode == _PerformanceEntryMode.scolia
             ? derivePerformanceMonths(
                 data.snapshots,
               ).monthFor('$_year-${_month.toString().padLeft(2, '0')}')
             : null;
-        final needsOverride = derivedForPeriod?.isEstimated ?? false;
+        final needsOverride =
+            _mode == _PerformanceEntryMode.scolia && _needsNewLegsOverride;
         final years = [
           for (var year = DateTime.now().year; year >= 2000; year--) year,
         ];
@@ -356,10 +407,14 @@ class _PlayerPerformanceEntryPageState
             const SizedBox(height: 12),
             Text(
               _mode == _PerformanceEntryMode.scolia
-                  ? 'Ab Oktober 2026 die aktuell in Scolia angezeigten '
-                        'Gesamtwerte eintragen. Die App speichert jeden Messpunkt '
-                        'und berechnet daraus den eigenständigen Monatswert. '
-                        'Bestehende Monate bis September 2026 bleiben unverändert.'
+                  ? 'Ab Oktober 2026 die aktuell in Scolia angezeigte '
+                        'Gesamtzahl der Partien eintragen. Legs liefert '
+                        'Scolia nicht; sie werden aus den dem Spieler in '
+                        'diesem Monat zugewiesenen Ranglistenturnieren '
+                        'geschätzt. Die App speichert jeden Messpunkt und '
+                        'berechnet daraus den eigenständigen Monatswert. '
+                        'Bestehende Monate bis September 2026 bleiben '
+                        'unverändert.'
                   : 'Gewertete Legs und Durchschnittswerte manuell erfassen. '
                         'Partien, Gewonnen, Verloren und Siegesrate werden '
                         'automatisch aus den zugewiesenen Turnieren berechnet.',
@@ -455,7 +510,7 @@ class _PlayerPerformanceEntryPageState
                         width: fieldWidth,
                         child: _numberField(
                           fieldKey: 'performance-scolia-matches',
-                          label: 'Gespielte Spiele',
+                          label: 'Partien (Scolia-Gesamt)',
                           controller: _matchesController,
                         ),
                       ),
@@ -464,9 +519,10 @@ class _PlayerPerformanceEntryPageState
                       child: _numberField(
                         fieldKey: 'performance-weighted-legs',
                         label: isScolia
-                            ? 'Legs (Scolia-Fenster)'
+                            ? 'Legs (aus Turnieren geschätzt)'
                             : 'Gewertete Legs',
                         controller: _legsController,
+                        readOnly: isScolia,
                       ),
                     ),
                     SizedBox(
