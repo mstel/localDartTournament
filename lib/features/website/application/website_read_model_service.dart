@@ -255,8 +255,14 @@ class WebsiteReadModelService {
       });
     }
 
+    final monthlyPerformanceData = await _monthlyPerformanceData(
+      profiles.map((profile) => profile.id),
+      completed,
+    );
+
     return {
       'schemaVersion': schemaVersion,
+      ...monthlyPerformanceData,
       'generatedAt': DateTime.now().toUtc().toIso8601String(),
       'players': [
         for (final profile in profiles)
@@ -320,48 +326,17 @@ class WebsiteReadModelService {
     };
   }
 
-  /// Builds independently downloadable v2 resources without changing v1.
-  Future<Map<String, Map<String, dynamic>>> createVersion2Resources(
-    Map<String, dynamic> readModel,
+  Future<Map<String, dynamic>> _monthlyPerformanceData(
+    Iterable<String> playerIds,
+    List<CreatedTournament> completed,
   ) async {
-    final generatedAt = readModel['generatedAt'];
-    final players = (readModel['players'] as List).cast<Map<String, dynamic>>();
-    final tournaments = createTournamentIndex(readModel);
-    final resources = <String, Map<String, dynamic>>{
-      'players': _version2Resource('players', generatedAt, {
-        'players': players,
-      }),
-      'rankings': _version2Resource('rankings', generatedAt, {
-        'rankings': readModel['rankings'],
-        'rankingStandings': readModel['rankingStandings'],
-        'eloHistory': readModel['eloHistory'] ?? const [],
-      }),
-      'statistics': _version2Resource('statistics', generatedAt, {
-        'statistics': readModel['statistics'],
-        'bestPerformances': readModel['bestPerformances'],
-        'currentForm': readModel['currentForm'],
-      }),
-      'achievements': _version2Resource('achievements', generatedAt, {
-        'rankingAchievements': readModel['rankingAchievements'] ?? const [],
-      }),
-    };
-
     final monthlyPerformance = <Map<String, dynamic>>[];
     final importedMonthlyStatistics = <Map<String, dynamic>>[];
     final combinedMonthlyPerformance = <PlayerMonthlyPerformance>[];
-    final completed = completedTournaments(
-      await _tournamentStorage.loadTournaments(),
-    );
     final tournamentResults = const TournamentMonthlyResultCalculator()
-        .calculate(
-          completed,
-          playerIds: {for (final player in players) player['id'] as String},
-        );
-    for (final player in players) {
-      final playerId = player['id'] as String;
-      final imported = await _database.loadMonthlyPlayerPerformances({
-        playerId,
-      });
+        .calculate(completed, playerIds: playerIds.toSet());
+    for (final playerId in playerIds) {
+      final imported = await _database.loadMonthlyPlayerPerformances({playerId});
       final entries = combineMonthlyPlayerPerformances(
         recorded: await _database.loadPlayerMonthlyPerformance(playerId),
         imported: imported,
@@ -405,7 +380,7 @@ class WebsiteReadModelService {
         RankingYearReviewService.aggregateMonthlyClubPerformance(
           combinedMonthlyPerformance,
         );
-    resources['performance'] = _version2Resource('performance', generatedAt, {
+    return {
       'monthlyPerformance': monthlyPerformance,
       'monthlyClubPerformance': [
         for (final entry in monthlyClubPerformance)
@@ -449,6 +424,52 @@ class WebsiteReadModelService {
           },
       ],
       'importedMonthlyStatistics': importedMonthlyStatistics,
+    };
+  }
+
+  /// Builds independently downloadable v2 resources without changing v1.
+  Future<Map<String, Map<String, dynamic>>> createVersion2Resources(
+    Map<String, dynamic> readModel,
+  ) async {
+    final generatedAt = readModel['generatedAt'];
+    final players = (readModel['players'] as List).cast<Map<String, dynamic>>();
+    final tournaments = createTournamentIndex(readModel);
+    final resources = <String, Map<String, dynamic>>{
+      'players': _version2Resource('players', generatedAt, {
+        'players': players,
+      }),
+      'rankings': _version2Resource('rankings', generatedAt, {
+        'rankings': readModel['rankings'],
+        'rankingStandings': readModel['rankingStandings'],
+        'eloHistory': readModel['eloHistory'] ?? const [],
+      }),
+      'statistics': _version2Resource('statistics', generatedAt, {
+        'statistics': readModel['statistics'],
+        'bestPerformances': readModel['bestPerformances'],
+        'currentForm': readModel['currentForm'],
+      }),
+      'achievements': _version2Resource('achievements', generatedAt, {
+        'rankingAchievements': readModel['rankingAchievements'] ?? const [],
+      }),
+    };
+
+    final monthlyData = readModel.containsKey('monthlyPerformance')
+        ? <String, dynamic>{
+          for (final key in const [
+            'monthlyPerformance',
+            'monthlyClubPerformance',
+            'winRateSeries',
+            'clubWinRateSeries',
+            'importedMonthlyStatistics',
+          ])
+            key: readModel[key],
+        }
+        : await _monthlyPerformanceData(
+          players.map((player) => player['id'] as String),
+          completedTournaments(await _tournamentStorage.loadTournaments()),
+        );
+    resources['performance'] = _version2Resource('performance', generatedAt, {
+      ...monthlyData,
       'currentForm': readModel['currentForm'],
     });
 

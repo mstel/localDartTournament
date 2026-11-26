@@ -383,6 +383,26 @@ void main() {
           },
         ],
       });
+      expect(
+        model['monthlyPerformance'],
+        resources['performance']!['monthlyPerformance'],
+      );
+      expect(
+        model['monthlyClubPerformance'],
+        resources['performance']!['monthlyClubPerformance'],
+      );
+      expect(
+        model['winRateSeries'],
+        resources['performance']!['winRateSeries'],
+      );
+      expect(
+        model['clubWinRateSeries'],
+        resources['performance']!['clubWinRateSeries'],
+      );
+      expect(
+        model['importedMonthlyStatistics'],
+        resources['performance']!['importedMonthlyStatistics'],
+      );
       expect(resources['tournaments:1']!['completedTournaments'], [
         {
           'id': 'finished',
