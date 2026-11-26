@@ -43,8 +43,9 @@ class QualificationPlanEngine {
     final baseFixed = [
       for (final size in groupSizes) min(baseFixedPerGroup, max(0, size)),
     ];
-    final resolvedPolicy = resolveAdvancementPolicy(
+    final resolvedPolicy = resolveAutomaticDistributionPolicy(
       groupSizes: groupSizes,
+      totalQualifiers: cappedTotal,
       advancementPolicy: advancementPolicy,
     );
 
@@ -201,8 +202,33 @@ class QualificationPlanEngine {
     required List<int> groupSizes,
     required String advancementPolicy,
   }) {
+    if (advancementPolicy == 'automatic') {
+      return automaticPolicyFor(
+        groupSizes: groupSizes,
+        totalQualifiers: groupSizes.fold<int>(0, (sum, size) => sum + max(0, size)),
+      );
+    }
     if (hasEqualGroupSizes(groupSizes)) return 'best_rank';
     return advancementPolicy == 'best_rank' ? 'best_rank' : 'larger_group';
+  }
+
+  /// Resolves the policy used for automatic distribution. "automatic" picks the
+  /// most sensible concrete rule for the current group/qualifier constellation.
+  static String resolveAutomaticDistributionPolicy({
+    required List<int> groupSizes,
+    required int totalQualifiers,
+    required String advancementPolicy,
+  }) {
+    if (advancementPolicy == 'automatic') {
+      return automaticPolicyFor(
+        groupSizes: groupSizes,
+        totalQualifiers: totalQualifiers,
+      );
+    }
+    return resolveAdvancementPolicy(
+      groupSizes: groupSizes,
+      advancementPolicy: advancementPolicy,
+    );
   }
 
   static bool canUseLargerGroupPolicy(List<int> groupSizes) =>
@@ -215,6 +241,39 @@ class QualificationPlanEngine {
         plan.lockedComparisonSlots == 0;
   }
 
+  /// Default policy option for Automatik mode.
+  ///
+  /// Spec: equal groups => larger_group disabled; divisible/clear => Automatisch;
+  /// not divisible by group count => best_rank; unequal groups => larger_group.
+  /// Automatik is always active as an option.
+  static String recommendedAutomaticPolicy({
+    required List<int> groupSizes,
+    required int totalQualifiers,
+  }) {
+    if (groupSizes.isEmpty) return 'automatic';
+    final groupCount = groupSizes.length;
+    final cappedTotal = min(
+      max(0, totalQualifiers),
+      groupSizes.fold<int>(0, (sum, size) => sum + max(0, size)),
+    );
+    if (groupCount == 0) return 'automatic';
+    final divisible = cappedTotal % groupCount == 0;
+    final clearPlan = isDistributionClear(
+      const QualificationPlanEngine().build(
+        groupSizes: groupSizes,
+        totalQualifiers: cappedTotal,
+        autoAdjust: true,
+        advancementPolicy: 'automatic',
+      ),
+    );
+    if (divisible && clearPlan) return 'automatic';
+    if (!divisible) return 'best_rank';
+    if (!hasEqualGroupSizes(groupSizes)) return 'larger_group';
+    return 'automatic';
+  }
+
+  /// Concrete policy used when advancementPolicy is "automatic".
+  /// Keeps distribution sensible for automatic planning.
   static String automaticPolicyFor({
     required List<int> groupSizes,
     required int totalQualifiers,
@@ -240,6 +299,7 @@ class QualificationPlanEngine {
     );
     final largerRemaining =
         cappedTotal - largerFixed.fold<int>(0, (sum, value) => sum + value);
+    if (largerRemaining <= 0) return 'larger_group';
     final largerRank = _effectiveExtraRankStatic(
       groupSizes: groupSizes,
       fixed: largerFixed,

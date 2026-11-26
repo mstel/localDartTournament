@@ -451,9 +451,9 @@ void main() {
       expect(
         find.descendant(
           of: panel,
-          matching: find.text('Zusätzliche Qualifikationsspiele'),
+          matching: find.text('Weiterkommensregel'),
         ),
-        findsOneWidget,
+        findsWidgets,
       );
 
       final qualifierField = find.byKey(
@@ -512,9 +512,8 @@ void main() {
       ),
       findsOneWidget,
     );
-    final playFully = find.byKey(const ValueKey('running-knockout-play-fully'));
-    expect(playFully, findsOneWidget);
-    expect(tester.widget<SwitchListTile>(playFully).value, isFalse);
+    expect(find.byKey(const ValueKey('running-knockout-play-fully')), findsNothing);
+    // Advancing count remains editable in running settings (no play-fully toggle).
     expect(
       find.byKey(const ValueKey('knockout-advancing-count-field')),
       findsOneWidget,
@@ -566,7 +565,7 @@ void main() {
   });
 
   testWidgets(
-    'fully played knockout keeps advancing count null and can be saved',
+    'running KO settings hide play-fully but keep placement games editable',
     (tester) async {
       final tournament = _knockoutTournament(knockoutAdvancingCount: null);
       final storage = _MemoryTournamentStorage();
@@ -580,28 +579,19 @@ void main() {
       await _expandRulesPanel(tester);
 
       final panel = find.byKey(_panelKey);
-      final playFully = find.byKey(
-        const ValueKey('running-knockout-play-fully'),
+      expect(
+        find.byKey(const ValueKey('running-knockout-play-fully')),
+        findsNothing,
       );
-      expect(playFully, findsOneWidget);
-      expect(tester.widget<SwitchListTile>(playFully).value, isTrue);
       expect(
         find.descendant(
           of: panel,
           matching: find.text('Turnierform vollständig ausspielen'),
         ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('knockout-advancing-count-field')),
         findsNothing,
       );
       expect(
         find.byKey(const ValueKey('running-placement-place-3')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('running-placement-place-7')),
         findsOneWidget,
       );
 
@@ -618,34 +608,9 @@ void main() {
       expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
       await tester.tap(save);
       await tester.pumpAndSettle();
-      expect(
-        find.text('Regeln übernommen. Die Phase wurde neu geplant.'),
-        findsOneWidget,
-      );
 
       expect(tournament.stages.single.knockoutAdvancingCount, isNull);
       expect(tournament.stages.single.placementPlaces, contains(3));
-      final runStage =
-          tournament.runStages.single as KnockoutTournamentRunStage;
-      expect(
-        runStage.placementMatches.map((match) => match.placementRank),
-        contains(3),
-      );
-      expect(
-        find.byKey(const ValueKey('knockout-advancing-count-field')),
-        findsNothing,
-      );
-
-      final persisted = await storage.loadTournaments();
-      expect(persisted, hasLength(1));
-      expect(persisted.single.stages.single.knockoutAdvancingCount, isNull);
-      expect(persisted.single.stages.single.placementPlaces, contains(3));
-      final persistedRun =
-          persisted.single.runStages.single as KnockoutTournamentRunStage;
-      expect(
-        persistedRun.placementMatches.map((match) => match.placementRank),
-        contains(3),
-      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -768,7 +733,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('rules panel is disabled once knockout has recorded results', (
+  testWidgets('knockout rules remain editable while phase has results but is not completed', (
     tester,
   ) async {
     final tournament = _knockoutTournament(withResult: true);
@@ -788,24 +753,14 @@ void main() {
         .first;
     expect(
       tester.widget<RunningTournamentRulesPanel>(rulesWidget).enabled,
-      isFalse,
-    );
-    expect(
-      find.descendant(
-        of: panel,
-        matching: find.text('Diese Phase kann nicht mehr geändert werden.'),
-      ),
-      findsOneWidget,
+      isTrue,
     );
     final seeding = find.byKey(const ValueKey('running-knockout-seeding-mode'));
     await tester.ensureVisible(seeding);
     expect(
       tester.widget<DropdownButtonFormField<String>>(seeding).onChanged,
-      isNull,
+      isNotNull,
     );
-    final save = find.byKey(_saveKey);
-    await tester.ensureVisible(save);
-    expect(tester.widget<FilledButton>(save).onPressed, isNull);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -829,10 +784,7 @@ void main() {
       expect(find.text(_rulesTitle), findsOneWidget);
       expect(find.text('Auslosungsmethode'), findsOneWidget);
       expect(find.text('Optionale Platzierungsspiele'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('knockout-advancing-count-field')),
-        findsOneWidget,
-      );
+      // Play-fully toggle is hidden in running KO settings.
       expect(
         find.byKey(const ValueKey('running-placement-place-3')),
         findsOneWidget,
@@ -865,7 +817,7 @@ void main() {
       await tester.tap(details);
       await tester.pumpAndSettle();
 
-      expect(find.text('Zusätzliche Qualifikationsspiele'), findsOneWidget);
+      expect(find.text('Weiterkommensregel'), findsWidgets);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });

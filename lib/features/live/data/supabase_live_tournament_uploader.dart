@@ -51,17 +51,23 @@ class SupabaseLiveTournamentUploader implements LiveTournamentUploader {
 
   @override
   Future<void> uploadViewer(String path, String html) async {
-    await _requiredClient.storage
-        .from(LiveTournamentConfig.bucket)
-        .uploadBinary(
-          path,
-          Uint8List.fromList(utf8.encode(html)),
-          fileOptions: const FileOptions(
-            upsert: true,
-            contentType: 'text/html',
-            cacheControl: '60',
-          ),
-        );
+    final storage = _requiredClient.storage.from(LiveTournamentConfig.bucket);
+    // Supabase object metadata (especially content-type) can stick on upsert.
+    // Replace the viewer object to ensure browsers receive text/html.
+    try {
+      await storage.remove([path]);
+    } catch (_) {
+      // Best effort: upload below will still attempt to replace/create.
+    }
+    await storage.uploadBinary(
+      path,
+      Uint8List.fromList(utf8.encode(html)),
+      fileOptions: const FileOptions(
+        upsert: true,
+        contentType: 'text/html',
+        cacheControl: '60',
+      ),
+    );
   }
 
   @override

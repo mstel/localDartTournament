@@ -123,13 +123,12 @@ class RunningRulesDraft {
     extraQualifierCount = null;
     qualificationPlaceStatuses = const {};
     if (autoAdjust) {
-      advancementPolicy = QualificationPlanEngine.automaticPolicyFor(
+      advancementPolicy = QualificationPlanEngine.recommendedAutomaticPolicy(
         groupSizes: groupSizes,
         totalQualifiers: parsed,
       );
     }
     syncQualificationDistribution(groupSizes);
-    maybeReturnToAutomatic(groupSizes);
   }
 
   void setKnockoutAdvancingCount(String value) {
@@ -168,79 +167,36 @@ class RunningRulesDraft {
       extraQualifierRank = null;
       extraQualifierCount = null;
       qualificationPlaceStatuses = const {};
-      advancementPolicy = QualificationPlanEngine.automaticPolicyFor(
+      fixedQualifiersByGroup = const [];
+      qualifiersByGroup = const [];
+      advancementPolicy = QualificationPlanEngine.recommendedAutomaticPolicy(
         groupSizes: groupSizes,
-        totalQualifiers: parsedQualifierCount ?? 0,
+        totalQualifiers: previous?.totalQualifiers ?? (parsedQualifierCount ?? 0),
       );
     }
     _bestOfQualifierCount.text = '${previous?.extraCount ?? 0}';
-    if (enabled) {
-      syncQualificationDistribution(groupSizes);
-      maybeReturnToAutomatic(groupSizes);
-    }
+    syncQualificationDistribution(groupSizes);
   }
 
-  void setAdvancementPolicy(String value) {
+  /// In auto mode: change policy but stay automatic. In manual mode: ignored.
+  void setAdvancementPolicy(String value, List<int> groupSizes) {
+    if (!autoAdjust) return;
     advancementPolicy = value;
     fixedQualifiersByGroup = const [];
     qualifiersByGroup = const [];
     extraQualifierRank = null;
     extraQualifierCount = null;
     qualificationPlaceStatuses = const {};
-  }
-
-  bool isManualOverride(List<int> groupSizes) {
-    if (!autoAdjust) return true;
-    final plan = planFor(groupSizes);
-    if (plan == null) return false;
-    final autoPolicy = QualificationPlanEngine.automaticPolicyFor(
-      groupSizes: groupSizes,
-      totalQualifiers: plan.totalQualifiers,
-    );
-    final autoPlan = const QualificationPlanEngine().build(
-      groupSizes: groupSizes,
-      totalQualifiers: plan.totalQualifiers,
-      autoAdjust: true,
-      advancementPolicy: autoPolicy,
-    );
-    return !_samePlan(plan, autoPlan);
-  }
-
-  void maybeReturnToAutomatic(List<int> groupSizes) {
-    final plan = planFor(groupSizes);
-    if (plan == null || !QualificationPlanEngine.isDistributionClear(plan)) {
-      return;
-    }
-    autoAdjust = true;
-    advancementPolicy = QualificationPlanEngine.automaticPolicyFor(
-      groupSizes: groupSizes,
-      totalQualifiers: plan.totalQualifiers,
-    );
-    extraQualifierRank = null;
-    extraQualifierCount = null;
-    qualificationPlaceStatuses = const {};
     syncQualificationDistribution(groupSizes);
   }
 
-  static bool _samePlan(QualificationPlan left, QualificationPlan right) {
-    return left.totalQualifiers == right.totalQualifiers &&
-        left.fixedPerGroup == right.fixedPerGroup &&
-        left.extraCount == right.extraCount &&
-        left.extraRank == right.extraRank &&
-        left.eligibleGroupSize == right.eligibleGroupSize &&
-        _sameInts(left.extraGroups, right.extraGroups) &&
-        _sameInts(left.fixedByGroup, right.fixedByGroup) &&
-        left.placeStatuses.length == right.placeStatuses.length &&
-        left.placeStatuses.entries.every(
-          (entry) => right.placeStatuses[entry.key] == entry.value,
-        );
-  }
+  /// True when user has made manual place/distribution edits (manual mode).
+  bool get isManualMode => !autoAdjust;
 
   void setBestOfQualifierCount(String value, List<int> groupSizes) {
     autoAdjust = false;
     final parsed = int.tryParse(value.trim());
     extraQualifierCount = parsed == null || parsed < 0 ? 0 : parsed;
-    maybeReturnToAutomatic(groupSizes);
   }
 
   void setExtraGroup(
@@ -268,7 +224,6 @@ class RunningRulesDraft {
             : QualificationPlaceStatus.eliminated.jsonValue,
       };
     }
-    maybeReturnToAutomatic(groupSizes);
   }
 
   void cycleQualificationPlace(
@@ -326,7 +281,6 @@ class RunningRulesDraft {
         ),
       );
     }
-    maybeReturnToAutomatic(groupSizes);
   }
 
   void togglePlacementPlace(int place) {
@@ -464,6 +418,22 @@ class _RunningTournamentRulesPanelState
     final messages = widget.draft.autoAdjust || plan == null
         ? const <String>[]
         : const QualificationPlanEngine().validationMessages(plan);
+    final manualMode = widget.draft.isManualMode;
+    final canUseLargerGroup =
+        QualificationPlanEngine.canUseLargerGroupPolicy(groupSizes);
+    final totalQualifiers = widget.draft.parsedQualifierCount ?? 0;
+    final effectiveAutoValue =
+        widget.draft.advancementPolicy == 'automatic'
+        ? QualificationPlanEngine.recommendedAutomaticPolicy(
+            groupSizes: groupSizes,
+            totalQualifiers: totalQualifiers,
+          )
+        : QualificationPlanEngine.resolveAutomaticDistributionPolicy(
+            groupSizes: groupSizes,
+            totalQualifiers: totalQualifiers,
+            advancementPolicy: widget.draft.advancementPolicy,
+          );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -490,124 +460,104 @@ class _RunningTournamentRulesPanelState
           title: const Text('Weiterkommen im Detail'),
           childrenPadding: const EdgeInsets.only(bottom: 12),
           children: [
-            Text(
-              'Zusätzliche Qualifikationsspiele',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 4),
-            Builder(
-              builder: (context) {
-                final canUseLargerGroup =
-                    QualificationPlanEngine.canUseLargerGroupPolicy(groupSizes);
-                final autoPolicy =
-                    QualificationPlanEngine.automaticPolicyFor(
-                  groupSizes: groupSizes,
-                  totalQualifiers: widget.draft.parsedQualifierCount ?? 0,
-                );
-                final resolvedPolicy =
-                    QualificationPlanEngine.resolveAdvancementPolicy(
-                  groupSizes: groupSizes,
-                  advancementPolicy: widget.draft.advancementPolicy,
-                );
-                final manualOverride = widget.draft.isManualOverride(groupSizes);
-                final showManualModes = !widget.draft.autoAdjust || manualOverride;
-                final effectiveValue = widget.draft.autoAdjust && !manualOverride
-                    ? 'automatic'
-                    : resolvedPolicy;
-                final items = <DropdownMenuItem<String>>[
+            if (manualMode)
+              DropdownButtonFormField<String>(
+                key: const ValueKey('running-qualification-manual-mode'),
+                initialValue: 'manual',
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Weiterkommensregel',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
                   DropdownMenuItem(
-                    value: 'automatic',
+                    value: 'manual',
+                    child: Text('Manuelle weiterkommensregelung'),
+                  ),
+                ],
+                onChanged: null,
+              )
+            else
+              DropdownButtonFormField<String>(
+                key: const ValueKey('running-qualification-auto-mode'),
+                initialValue: effectiveAutoValue,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Weiterkommensregel',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  DropdownMenuItem<String>(
+                    value: 'larger_group',
+                    enabled: canUseLargerGroup,
                     child: Text(
-                      'Automatisch (${autoPolicy == 'larger_group' ? 'Größere Gruppe hat Vorrang' : 'Gruppenübergreifend vergleichen'})',
+                      canUseLargerGroup
+                          ? 'Größere Gruppe hat Vorrang'
+                          : 'Größere Gruppe hat Vorrang (bei gleich großen Gruppen nicht nötig)',
                     ),
                   ),
-                  if (showManualModes)
-                    DropdownMenuItem(
-                      value: 'larger_group',
-                      enabled: canUseLargerGroup && !manualOverride,
-                      child: Text(
-                        canUseLargerGroup
-                            ? 'Größere Gruppe hat Vorrang'
-                            : 'Größere Gruppe hat Vorrang (nicht nötig bei gleich großen Gruppen)',
-                      ),
-                    ),
-                  if (showManualModes)
-                    DropdownMenuItem(
-                      value: 'best_rank',
-                      enabled: !manualOverride,
-                      child: const Text(
-                        'Beste X. Plätze gruppenübergreifend vergleichen',
-                      ),
-                    ),
-                ];
-                return DropdownButtonFormField<String>(
-                  initialValue: effectiveValue,
-                  isExpanded: true,
-                  decoration: const InputDecoration(border: OutlineInputBorder()),
-                  items: items,
-                  onChanged: widget.enabled
-                      ? (value) {
-                          if (value == null) return;
-                          if (value == 'automatic') {
-                            widget.draft.setAutoAdjust(true, groupSizes);
-                          } else {
-                            widget.draft.autoAdjust = false;
-                            widget.draft.setAdvancementPolicy(value);
-                            widget.draft.syncQualificationDistribution(groupSizes);
-                            widget.draft.maybeReturnToAutomatic(groupSizes);
-                          }
+                  const DropdownMenuItem<String>(
+                    value: 'best_rank',
+                    child: Text('Beste X Plätze gruppenübergreifend vergleichen'),
+                  ),
+                  const DropdownMenuItem<String>(
+                    value: 'automatic',
+                    child: Text('Automatisch'),
+                  ),
+                ],
+                onChanged: widget.enabled
+                    ? (value) {
+                        if (value == null) return;
+                        if (value == 'automatic') {
+                          widget.draft.advancementPolicy = 'automatic';
+                          widget.draft.syncQualificationDistribution(groupSizes);
+                        } else {
+                          widget.draft.setAdvancementPolicy(value, groupSizes);
+                        }
+                        _changed();
+                      }
+                    : null,
+              ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  key: const ValueKey('running-auto-adjust-true'),
+                  avatar: const Icon(Icons.auto_fix_high_outlined, size: 18),
+                  label: const Text('Automatik'),
+                  selected: !manualMode,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  onSelected: widget.enabled
+                      ? (_) {
+                          widget.draft.setAutoAdjust(true, groupSizes);
                           _changed();
                         }
                       : null,
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            Builder(
-              builder: (context) {
-                final manualOverride = widget.draft.isManualOverride(groupSizes);
-                final selectedManual = !widget.draft.autoAdjust || manualOverride;
-                return Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ChoiceChip(
-                      key: const ValueKey('running-auto-adjust-true'),
-                      avatar: const Icon(Icons.auto_fix_high_outlined, size: 18),
-                      label: const Text('Automatik'),
-                      selected: !selectedManual,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      onSelected: widget.enabled
-                          ? (_) {
-                              widget.draft.setAutoAdjust(true, groupSizes);
-                              _changed();
-                            }
-                          : null,
-                    ),
-                    ChoiceChip(
-                      key: const ValueKey('running-auto-adjust-false'),
-                      avatar: const Icon(Icons.tune_outlined, size: 18),
-                      label: const Text('Manuell'),
-                      selected: selectedManual,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      onSelected: widget.enabled
-                          ? (_) {
-                              if (!selectedManual) {
-                                widget.draft.setAutoAdjust(false, groupSizes);
-                                _changed();
-                              }
-                            }
-                          : null,
-                    ),
-                  ],
-                );
-              },
+                ),
+                ChoiceChip(
+                  key: const ValueKey('running-auto-adjust-false'),
+                  avatar: const Icon(Icons.tune_outlined, size: 18),
+                  label: const Text('Manuell'),
+                  selected: manualMode,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  onSelected: widget.enabled
+                      ? (_) {
+                          if (!manualMode) {
+                            widget.draft.setAutoAdjust(false, groupSizes);
+                            _changed();
+                          }
+                        }
+                      : null,
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             QualificationRuleSummary(qualificationPlan: plan),
@@ -617,9 +567,7 @@ class _RunningTournamentRulesPanelState
                 width: 180,
                 child: TextField(
                   controller: widget.draft.bestOfQualifierCount,
-                  enabled: widget.enabled &&
-                      (!widget.draft.autoAdjust ||
-                          widget.draft.isManualOverride(groupSizes)),
+                  enabled: widget.enabled && manualMode,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -695,9 +643,11 @@ class _RunningTournamentRulesPanelState
     required TournamentStage stage,
     String? heading,
     int? participantCountOverride,
+    bool allowPlayFully = true,
   }) {
     final participants =
         participantCountOverride ?? stage.knockoutParticipantCount ?? 0;
+    final canPlayFully = allowPlayFully && participants >= 5;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -705,7 +655,7 @@ class _RunningTournamentRulesPanelState
           Text(heading, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
         ],
-        if (participants >= 5)
+        if (canPlayFully)
           SwitchListTile(
             key: const ValueKey('running-knockout-play-fully'),
             contentPadding: EdgeInsets.zero,
@@ -718,7 +668,8 @@ class _RunningTournamentRulesPanelState
                   }
                 : null,
           ),
-        if (!widget.draft.playsKnockoutFully && participants > 1) ...[
+        if ((!widget.draft.playsKnockoutFully || !canPlayFully) &&
+            participants > 1) ...[
           Text(
             'Weiterkommende',
             style: Theme.of(context).textTheme.titleSmall,
@@ -841,7 +792,7 @@ class _RunningTournamentRulesPanelState
               ),
             ],
           ] else
-            _knockoutSection(stage: widget.stage),
+            _knockoutSection(stage: widget.stage, allowPlayFully: false),
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerRight,

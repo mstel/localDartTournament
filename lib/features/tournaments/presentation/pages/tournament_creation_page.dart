@@ -2968,7 +2968,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
 
   void _syncQualificationAfterChange({bool resetManualDistribution = false}) {
-    final groupSizes = _calculateGroupSizes();
     final qualifierCount = _groupQualifierCount();
     if (resetManualDistribution) {
       _fixedQualifiersByGroup.clear();
@@ -2979,8 +2978,8 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
     if (_autoAdjustQualification && qualifierCount != null) {
       _qualificationAdvancementPolicy =
-          QualificationPlanEngine.automaticPolicyFor(
-        groupSizes: groupSizes,
+          QualificationPlanEngine.recommendedAutomaticPolicy(
+        groupSizes: _calculateGroupSizes(),
         totalQualifiers: qualifierCount,
       );
     }
@@ -2988,31 +2987,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     if (plan == null) return;
     if (_autoAdjustQualification) {
       _bestOfQualifierCountController.text = '${plan.extraCount}';
-    }
-    _maybeReturnQualificationToAutomatic(plan);
-  }
-
-  void _maybeReturnQualificationToAutomatic([QualificationPlan? plan]) {
-    final currentPlan = plan ?? _groupQualificationPlan();
-    if (currentPlan == null ||
-        !QualificationPlanEngine.isDistributionClear(currentPlan)) {
-      return;
-    }
-    final groupSizes = _calculateGroupSizes();
-    _autoAdjustQualification = true;
-    _qualificationAdvancementPolicy =
-        QualificationPlanEngine.automaticPolicyFor(
-      groupSizes: groupSizes,
-      totalQualifiers: currentPlan.totalQualifiers,
-    );
-    _fixedQualifiersByGroup.clear();
-    _selectedExtraGroups.clear();
-    _manualExtraRank = null;
-    _manualExtraCount = null;
-    _qualificationPlaceStatuses = const {};
-    final autoPlan = _groupQualificationPlan();
-    if (autoPlan != null) {
-      _bestOfQualifierCountController.text = '${autoPlan.extraCount}';
     }
   }
 
@@ -3042,7 +3016,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               : QualificationPlaceStatus.eliminated,
         };
       }
-      _maybeReturnQualificationToAutomatic();
     });
   }
 
@@ -3069,6 +3042,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _manualExtraRank = null;
         _manualExtraCount = null;
         _qualificationPlaceStatuses = const {};
+        _qualificationAdvancementPolicy =
+            QualificationPlanEngine.recommendedAutomaticPolicy(
+          groupSizes: _calculateGroupSizes(),
+          totalQualifiers: _groupQualifierCount() ?? 0,
+        );
         _syncQualificationAfterChange();
       }
     });
@@ -3076,8 +3054,16 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
 
   void _setQualificationAdvancementPolicy(String policy) => setState(() {
     _markDirty();
-    _autoAdjustQualification = false;
-    _qualificationAdvancementPolicy = policy;
+    if (!_autoAdjustQualification) return;
+    if (policy == 'automatic') {
+      _qualificationAdvancementPolicy =
+          QualificationPlanEngine.recommendedAutomaticPolicy(
+        groupSizes: _calculateGroupSizes(),
+        totalQualifiers: _groupQualifierCount() ?? 0,
+      );
+    } else {
+      _qualificationAdvancementPolicy = policy;
+    }
     _fixedQualifiersByGroup.clear();
     _selectedExtraGroups.clear();
     _manualExtraRank = null;
@@ -3092,7 +3078,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     setState(() {
       _autoAdjustQualification = false;
       _manualExtraCount = parsed == null || parsed < 0 ? 0 : parsed;
-      _maybeReturnQualificationToAutomatic();
     });
   }
 
@@ -3149,7 +3134,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           updatedPlan.placeStatuses,
         );
       }
-      _maybeReturnQualificationToAutomatic(updatedPlan);
     });
   }
 

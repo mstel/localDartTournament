@@ -4033,13 +4033,21 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (index < 0 ||
         index >= widget.tournament.stages.length ||
         index >= widget.tournament.runStages.length ||
-        _completedStageIndexes.contains(index) ||
-        _viewStageIndex != index) {
+        _completedStageIndexes.contains(index)) {
       return false;
     }
     final stage = widget.tournament.stages[index];
     if (!stage.isGroupStage && !_isKnockoutStageType(stage.type)) return false;
-    return !_runStageHasProgress(widget.tournament.runStages[index]);
+    // Während der Phase editierbar, auch wenn schon Ergebnisse vorliegen.
+    // Erst wenn eine Folgephase begonnen hat oder die Phase abgeschlossen ist,
+    // sperren. Beim erneuten Öffnen einer vorherigen Phase bleibt sie editierbar,
+    // solange keine Folgephase Fortschritt hat.
+    for (var next = index + 1; next < widget.tournament.runStages.length; next++) {
+      if (_runStageHasProgress(widget.tournament.runStages[next])) {
+        return false;
+      }
+    }
+    return true;
   }
 
   List<TournamentPlayer> _playersForRunStage(TournamentRunStage stage) {

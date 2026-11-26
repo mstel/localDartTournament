@@ -889,29 +889,7 @@ class _GroupQualificationSetup extends StatelessWidget {
     return const QualificationPlanEngine().validationMessages(plan);
   }
 
-  bool _isManualOverride(QualificationPlan plan) {
-    if (!autoAdjust) return true;
-    final autoPolicy = QualificationPlanEngine.automaticPolicyFor(
-      groupSizes: groupSizes,
-      totalQualifiers: plan.totalQualifiers,
-    );
-    final autoPlan = const QualificationPlanEngine().build(
-      groupSizes: groupSizes,
-      totalQualifiers: plan.totalQualifiers,
-      autoAdjust: true,
-      advancementPolicy: autoPolicy,
-    );
-    return plan.totalQualifiers != autoPlan.totalQualifiers ||
-        plan.fixedPerGroup != autoPlan.fixedPerGroup ||
-        plan.extraCount != autoPlan.extraCount ||
-        plan.extraRank != autoPlan.extraRank ||
-        plan.extraGroups.join(',') != autoPlan.extraGroups.join(',') ||
-        plan.fixedByGroup.join(',') != autoPlan.fixedByGroup.join(',') ||
-        plan.placeStatuses.length != autoPlan.placeStatuses.length ||
-        plan.placeStatuses.entries.any(
-          (entry) => autoPlan.placeStatuses[entry.key] != entry.value,
-        );
-  }
+  bool get _isManualMode => !autoAdjust;
 
   @override
   Widget build(BuildContext context) {
@@ -924,69 +902,77 @@ class _GroupQualificationSetup extends StatelessWidget {
     final plan = qualificationPlan;
     final canUseLargerGroup =
         QualificationPlanEngine.canUseLargerGroupPolicy(groupSizes);
-    final autoPolicy = QualificationPlanEngine.automaticPolicyFor(
-      groupSizes: groupSizes,
-      totalQualifiers: plan?.totalQualifiers ?? 0,
-    );
-    final resolvedPolicy = QualificationPlanEngine.resolveAdvancementPolicy(
-      groupSizes: groupSizes,
-      advancementPolicy: advancementPolicy,
-    );
-    final manualOverride = plan != null && _isManualOverride(plan);
-    final showManualModes = !autoAdjust || manualOverride;
-    final effectiveValue =
-        autoAdjust && !manualOverride ? 'automatic' : resolvedPolicy;
+    final totalQualifiers = plan?.totalQualifiers ?? 0;
+    final effectiveAutoValue = advancementPolicy == 'automatic'
+        ? QualificationPlanEngine.recommendedAutomaticPolicy(
+            groupSizes: groupSizes,
+            totalQualifiers: totalQualifiers,
+          )
+        : QualificationPlanEngine.resolveAutomaticDistributionPolicy(
+            groupSizes: groupSizes,
+            totalQualifiers: totalQualifiers,
+            advancementPolicy: advancementPolicy,
+          );
+    final manualMode = _isManualMode;
+
+    final Widget modeControl = manualMode
+        ? DropdownButtonFormField<String>(
+            key: const ValueKey('qualification-manual-mode'),
+            initialValue: 'manual',
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Weiterkommensregel',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: 'manual',
+                child: Text('Manuelle weiterkommensregelung'),
+              ),
+            ],
+            onChanged: null,
+          )
+        : DropdownButtonFormField<String>(
+            key: const ValueKey('qualification-auto-mode'),
+            initialValue: effectiveAutoValue,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Weiterkommensregel',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              DropdownMenuItem<String>(
+                value: 'larger_group',
+                enabled: canUseLargerGroup,
+                child: Text(
+                  canUseLargerGroup
+                      ? 'Größere Gruppe hat Vorrang'
+                      : 'Größere Gruppe hat Vorrang (bei gleich großen Gruppen nicht nötig)',
+                ),
+              ),
+              const DropdownMenuItem<String>(
+                value: 'best_rank',
+                child: Text('Beste X Plätze gruppenübergreifend vergleichen'),
+              ),
+              const DropdownMenuItem<String>(
+                value: 'automatic',
+                child: Text('Automatisch'),
+              ),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              if (value == 'automatic') {
+                onAutoAdjustChanged(true);
+              } else {
+                onAdvancementPolicyChanged(value);
+              }
+            },
+          );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Weiterkommensregel',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          initialValue: effectiveValue,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Zusätzliche Qualifikationsplätze',
-            border: OutlineInputBorder(),
-          ),
-          items: [
-            DropdownMenuItem(
-              value: 'automatic',
-              child: Text(
-                'Automatisch (${autoPolicy == 'larger_group' ? 'Größere Gruppe hat Vorrang' : 'Gruppenübergreifend vergleichen'})',
-              ),
-            ),
-            if (showManualModes)
-              DropdownMenuItem(
-                value: 'larger_group',
-                enabled: canUseLargerGroup && !manualOverride,
-                child: Text(
-                  canUseLargerGroup
-                      ? 'Größere Gruppe hat Vorrang'
-                      : 'Größere Gruppe hat Vorrang (nicht nötig bei gleich großen Gruppen)',
-                ),
-              ),
-            if (showManualModes)
-              DropdownMenuItem(
-                value: 'best_rank',
-                enabled: !manualOverride,
-                child: const Text(
-                  'Beste X. Plätze gruppenübergreifend vergleichen',
-                ),
-              ),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            if (value == 'automatic') {
-              onAutoAdjustChanged(true);
-            } else {
-              onAdvancementPolicyChanged(value);
-            }
-          },
-        ),
+        modeControl,
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
@@ -997,15 +983,15 @@ class _GroupQualificationSetup extends StatelessWidget {
               ChoiceChip(
                 avatar: const Icon(Icons.auto_fix_high_outlined, size: 18),
                 label: const Text('Automatik'),
-                selected: autoAdjust && !manualOverride,
+                selected: !manualMode,
                 onSelected: (_) => onAutoAdjustChanged(true),
               ),
               ChoiceChip(
                 avatar: const Icon(Icons.tune_outlined, size: 18),
                 label: const Text('Manuell'),
-                selected: !autoAdjust || manualOverride,
+                selected: manualMode,
                 onSelected: (_) {
-                  if (autoAdjust && !manualOverride) {
+                  if (!manualMode) {
                     onAutoAdjustChanged(false);
                   }
                 },
@@ -1021,7 +1007,7 @@ class _GroupQualificationSetup extends StatelessWidget {
             width: 180,
             child: TextField(
               controller: bestOfQualifierCountController,
-              enabled: !autoAdjust || manualOverride,
+              enabled: manualMode,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
