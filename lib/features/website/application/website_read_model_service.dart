@@ -321,8 +321,51 @@ class WebsiteReadModelService {
             .toIso8601String(),
       'winnerId': TournamentWinner.profileId(tournament),
       'winnerName': TournamentWinner.name(tournament),
+      'leagueMatchResult': _leagueMatchResultJson(tournament),
       'phaseViews': [for (final view in phaseViews) view.toJson()],
       'phaseKinds': [for (final view in phaseViews) view.type.jsonValue],
+    };
+  }
+
+  static Map<String, dynamic>? _leagueMatchResultJson(
+    CreatedTournament tournament,
+  ) {
+    final league = tournament.leagueMatch;
+    if (league == null) return null;
+    var homeMatchPoints = 0;
+    var awayMatchPoints = 0;
+    var homeLegs = 0;
+    var awayLegs = 0;
+    var playedMatches = 0;
+    for (final game in league.games) {
+      final homeScore = game.homeScore(league.gameFormat);
+      final awayScore = game.awayScore(league.gameFormat);
+      if (homeScore == null || awayScore == null) continue;
+      playedMatches++;
+      homeLegs += homeScore;
+      awayLegs += awayScore;
+      if (homeScore > awayScore) homeMatchPoints++;
+      if (awayScore > homeScore) awayMatchPoints++;
+    }
+    final isComplete = playedMatches == league.games.length;
+    final winnerTeam = !isComplete
+        ? null
+        : homeMatchPoints > awayMatchPoints
+            ? league.homeTeam
+            : awayMatchPoints > homeMatchPoints
+                ? league.awayTeam
+                : 'Unentschieden';
+    return {
+      'homeTeam': league.homeTeam,
+      'awayTeam': league.awayTeam,
+      'homeMatchPoints': homeMatchPoints,
+      'awayMatchPoints': awayMatchPoints,
+      'homeLegs': homeLegs,
+      'awayLegs': awayLegs,
+      'playedMatches': playedMatches,
+      'totalMatches': league.games.length,
+      'isComplete': isComplete,
+      'winnerTeam': winnerTeam,
     };
   }
 
@@ -727,6 +770,8 @@ class WebsiteReadModelService {
           // the same archive/final match/standings data used on the detail page.
           'winnerId': podiumWinner?.profileId ?? tournament['winnerId'],
           'winnerName': podiumWinner?.name ?? tournament['winnerName'],
+          if (tournament['leagueMatchResult'] case final Map<String, dynamic> leagueMatchResult)
+            'leagueMatchResult': leagueMatchResult,
           'phaseKinds': [
             for (final kind
                 in tournament['phaseKinds'] as List<dynamic>? ?? const [])

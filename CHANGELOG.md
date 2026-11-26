@@ -1,3 +1,11 @@
+# 4.0.9+139
+
+- Qualifikation: In Turniererstellung und laufenden Turniereinstellungen passt sich die Weiterkommensverteilung beim Ändern der Weiterkommenszahl automatisch an (z. B. 2×8, 8→6 = 3/3). Bei gleich großen Gruppen wird „größere Gruppe hat Vorrang“ ausgeblendet/deaktiviert; bei vollständig geklärter Verteilung wird kein unnötiger gruppenübergreifender Vergleich angezeigt. Nicht benötigte Optionen werden deaktiviert, „Automatisch“ ist auswählbar, und bei geklärter Verteilung springt die Auswahl sauber auf Automatik zurück. Nach manuellem Eingriff bleiben manuelle Voreinstellungen gesperrt, bis wieder Automatik gewählt wird.
+- KO-Vorschau: „Vorschau nächste Phase“ (Zweitmonitor/Leitung) nutzt die KO-Baum-Darstellung mit strikt getrennten Runden (Viertelfinale/Halbfinale/Finale). Optionale Platzierungsspiele werden separat unterhalb des Baums als „Platzierungsspiele“ angezeigt, nicht auf derselben Ebene wie das Finale.
+- Aktuelle Form: Bei weniger als 100 gewerteten Legs zeigt der Spielerkatalog die tatsächliche Leg-Anzahl statt fest „100 Legs“ und kennzeichnet den kleineren Zeitraum. Die Berechnung proratiert/ rundet konsistent, damit Siege/Niederlagen und Siegesrate zum angezeigten Zeitraum passen.
+- Live-Turnier: Der öffentliche Viewer wird beim Publish immer mit Content-Type `text/html` und kurzem Cache neu hochgeladen, damit QR-Code/URL wieder als HTML gerendert werden (bestehende falsch als `text/plain` abgelegte Viewer müssen einmal neu veröffentlicht oder im Bucket ersetzt werden).
+- Website-Read-Model: Abgeschlossene Turniere liefern ein `leagueMatchResult` (Mannschaften, Matchpunkte, Legs, Sieger) für die Homepage; der Turnierindex enthält dieses Feld für die Turnierliste.
+
 # 4.0.8+138
 
 - Scolia: Ein vorhandener Messpunkt zwingt die Eingabemaske nicht mehr in den Scolia-Reiter; der Wechsel zurück zu „Monatswerte“ bleibt möglich. Dort wird manuelle Speicherung so lange gesperrt und erklärt, bis der zugehörige Messpunkt zurückgesetzt wurde. Früher leere Monatsdatensätze mit 0 Legs werden aus den bewerteten Turnierlegs des Monats vorgeschlagen und beim Speichern korrigiert. Pro Monat gibt es außerdem einen zurücksetzen-Button, der den Scolia-Messpunkt löscht und die abhängigen Monatswerte neu berechnet; manuell erfasste Monate bleiben unberührt.

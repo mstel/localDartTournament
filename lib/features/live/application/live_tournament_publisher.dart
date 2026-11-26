@@ -40,7 +40,6 @@ class LiveTournamentPublisher {
   final LiveTournamentUploader _uploader;
   final LiveTournamentPayloadBuilder _builder;
   final String? _viewerHtml;
-  bool _viewerUploaded = false;
   bool _payloadCleared = false;
   String? _lastPayloadHash;
 
@@ -94,12 +93,10 @@ class LiveTournamentPublisher {
   }
 
   Future<void> _ensureViewer(String channel) async {
-    if (_viewerUploaded) return;
     final html =
         _viewerHtml ??
         await rootBundle.loadString('assets/live/live_viewer.html');
     await _uploader.uploadViewer(_viewerPath(channel), html);
-    _viewerUploaded = true;
   }
 
   String _viewerPath(String channel) => '$channel/index.html';

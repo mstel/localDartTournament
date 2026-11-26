@@ -2965,6 +2965,57 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
   }
 
+
+
+  void _syncQualificationAfterChange({bool resetManualDistribution = false}) {
+    final groupSizes = _calculateGroupSizes();
+    final qualifierCount = _groupQualifierCount();
+    if (resetManualDistribution) {
+      _fixedQualifiersByGroup.clear();
+      _selectedExtraGroups.clear();
+      _manualExtraRank = null;
+      _manualExtraCount = null;
+      _qualificationPlaceStatuses = const {};
+    }
+    if (_autoAdjustQualification && qualifierCount != null) {
+      _qualificationAdvancementPolicy =
+          QualificationPlanEngine.automaticPolicyFor(
+        groupSizes: groupSizes,
+        totalQualifiers: qualifierCount,
+      );
+    }
+    final plan = _groupQualificationPlan();
+    if (plan == null) return;
+    if (_autoAdjustQualification) {
+      _bestOfQualifierCountController.text = '${plan.extraCount}';
+    }
+    _maybeReturnQualificationToAutomatic(plan);
+  }
+
+  void _maybeReturnQualificationToAutomatic([QualificationPlan? plan]) {
+    final currentPlan = plan ?? _groupQualificationPlan();
+    if (currentPlan == null ||
+        !QualificationPlanEngine.isDistributionClear(currentPlan)) {
+      return;
+    }
+    final groupSizes = _calculateGroupSizes();
+    _autoAdjustQualification = true;
+    _qualificationAdvancementPolicy =
+        QualificationPlanEngine.automaticPolicyFor(
+      groupSizes: groupSizes,
+      totalQualifiers: currentPlan.totalQualifiers,
+    );
+    _fixedQualifiersByGroup.clear();
+    _selectedExtraGroups.clear();
+    _manualExtraRank = null;
+    _manualExtraCount = null;
+    _qualificationPlaceStatuses = const {};
+    final autoPlan = _groupQualificationPlan();
+    if (autoPlan != null) {
+      _bestOfQualifierCountController.text = '${autoPlan.extraCount}';
+    }
+  }
+
   void _setExtraGroupSelection(
     int groupNumber,
     bool selected,
@@ -2973,6 +3024,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _markDirty();
     final plan = _groupQualificationPlan();
     setState(() {
+      _autoAdjustQualification = false;
       if (_selectedExtraGroups.isEmpty && currentGroups.isNotEmpty) {
         _selectedExtraGroups.addAll(currentGroups);
       }
@@ -2990,50 +3042,57 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
               : QualificationPlaceStatus.eliminated,
         };
       }
+      _maybeReturnQualificationToAutomatic();
     });
   }
 
   void _setQualificationAutoAdjust(bool enabled) {
     _markDirty();
-    final groupSizes = _calculateGroupSizes();
     final plan = _groupQualificationPlan();
     setState(() {
       _autoAdjustQualification = enabled;
-      if (!enabled &&
-          _fixedQualifiersByGroup.length != groupSizes.length &&
-          plan != null) {
+      if (!enabled && plan != null) {
         _fixedQualifiersByGroup
           ..clear()
-          ..addAll(_defaultFixedQualifiersForPlan(groupSizes, plan));
+          ..addAll(plan.fixedByGroup);
         _selectedExtraGroups
           ..clear()
           ..addAll(plan.extraGroups);
         _manualExtraRank = plan.extraRank;
-        _qualificationPlaceStatuses = Map.unmodifiable(plan.placeStatuses);
-      }
-      if (enabled && plan != null) {
-        _manualExtraCount = null;
-        _bestOfQualifierCountController.text = '${plan.extraCount}';
-      } else if (!enabled && plan != null) {
         _manualExtraCount = plan.extraCount;
+        _qualificationPlaceStatuses = Map.unmodifiable(plan.placeStatuses);
         _bestOfQualifierCountController.text = '${plan.extraCount}';
+      }
+      if (enabled) {
+        _fixedQualifiersByGroup.clear();
+        _selectedExtraGroups.clear();
+        _manualExtraRank = null;
+        _manualExtraCount = null;
+        _qualificationPlaceStatuses = const {};
+        _syncQualificationAfterChange();
       }
     });
   }
 
   void _setQualificationAdvancementPolicy(String policy) => setState(() {
     _markDirty();
+    _autoAdjustQualification = false;
     _qualificationAdvancementPolicy = policy;
     _fixedQualifiersByGroup.clear();
     _selectedExtraGroups.clear();
+    _manualExtraRank = null;
+    _manualExtraCount = null;
     _qualificationPlaceStatuses = const {};
+    _syncQualificationAfterChange();
   });
 
   void _setBestOfQualifierCount(String value) {
     _markDirty();
     final parsed = int.tryParse(value);
     setState(() {
+      _autoAdjustQualification = false;
       _manualExtraCount = parsed == null || parsed < 0 ? 0 : parsed;
+      _maybeReturnQualificationToAutomatic();
     });
   }
 
@@ -3050,6 +3109,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     }
 
     setState(() {
+      _autoAdjustQualification = false;
       final fixed = _currentFixedQualifiersByGroup(groupSizes, plan);
       final groupIndex = groupNumber - 1;
       final status = plan.statusFor(groupNumber, place);
@@ -3089,6 +3149,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
           updatedPlan.placeStatuses,
         );
       }
+      _maybeReturnQualificationToAutomatic(updatedPlan);
     });
   }
 
@@ -3959,7 +4020,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                       onChanged: (_) {
                         _markDirty();
                         _groupQualifierCountEdited = true;
-                        setState(() {});
+                        setState(() {
+                          _syncQualificationAfterChange(
+                            resetManualDistribution: true,
+                          );
+                        });
                       },
                     ),
                     trailing: ExpertSetupSection(

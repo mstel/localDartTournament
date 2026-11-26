@@ -58,7 +58,8 @@ class SupabaseLiveTournamentUploader implements LiveTournamentUploader {
           Uint8List.fromList(utf8.encode(html)),
           fileOptions: const FileOptions(
             upsert: true,
-            contentType: 'text/html; charset=utf-8',
+            contentType: 'text/html',
+            cacheControl: '60',
           ),
         );
   }

@@ -263,12 +263,21 @@ CurrentFormPerformance calculateCurrentFormPerformance(
     final weightTaken = remainingWeight
         .clamp(0, totals.selectionWeight)
         .toInt();
-    if (totals.selectionWeight <= 0) continue;
+    if (totals.selectionWeight <= 0 || weightTaken <= 0) continue;
     final fraction = weightTaken / totals.selectionWeight;
-    weightedLegs += (totals.weightedLegs * fraction).round();
-    matches += (totals.matches * fraction).round();
-    wins += (totals.wins * fraction).round();
-    losses += (totals.losses * fraction).round();
+    final proportionalMatches = totals.matches * fraction;
+    final proportionalWins = totals.wins * fraction;
+    var roundedMatches = proportionalMatches.round();
+    var roundedWins = proportionalWins.round();
+    if (roundedMatches < 0) roundedMatches = 0;
+    if (roundedWins < 0) roundedWins = 0;
+    if (roundedWins > roundedMatches) roundedWins = roundedMatches;
+    final roundedLosses = roundedMatches - roundedWins;
+
+    weightedLegs += weightTaken;
+    matches += roundedMatches;
+    wins += roundedWins;
+    losses += roundedLosses;
     remainingWeight -= weightTaken;
     scoring.addTotals(totals.scoring, fraction);
     average.addTotals(totals.average, fraction);

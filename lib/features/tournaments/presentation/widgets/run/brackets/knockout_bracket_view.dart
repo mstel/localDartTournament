@@ -123,14 +123,19 @@ class KnockoutBracketView extends StatelessWidget {
                   for (var j = 0; j < rounds[i].length; j++)
                     _KnockoutBracketMatchCard(
                       match: rounds[i][j],
-                      matchNumber: numbers[rounds[i][j]]!,
-                      homeSourceLabel: sourceName(edges[rounds[i][j]]!.home),
-                      awaySourceLabel: sourceName(edges[rounds[i][j]]!.away),
+                      matchNumber: numbers[rounds[i][j]] ??
+                          (stage.matches.indexOf(rounds[i][j]) + 1),
+                      homeSourceLabel: edges[rounds[i][j]] == null
+                          ? null
+                          : sourceName(edges[rounds[i][j]]!.home),
+                      awaySourceLabel: edges[rounds[i][j]] == null
+                          ? null
+                          : sourceName(edges[rounds[i][j]]!.away),
                       roundIndex: i,
                       matchIndex: j,
                       totalRounds: rounds.length,
                       qualifyingRank: 0,
-                      qualificationLabel: rounds[i][j].label,
+                      qualificationLabel: null,
                       onEditResult: onEditResult,
                       canEditResult: canEditResults,
                       isEditMode: false,
@@ -182,85 +187,72 @@ class KnockoutBracketView extends StatelessWidget {
       );
     }
 
-    final displayRounds = _singleKnockoutRoundsWithPlacement(
-      stage.rounds,
-      placementMatches,
-    );
-    final matchNumbers = _stageMatchNumbers(displayRounds);
-    final sourceMatches = {
-      ..._singleKnockoutSourceMatches(displayRounds),
-      ..._singleKnockoutPlacementSourceMatches(stage.rounds, placementMatches),
-    };
+    final mainRounds = stage.rounds;
+    final matchNumbers = _stageMatchNumbers(mainRounds);
+    final sourceMatches = _singleKnockoutSourceMatches(mainRounds);
     final sourceLabels = _deferUnresolvedSourcePlayerLabels(
-      {
-        ..._singleKnockoutSourceLabels(displayRounds, matchNumbers),
-        ..._singleKnockoutPlacementSourceLabels(
-          stage.rounds,
-          placementMatches,
-          matchNumbers,
-        ),
-      },
+      _singleKnockoutSourceLabels(mainRounds, matchNumbers),
       sourceMatches,
       matchNumbers,
     );
 
-    return _BracketTreeLayout(
-      totalRounds: displayRounds.length,
+    final mainBracket = _BracketTreeLayout(
+      totalRounds: mainRounds.length,
       columnWidth: 260,
       cardHeight: _compactBracketCardHeight(context),
       firstRoundGap: 12,
       useBalancedColumnLayout: stage.eliminationLossLimit > 1,
-      roundMatches: displayRounds,
+      roundMatches: mainRounds,
       sourceMatches: sourceMatches,
       roundTitles: [
-        for (var index = 0; index < displayRounds.length; index++)
+        for (var index = 0; index < mainRounds.length; index++)
           stage.eliminationLossLimit == 2
-              ? displayRounds[index]
+              ? mainRounds[index]
                     .map((m) => knockoutMatchName(m, stage.matches))
                     .toSet()
                     .join(' / ')
               : stage.eliminationLossLimit > 1
-              ? displayRounds[index]
+              ? mainRounds[index]
                     .map((m) => knockoutMatchName(m, stage.matches))
                     .toSet()
                     .join(' / ')
               : _singleKnockoutColumnTitle(
-                  displayRounds[index],
+                  mainRounds[index],
                   index,
-                  displayRounds.length,
+                  mainRounds.length,
                 ),
       ],
       roundCards: [
         for (
           var roundIndex = 0;
-          roundIndex < displayRounds.length;
+          roundIndex < mainRounds.length;
           roundIndex++
         )
           [
             for (
               var matchIndex = 0;
-              matchIndex < displayRounds[roundIndex].length;
+              matchIndex < mainRounds[roundIndex].length;
               matchIndex++
             )
               _KnockoutBracketMatchCard(
-                match: displayRounds[roundIndex][matchIndex],
+                match: mainRounds[roundIndex][matchIndex],
                 matchNumber:
-                    matchNumbers[displayRounds[roundIndex][matchIndex]] ??
+                    matchNumbers[mainRounds[roundIndex][matchIndex]] ??
                     matchIndex + 1,
                 homeSourceLabel:
-                    sourceLabels[displayRounds[roundIndex][matchIndex]]?.first,
+                    sourceLabels[mainRounds[roundIndex][matchIndex]]?.first,
                 awaySourceLabel:
-                    sourceLabels[displayRounds[roundIndex][matchIndex]]?.second,
+                    sourceLabels[mainRounds[roundIndex][matchIndex]]?.second,
                 roundIndex: roundIndex,
                 matchIndex: matchIndex,
-                totalRounds: displayRounds.length,
+                totalRounds: mainRounds.length,
                 qualifyingRank: qualifyingRank,
                 qualificationLabel: _singleKnockoutQualificationLabel(
-                  displayRounds[roundIndex][matchIndex],
+                  mainRounds[roundIndex][matchIndex],
                   sourceMatches,
                   qualifyingRank,
                   roundIndex,
-                  displayRounds.length,
+                  mainRounds.length,
                 ),
                 onEditResult: onEditResult,
                 canEditResult: canEditResults,
@@ -270,46 +262,91 @@ class KnockoutBracketView extends StatelessWidget {
           ],
       ],
     );
+
+    if (placementMatches.isEmpty) {
+      return mainBracket;
+    }
+
+    final placementMatchNumbers = _stageMatchNumbers([placementMatches]);
+    final placementSourceMatches = _singleKnockoutPlacementSourceMatches(
+      stage.rounds,
+      placementMatches,
+    );
+    final placementSourceLabels = _deferUnresolvedSourcePlayerLabels(
+      _singleKnockoutPlacementSourceLabels(
+        stage.rounds,
+        placementMatches,
+        {
+          ...matchNumbers,
+          ...placementMatchNumbers,
+        },
+      ),
+      placementSourceMatches,
+      {
+        ...matchNumbers,
+        ...placementMatchNumbers,
+      },
+    );
+    final orderedPlacement = _orderedPlacementMatches(placementMatches);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        mainBracket,
+        const SizedBox(height: 24),
+        const _BracketBandTitle(title: 'Platzierungsspiele'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            for (final match in orderedPlacement)
+              SizedBox(
+                width: 260,
+                child: _KnockoutBracketMatchCard(
+                  match: match,
+                  matchNumber: placementMatchNumbers[match] ??
+                      (matchNumbers[match] ?? 0),
+                  homeSourceLabel: placementSourceLabels[match]?.first,
+                  awaySourceLabel: placementSourceLabels[match]?.second,
+                  roundIndex: 0,
+                  matchIndex: 0,
+                  totalRounds: 1,
+                  qualifyingRank: 0,
+                  qualificationLabel: null,
+                  onEditResult: onEditResult,
+                  canEditResult: canEditResults,
+                  isEditMode: isEditMode,
+                  onSwapSlot: onSwapSlot,
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
-List<List<GroupMatch>> _singleKnockoutRoundsWithPlacement(
-  List<List<GroupMatch>> rounds,
-  List<GroupMatch> placementMatches,
-) {
-  if (placementMatches.isEmpty) {
-    return rounds;
+List<GroupMatch> _orderedPlacementMatches(List<GroupMatch> placementMatches) {
+  final matches = List<GroupMatch>.from(placementMatches);
+  int rankFor(GroupMatch match) {
+    final label = match.label ?? '';
+    final m = RegExp(r'Platz\s+(\d+)').firstMatch(label);
+    return int.tryParse(m?.group(1) ?? '') ?? 999;
   }
-  if (rounds.isEmpty) {
-    return [placementMatches];
+  int phaseFor(GroupMatch match) {
+    final label = match.label ?? '';
+    if (label.contains('Halbfinale')) return 0;
+    return 1;
   }
-
-  final displayRounds = [
-    for (final round in rounds) List<GroupMatch>.from(round),
-  ];
-  final fifthSemis = placementMatches
-      .where((match) => match.label?.startsWith('Platz 5 Halbfinale') ?? false)
-      .toList();
-  final finalColumnMatches = placementMatches
-      .where(
-        (match) =>
-            match.label == 'Spiel um Platz 3' ||
-            match.label == 'Spiel um Platz 5' ||
-            match.label == 'Spiel um Platz 7',
-      )
-      .toList();
-
-  if (fifthSemis.isNotEmpty) {
-    final targetIndex = displayRounds.length >= 2
-        ? displayRounds.length - 2
-        : displayRounds.length - 1;
-    displayRounds[targetIndex].addAll(fifthSemis);
-  }
-  if (finalColumnMatches.isNotEmpty) {
-    displayRounds.add(finalColumnMatches);
-  }
-
-  return displayRounds;
+  matches.sort((a, b) {
+    final r = rankFor(a).compareTo(rankFor(b));
+    if (r != 0) return r;
+    final p = phaseFor(a).compareTo(phaseFor(b));
+    if (p != 0) return p;
+    return (a.label ?? '').compareTo(b.label ?? '');
+  });
+  return matches;
 }
 
 String _singleKnockoutColumnTitle(
@@ -2203,8 +2240,9 @@ class _KnockoutBracketMatchCard extends StatelessWidget {
   }
 
   String _matchTitle() {
-    if (_isPlacementMatchLabel(match.label)) {
-      return matchDisplayLabel(match.label, fallback: '');
+    final label = match.label?.trim();
+    if (label != null && label.isNotEmpty) {
+      return matchDisplayLabel(label, fallback: 'Begegnung $matchNumber');
     }
     return 'Begegnung $matchNumber';
   }

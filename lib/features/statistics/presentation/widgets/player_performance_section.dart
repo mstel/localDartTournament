@@ -57,6 +57,14 @@ class PlayerPerformanceSection extends StatelessWidget {
               : 'Aktuelle Form: letzte 100 Legs',
           style: Theme.of(context).textTheme.titleLarge,
         ),
+        if (currentForm.weightedLegs > 0 && currentForm.weightedLegs < 100)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Es liegen aktuell nur ${currentForm.weightedLegs} gewertete Legs vor.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 12,

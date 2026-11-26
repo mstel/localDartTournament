@@ -122,7 +122,14 @@ class RunningRulesDraft {
     extraQualifierRank = null;
     extraQualifierCount = null;
     qualificationPlaceStatuses = const {};
+    if (autoAdjust) {
+      advancementPolicy = QualificationPlanEngine.automaticPolicyFor(
+        groupSizes: groupSizes,
+        totalQualifiers: parsed,
+      );
+    }
     syncQualificationDistribution(groupSizes);
+    maybeReturnToAutomatic(groupSizes);
   }
 
   void setKnockoutAdvancingCount(String value) {
@@ -161,8 +168,16 @@ class RunningRulesDraft {
       extraQualifierRank = null;
       extraQualifierCount = null;
       qualificationPlaceStatuses = const {};
+      advancementPolicy = QualificationPlanEngine.automaticPolicyFor(
+        groupSizes: groupSizes,
+        totalQualifiers: parsedQualifierCount ?? 0,
+      );
     }
     _bestOfQualifierCount.text = '${previous?.extraCount ?? 0}';
+    if (enabled) {
+      syncQualificationDistribution(groupSizes);
+      maybeReturnToAutomatic(groupSizes);
+    }
   }
 
   void setAdvancementPolicy(String value) {
@@ -174,9 +189,58 @@ class RunningRulesDraft {
     qualificationPlaceStatuses = const {};
   }
 
-  void setBestOfQualifierCount(String value) {
+  bool isManualOverride(List<int> groupSizes) {
+    if (!autoAdjust) return true;
+    final plan = planFor(groupSizes);
+    if (plan == null) return false;
+    final autoPolicy = QualificationPlanEngine.automaticPolicyFor(
+      groupSizes: groupSizes,
+      totalQualifiers: plan.totalQualifiers,
+    );
+    final autoPlan = const QualificationPlanEngine().build(
+      groupSizes: groupSizes,
+      totalQualifiers: plan.totalQualifiers,
+      autoAdjust: true,
+      advancementPolicy: autoPolicy,
+    );
+    return !_samePlan(plan, autoPlan);
+  }
+
+  void maybeReturnToAutomatic(List<int> groupSizes) {
+    final plan = planFor(groupSizes);
+    if (plan == null || !QualificationPlanEngine.isDistributionClear(plan)) {
+      return;
+    }
+    autoAdjust = true;
+    advancementPolicy = QualificationPlanEngine.automaticPolicyFor(
+      groupSizes: groupSizes,
+      totalQualifiers: plan.totalQualifiers,
+    );
+    extraQualifierRank = null;
+    extraQualifierCount = null;
+    qualificationPlaceStatuses = const {};
+    syncQualificationDistribution(groupSizes);
+  }
+
+  static bool _samePlan(QualificationPlan left, QualificationPlan right) {
+    return left.totalQualifiers == right.totalQualifiers &&
+        left.fixedPerGroup == right.fixedPerGroup &&
+        left.extraCount == right.extraCount &&
+        left.extraRank == right.extraRank &&
+        left.eligibleGroupSize == right.eligibleGroupSize &&
+        _sameInts(left.extraGroups, right.extraGroups) &&
+        _sameInts(left.fixedByGroup, right.fixedByGroup) &&
+        left.placeStatuses.length == right.placeStatuses.length &&
+        left.placeStatuses.entries.every(
+          (entry) => right.placeStatuses[entry.key] == entry.value,
+        );
+  }
+
+  void setBestOfQualifierCount(String value, List<int> groupSizes) {
+    autoAdjust = false;
     final parsed = int.tryParse(value.trim());
     extraQualifierCount = parsed == null || parsed < 0 ? 0 : parsed;
+    maybeReturnToAutomatic(groupSizes);
   }
 
   void setExtraGroup(
@@ -184,7 +248,9 @@ class RunningRulesDraft {
     bool selected,
     List<int> currentGroups,
     QualificationPlan? plan,
+    List<int> groupSizes,
   ) {
+    autoAdjust = false;
     final groups = <int>{
       ...(qualifiersByGroup.isEmpty ? currentGroups : qualifiersByGroup),
     };
@@ -202,6 +268,7 @@ class RunningRulesDraft {
             : QualificationPlaceStatus.eliminated.jsonValue,
       };
     }
+    maybeReturnToAutomatic(groupSizes);
   }
 
   void cycleQualificationPlace(
@@ -209,6 +276,7 @@ class RunningRulesDraft {
     int place,
     List<int> groupSizes,
   ) {
+    autoAdjust = false;
     final plan = planFor(groupSizes);
     if (plan == null ||
         groupNumber < 1 ||
@@ -258,6 +326,7 @@ class RunningRulesDraft {
         ),
       );
     }
+    maybeReturnToAutomatic(groupSizes);
   }
 
   void togglePlacementPlace(int place) {
@@ -426,62 +495,119 @@ class _RunningTournamentRulesPanelState
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 4),
-            DropdownButtonFormField<String>(
-              initialValue: widget.draft.advancementPolicy,
-              isExpanded: true,
-              decoration: const InputDecoration(border: OutlineInputBorder()),
-              items: const [
-                DropdownMenuItem(
-                  value: 'larger_group',
-                  child: Text('Größere Gruppe hat Vorrang'),
-                ),
-                DropdownMenuItem(
-                  value: 'best_rank',
-                  child: Text(
-                    'Beste X. Plätze gruppenübergreifend vergleichen',
+            Builder(
+              builder: (context) {
+                final canUseLargerGroup =
+                    QualificationPlanEngine.canUseLargerGroupPolicy(groupSizes);
+                final autoPolicy =
+                    QualificationPlanEngine.automaticPolicyFor(
+                  groupSizes: groupSizes,
+                  totalQualifiers: widget.draft.parsedQualifierCount ?? 0,
+                );
+                final resolvedPolicy =
+                    QualificationPlanEngine.resolveAdvancementPolicy(
+                  groupSizes: groupSizes,
+                  advancementPolicy: widget.draft.advancementPolicy,
+                );
+                final manualOverride = widget.draft.isManualOverride(groupSizes);
+                final showManualModes = !widget.draft.autoAdjust || manualOverride;
+                final effectiveValue = widget.draft.autoAdjust && !manualOverride
+                    ? 'automatic'
+                    : resolvedPolicy;
+                final items = <DropdownMenuItem<String>>[
+                  DropdownMenuItem(
+                    value: 'automatic',
+                    child: Text(
+                      'Automatisch (${autoPolicy == 'larger_group' ? 'Größere Gruppe hat Vorrang' : 'Gruppenübergreifend vergleichen'})',
+                    ),
                   ),
-                ),
-              ],
-              onChanged: widget.enabled
-                  ? (value) {
-                      if (value != null) {
-                        widget.draft.setAdvancementPolicy(value);
-                        _changed();
-                      }
-                    }
-                  : null,
+                  if (showManualModes)
+                    DropdownMenuItem(
+                      value: 'larger_group',
+                      enabled: canUseLargerGroup && !manualOverride,
+                      child: Text(
+                        canUseLargerGroup
+                            ? 'Größere Gruppe hat Vorrang'
+                            : 'Größere Gruppe hat Vorrang (nicht nötig bei gleich großen Gruppen)',
+                      ),
+                    ),
+                  if (showManualModes)
+                    DropdownMenuItem(
+                      value: 'best_rank',
+                      enabled: !manualOverride,
+                      child: const Text(
+                        'Beste X. Plätze gruppenübergreifend vergleichen',
+                      ),
+                    ),
+                ];
+                return DropdownButtonFormField<String>(
+                  initialValue: effectiveValue,
+                  isExpanded: true,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                  items: items,
+                  onChanged: widget.enabled
+                      ? (value) {
+                          if (value == null) return;
+                          if (value == 'automatic') {
+                            widget.draft.setAutoAdjust(true, groupSizes);
+                          } else {
+                            widget.draft.autoAdjust = false;
+                            widget.draft.setAdvancementPolicy(value);
+                            widget.draft.syncQualificationDistribution(groupSizes);
+                            widget.draft.maybeReturnToAutomatic(groupSizes);
+                          }
+                          _changed();
+                        }
+                      : null,
+                );
+              },
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final entry in {
-                  true: 'Automatik',
-                  false: 'Manuell',
-                }.entries)
-                  ChoiceChip(
-                    key: ValueKey('running-auto-adjust-${entry.key}'),
-                    avatar: Icon(
-                      entry.key
-                          ? Icons.auto_fix_high_outlined
-                          : Icons.tune_outlined,
-                      size: 18,
+            Builder(
+              builder: (context) {
+                final manualOverride = widget.draft.isManualOverride(groupSizes);
+                final selectedManual = !widget.draft.autoAdjust || manualOverride;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      key: const ValueKey('running-auto-adjust-true'),
+                      avatar: const Icon(Icons.auto_fix_high_outlined, size: 18),
+                      label: const Text('Automatik'),
+                      selected: !selectedManual,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      onSelected: widget.enabled
+                          ? (_) {
+                              widget.draft.setAutoAdjust(true, groupSizes);
+                              _changed();
+                            }
+                          : null,
                     ),
-                    label: Text(entry.value),
-                    selected: widget.draft.autoAdjust == entry.key,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
+                    ChoiceChip(
+                      key: const ValueKey('running-auto-adjust-false'),
+                      avatar: const Icon(Icons.tune_outlined, size: 18),
+                      label: const Text('Manuell'),
+                      selected: selectedManual,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      onSelected: widget.enabled
+                          ? (_) {
+                              if (!selectedManual) {
+                                widget.draft.setAutoAdjust(false, groupSizes);
+                                _changed();
+                              }
+                            }
+                          : null,
                     ),
-                    onSelected: widget.enabled
-                        ? (_) {
-                            widget.draft.setAutoAdjust(entry.key, groupSizes);
-                            _changed();
-                          }
-                        : null,
-                  ),
-              ],
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 12),
             QualificationRuleSummary(qualificationPlan: plan),
@@ -491,7 +617,9 @@ class _RunningTournamentRulesPanelState
                 width: 180,
                 child: TextField(
                   controller: widget.draft.bestOfQualifierCount,
-                  enabled: widget.enabled && !widget.draft.autoAdjust,
+                  enabled: widget.enabled &&
+                      (!widget.draft.autoAdjust ||
+                          widget.draft.isManualOverride(groupSizes)),
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -499,7 +627,7 @@ class _RunningTournamentRulesPanelState
                     prefixIcon: Icon(Icons.workspace_premium_outlined),
                   ),
                   onChanged: (value) {
-                    widget.draft.setBestOfQualifierCount(value);
+                    widget.draft.setBestOfQualifierCount(value, groupSizes);
                     _changed();
                   },
                 ),
@@ -549,6 +677,7 @@ class _RunningTournamentRulesPanelState
                                 selected,
                                 plan.extraGroups,
                                 plan,
+                                groupSizes,
                               );
                               _changed();
                             },

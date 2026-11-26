@@ -41,6 +41,71 @@ void main() {
       expect(plan.statusFor(3, 3), QualificationPlaceStatus.comparison);
     });
 
+    test('equal groups disable larger-group advantage and auto-adjust cleanly', () {
+      expect(QualificationPlanEngine.canUseLargerGroupPolicy(const [8, 8]), isFalse);
+      expect(
+        QualificationPlanEngine.automaticPolicyFor(
+          groupSizes: const [8, 8],
+          totalQualifiers: 6,
+        ),
+        'best_rank',
+      );
+
+      final plan = _engine.build(
+        groupSizes: const [8, 8],
+        totalQualifiers: 6,
+        autoAdjust: true,
+        advancementPolicy: 'larger_group',
+      );
+
+      expect(plan.fixedByGroup, [3, 3]);
+      expect(plan.extraCount, 0);
+      expect(plan.extraGroups, isEmpty);
+      expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
+    });
+
+    test('7 qualifiers in two equal groups keeps comparison automatic', () {
+      final plan = _engine.build(
+        groupSizes: const [8, 8],
+        totalQualifiers: 7,
+        autoAdjust: true,
+        advancementPolicy: 'larger_group',
+      );
+
+      expect(plan.fixedByGroup, [3, 3]);
+      expect(plan.extraRank, 4);
+      expect(plan.extraCount, 1);
+      expect(plan.extraGroups, [1, 2]);
+      expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
+    });
+
+    test('8 qualifiers in two equal groups of 8 need no comparison', () {
+      final plan = _engine.build(
+        groupSizes: const [8, 8],
+        totalQualifiers: 8,
+        autoAdjust: true,
+        advancementPolicy: 'larger_group',
+      );
+
+      expect(plan.fixedByGroup, [4, 4]);
+      expect(plan.extraCount, 0);
+      expect(plan.extraGroups, isEmpty);
+      expect(QualificationPlanEngine.isDistributionClear(plan), isTrue);
+    });
+
+    test('reducing qualifiers from 8 to 6 in two 8er groups yields 3/3', () {
+      final plan = _engine.build(
+        groupSizes: const [8, 8],
+        totalQualifiers: 6,
+        autoAdjust: true,
+        advancementPolicy: 'larger_group',
+      );
+
+      expect(plan.fixedByGroup, [3, 3]);
+      expect(plan.extraCount, 0);
+      expect(plan.extraGroups, isEmpty);
+    });
+
     test('manual fixed third place consumes one comparison slot, not an extra slot', () {
       final plan = _engine.build(
         groupSizes: const [6, 5, 5],

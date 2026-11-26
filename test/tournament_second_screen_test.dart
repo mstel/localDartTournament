@@ -2381,8 +2381,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('KO · Turnierbaum-Vorschau'), findsOneWidget);
-    expect(find.text('Finale / Spiel um Platz 3'), findsOneWidget);
-    expect(find.text('Begegnung um Platz 3'), findsOneWidget);
+    expect(find.text('Platzierungsspiele'), findsOneWidget);
+    expect(find.text('Spiel um Platz 3'), findsWidgets);
+    expect(find.text('Finale / Spiel um Platz 3'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

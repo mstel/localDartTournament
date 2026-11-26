@@ -43,16 +43,21 @@ class QualificationPlanEngine {
     final baseFixed = [
       for (final size in groupSizes) min(baseFixedPerGroup, max(0, size)),
     ];
+    final resolvedPolicy = resolveAdvancementPolicy(
+      groupSizes: groupSizes,
+      advancementPolicy: advancementPolicy,
+    );
 
     if (autoAdjust) {
-      final fixed = advancementPolicy == 'larger_group'
+      final fixed = resolvedPolicy == 'larger_group'
           ? _allocateLargerGroupBonus(
               groupSizes: groupSizes,
               baseFixed: baseFixed,
               totalQualifiers: cappedTotal,
             )
           : List<int>.from(baseFixed);
-      var remaining = cappedTotal - fixed.fold<int>(0, (sum, value) => sum + value);
+      var remaining =
+          cappedTotal - fixed.fold<int>(0, (sum, value) => sum + value);
       remaining = _reduceExtraSlotsWhenNecessary(
         groupSizes: groupSizes,
         fixed: fixed,
@@ -185,6 +190,112 @@ class QualificationPlanEngine {
     return [
       'Es kommen ${advancingCount - plan.totalQualifiers} Teilnehmer zu viel weiter. Reduziere "Beste-N Weiter" oder feste Plätze.',
     ];
+  }
+
+  static bool hasEqualGroupSizes(List<int> groupSizes) {
+    final nonEmpty = groupSizes.where((size) => size > 0).toList();
+    return nonEmpty.isEmpty || nonEmpty.toSet().length == 1;
+  }
+
+  static String resolveAdvancementPolicy({
+    required List<int> groupSizes,
+    required String advancementPolicy,
+  }) {
+    if (hasEqualGroupSizes(groupSizes)) return 'best_rank';
+    return advancementPolicy == 'best_rank' ? 'best_rank' : 'larger_group';
+  }
+
+  static bool canUseLargerGroupPolicy(List<int> groupSizes) =>
+      !hasEqualGroupSizes(groupSizes);
+
+  static bool isDistributionClear(QualificationPlan plan) {
+    if (plan.totalQualifiers <= 0) return true;
+    if (plan.extraCount <= 0) return true;
+    return plan.extraCount == plan.extraGroups.length &&
+        plan.lockedComparisonSlots == 0;
+  }
+
+  static String automaticPolicyFor({
+    required List<int> groupSizes,
+    required int totalQualifiers,
+  }) {
+    if (groupSizes.isEmpty) return 'best_rank';
+    final groupCount = groupSizes.length;
+    final cappedTotal = min(
+      max(0, totalQualifiers),
+      groupSizes.fold<int>(0, (sum, size) => sum + max(0, size)),
+    );
+    final baseFixedPerGroup = cappedTotal ~/ groupCount;
+    final baseFixed = [
+      for (final size in groupSizes) min(baseFixedPerGroup, max(0, size)),
+    ];
+    final remaining =
+        cappedTotal - baseFixed.fold<int>(0, (sum, value) => sum + value);
+    if (remaining <= 0) return 'best_rank';
+    if (hasEqualGroupSizes(groupSizes)) return 'best_rank';
+    final largerFixed = _allocateLargerGroupBonusStatic(
+      groupSizes: groupSizes,
+      baseFixed: baseFixed,
+      totalQualifiers: cappedTotal,
+    );
+    final largerRemaining =
+        cappedTotal - largerFixed.fold<int>(0, (sum, value) => sum + value);
+    final largerRank = _effectiveExtraRankStatic(
+      groupSizes: groupSizes,
+      fixed: largerFixed,
+      baseFixedPerGroup: baseFixedPerGroup,
+      neededSlots: largerRemaining,
+    );
+    final largerEligible = _eligibleGroupsStatic(
+      groupSizes: groupSizes,
+      fixed: largerFixed,
+      extraRank: largerRank,
+    );
+    if (largerRemaining > 0 && largerRemaining == largerEligible.length) {
+      return 'best_rank';
+    }
+    return 'larger_group';
+  }
+
+  static List<int> _allocateLargerGroupBonusStatic({
+    required List<int> groupSizes,
+    required List<int> baseFixed,
+    required int totalQualifiers,
+  }) {
+    const engine = QualificationPlanEngine();
+    return engine._allocateLargerGroupBonus(
+      groupSizes: groupSizes,
+      baseFixed: baseFixed,
+      totalQualifiers: totalQualifiers,
+    );
+  }
+
+  static int _effectiveExtraRankStatic({
+    required List<int> groupSizes,
+    required List<int> fixed,
+    required int baseFixedPerGroup,
+    required int neededSlots,
+  }) {
+    const engine = QualificationPlanEngine();
+    return engine._effectiveExtraRank(
+      groupSizes: groupSizes,
+      fixed: fixed,
+      baseFixedPerGroup: baseFixedPerGroup,
+      neededSlots: neededSlots,
+    );
+  }
+
+  static List<int> _eligibleGroupsStatic({
+    required List<int> groupSizes,
+    required List<int> fixed,
+    required int extraRank,
+  }) {
+    const engine = QualificationPlanEngine();
+    return engine._eligibleGroups(
+      groupSizes: groupSizes,
+      fixed: fixed,
+      extraRank: extraRank,
+    );
   }
 
   /// Größere Gruppen erhalten vorrang einen festen Platz. Kann eine

@@ -889,6 +889,30 @@ class _GroupQualificationSetup extends StatelessWidget {
     return const QualificationPlanEngine().validationMessages(plan);
   }
 
+  bool _isManualOverride(QualificationPlan plan) {
+    if (!autoAdjust) return true;
+    final autoPolicy = QualificationPlanEngine.automaticPolicyFor(
+      groupSizes: groupSizes,
+      totalQualifiers: plan.totalQualifiers,
+    );
+    final autoPlan = const QualificationPlanEngine().build(
+      groupSizes: groupSizes,
+      totalQualifiers: plan.totalQualifiers,
+      autoAdjust: true,
+      advancementPolicy: autoPolicy,
+    );
+    return plan.totalQualifiers != autoPlan.totalQualifiers ||
+        plan.fixedPerGroup != autoPlan.fixedPerGroup ||
+        plan.extraCount != autoPlan.extraCount ||
+        plan.extraRank != autoPlan.extraRank ||
+        plan.extraGroups.join(',') != autoPlan.extraGroups.join(',') ||
+        plan.fixedByGroup.join(',') != autoPlan.fixedByGroup.join(',') ||
+        plan.placeStatuses.length != autoPlan.placeStatuses.length ||
+        plan.placeStatuses.entries.any(
+          (entry) => autoPlan.placeStatuses[entry.key] != entry.value,
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (groupSizes.isEmpty) {
@@ -897,6 +921,21 @@ class _GroupQualificationSetup extends StatelessWidget {
         child: Text('Erst Teilnehmer und Gruppen anlegen.'),
       );
     }
+    final plan = qualificationPlan;
+    final canUseLargerGroup =
+        QualificationPlanEngine.canUseLargerGroupPolicy(groupSizes);
+    final autoPolicy = QualificationPlanEngine.automaticPolicyFor(
+      groupSizes: groupSizes,
+      totalQualifiers: plan?.totalQualifiers ?? 0,
+    );
+    final resolvedPolicy = QualificationPlanEngine.resolveAdvancementPolicy(
+      groupSizes: groupSizes,
+      advancementPolicy: advancementPolicy,
+    );
+    final manualOverride = plan != null && _isManualOverride(plan);
+    final showManualModes = !autoAdjust || manualOverride;
+    final effectiveValue =
+        autoAdjust && !manualOverride ? 'automatic' : resolvedPolicy;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -906,59 +945,83 @@ class _GroupQualificationSetup extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
-        if (autoAdjust)
-          DropdownButtonFormField<String>(
-            initialValue: advancementPolicy,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Zusätzliche Qualifikationsplätze',
-              border: OutlineInputBorder(),
+        DropdownButtonFormField<String>(
+          initialValue: effectiveValue,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Zusätzliche Qualifikationsplätze',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(
+              value: 'automatic',
+              child: Text(
+                'Automatisch (${autoPolicy == 'larger_group' ? 'Größere Gruppe hat Vorrang' : 'Gruppenübergreifend vergleichen'})',
+              ),
             ),
-            items: const [
+            if (showManualModes)
               DropdownMenuItem(
                 value: 'larger_group',
-                child: Text('Größere Gruppe hat Vorrang'),
+                enabled: canUseLargerGroup && !manualOverride,
+                child: Text(
+                  canUseLargerGroup
+                      ? 'Größere Gruppe hat Vorrang'
+                      : 'Größere Gruppe hat Vorrang (nicht nötig bei gleich großen Gruppen)',
+                ),
               ),
+            if (showManualModes)
               DropdownMenuItem(
                 value: 'best_rank',
-                child: Text('Beste X. Plätze gruppenübergreifend vergleichen'),
+                enabled: !manualOverride,
+                child: const Text(
+                  'Beste X. Plätze gruppenübergreifend vergleichen',
+                ),
               ),
-            ],
-            onChanged: (value) {
-              if (value != null) onAdvancementPolicyChanged(value);
-            },
-          ),
-        if (autoAdjust) const SizedBox(height: 8),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            if (value == 'automatic') {
+              onAutoAdjustChanged(true);
+            } else {
+              onAdvancementPolicyChanged(value);
+            }
+          },
+        ),
+        const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
-          child: SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(
-                value: true,
-                icon: Icon(Icons.auto_fix_high_outlined),
-                label: Text('Automatik'),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                avatar: const Icon(Icons.auto_fix_high_outlined, size: 18),
+                label: const Text('Automatik'),
+                selected: autoAdjust && !manualOverride,
+                onSelected: (_) => onAutoAdjustChanged(true),
               ),
-              ButtonSegment(
-                value: false,
-                icon: Icon(Icons.tune_outlined),
-                label: Text('Manuell'),
+              ChoiceChip(
+                avatar: const Icon(Icons.tune_outlined, size: 18),
+                label: const Text('Manuell'),
+                selected: !autoAdjust || manualOverride,
+                onSelected: (_) {
+                  if (autoAdjust && !manualOverride) {
+                    onAutoAdjustChanged(false);
+                  }
+                },
               ),
             ],
-            selected: {autoAdjust},
-            onSelectionChanged: (selection) {
-              onAutoAdjustChanged(selection.first);
-            },
           ),
         ),
         const SizedBox(height: 8),
-        QualificationRuleSummary(qualificationPlan: qualificationPlan),
-        if (qualificationPlan != null) ...[
+        QualificationRuleSummary(qualificationPlan: plan),
+        if (plan != null) ...[
           const SizedBox(height: 8),
           SizedBox(
             width: 180,
             child: TextField(
               controller: bestOfQualifierCountController,
-              enabled: !autoAdjust,
+              enabled: !autoAdjust || manualOverride,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
@@ -969,25 +1032,25 @@ class _GroupQualificationSetup extends StatelessWidget {
             ),
           ),
         ],
-        for (final message in _validationMessages(qualificationPlan)) ...[
+        for (final message in _validationMessages(plan)) ...[
           const SizedBox(height: 8),
           QualificationErrorBanner(message: message),
         ],
         const SizedBox(height: 12),
         QualificationGroupPreview(
           groupSizes: groupSizes,
-          qualificationPlan: qualificationPlan,
+          qualificationPlan: plan,
           onCyclePlace: onCyclePlace,
         ),
         _GroupEliminationPreviewSection(
           groupSizes: groupSizes,
           groupPlayTypes: groupPlayTypes,
-          qualificationPlan: qualificationPlan,
+          qualificationPlan: plan,
         ),
-        if (qualificationPlan != null && qualificationPlan!.extraCount > 0) ...[
+        if (plan != null && plan.extraCount > 0) ...[
           const SizedBox(height: 12),
           Text(
-            'Gruppen im Beste-${qualificationPlan!.extraCount}-Vergleich',
+            'Gruppen im Beste-${plan.extraCount}-Vergleich',
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 8),
@@ -999,13 +1062,13 @@ class _GroupQualificationSetup extends StatelessWidget {
                 FilterChip(
                   key: ValueKey('extra-group-chip-${index + 1}'),
                   label: Text(groupLabel(index + 1)),
-                  selected: qualificationPlan!.extraGroups.contains(index + 1),
-                  onSelected: groupSizes[index] < qualificationPlan!.extraRank
+                  selected: plan.extraGroups.contains(index + 1),
+                  onSelected: groupSizes[index] < plan.extraRank
                       ? null
                       : (selected) => onSetExtraGroup(
                           index + 1,
                           selected,
-                          qualificationPlan!.extraGroups,
+                          plan.extraGroups,
                         ),
                 ),
             ],

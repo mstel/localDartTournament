@@ -3009,7 +3009,12 @@ class _TournamentSecondScreenViewState
             ? const SizedBox.shrink()
             : SingleChildScrollView(child: LeagueOverview(league: league));
       case 'nextStagePreview':
-        return const SizedBox.shrink();
+        return _buildNextStagePreview(
+          context,
+          tournament,
+          activeIndex,
+          activeStage,
+        );
       case 'kratzerLives':
         return SingleChildScrollView(
           child: _buildKratzerLivesPanel(context, tournament, activeStage),
@@ -4165,45 +4170,7 @@ class _TournamentSecondScreenViewState
     return null;
   }
 
-  /// Fügt Platzierungsspiele als eigene Spalte in die Vorschau ein, damit sie
-  /// genauso sichtbar sind wie im Turnierbaum unter „Partien & Ergebnisse“.
-  List<List<GroupMatch>> _previewRoundsWithPlacement(
-    KnockoutTournamentRunStage stage, {
-    List<GroupMatch>? placementMatches,
-  }) {
-    final rounds = stage.rounds;
-    placementMatches ??= stage.placementMatches;
-    if (placementMatches.isEmpty) return rounds;
-    if (rounds.isEmpty) return [placementMatches];
 
-    final displayRounds = [
-      for (final round in rounds) List<GroupMatch>.from(round),
-    ];
-    final fifthSemis = placementMatches
-        .where(
-          (match) => match.label?.startsWith('Platz 5 Halbfinale') ?? false,
-        )
-        .toList();
-    final finalColumnMatches = placementMatches
-        .where(
-          (match) =>
-              match.label == 'Spiel um Platz 3' ||
-              match.label == 'Spiel um Platz 5' ||
-              match.label == 'Spiel um Platz 7',
-        )
-        .toList();
-
-    if (fifthSemis.isNotEmpty) {
-      final targetIndex = displayRounds.length >= 2
-          ? displayRounds.length - 2
-          : displayRounds.length - 1;
-      displayRounds[targetIndex].addAll(fifthSemis);
-    }
-    if (finalColumnMatches.isNotEmpty) {
-      displayRounds.add(finalColumnMatches);
-    }
-    return displayRounds;
-  }
 
   Widget _buildNextStagePreview(
     BuildContext context,
@@ -4292,43 +4259,39 @@ class _TournamentSecondScreenViewState
         presentedPlayers,
       );
       if (rebuiltStage is KnockoutTournamentRunStage) {
-        previewStage = rebuiltStage;
+        final preservedPlacement = previewStage.placementMatches.isNotEmpty
+            ? previewStage.placementMatches
+            : stage.placementMatches;
+        previewStage = preservedPlacement.isEmpty
+            ? rebuiltStage
+            : KnockoutTournamentRunStage(
+                name: rebuiltStage.name,
+                rounds: rebuiltStage.rounds,
+                placementMatches: preservedPlacement,
+                eliminationLossLimit: rebuiltStage.eliminationLossLimit,
+                finalEndsTournament: rebuiltStage.finalEndsTournament,
+                isKratzer: rebuiltStage.isKratzer,
+                kratzerPlayersPerBoard: rebuiltStage.kratzerPlayersPerBoard,
+                kratzerPreferSameScratchCount:
+                    rebuiltStage.kratzerPreferSameScratchCount,
+                kratzerPlayUntilElimination:
+                    rebuiltStage.kratzerPlayUntilElimination,
+                kratzerBonusLifeFor180: rebuiltStage.kratzerBonusLifeFor180,
+                kratzerBonusLifeForHighFinish:
+                    rebuiltStage.kratzerBonusLifeForHighFinish,
+                kratzerHandicapsEnabled: rebuiltStage.kratzerHandicapsEnabled,
+                kratzerHandicaps: rebuiltStage.kratzerHandicaps,
+                kratzerHandicapAssignments:
+                    rebuiltStage.kratzerHandicapAssignments,
+                participants: rebuiltStage.participants,
+              );
       }
     }
     final groupStageIsSet =
         groupStage != null &&
         const GroupStagePreviewService().isStageSet(groupStage);
-    final rounds = _previewRoundsWithPlacement(
-      previewStage,
-      placementMatches: previewStage.placementMatches.isNotEmpty
-          ? previewStage.placementMatches
-          : stage.placementMatches,
-    );
-
-    // Einzel-KO: Die Vorschau zeigt die bereits zusammengeführten Runden
-    // (inklusive Platzierungsspiel) im gemeinsamen Turnierbaum. Doppel-/Triple-
-    // KO überlässt die Struktur dem gemeinsamen Baum.
-    final displayStage = previewStage.eliminationLossLimit <= 1
-        ? KnockoutTournamentRunStage(
-            name: previewStage.name,
-            rounds: rounds,
-            eliminationLossLimit: previewStage.eliminationLossLimit,
-            finalEndsTournament: previewStage.finalEndsTournament,
-            isKratzer: previewStage.isKratzer,
-            kratzerPlayersPerBoard: previewStage.kratzerPlayersPerBoard,
-            kratzerPreferSameScratchCount:
-                previewStage.kratzerPreferSameScratchCount,
-            kratzerPlayUntilElimination:
-                previewStage.kratzerPlayUntilElimination,
-            kratzerBonusLifeFor180: previewStage.kratzerBonusLifeFor180,
-            kratzerBonusLifeForHighFinish:
-                previewStage.kratzerBonusLifeForHighFinish,
-            kratzerHandicapsEnabled: previewStage.kratzerHandicapsEnabled,
-            kratzerHandicaps: previewStage.kratzerHandicaps,
-            kratzerHandicapAssignments: previewStage.kratzerHandicapAssignments,
-            participants: previewStage.participants,
-          )
-        : previewStage;
+    final rounds = previewStage.rounds;
+    final displayStage = previewStage;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
