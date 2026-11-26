@@ -69,6 +69,7 @@ import 'features/tournaments/application/tournament_director_snapshot.dart';
 import 'features/tournaments/application/group_stage_preview_service.dart';
 import 'features/tournaments/application/group_end_review_service.dart';
 import 'features/tournaments/application/group_assignment_preservation.dart';
+import 'features/tournaments/application/running_rules_propagation.dart';
 import 'features/tournaments/application/tournament_info_summary.dart';
 import 'features/tournaments/domain/second_screen_dialog_requests.dart';
 import 'features/tournaments/presentation/widgets/run/brackets/knockout_seeding_mode_label.dart';

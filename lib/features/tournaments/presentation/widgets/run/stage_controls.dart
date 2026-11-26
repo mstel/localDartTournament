@@ -39,6 +39,7 @@ class StageProgressBar extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: SportSectionNavigation<int>(
+              key: const ValueKey('stage-phase-switcher'),
               label: 'Phase',
               selected: activeStageIndex,
               onChanged: onStageSelected,
@@ -58,6 +59,7 @@ class StageProgressBar extends StatelessWidget {
         return Material(
           color: colorScheme.surface,
           child: SingleChildScrollView(
+            key: const ValueKey('stage-phase-switcher'),
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(

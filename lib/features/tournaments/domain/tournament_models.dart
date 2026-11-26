@@ -755,10 +755,21 @@ class TournamentStage {
     String? groupAssignmentMode,
     List<String>? groupMatchmakingStrategies,
     Map<String, int>? groupMatchmakingRatings,
+    int? knockoutParticipantCount,
+    int? knockoutAdvancingCount,
+    int? knockoutBracketSize,
+    int? knockoutByeCount,
     List<int?>? knockoutSlotOrder,
+    String? knockoutSeedingMode,
     bool? knockoutDrawOnStart,
     String? qualificationAdvancementPolicy,
+    int? qualifiedParticipantCount,
+    List<int>? qualifiersByGroup,
+    List<int>? fixedQualifiersByGroup,
+    int? extraQualifierRank,
+    int? extraQualifierCount,
     Map<String, String>? qualificationPlaceStatuses,
+    List<int>? placementPlaces,
     bool? kratzerHandicapsEnabled,
     List<String>? kratzerHandicaps,
     Map<int, String>? kratzerHandicapAssignments,
@@ -777,7 +788,7 @@ class TournamentStage {
     kratzerHandicaps: kratzerHandicaps ?? this.kratzerHandicaps,
     kratzerHandicapAssignments:
         kratzerHandicapAssignments ?? this.kratzerHandicapAssignments,
-    placementPlaces: placementPlaces,
+    placementPlaces: placementPlaces ?? this.placementPlaces,
     groupCount: groupCount,
     groupSizes: groupSizes,
     groupPlayType: groupPlayType,
@@ -796,25 +807,105 @@ class TournamentStage {
     groupSlotOrder: groupSlotOrder ?? this.groupSlotOrder,
     groupDrawCompleted: groupDrawCompleted ?? this.groupDrawCompleted,
     groupAssignmentMode: groupAssignmentMode ?? this.groupAssignmentMode,
-    knockoutParticipantCount: knockoutParticipantCount,
-    knockoutAdvancingCount: knockoutAdvancingCount,
-    knockoutBracketSize: knockoutBracketSize,
-    knockoutByeCount: knockoutByeCount,
+    knockoutParticipantCount:
+        knockoutParticipantCount ?? this.knockoutParticipantCount,
+    knockoutAdvancingCount:
+        knockoutAdvancingCount ?? this.knockoutAdvancingCount,
+    knockoutBracketSize: knockoutBracketSize ?? this.knockoutBracketSize,
+    knockoutByeCount: knockoutByeCount ?? this.knockoutByeCount,
     knockoutSlotOrder: knockoutSlotOrder ?? this.knockoutSlotOrder,
-    knockoutSeedingMode: knockoutSeedingMode,
+    knockoutSeedingMode: knockoutSeedingMode ?? this.knockoutSeedingMode,
     knockoutDrawOnStart: knockoutDrawOnStart ?? this.knockoutDrawOnStart,
+    qualifiersByGroup: qualifiersByGroup ?? this.qualifiersByGroup,
+    fixedQualifiersByGroup:
+        fixedQualifiersByGroup ?? this.fixedQualifiersByGroup,
+    extraQualifierRank: extraQualifierRank ?? this.extraQualifierRank,
+    extraQualifierCount: extraQualifierCount ?? this.extraQualifierCount,
+    qualificationAutoAdjust: qualificationAutoAdjust,
+    qualificationAdvancementPolicy:
+        qualificationAdvancementPolicy ?? this.qualificationAdvancementPolicy,
+    qualifiedParticipantCount:
+        qualifiedParticipantCount ?? this.qualifiedParticipantCount,
+    qualificationSummary: qualificationSummary,
+    qualificationPlaceStatuses:
+        qualificationPlaceStatuses ?? this.qualificationPlaceStatuses,
+    gameFormat: gameFormat,
+  );
+
+  /// Erzeugt eine Kopie mit explizit gesetzten KO-Planungswerten.
+  ///
+  /// [copyWith] behält nullable Werte bewusst bei. Für Folge-Phasen müssen
+  /// diese Werte aber auch auf `null` gesetzt werden können, wenn z. B. eine
+  /// KO-Phase vollständig ausgespielt wird.
+  TournamentStage withKnockoutPlan({
+    required int participantCount,
+    required int bracketSize,
+    required int byeCount,
+    required List<int?> slotOrder,
+    required String seedingMode,
+    required int? advancingCount,
+    required List<int> placementPlaces,
+  }) => TournamentStage(
+    name: name,
+    type: type,
+    finalEndsTournament: finalEndsTournament,
+    knockoutLives: knockoutLives,
+    kratzerPlayersPerBoard: kratzerPlayersPerBoard,
+    kratzerPreferSameScratchCount: kratzerPreferSameScratchCount,
+    kratzerPlayUntilElimination: kratzerPlayUntilElimination,
+    kratzerBonusLifeFor180: kratzerBonusLifeFor180,
+    kratzerBonusLifeForHighFinish: kratzerBonusLifeForHighFinish,
+    kratzerHandicapsEnabled: kratzerHandicapsEnabled,
+    kratzerHandicaps: kratzerHandicaps,
+    kratzerHandicapAssignments: kratzerHandicapAssignments,
+    placementPlaces: placementPlaces,
+    groupCount: groupCount,
+    groupSizes: groupSizes,
+    groupPlayType: groupPlayType,
+    groupPlayTypes: groupPlayTypes,
+    groupRoundRobinRepeats: groupRoundRobinRepeats,
+    groupMaxGamesPerPlayer: groupMaxGamesPerPlayer,
+    groupMatchmakingStrategies: groupMatchmakingStrategies,
+    groupMatchmakingRatings: groupMatchmakingRatings,
+    groupTieBreakers: groupTieBreakers,
+    allowGroupTieBreakDeciders: allowGroupTieBreakDeciders,
+    tieBreakGameFormat: tieBreakGameFormat,
+    groupDrawOnStart: groupDrawOnStart,
+    groupSlotOrder: groupSlotOrder,
+    groupDrawCompleted: groupDrawCompleted,
+    groupAssignmentMode: groupAssignmentMode,
+    knockoutParticipantCount: participantCount,
+    knockoutAdvancingCount: advancingCount,
+    knockoutBracketSize: bracketSize,
+    knockoutByeCount: byeCount,
+    knockoutSlotOrder: slotOrder,
+    knockoutSeedingMode: seedingMode,
+    knockoutDrawOnStart: knockoutDrawOnStart,
     qualifiersByGroup: qualifiersByGroup,
     fixedQualifiersByGroup: fixedQualifiersByGroup,
     extraQualifierRank: extraQualifierRank,
     extraQualifierCount: extraQualifierCount,
     qualificationAutoAdjust: qualificationAutoAdjust,
-    qualificationAdvancementPolicy:
-        qualificationAdvancementPolicy ?? this.qualificationAdvancementPolicy,
+    qualificationAdvancementPolicy: qualificationAdvancementPolicy,
     qualifiedParticipantCount: qualifiedParticipantCount,
     qualificationSummary: qualificationSummary,
-    qualificationPlaceStatuses:
-        qualificationPlaceStatuses ?? this.qualificationPlaceStatuses,
+    qualificationPlaceStatuses: qualificationPlaceStatuses,
     gameFormat: gameFormat,
+  );
+
+  /// Wendet nur die KO-spezifischen Laufregeln an und behält die Planungswerte.
+  TournamentStage withKnockoutRunningRules({
+    required int? advancingCount,
+    required String seedingMode,
+    required List<int> placementPlaces,
+  }) => withKnockoutPlan(
+    participantCount: knockoutParticipantCount ?? 0,
+    bracketSize: knockoutBracketSize ?? 0,
+    byeCount: knockoutByeCount,
+    slotOrder: knockoutSlotOrder,
+    seedingMode: seedingMode,
+    advancingCount: advancingCount,
+    placementPlaces: placementPlaces,
   );
 
   /// Wendet die während des Laufs editierbaren Regeloptionen an.

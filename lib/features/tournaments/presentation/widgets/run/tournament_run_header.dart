@@ -15,6 +15,7 @@ class TournamentRunHeader extends StatelessWidget {
     required this.onModeChanged,
     this.canLead = true,
     this.directorModeEnabled = false,
+    this.showStageSwitcher = true,
   });
   final CreatedTournament tournament;
   final int stageIndex;
@@ -24,6 +25,7 @@ class TournamentRunHeader extends StatelessWidget {
   final ValueChanged<StageViewMode> onModeChanged;
   final bool canLead;
   final bool directorModeEnabled;
+  final bool showStageSwitcher;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -37,7 +39,9 @@ class TournamentRunHeader extends StatelessWidget {
           canLead: canLead,
           directorModeEnabled: directorModeEnabled,
         ),
-        if (tournament.runStages.length > 1 && mode != StageViewMode.director)
+        if (showStageSwitcher &&
+            tournament.runStages.length > 1 &&
+            mode != StageViewMode.director)
           StageProgressBar(
             stages: tournament.runStages,
             activeStageIndex: stageIndex,

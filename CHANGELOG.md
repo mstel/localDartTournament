@@ -1,6 +1,7 @@
-# Unreleased
+# 4.0.8+138
 
 - Scolia: Ein vorhandener Messpunkt zwingt die Eingabemaske nicht mehr in den Scolia-Reiter; der Wechsel zurück zu „Monatswerte“ bleibt möglich. Dort wird manuelle Speicherung so lange gesperrt und erklärt, bis der zugehörige Messpunkt zurückgesetzt wurde. Früher leere Monatsdatensätze mit 0 Legs werden aus den bewerteten Turnierlegs des Monats vorgeschlagen und beim Speichern korrigiert. Pro Monat gibt es außerdem einen zurücksetzen-Button, der den Scolia-Messpunkt löscht und die abhängigen Monatswerte neu berechnet; manuell erfasste Monate bleiben unberührt.
+- Laufendes Turnier: Die Einstellungen zeigen Weiterkommensregeln, Auslosungsmethode und optionale Platzierungsspiele der automatisch erkannten Folge-KO-Phase direkt mit an; der Phasen-Umschalter ist in den Einstellungen ausgeblendet. Änderungen an der Weiterkommenszahl ziehen die Verteilung im Detail sowie die Planung der Folgephasen nach, ohne laufende Phase oder bereits erfasste Ergebnisse zurückzusetzen. KO-Baum-/Zweitmonitor-Vorschau und Folgephasen übernehmen die neue Teilnehmerzahl.
 
 # 4.0.7+137
 

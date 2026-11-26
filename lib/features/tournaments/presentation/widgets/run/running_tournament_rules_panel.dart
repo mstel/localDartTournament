@@ -11,31 +11,37 @@ import 'brackets/knockout_seeding_mode_label.dart';
 /// Textfelder und die abgeleiteten Qualifikationsdaten zusammen, damit die
 /// Laufseite ihn unverändert speichern kann.
 class RunningRulesDraft {
-  RunningRulesDraft.fromStage(TournamentStage stage)
-    : stageIndex = -1,
-      _qualifiedParticipantCount = TextEditingController(
-        text: '${stage.qualifiedParticipantCount ?? 0}',
-      ),
-      _bestOfQualifierCount = TextEditingController(
-        text: '${stage.extraQualifierCount ?? 0}',
-      ),
-      _knockoutAdvancingCount = TextEditingController(
-        text: stage.knockoutAdvancingCount?.toString() ?? '',
-      ),
-      playsKnockoutFully = stage.knockoutAdvancingCount == null,
-      autoAdjust = stage.qualificationAutoAdjust,
-      advancementPolicy = stage.qualificationAdvancementPolicy,
-      qualifiersByGroup = List<int>.from(stage.qualifiersByGroup),
-      fixedQualifiersByGroup = List<int>.from(stage.fixedQualifiersByGroup),
-      extraQualifierRank = stage.extraQualifierRank,
-      extraQualifierCount = stage.extraQualifierCount,
-      qualificationPlaceStatuses = Map<String, String>.from(
-        stage.qualificationPlaceStatuses,
-      ),
-      knockoutSeedingMode = stage.knockoutSeedingMode,
-      placementPlaces = List<int>.from(stage.placementPlaces);
+  RunningRulesDraft.fromStage(
+    TournamentStage stage, {
+    TournamentStage? knockoutStage,
+    this.knockoutStageIndex = -1,
+  }) : _qualifiedParticipantCount = TextEditingController(
+         text: '${stage.qualifiedParticipantCount ?? 0}',
+       ),
+       _bestOfQualifierCount = TextEditingController(
+         text: '${stage.extraQualifierCount ?? 0}',
+       ),
+       _knockoutAdvancingCount = TextEditingController(
+         text: (knockoutStage ?? stage).knockoutAdvancingCount?.toString() ??
+             '',
+       ),
+       playsKnockoutFully =
+           (knockoutStage ?? stage).knockoutAdvancingCount == null,
+       autoAdjust = stage.qualificationAutoAdjust,
+       advancementPolicy = stage.qualificationAdvancementPolicy,
+       qualifiersByGroup = List<int>.from(stage.qualifiersByGroup),
+       fixedQualifiersByGroup = List<int>.from(stage.fixedQualifiersByGroup),
+       extraQualifierRank = stage.extraQualifierRank,
+       extraQualifierCount = stage.extraQualifierCount,
+       qualificationPlaceStatuses = Map<String, String>.from(
+         stage.qualificationPlaceStatuses,
+       ),
+       knockoutSeedingMode = (knockoutStage ?? stage).knockoutSeedingMode,
+       placementPlaces = List<int>.from(
+         (knockoutStage ?? stage).placementPlaces,
+       );
 
-  final int stageIndex;
+  final int knockoutStageIndex;
 
   final TextEditingController _qualifiedParticipantCount;
   final TextEditingController _bestOfQualifierCount;
@@ -89,10 +95,34 @@ class RunningRulesDraft {
     );
   }
 
-  void setQualifierCount(String value) {
+  /// Schreibt die aus der neuen Weiterkommenszahl abgeleitete Verteilung
+  /// zurück in den Entwurf, damit „Weiterkommen im Detail“ nach dem
+  /// Übernehmen nicht mehr die alte Aufteilung zeigt.
+  void syncQualificationDistribution(List<int> groupSizes) {
+    final plan = planFor(groupSizes);
+    if (plan == null) return;
+    fixedQualifiersByGroup = List<int>.from(plan.fixedByGroup);
+    qualifiersByGroup = List<int>.from(plan.extraGroups);
+    extraQualifierRank = plan.extraRank;
+    extraQualifierCount = plan.extraCount;
+    qualificationPlaceStatuses = Map<String, String>.from(
+      plan.placeStatuses.map(
+        (key, value) => MapEntry(key, value.jsonValue),
+      ),
+    );
+    _bestOfQualifierCount.text = '${plan.extraCount}';
+  }
+
+  void setQualifierCount(String value, List<int> groupSizes) {
     final parsed = int.tryParse(value.trim());
     if (parsed == null || parsed < 0) return;
     _qualifiedParticipantCount.text = '$parsed';
+    fixedQualifiersByGroup = const [];
+    qualifiersByGroup = const [];
+    extraQualifierRank = null;
+    extraQualifierCount = null;
+    qualificationPlaceStatuses = const {};
+    syncQualificationDistribution(groupSizes);
   }
 
   void setKnockoutAdvancingCount(String value) {
@@ -238,44 +268,74 @@ class RunningRulesDraft {
           ..sort();
   }
 
-  bool hasChanges(TournamentStage stage) {
+  bool hasChanges(
+    TournamentStage stage, {
+    TournamentStage? knockoutStage,
+  }) {
     final plan = planFor(stage.groupSizes);
     final messages = autoAdjust || plan == null
         ? const <String>[]
         : const QualificationPlanEngine().validationMessages(plan);
+    final knockout = knockoutStage ?? stage;
     return parsedQualifierCount != stage.qualifiedParticipantCount ||
-        playsKnockoutFully != (stage.knockoutAdvancingCount == null) ||
-        parsedKnockoutAdvancingCount != stage.knockoutAdvancingCount ||
         autoAdjust != stage.qualificationAutoAdjust ||
         advancementPolicy != stage.qualificationAdvancementPolicy ||
         extraQualifierRank != stage.extraQualifierRank ||
         extraQualifierCount != stage.extraQualifierCount ||
-        knockoutSeedingMode != stage.knockoutSeedingMode ||
         !_sameInts(qualifiersByGroup, stage.qualifiersByGroup) ||
         !_sameInts(fixedQualifiersByGroup, stage.fixedQualifiersByGroup) ||
-        !_sameInts(placementPlaces, stage.placementPlaces) ||
         !_sameStrings(
           qualificationPlaceStatuses,
           stage.qualificationPlaceStatuses,
         ) ||
+        playsKnockoutFully != (knockout.knockoutAdvancingCount == null) ||
+        parsedKnockoutAdvancingCount != knockout.knockoutAdvancingCount ||
+        knockoutSeedingMode != knockout.knockoutSeedingMode ||
+        !_sameInts(placementPlaces, knockout.placementPlaces) ||
         messages.isNotEmpty;
   }
 
-  TournamentStage applyTo(TournamentStage stage) => stage.withRunningRules(
-    qualifiedParticipantCount: parsedQualifierCount,
-    qualificationAutoAdjust: autoAdjust,
-    qualificationAdvancementPolicy: advancementPolicy,
-    qualifiersByGroup: List<int>.from(qualifiersByGroup),
-    fixedQualifiersByGroup: List<int>.from(fixedQualifiersByGroup),
-    extraQualifierRank: extraQualifierRank,
-    extraQualifierCount: extraQualifierCount,
-    qualificationPlaceStatuses: Map<String, String>.from(
-      qualificationPlaceStatuses,
-    ),
-    knockoutAdvancingCount: parsedKnockoutAdvancingCount,
-    knockoutSeedingMode: knockoutSeedingMode,
-    placementPlaces: List<int>.from(placementPlaces),
-  );
+  TournamentStage applyToKnockoutStage(TournamentStage stage) =>
+      stage.withKnockoutRunningRules(
+        advancingCount: parsedKnockoutAdvancingCount,
+        seedingMode: knockoutSeedingMode,
+        placementPlaces: List<int>.from(placementPlaces),
+      );
+
+  TournamentStage applyTo(TournamentStage stage) {
+    if (stage.isGroupStage) {
+      return stage.withRunningRules(
+        qualifiedParticipantCount: parsedQualifierCount,
+        qualificationAutoAdjust: autoAdjust,
+        qualificationAdvancementPolicy: advancementPolicy,
+        qualifiersByGroup: List<int>.from(qualifiersByGroup),
+        fixedQualifiersByGroup: List<int>.from(fixedQualifiersByGroup),
+        extraQualifierRank: extraQualifierRank,
+        extraQualifierCount: extraQualifierCount,
+        qualificationPlaceStatuses: Map<String, String>.from(
+          qualificationPlaceStatuses,
+        ),
+        knockoutAdvancingCount: stage.knockoutAdvancingCount,
+        knockoutSeedingMode: stage.knockoutSeedingMode,
+        placementPlaces: List<int>.from(stage.placementPlaces),
+      );
+    }
+    return stage.withRunningRules(
+      qualifiedParticipantCount: stage.qualifiedParticipantCount,
+      qualificationAutoAdjust: stage.qualificationAutoAdjust,
+      qualificationAdvancementPolicy: stage.qualificationAdvancementPolicy,
+      qualifiersByGroup: List<int>.from(stage.qualifiersByGroup),
+      fixedQualifiersByGroup: List<int>.from(stage.fixedQualifiersByGroup),
+      extraQualifierRank: stage.extraQualifierRank,
+      extraQualifierCount: stage.extraQualifierCount,
+      qualificationPlaceStatuses: Map<String, String>.from(
+        stage.qualificationPlaceStatuses,
+      ),
+      knockoutAdvancingCount: parsedKnockoutAdvancingCount,
+      knockoutSeedingMode: knockoutSeedingMode,
+      placementPlaces: List<int>.from(placementPlaces),
+    );
+  }
 
   static bool _sameInts(List<int> left, List<int> right) =>
       left.length == right.length &&
@@ -301,10 +361,14 @@ class RunningTournamentRulesPanel extends StatefulWidget {
     required this.saving,
     required this.onSave,
     required this.onChanged,
+    this.followUpKnockoutStage,
+    this.followUpKnockoutStageIndex = -1,
   });
 
   final TournamentStage stage;
   final RunningRulesDraft draft;
+  final TournamentStage? followUpKnockoutStage;
+  final int followUpKnockoutStageIndex;
   final bool enabled;
   final bool saving;
   final VoidCallback onSave;
@@ -334,17 +398,19 @@ class _RunningTournamentRulesPanelState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text(
+          'Weiterkommende',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 4),
         TextField(
           key: const ValueKey('group-qualifier-count-field'),
           controller: widget.draft.qualifiedParticipantCount,
           enabled: widget.enabled,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Weiterkommende',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(border: OutlineInputBorder()),
           onChanged: (value) {
-            widget.draft.setQualifierCount(value);
+            widget.draft.setQualifierCount(value, groupSizes);
             _changed();
           },
         ),
@@ -355,13 +421,15 @@ class _RunningTournamentRulesPanelState
           title: const Text('Weiterkommen im Detail'),
           childrenPadding: const EdgeInsets.only(bottom: 12),
           children: [
+            Text(
+              'Zusätzliche Qualifikationsspiele',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
             DropdownButtonFormField<String>(
               initialValue: widget.draft.advancementPolicy,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Zusätzliche Qualifikationsplätze',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(border: OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(
                   value: 'larger_group',
@@ -494,11 +562,20 @@ class _RunningTournamentRulesPanelState
     );
   }
 
-  Widget _knockoutSection() {
-    final participants = widget.stage.knockoutParticipantCount ?? 0;
+  Widget _knockoutSection({
+    required TournamentStage stage,
+    String? heading,
+    int? participantCountOverride,
+  }) {
+    final participants =
+        participantCountOverride ?? stage.knockoutParticipantCount ?? 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (heading != null) ...[
+          Text(heading, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+        ],
         if (participants >= 5)
           SwitchListTile(
             key: const ValueKey('running-knockout-play-fully'),
@@ -512,14 +589,18 @@ class _RunningTournamentRulesPanelState
                   }
                 : null,
           ),
-        if (!widget.draft.playsKnockoutFully && participants > 1)
+        if (!widget.draft.playsKnockoutFully && participants > 1) ...[
+          Text(
+            'Weiterkommende',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 4),
           TextField(
             key: const ValueKey('knockout-advancing-count-field'),
             controller: widget.draft.knockoutAdvancingCount,
             enabled: widget.enabled,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              labelText: 'Weiterkommende',
               border: const OutlineInputBorder(),
               helperText: '4 bis ${participants - 1}',
             ),
@@ -528,15 +609,18 @@ class _RunningTournamentRulesPanelState
               _changed();
             },
           ),
+        ],
         const SizedBox(height: 12),
+        Text(
+          'Auslosungsmethode',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 4),
         DropdownButtonFormField<String>(
           key: const ValueKey('running-knockout-seeding-mode'),
           initialValue: widget.draft.knockoutSeedingMode,
           isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Auslosungsmethode',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(border: OutlineInputBorder()),
           items: [
             for (final mode in [
               'cross',
@@ -553,9 +637,7 @@ class _RunningTournamentRulesPanelState
           onChanged: widget.enabled
               ? (value) {
                   if (value != null) {
-                    setState(() {
-                      widget.draft.knockoutSeedingMode = value;
-                    });
+                    widget.draft.knockoutSeedingMode = value;
                     _changed();
                   }
                 }
@@ -595,7 +677,11 @@ class _RunningTournamentRulesPanelState
   @override
   Widget build(BuildContext context) {
     final isGroup = widget.stage.isGroupStage;
-    final hasChanges = widget.draft.hasChanges(widget.stage);
+    final followUp = widget.followUpKnockoutStage;
+    final hasChanges = widget.draft.hasChanges(
+      widget.stage,
+      knockoutStage: followUp,
+    );
     return Card(
       key: const ValueKey('running-tournament-rules-panel'),
       child: ExpansionTile(
@@ -609,7 +695,24 @@ class _RunningTournamentRulesPanelState
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
-          if (isGroup) _groupSection() else _knockoutSection(),
+          if (isGroup) ...[
+            _groupSection(),
+            if (followUp != null) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+              _knockoutSection(
+                stage: followUp,
+                heading: 'Folgephase: ${followUp.name}',
+                participantCountOverride:
+                    widget.draft.parsedQualifierCount ??
+                    widget.stage.qualifiedParticipantCount ??
+                    followUp.knockoutParticipantCount ??
+                    0,
+              ),
+            ],
+          ] else
+            _knockoutSection(stage: widget.stage),
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerRight,

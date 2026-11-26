@@ -3975,6 +3975,19 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     ),
   );
 
+  int _nextKnockoutStageIndexForRules(int fromIndex) {
+    for (
+      var index = fromIndex + 1;
+      index < widget.tournament.stages.length;
+      index++
+    ) {
+      if (_isKnockoutStageType(widget.tournament.stages[index].type)) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
   void _ensureRunningRulesDraft() {
     final index = _activeStageIndex;
     if (index < 0 || index >= widget.tournament.stages.length) {
@@ -3986,9 +3999,14 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (_runningRulesDraft != null && _runningRulesDraftStageIndex == index) {
       return;
     }
+    final knockoutIndex = _nextKnockoutStageIndexForRules(index);
     _runningRulesDraft?.dispose();
     _runningRulesDraft = RunningRulesDraft.fromStage(
       widget.tournament.stages[index],
+      knockoutStage: knockoutIndex >= 0
+          ? widget.tournament.stages[knockoutIndex]
+          : null,
+      knockoutStageIndex: knockoutIndex,
     );
     _runningRulesDraftStageIndex = index;
   }
@@ -4106,10 +4124,112 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
 
     final updatedRunStage = _buildRunStageFromPlayers(updatedStage, players);
+    final followUpIndex = draft.knockoutStageIndex;
+    final followUpStage =
+        followUpIndex > index && followUpIndex < widget.tournament.stages.length
+        ? widget.tournament.stages[followUpIndex]
+        : null;
+    final followUpPlayers = updatedStage.isGroupStage
+        ? _advancingPlayersFromGroupStage(
+            updatedRunStage as GroupTournamentRunStage,
+          )
+        : _advancingPlayersFromStage(updatedRunStage);
+    final updatedFollowUpStage =
+        updatedStage.isGroupStage &&
+            followUpStage != null &&
+            _isKnockoutStageType(followUpStage.type)
+        ? RunningRulesPropagation()
+            .adaptStage(followUpStage, incomingPlayers: followUpPlayers.length)
+            .withKnockoutRunningRules(
+              advancingCount: draft.parsedKnockoutAdvancingCount,
+              seedingMode: draft.knockoutSeedingMode,
+              placementPlaces: List<int>.from(draft.placementPlaces),
+            )
+        : null;
+    if (updatedFollowUpStage != null && !draft.playsKnockoutFully) {
+      final advancing = draft.parsedKnockoutAdvancingCount;
+      final participants =
+          updatedFollowUpStage.knockoutParticipantCount ??
+          followUpPlayers.length;
+      if (advancing == null || advancing < 4 || advancing >= participants) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Bitte eine Weiterkommenszahl zwischen 4 und '
+              '${participants - 1} angeben.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    final propagatedStages = <int, TournamentStage>{};
+    final propagatedRunStages = <int, TournamentRunStage>{};
+    if (updatedFollowUpStage != null) {
+      propagatedStages[followUpIndex] = updatedFollowUpStage;
+      propagatedRunStages[followUpIndex] = _buildRunStageFromPlayers(
+        updatedFollowUpStage,
+        followUpPlayers,
+      );
+      var incomingPlayersForStage = _advancingPlayersFromStage(
+        propagatedRunStages[followUpIndex]!,
+      );
+      var incomingCount = incomingPlayersForStage.length;
+      for (
+        var stageIndex = followUpIndex + 1;
+        stageIndex < widget.tournament.stages.length;
+        stageIndex++
+      ) {
+        final currentStage = widget.tournament.stages[stageIndex];
+        final adapted = RunningRulesPropagation().adaptStage(
+          currentStage,
+          incomingPlayers: incomingCount,
+        );
+        final changed = adapted != currentStage;
+        if (changed) {
+          propagatedStages[stageIndex] = adapted;
+        }
+        final canRebuildRunStage =
+            stageIndex > _activeStageIndex &&
+            stageIndex < widget.tournament.runStages.length &&
+            !_completedStageIndexes.contains(stageIndex) &&
+            !_runStageHasProgress(widget.tournament.runStages[stageIndex]);
+        if (canRebuildRunStage && (changed || propagatedRunStages.containsKey(stageIndex - 1))) {
+          propagatedRunStages[stageIndex] = _buildRunStageFromPlayers(
+            adapted,
+            incomingPlayersForStage,
+          );
+          incomingPlayersForStage = _advancingPlayersFromStage(
+            propagatedRunStages[stageIndex]!,
+          );
+          incomingCount = incomingPlayersForStage.length;
+        } else {
+          incomingCount = adapted.isGroupStage
+              ? (adapted.qualifiedParticipantCount ?? incomingCount)
+              : adapted.knockoutParticipantCount ?? incomingCount;
+          incomingPlayersForStage = const <TournamentPlayer>[];
+        }
+      }
+    }
+
+    final previousStages = <int, TournamentStage>{};
+    final previousRunStages = <int, TournamentRunStage>{};
+    for (final entry in propagatedStages.entries) {
+      previousStages[entry.key] = widget.tournament.stages[entry.key];
+    }
+    for (final entry in propagatedRunStages.entries) {
+      previousRunStages[entry.key] = widget.tournament.runStages[entry.key];
+    }
     setState(() {
       _savingRunningRulesSettings = true;
       widget.tournament.stages[index] = updatedStage;
       widget.tournament.runStages[index] = updatedRunStage;
+      for (final entry in propagatedStages.entries) {
+        widget.tournament.stages[entry.key] = entry.value;
+      }
+      for (final entry in propagatedRunStages.entries) {
+        widget.tournament.runStages[entry.key] = entry.value;
+      }
       widget.tournament.addActivity(
         'running_rules_changed',
         'Regeln in Phase „${previousStage.name}“ geändert',
@@ -4134,6 +4254,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
         _savingRunningRulesSettings = false;
         widget.tournament.stages[index] = previousStage;
         widget.tournament.runStages[index] = previousRunStage;
+        for (final entry in previousStages.entries) {
+          widget.tournament.stages[entry.key] = entry.value;
+        }
+        for (final entry in previousRunStages.entries) {
+          widget.tournament.runStages[entry.key] = entry.value;
+        }
         widget.tournament.activityLog.removeLast();
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4212,7 +4338,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       name: previousRunStage.name,
       groupPlayType: previousRunStage.groupPlayType,
       groups: previousRunStage.groups,
-      qualificationPlan: previousRunStage.qualificationPlan,
+      qualificationPlan: _qualificationPlanForStage(updatedStage),
       tieBreakers: tieBreakers,
       allowTieBreakDeciders: previousRunStage.allowTieBreakDeciders,
       tieBreakGameFormat: previousRunStage.tieBreakGameFormat,
@@ -6998,7 +7124,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   int _drawBracketSize(TournamentStage stage, int participantCount) {
     final storedBracketSize = stage.knockoutBracketSize;
-    if (storedBracketSize != null && storedBracketSize >= participantCount) {
+    if (storedBracketSize != null && storedBracketSize == participantCount) {
       return storedBracketSize;
     }
 
@@ -7468,6 +7594,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                       }
                       setState(() => _stageViewMode = mode);
                     },
+                    showStageSwitcher: _stageViewMode != StageViewMode.settings,
                   ),
                 ),
                 SliverPadding(
@@ -8504,6 +8631,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 stage:
                                     widget.tournament.stages[_activeStageIndex],
                                 draft: _runningRulesDraft!,
+                                followUpKnockoutStage:
+                                    _runningRulesDraft!.knockoutStageIndex >= 0 &&
+                                        _runningRulesDraft!.knockoutStageIndex <
+                                            widget.tournament.stages.length
+                                    ? widget.tournament.stages[_runningRulesDraft!
+                                          .knockoutStageIndex]
+                                    : null,
+                                followUpKnockoutStageIndex:
+                                    _runningRulesDraft!.knockoutStageIndex,
                                 enabled: _canEditRunningRulesForStage(
                                   _activeStageIndex,
                                 ),

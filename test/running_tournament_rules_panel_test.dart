@@ -37,6 +37,91 @@ List<GroupMatch> _roundRobin(List<TournamentPlayer> players) => [
       ),
 ];
 
+CreatedTournament _groupThenKnockoutTournament({
+  int qualifiedCount = 4,
+  int? knockoutAdvancingCount = 4,
+  String knockoutSeedingMode = 'cross',
+  List<int> placementPlaces = const [],
+}) {
+  final players = [
+    for (var index = 1; index <= 8; index++) TournamentPlayer.generated(index),
+  ];
+  final groups = [
+    TournamentGroup(
+      name: 'A',
+      playType: 'round_robin',
+      players: players.sublist(0, 4),
+      matches: _roundRobin(players.sublist(0, 4)),
+    ),
+    TournamentGroup(
+      name: 'B',
+      playType: 'round_robin',
+      players: players.sublist(4, 8),
+      matches: _roundRobin(players.sublist(4, 8)),
+    ),
+  ];
+  final groupStage = TournamentStage(
+    name: 'Gruppen',
+    type: 'groups',
+    groupCount: 2,
+    groupSizes: const [4, 4],
+    qualifiedParticipantCount: qualifiedCount,
+    qualificationAutoAdjust: true,
+    qualificationAdvancementPolicy: 'larger_group',
+    groupTieBreakers: defaultGroupTieBreakers,
+  );
+  final plan = const QualificationPlanEngine().build(
+    groupSizes: const [4, 4],
+    totalQualifiers: qualifiedCount,
+    autoAdjust: true,
+    advancementPolicy: 'larger_group',
+  );
+  final knockoutStage = TournamentStage(
+    name: 'KO',
+    type: 'single_knockout',
+    knockoutParticipantCount: qualifiedCount,
+    knockoutAdvancingCount: knockoutAdvancingCount,
+    knockoutSeedingMode: knockoutSeedingMode,
+    placementPlaces: placementPlaces,
+  );
+  final koPlayers = players.take(qualifiedCount).toList();
+  final firstRound = <GroupMatch>[
+    for (var i = 0; i < koPlayers.length ~/ 2; i++)
+      GroupMatch(
+        homePlayer: koPlayers[i],
+        awayPlayer: koPlayers[koPlayers.length - 1 - i],
+        round: 1,
+      ),
+  ];
+  return CreatedTournament(
+    name: 'Gruppen+KO Regeln',
+    players: players,
+    stages: [groupStage, knockoutStage],
+    runStages: [
+      GroupTournamentRunStage(
+        name: groupStage.name,
+        groupPlayType: 'round_robin',
+        groups: groups,
+        qualificationPlan: plan,
+        tieBreakers: defaultGroupTieBreakers,
+      ),
+      KnockoutTournamentRunStage(
+        name: knockoutStage.name,
+        participants: koPlayers,
+        eliminationLossLimit: 1,
+        rounds: [
+          firstRound,
+          [
+            GroupMatch(round: 2, label: 'Halbfinale'),
+            GroupMatch(round: 2, label: 'Halbfinale'),
+          ],
+          [GroupMatch(round: 3, label: 'Finale')],
+        ],
+      ),
+    ],
+  );
+}
+
 CreatedTournament _groupTournament({
   bool ranking = false,
   Set<int> completedStageIndexes = const {},
@@ -348,7 +433,7 @@ void main() {
       final panel = find.byKey(_panelKey);
       expect(
         find.descendant(of: panel, matching: find.text('Weiterkommende')),
-        findsOneWidget,
+        findsWidgets,
       );
       expect(
         find.descendant(
@@ -366,7 +451,7 @@ void main() {
       expect(
         find.descendant(
           of: panel,
-          matching: find.text('Zusätzliche Qualifikationsplätze'),
+          matching: find.text('Zusätzliche Qualifikationsspiele'),
         ),
         findsOneWidget,
       );
@@ -607,6 +692,82 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets(
+    'group phase settings show follow-up knockout rules and propagate to next stage',
+    (tester) async {
+      final tournament = _groupThenKnockoutTournament(qualifiedCount: 8);
+      final storage = _MemoryTournamentStorage();
+      await _pumpRunPage(
+        tester,
+        tournament: tournament,
+        storage: storage,
+        size: const Size(1440, 1600),
+      );
+      await _openSettings(tester);
+      await _expandRulesPanel(tester);
+
+      final panel = find.byKey(_panelKey);
+      expect(
+        find.descendant(of: panel, matching: find.text('Folgephase: KO')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: panel, matching: find.text('Auslosungsmethode')),
+        findsOneWidget,
+      );
+
+      final qualifierField = find.byKey(
+        const ValueKey('group-qualifier-count-field'),
+      );
+      await tester.ensureVisible(qualifierField);
+      await tester.enterText(qualifierField, '6');
+      await tester.pumpAndSettle();
+
+      final seeding = find.byKey(const ValueKey('running-knockout-seeding-mode'));
+      await tester.ensureVisible(seeding);
+      await tester.tap(seeding);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Leistungsbasierte Setzliste (ELO)').last);
+      await tester.pumpAndSettle();
+
+      final fifthPlace = find.byKey(const ValueKey('running-placement-place-5'));
+      await tester.ensureVisible(fifthPlace);
+      await tester.tap(fifthPlace);
+      await tester.pumpAndSettle();
+
+      final save = find.byKey(_saveKey);
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(tournament.stages[0].qualifiedParticipantCount, 6);
+      expect(tournament.stages[1].knockoutParticipantCount, 6);
+      expect(tournament.stages[1].knockoutBracketSize, 8);
+      expect(tournament.stages[1].knockoutSeedingMode, 'elo');
+      expect(tournament.stages[1].placementPlaces, contains(5));
+      final koRun = tournament.runStages[1] as KnockoutTournamentRunStage;
+      expect(koRun.rounds.first.length, 4);
+      expect(
+        koRun.placementMatches.map((match) => match.placementRank),
+        contains(5),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets('settings view hides phase switcher', (tester) async {
+    final tournament = _groupThenKnockoutTournament();
+    final storage = _MemoryTournamentStorage();
+    await _pumpRunPage(tester, tournament: tournament, storage: storage);
+    expect(find.byKey(const ValueKey('stage-phase-switcher')), findsOneWidget);
+    await _openSettings(tester);
+    expect(find.byKey(const ValueKey('stage-phase-switcher')), findsNothing);
+    expect(find.byKey(_panelKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('rules panel is disabled once knockout has recorded results', (
     tester,
   ) async {
@@ -704,7 +865,7 @@ void main() {
       await tester.tap(details);
       await tester.pumpAndSettle();
 
-      expect(find.text('Zusätzliche Qualifikationsplätze'), findsOneWidget);
+      expect(find.text('Zusätzliche Qualifikationsspiele'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });
