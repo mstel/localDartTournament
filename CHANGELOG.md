@@ -1,3 +1,7 @@
+# 4.1.4+144
+
+- Live-Turnier: Zweiter Hotfix für den Viewer-Upload. Der Viewer wird jetzt per raw `POST` mit `Content-Type: text/html; charset=utf-8` hochgeladen (statt Multipart), damit Supabase-Objektmetadaten nicht wieder als `text/plain` ausgeliefert werden. Nach Installation einmal Live neu veröffentlichen.
+
 # 4.1.3+143
 
 - Live-Turnier: Hotfix für 4.1.2+142 – der neue Multipart-Viewer-Upload ergänzt jetzt fehlende `Authorization`/`apikey`-Header aus der Supabase-Session/Config. Behebt „Live-Veröffentlichung fehlgeschlagen (400): headers must have required property authorization“.

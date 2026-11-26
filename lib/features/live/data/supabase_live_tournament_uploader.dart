@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-// ignore: depend_on_referenced_packages
-import 'package:http_parser/http_parser.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../accounts/data/supabase_account_config.dart';
@@ -63,7 +61,6 @@ class SupabaseLiveTournamentUploader implements LiveTournamentUploader {
         .map(Uri.encodeComponent)
         .join('/');
     final uri = Uri.parse('${storage.url}/object/$bucket/$encodedPath');
-    final fileName = normalizedPath.split('/').last;
 
     // Supabase object metadata (especially content-type) can stick on upsert.
     // Replace the viewer object to ensure browsers receive text/html.
@@ -93,21 +90,17 @@ class SupabaseLiveTournamentUploader implements LiveTournamentUploader {
       );
     }
 
-    final request = http.MultipartRequest('POST', uri)
-      ..headers.addAll(headers)
-      ..headers['x-upsert'] = 'true'
-      ..fields['cacheControl'] = '60'
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          '',
-          utf8.encode(html),
-          filename: fileName.isEmpty ? 'index.html' : fileName,
-          contentType: MediaType('text', 'html', {'charset': 'utf-8'}),
-        ),
-      );
+    // Raw upload: sets the object Content-Type metadata directly. Multipart
+    // uploads can leave stale/wrong mimetype metadata on Supabase Storage.
+    headers['Content-Type'] = 'text/html; charset=utf-8';
+    headers['x-upsert'] = 'true';
+    headers['cache-control'] = '60';
 
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
+    final response = await http.post(
+      uri,
+      headers: headers,
+      body: utf8.encode(html),
+    );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(
