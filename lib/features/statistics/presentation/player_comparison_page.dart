@@ -738,8 +738,35 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
         PlayerSpiderMetric(
           label: PlayerSpiderValues.labels[i],
           value: comparison.player.toList()[i],
-          maxValue: comparison.rankingMax.toList()[i],
+          maxValue: comparison.clubMax.toList()[i],
           averageValue: comparison.clubAverage.toList()[i],
+          normalizedValue: i == 4
+              ? PlayerSpiderComparison.normalizeWinRate(
+                  comparison.player.toList()[i],
+                )
+              : (comparison.clubMax.toList()[i] <= 0
+                    ? 0
+                    : (comparison.player.toList()[i] /
+                              comparison.clubMax.toList()[i])
+                          .clamp(0.0, 1.0)),
+          normalizedAverage: i == 4
+              ? PlayerSpiderComparison.normalizeWinRate(
+                  comparison.clubAverage.toList()[i],
+                )
+              : (comparison.clubMax.toList()[i] <= 0
+                    ? 0
+                    : (comparison.clubAverage.toList()[i] /
+                              comparison.clubMax.toList()[i])
+                          .clamp(0.0, 1.0)),
+          valueText: i == 2 || i == 4
+              ? '${comparison.player.toList()[i].toStringAsFixed(1)} %'
+              : comparison.player.toList()[i].toStringAsFixed(1),
+          averageText: i == 2 || i == 4
+              ? '${comparison.clubAverage.toList()[i].toStringAsFixed(1)} %'
+              : comparison.clubAverage.toList()[i].toStringAsFixed(1),
+          maxText: i == 2 || i == 4
+              ? '${comparison.clubMax.toList()[i].toStringAsFixed(1)} %'
+              : comparison.clubMax.toList()[i].toStringAsFixed(1),
         ),
     ];
     Widget chartFor(
@@ -748,7 +775,7 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       Color color,
     ) => PlayerSpiderChart(
       title: player.displayName,
-      subtitle: 'gegen Vereinsdurchschnitt / Ranglisten-Maximum',
+      subtitle: 'gegen Vereinsdurchschnitt / Vereinsmaximum',
       metrics: metrics(comparison),
       playerColor: color,
       size: 220,

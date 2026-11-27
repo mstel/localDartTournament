@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/player_spider_metrics.dart';
 import '../../domain/player_monthly_performance.dart';
 import 'player_performance_trend_chart.dart';
+import 'player_spider_chart.dart';
 
 class PerformanceStatisticsDetailSection extends StatefulWidget {
-  const PerformanceStatisticsDetailSection({super.key, required this.entries});
+  const PerformanceStatisticsDetailSection({
+    super.key,
+    required this.entries,
+    this.allEntries,
+    this.spiderBuilder,
+  });
 
   final List<PlayerMonthlyPerformance> entries;
+  final List<PlayerMonthlyPerformance>? allEntries;
+  final Future<PlayerSpiderComparison> Function(
+    List<PlayerMonthlyPerformance> yearEntries,
+  )?
+  spiderBuilder;
 
   @override
   State<PerformanceStatisticsDetailSection> createState() =>
@@ -16,15 +28,40 @@ class PerformanceStatisticsDetailSection extends StatefulWidget {
 class _PerformanceStatisticsDetailSectionState
     extends State<PerformanceStatisticsDetailSection> {
   int _year = DateTime.now().year;
+  Future<PlayerSpiderComparison>? _spiderFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSpider();
+  }
+
+  @override
+  void didUpdateWidget(covariant PerformanceStatisticsDetailSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entries != widget.entries ||
+        oldWidget.spiderBuilder != widget.spiderBuilder) {
+      _refreshSpider();
+    }
+  }
+
+  void _refreshSpider() {
+    if (widget.spiderBuilder == null) return;
+    final entries =
+        widget.entries.where((entry) => entry.year == _year).toList()
+          ..sort((left, right) => left.month.compareTo(right.month));
+    _spiderFuture = widget.spiderBuilder!(entries);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final source = widget.allEntries ?? widget.entries;
     final years = {
       DateTime.now().year,
-      ...widget.entries.map((entry) => entry.year),
+      ...source.map((entry) => entry.year),
     }.toList()..sort((left, right) => right.compareTo(left));
     final entries =
-        widget.entries.where((entry) => entry.year == _year).toList()
+        source.where((entry) => entry.year == _year).toList()
           ..sort((left, right) => left.month.compareTo(right.month));
     final summary = summarizeMonthlyPerformance(entries);
     final matches = entries.fold<int>(
@@ -64,7 +101,12 @@ class _PerformanceStatisticsDetailSectionState
                         DropdownMenuItem(value: year, child: Text('$year')),
                     ],
                     onChanged: (year) {
-                      if (year != null) setState(() => _year = year);
+                      if (year != null) {
+                        setState(() {
+                          _year = year;
+                          _refreshSpider();
+                        });
+                      }
                     },
                   ),
                 ),
@@ -72,19 +114,67 @@ class _PerformanceStatisticsDetailSectionState
             ),
           ),
           const SizedBox(height: 8),
+          PlayerPerformanceTrendChart(
+            entries: entries,
+            year: _year,
+            title: 'Performance-Entwicklung',
+          ),
+          if (widget.spiderBuilder != null) ...[
+            const SizedBox(height: 12),
+            FutureBuilder<PlayerSpiderComparison>(
+              future: _spiderFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final spider = snapshot.data;
+                if (spider == null) {
+                  return const SizedBox.shrink();
+                }
+                final hasPlayerData = entries.isNotEmpty;
+                return PlayerSpiderChart(
+                  title: 'Leistungsprofil',
+                  subtitle: hasPlayerData
+                      ? 'Außenkante: Vereinsmaximum, Mitte: Vereinsdurchschnitt'
+                      : 'Keine Daten im ausgewählten Zeitraum – Vereinsdurchschnitt angezeigt',
+                  metrics: [
+                    for (var i = 0; i < PlayerSpiderValues.labels.length; i++)
+                      PlayerSpiderMetric(
+                        label: PlayerSpiderValues.labels[i],
+                        value: hasPlayerData ? spider.player.toList()[i] : 0,
+                        maxValue: spider.clubMax.toList()[i],
+                        averageValue: spider.clubAverage.toList()[i],
+                        normalizedValue: hasPlayerData
+                            ? _normalizedSpiderValue(spider, i)
+                            : 0,
+                        normalizedAverage: _normalizedSpiderAverage(spider, i),
+                        valueText: hasPlayerData ? null : '–',
+                        averageText: _spiderValueText(
+                          spider.clubAverage.toList()[i],
+                          i,
+                        ),
+                        maxText: _spiderValueText(spider.clubMax.toList()[i], i),
+                      ),
+                  ],
+                  playerColor: Theme.of(context).colorScheme.primary,
+                );
+              },
+            ),
+          ],
           if (entries.isEmpty)
             const Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                'Für dieses Jahr sind keine Performance-Daten erfasst.',
+              child: Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Für dieses Jahr sind keine Performance-Daten erfasst.',
+                ),
               ),
             )
           else ...[
-            PlayerPerformanceTrendChart(
-              entries: entries,
-              year: _year,
-              title: 'Performance-Entwicklung',
-            ),
             const Divider(),
             const Align(
               alignment: Alignment.centerLeft,
@@ -176,6 +266,28 @@ class _PerformanceStatisticsDetailSectionState
         ],
       ),
     );
+  }
+
+  double _normalizedSpiderValue(PlayerSpiderComparison spider, int index) {
+    final value = spider.player.toList()[index];
+    final max = spider.clubMax.toList()[index];
+    if (index == 4) return PlayerSpiderComparison.normalizeWinRate(value);
+    if (max <= 0) return 0;
+    return (value / max).clamp(0.0, 1.0);
+  }
+
+  double _normalizedSpiderAverage(PlayerSpiderComparison spider, int index) {
+    final value = spider.clubAverage.toList()[index];
+    final max = spider.clubMax.toList()[index];
+    if (index == 4) return PlayerSpiderComparison.normalizeWinRate(value);
+    if (max <= 0) return 0;
+    return (value / max).clamp(0.0, 1.0);
+  }
+
+  String _spiderValueText(double value, int index) {
+    if (index == 2 || index == 4) return '${value.toStringAsFixed(1)} %';
+    if (index == 3) return value.toStringAsFixed(1);
+    return value.toStringAsFixed(1);
   }
 
   String _format(double? value) => value?.toStringAsFixed(1) ?? '–';

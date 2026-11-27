@@ -1,3 +1,11 @@
+# 4.2.1+151
+
+- Netzdiagramm/Leistungsprofil: „Ranglisten-Maximum“ in „Vereinsmaximum“ umbenannt. Hover/Touch auf Datenpunkte zeigt konkrete Spieler-, Vereinsdurchschnitt- und Vereinsmaximum-Werte.
+- Netzdiagramm-Skalierung: Siegesrate skaliert jetzt von 50% (Mitte) bis 100% (voller Ausschlag). Bestleistungen nutzen als Vereinsmaximum den aufgerundeten Vereinsdurchschnitt × 2 (mindestens 1); Werte darüber bleiben am vollen Ausschlag.
+- Spielerprofil: Performance (gesamt) zeigt keine Siegesrate mehr (steht bereits bei Turniere & Begegnungen). Reihenfolge jetzt Performance (gesamt), Aktuelle Form, Bestleistungen, Errungenschaften, Performance Statistiken im Detail. Das Netzdiagramm liegt in „Performance Statistiken im Detail“ unter „Performance-Entwicklung“ und über dem Scoring-Graph und reagiert auf die Jahresauswahl; ohne Daten im Zeitraum wird nur der Vereinsdurchschnitt angezeigt.
+- Teilnehmervergleich: Spiderdiagramme nutzen dieselbe Skalierung/Tooltips/Vereinsmaximum-Logik.
+- Website-Read-Model/API: `playerSpider` liefert zusätzlich `clubMax` (abwärtskompatibel weiterhin `rankingMax`) für die Homepage-Darstellung.
+
 # 4.2.0+150
 
 - Spielerprofil/Statistiken: Neues 5-Kategorien-Spiderdiagramm (Scoring, Average, Checkout%, Bestleistungen, Siegesrate). Außenkante = stärkster Wert im Ranking, Mitte = Vereinsdurchschnitt, farbig = Spieler. Im Spielerprofil oberhalb der Performance-Statistiken im Detail und im Teilnehmervergleich links/rechts unter den direkten Begegnungen.

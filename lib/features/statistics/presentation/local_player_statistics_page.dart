@@ -8,7 +8,7 @@ import '../../rankings/domain/local_ranking.dart';
 import '../../rankings/application/ranking_order.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
-import '../../tournaments/domain/tournament_models.dart';
+
 import '../../tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show TournamentRunPage;
@@ -20,7 +20,7 @@ import '../domain/player_spider_metrics.dart';
 import '../domain/tournament_monthly_results.dart';
 import 'widgets/performance_statistics_detail_section.dart';
 import 'widgets/player_performance_section.dart';
-import 'widgets/player_spider_chart.dart';
+
 import 'widgets/structured_best_performances_view.dart';
 
 class LocalPlayerStatisticsPage extends StatefulWidget {
@@ -47,7 +47,6 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
 
 class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
   bool _exporting = false;
-  PlayerSpiderComparison? _spider;
   late final _database = widget._database ?? LocalAppDatabase();
   late final _tournamentStorage =
       widget._tournamentStorage ?? TournamentStorage();
@@ -131,30 +130,25 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       }
     }
 
-    if (widget.loadSpider) {
-      _loadSpiderComparison(
-        stats: stats,
-        performance: performance,
-        tournaments: tournaments,
-        tournamentResults: tournamentResults,
-      ).timeout(const Duration(seconds: 5)).then((spider) {
-        if (!mounted) return;
-        setState(() => _spider = spider);
-      }).catchError((_) {});
-    }
     return (stats, rankings, positions, performance, achievementViews, null);
   }
 
-  Future<PlayerSpiderComparison?> _loadSpiderComparison({
+  Future<PlayerSpiderComparison> _buildSpiderComparison({
     required LocalPlayerStatistics stats,
     required List<PlayerMonthlyPerformance> performance,
-    required List<CreatedTournament> tournaments,
-    required List<TournamentMonthlyResult> tournamentResults,
   }) async {
-    final primaryProfileId = widget.profileIds.isEmpty
-        ? null
-        : widget.profileIds.first;
-    if (primaryProfileId == null) return null;
+    final allTournaments = await _tournamentStorage.loadTournaments();
+    final years = performance.map((e) => e.year).toSet();
+    final filterYear = years.length == 1 ? years.first : null;
+    final tournaments = filterYear == null
+        ? allTournaments
+        : allTournaments.where((t) {
+            final date = t.tournamentDate ?? t.finishedAt ?? t.createdAt;
+            return date.year == filterYear;
+          }).toList();
+    final tournamentResults = const TournamentMonthlyResultCalculator().calculate(
+      tournaments,
+    );
     final profiles = await _database.loadPlayerProfiles();
     final cohort = <PlayerSpiderValues>[];
     for (final profile in profiles) {
@@ -162,18 +156,15 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
         database: _database,
         storage: _tournamentStorage,
       ).forPlayersFromTournaments({profile.id}, tournaments);
-      final pRecorded = [
-        if (widget.year == null)
-          ...await _database.loadPlayerMonthlyPerformance(profile.id)
-        else
-          ...await _database.loadPlayerMonthlyPerformance(
-            profile.id,
-            year: widget.year,
-          ),
-      ];
+      final pRecorded = filterYear == null
+          ? await _database.loadPlayerMonthlyPerformance(profile.id)
+          : await _database.loadPlayerMonthlyPerformance(
+              profile.id,
+              year: filterYear,
+            );
       final pImported = await _database.loadMonthlyPlayerPerformances({
         profile.id,
-      }, year: widget.year);
+      }, year: filterYear);
       final pPerformance = aggregateMonthlyPlayerPerformances(
         combineMonthlyPlayerPerformances(
           recorded: pRecorded,
@@ -187,10 +178,16 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
         PlayerSpiderValues.fromStats(stats: pStats, performance: pPerformance),
       );
     }
+    final playerStats = filterYear == null
+        ? stats
+        : await LocalStatisticsService(
+            database: _database,
+            storage: _tournamentStorage,
+          ).forPlayersFromTournaments(widget.profileIds, tournaments);
     return PlayerSpiderComparison.build(
       player: PlayerSpiderValues.fromStats(
-        stats: stats,
-        performance: performance,
+        stats: playerStats,
+        performance: aggregateMonthlyPlayerPerformances(performance),
       ),
       cohort: cohort,
     );
@@ -333,7 +330,6 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                       .where((entry) => entry.year == widget.year)
                       .toList();
             final achievements = data.$5;
-            final spider = data.$6 ?? _spider;
             final performanceCounts = {
               for (final type in BestPerformanceType.values.where(
                 (type) => type != BestPerformanceType.score170,
@@ -454,34 +450,6 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   ],
                 ),
                 PlayerPerformanceSection(performance: profilePerformance),
-                if (spider != null)
-                  Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: PlayerSpiderChart(
-                          title: 'Leistungsprofil',
-                          subtitle:
-                              'Außenkante: Ranglisten-Maximum, Mitte: Vereinsdurchschnitt',
-                          metrics: [
-                            for (var i = 0;
-                                i < PlayerSpiderValues.labels.length;
-                                i++)
-                              PlayerSpiderMetric(
-                                label: PlayerSpiderValues.labels[i],
-                                value: spider.player.toList()[i],
-                                maxValue: spider.rankingMax.toList()[i],
-                                averageValue: spider.clubAverage.toList()[i],
-                              ),
-                          ],
-                          playerColor: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                PerformanceStatisticsDetailSection(entries: performance),
                 const SizedBox(height: 20),
                 Text(
                   'Bestleistungen',
@@ -529,6 +497,12 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   onTournamentTap: _openTournament,
                 ),
                 RankingAchievementSection(achievements: achievements),
+                PerformanceStatisticsDetailSection(
+                  entries: performance,
+                  allEntries: performance,
+                  spiderBuilder: (entries) =>
+                      _buildSpiderComparison(stats: stats, performance: entries),
+                ),
               ],
             );
           },

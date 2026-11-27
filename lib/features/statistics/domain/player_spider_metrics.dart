@@ -69,12 +69,25 @@ class PlayerSpiderComparison {
   const PlayerSpiderComparison({
     required this.player,
     required this.clubAverage,
-    required this.rankingMax,
+    required this.clubMax,
   });
 
   final PlayerSpiderValues player;
   final PlayerSpiderValues clubAverage;
-  final PlayerSpiderValues rankingMax;
+  final PlayerSpiderValues clubMax;
+
+  /// Backward-compatible alias for older API consumers.
+  PlayerSpiderValues get rankingMax => clubMax;
+
+  static double normalizeWinRate(double winRate) {
+    final value = winRate > 1 ? winRate / 100 : winRate;
+    return ((value - 0.5) / 0.5).clamp(0.0, 1.0);
+  }
+
+  static double bestPerformancesCap(double clubAverageBestPerformances) {
+    final cap = clubAverageBestPerformances.ceil() * 2;
+    return cap < 1 ? 1 : cap.toDouble();
+  }
 
   static PlayerSpiderComparison build({
     required PlayerSpiderValues player,
@@ -82,17 +95,25 @@ class PlayerSpiderComparison {
   }) {
     final values = cohort.toList();
     if (values.isEmpty) {
+      final bestCap = bestPerformancesCap(player.bestPerformances);
       return PlayerSpiderComparison(
         player: player,
         clubAverage: player,
-        rankingMax: player,
+        clubMax: PlayerSpiderValues(
+          scoring: player.scoring,
+          average: player.average,
+          checkoutPercent: player.checkoutPercent,
+          bestPerformances: bestCap,
+          winRate: 100,
+        ),
       );
     }
     double avg(double Function(PlayerSpiderValues v) pick) =>
         values.map(pick).fold<double>(0, (sum, value) => sum + value) /
         values.length;
-    double maxValue(double Function(PlayerSpiderValues v) pick) =>
-        values.map(pick).fold<double>(0, (max, value) => value > max ? value : max);
+    double maxValue(double Function(PlayerSpiderValues v) pick) => values
+        .map(pick)
+        .fold<double>(0, (max, value) => value > max ? value : max);
 
     final clubAverage = PlayerSpiderValues(
       scoring: avg((v) => v.scoring),
@@ -101,24 +122,26 @@ class PlayerSpiderComparison {
       bestPerformances: avg((v) => v.bestPerformances),
       winRate: avg((v) => v.winRate),
     );
-    final rankingMax = PlayerSpiderValues(
+    final clubMax = PlayerSpiderValues(
       scoring: maxValue((v) => v.scoring),
       average: maxValue((v) => v.average),
       checkoutPercent: maxValue((v) => v.checkoutPercent),
-      bestPerformances: maxValue((v) => v.bestPerformances),
-      winRate: maxValue((v) => v.winRate),
+      bestPerformances: bestPerformancesCap(clubAverage.bestPerformances),
+      winRate: 100,
     );
     return PlayerSpiderComparison(
       player: player,
       clubAverage: clubAverage,
-      rankingMax: rankingMax,
+      clubMax: clubMax,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'player': player.toJson(),
     'clubAverage': clubAverage.toJson(),
-    'rankingMax': rankingMax.toJson(),
+    'clubMax': clubMax.toJson(),
+    // Backward-compatible key for existing homepage consumers.
+    'rankingMax': clubMax.toJson(),
     'labels': PlayerSpiderValues.labels,
   };
 }

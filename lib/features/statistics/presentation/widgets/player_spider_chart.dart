@@ -8,17 +8,31 @@ class PlayerSpiderMetric {
     required this.value,
     required this.maxValue,
     required this.averageValue,
+    required this.normalizedValue,
+    required this.normalizedAverage,
+    this.valueText,
+    this.averageText,
+    this.maxText,
   });
 
   final String label;
   final double value;
   final double maxValue;
   final double averageValue;
+  final double normalizedValue;
+  final double normalizedAverage;
+  final String? valueText;
+  final String? averageText;
+  final String? maxText;
 
-  double get normalizedValue =>
-      maxValue <= 0 ? 0 : (value / maxValue).clamp(0.0, 1.0);
-  double get normalizedAverage =>
-      maxValue <= 0 ? 0 : (averageValue / maxValue).clamp(0.0, 1.0);
+  String get displayValue => valueText ?? _defaultFormat(value);
+  String get displayAverage => averageText ?? _defaultFormat(averageValue);
+  String get displayMax => maxText ?? _defaultFormat(maxValue);
+
+  static String _defaultFormat(double value) {
+    if (value == value.roundToDouble()) return value.toStringAsFixed(0);
+    return value.toStringAsFixed(1);
+  }
 }
 
 class PlayerSpiderChart extends StatelessWidget {
@@ -61,18 +75,16 @@ class PlayerSpiderChart extends StatelessWidget {
         SizedBox(
           width: size,
           height: size,
-          child: CustomPaint(
-            painter: _PlayerSpiderPainter(
-              metrics: metrics,
-              playerColor: playerColor,
-              gridColor: theme.colorScheme.outlineVariant,
-              labelStyle:
-                  theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ) ??
-                  const TextStyle(fontSize: 11),
-              averageColor: theme.colorScheme.secondary.withValues(alpha: 0.85),
-            ),
+          child: _SpiderChartWithTooltip(
+            metrics: metrics,
+            playerColor: playerColor,
+            gridColor: theme.colorScheme.outlineVariant,
+            labelStyle:
+                theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ) ??
+                const TextStyle(fontSize: 11),
+            averageColor: theme.colorScheme.secondary.withValues(alpha: 0.85),
           ),
         ),
         const SizedBox(height: 8),
@@ -88,7 +100,7 @@ class PlayerSpiderChart extends StatelessWidget {
             ),
             _LegendDot(
               color: theme.colorScheme.outline,
-              label: 'Ranglisten-Maximum',
+              label: 'Vereinsmaximum',
               filled: false,
             ),
           ],
@@ -136,8 +148,8 @@ class _LegendDot extends StatelessWidget {
   }
 }
 
-class _PlayerSpiderPainter extends CustomPainter {
-  _PlayerSpiderPainter({
+class _SpiderChartWithTooltip extends StatefulWidget {
+  const _SpiderChartWithTooltip({
     required this.metrics,
     required this.playerColor,
     required this.gridColor,
@@ -150,6 +162,139 @@ class _PlayerSpiderPainter extends CustomPainter {
   final Color gridColor;
   final TextStyle labelStyle;
   final Color averageColor;
+
+  @override
+  State<_SpiderChartWithTooltip> createState() =>
+      _SpiderChartWithTooltipState();
+}
+
+class _SpiderChartWithTooltipState extends State<_SpiderChartWithTooltip> {
+  int? _hovered;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        return MouseRegion(
+          onExit: (_) => setState(() => _hovered = null),
+          onHover: (event) => _updateHover(event.localPosition, size),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (details) => _updateHover(details.localPosition, size),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _PlayerSpiderPainter(
+                      metrics: widget.metrics,
+                      playerColor: widget.playerColor,
+                      gridColor: widget.gridColor,
+                      labelStyle: widget.labelStyle,
+                      averageColor: widget.averageColor,
+                      hoveredIndex: _hovered,
+                    ),
+                  ),
+                ),
+                if (_hovered != null && _hovered! < widget.metrics.length)
+                  _tooltip(theme, size, widget.metrics[_hovered!], _hovered!),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _updateHover(Offset position, Size size) {
+    final index = _PlayerSpiderPainter.hitTestIndex(
+      position: position,
+      size: size,
+      metricCount: widget.metrics.length,
+    );
+    if (index != _hovered) setState(() => _hovered = index);
+  }
+
+  Widget _tooltip(ThemeData theme, Size size, PlayerSpiderMetric metric, int i) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) * 0.32;
+    final angleStep = (math.pi * 2) / widget.metrics.length;
+    final angle = -math.pi / 2 + angleStep * i;
+    final point = center + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+    final left = (point.dx - 90).clamp(0.0, size.width - 180);
+    final top = (point.dy - 84).clamp(0.0, size.height - 74);
+    return Positioned(
+      left: left,
+      top: top,
+      child: IgnorePointer(
+        child: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(8),
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: DefaultTextStyle(
+              style: theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(metric.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text('Spieler: ${metric.displayValue}'),
+                  Text('Vereinsdurchschnitt: ${metric.displayAverage}'),
+                  Text('Vereinsmaximum: ${metric.displayMax}'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerSpiderPainter extends CustomPainter {
+  _PlayerSpiderPainter({
+    required this.metrics,
+    required this.playerColor,
+    required this.gridColor,
+    required this.labelStyle,
+    required this.averageColor,
+    this.hoveredIndex,
+  });
+
+  final List<PlayerSpiderMetric> metrics;
+  final Color playerColor;
+  final Color gridColor;
+  final TextStyle labelStyle;
+  final Color averageColor;
+  final int? hoveredIndex;
+
+  static int? hitTestIndex({
+    required Offset position,
+    required Size size,
+    required int metricCount,
+  }) {
+    if (metricCount == 0) return null;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) * 0.32;
+    final angleStep = (math.pi * 2) / metricCount;
+    const startAngle = -math.pi / 2;
+    int? closest;
+    var closestDistance = 26.0;
+    for (var i = 0; i < metricCount; i++) {
+      final angle = startAngle + angleStep * i;
+      final point = center + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+      final distance = (point - position).distance;
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closest = i;
+      }
+    }
+    return closest;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -192,8 +337,12 @@ class _PlayerSpiderPainter extends CustomPainter {
       final labelRadius = radius + 24;
       final labelCenter =
           center + Offset(math.cos(angle) * labelRadius, math.sin(angle) * labelRadius);
+      final isHovered = i == hoveredIndex;
+      final style = isHovered
+          ? labelStyle.copyWith(fontWeight: FontWeight.w700)
+          : labelStyle;
       final tp = TextPainter(
-        text: TextSpan(text: metrics[i].label, style: labelStyle),
+        text: TextSpan(text: metrics[i].label, style: style),
         textDirection: TextDirection.ltr,
         textAlign: TextAlign.center,
         maxLines: 2,
@@ -202,6 +351,9 @@ class _PlayerSpiderPainter extends CustomPainter {
         canvas,
         Offset(labelCenter.dx - tp.width / 2, labelCenter.dy - tp.height / 2),
       );
+      if (isHovered) {
+        canvas.drawCircle(end, 5, Paint()..color = playerColor.withValues(alpha: 0.18));
+      }
     }
 
     void drawPolygon(List<double> values, Color color, {required bool fill}) {
@@ -259,6 +411,7 @@ class _PlayerSpiderPainter extends CustomPainter {
     return oldDelegate.metrics != metrics ||
         oldDelegate.playerColor != playerColor ||
         oldDelegate.gridColor != gridColor ||
-        oldDelegate.averageColor != averageColor;
+        oldDelegate.averageColor != averageColor ||
+        oldDelegate.hoveredIndex != hoveredIndex;
   }
 }
