@@ -141,6 +141,7 @@ void main() {
           home: LocalPlayerStatisticsPage(
             name: 'Testspieler',
             profileIds: const {'player-1'},
+            loadSpider: false,
             database: database,
             tournamentStorage: TournamentStorage(
               file: File('${directory.path}/tournaments.json'),

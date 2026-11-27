@@ -8,6 +8,7 @@ import '../../rankings/domain/local_ranking.dart';
 import '../../rankings/application/ranking_order.dart';
 import '../../tournaments/data/app_database.dart';
 import '../../tournaments/data/tournament_storage.dart';
+import '../../tournaments/domain/tournament_models.dart';
 import '../../tournaments/presentation/pages/tournament_results_page.dart';
 import 'package:dart_tournament_manager/tournament_workspace.dart'
     show TournamentRunPage;
@@ -28,6 +29,7 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
     required this.name,
     required this.profileIds,
     this.year,
+    this.loadSpider = true,
     LocalAppDatabase? database,
     TournamentStorage? tournamentStorage,
   }) : _database = database,
@@ -35,6 +37,7 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
   final String name;
   final Set<String> profileIds;
   final int? year;
+  final bool loadSpider;
   final LocalAppDatabase? _database;
   final TournamentStorage? _tournamentStorage;
   @override
@@ -44,6 +47,7 @@ class LocalPlayerStatisticsPage extends StatefulWidget {
 
 class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
   bool _exporting = false;
+  PlayerSpiderComparison? _spider;
   late final _database = widget._database ?? LocalAppDatabase();
   late final _tournamentStorage =
       widget._tournamentStorage ?? TournamentStorage();
@@ -127,49 +131,69 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       }
     }
 
-    PlayerSpiderComparison? spider;
-    final primaryProfileId = widget.profileIds.firstOrNull;
-    if (primaryProfileId != null) {
-      final profiles = await _database.loadPlayerProfiles();
-      final cohort = <PlayerSpiderValues>[];
-      for (final profile in profiles) {
-        final pStats = await LocalStatisticsService(
-          database: _database,
-          storage: _tournamentStorage,
-        ).forPlayersFromTournaments({profile.id}, tournaments);
-        final pRecorded = [
-          if (widget.year == null)
-            ...await _database.loadPlayerMonthlyPerformance(profile.id)
-          else
-            ...await _database.loadPlayerMonthlyPerformance(
-              profile.id,
-              year: widget.year,
-            ),
-        ];
-        final pImported = await _database.loadMonthlyPlayerPerformances({
-          profile.id,
-        }, year: widget.year);
-        final pPerformance = aggregateMonthlyPlayerPerformances(
-          combineMonthlyPlayerPerformances(
-            recorded: pRecorded,
-            imported: pImported,
-            tournamentResults: tournamentResults
-                .where((r) => r.playerId == profile.id),
+    if (widget.loadSpider) {
+      _loadSpiderComparison(
+        stats: stats,
+        performance: performance,
+        tournaments: tournaments,
+        tournamentResults: tournamentResults,
+      ).timeout(const Duration(seconds: 5)).then((spider) {
+        if (!mounted) return;
+        setState(() => _spider = spider);
+      }).catchError((_) {});
+    }
+    return (stats, rankings, positions, performance, achievementViews, null);
+  }
+
+  Future<PlayerSpiderComparison?> _loadSpiderComparison({
+    required LocalPlayerStatistics stats,
+    required List<PlayerMonthlyPerformance> performance,
+    required List<CreatedTournament> tournaments,
+    required List<TournamentMonthlyResult> tournamentResults,
+  }) async {
+    final primaryProfileId = widget.profileIds.isEmpty
+        ? null
+        : widget.profileIds.first;
+    if (primaryProfileId == null) return null;
+    final profiles = await _database.loadPlayerProfiles();
+    final cohort = <PlayerSpiderValues>[];
+    for (final profile in profiles) {
+      final pStats = await LocalStatisticsService(
+        database: _database,
+        storage: _tournamentStorage,
+      ).forPlayersFromTournaments({profile.id}, tournaments);
+      final pRecorded = [
+        if (widget.year == null)
+          ...await _database.loadPlayerMonthlyPerformance(profile.id)
+        else
+          ...await _database.loadPlayerMonthlyPerformance(
+            profile.id,
+            year: widget.year,
           ),
-        );
-        cohort.add(
-          PlayerSpiderValues.fromStats(stats: pStats, performance: pPerformance),
-        );
-      }
-      spider = PlayerSpiderComparison.build(
-        player: PlayerSpiderValues.fromStats(
-          stats: stats,
-          performance: performance,
+      ];
+      final pImported = await _database.loadMonthlyPlayerPerformances({
+        profile.id,
+      }, year: widget.year);
+      final pPerformance = aggregateMonthlyPlayerPerformances(
+        combineMonthlyPlayerPerformances(
+          recorded: pRecorded,
+          imported: pImported,
+          tournamentResults: tournamentResults.where(
+            (r) => r.playerId == profile.id,
+          ),
         ),
-        cohort: cohort,
+      );
+      cohort.add(
+        PlayerSpiderValues.fromStats(stats: pStats, performance: pPerformance),
       );
     }
-    return (stats, rankings, positions, performance, achievementViews, spider);
+    return PlayerSpiderComparison.build(
+      player: PlayerSpiderValues.fromStats(
+        stats: stats,
+        performance: performance,
+      ),
+      cohort: cohort,
+    );
   }
 
   Future<void> _export(PlayerStatisticsImageOrientation orientation) async {

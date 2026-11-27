@@ -746,14 +746,12 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       PlayerProfile player,
       PlayerSpiderComparison comparison,
       Color color,
-    ) => Expanded(
-      child: PlayerSpiderChart(
-        title: player.displayName,
-        subtitle: 'gegen Vereinsdurchschnitt / Ranglisten-Maximum',
-        metrics: metrics(comparison),
-        playerColor: color,
-        size: 220,
-      ),
+    ) => PlayerSpiderChart(
+      title: player.displayName,
+      subtitle: 'gegen Vereinsdurchschnitt / Ranglisten-Maximum',
+      metrics: metrics(comparison),
+      playerColor: color,
+      size: 220,
     );
     return Card(
       child: Padding(
@@ -765,17 +763,32 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
             const SizedBox(height: 12),
             LayoutBuilder(
               builder: (context, constraints) {
-                final children = [
-                  chartFor(left, leftSpider, Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 12, height: 12),
-                  chartFor(right, rightSpider, Theme.of(context).colorScheme.tertiary),
-                ];
+                final leftChart = chartFor(
+                  left,
+                  leftSpider,
+                  Theme.of(context).colorScheme.primary,
+                );
+                final rightChart = chartFor(
+                  right,
+                  rightSpider,
+                  Theme.of(context).colorScheme.tertiary,
+                );
                 if (constraints.maxWidth < 700) {
-                  return Column(children: children);
+                  return Column(
+                    children: [
+                      leftChart,
+                      const SizedBox(height: 12),
+                      rightChart,
+                    ],
+                  );
                 }
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: children,
+                  children: [
+                    Expanded(child: leftChart),
+                    const SizedBox(width: 12),
+                    Expanded(child: rightChart),
+                  ],
                 );
               },
             ),
