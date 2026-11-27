@@ -449,10 +449,7 @@ void main() {
       await tester.tap(details);
       await tester.pumpAndSettle();
       expect(
-        find.descendant(
-          of: panel,
-          matching: find.text('Weiterkommensregel'),
-        ),
+        find.descendant(of: panel, matching: find.text('Weiterkommensregel')),
         findsWidgets,
       );
 
@@ -512,7 +509,10 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('running-knockout-play-fully')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('running-knockout-play-fully')),
+      findsNothing,
+    );
     // Advancing count remains editable in running settings (no play-fully toggle).
     expect(
       find.byKey(const ValueKey('knockout-advancing-count-field')),
@@ -688,14 +688,18 @@ void main() {
       await tester.enterText(qualifierField, '6');
       await tester.pumpAndSettle();
 
-      final seeding = find.byKey(const ValueKey('running-knockout-seeding-mode'));
+      final seeding = find.byKey(
+        const ValueKey('running-knockout-seeding-mode'),
+      );
       await tester.ensureVisible(seeding);
       await tester.tap(seeding);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Leistungsbasierte Setzliste (ELO)').last);
       await tester.pumpAndSettle();
 
-      final fifthPlace = find.byKey(const ValueKey('running-placement-place-5'));
+      final fifthPlace = find.byKey(
+        const ValueKey('running-placement-place-5'),
+      );
       await tester.ensureVisible(fifthPlace);
       await tester.tap(fifthPlace);
       await tester.pumpAndSettle();
@@ -733,37 +737,43 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('knockout rules remain editable while phase has results but is not completed', (
-    tester,
-  ) async {
-    final tournament = _knockoutTournament(withResult: true);
-    final storage = _MemoryTournamentStorage();
-    await _pumpRunPage(
-      tester,
-      tournament: tournament,
-      storage: storage,
-      size: const Size(1440, 1400),
-    );
-    await _openSettings(tester);
-    await _expandRulesPanel(tester);
+  testWidgets(
+    'knockout rules remain editable while phase has results but is not completed',
+    (tester) async {
+      final tournament = _knockoutTournament(withResult: true);
+      final storage = _MemoryTournamentStorage();
+      await _pumpRunPage(
+        tester,
+        tournament: tournament,
+        storage: storage,
+        size: const Size(1440, 1400),
+      );
+      await _openSettings(tester);
+      await _expandRulesPanel(tester);
 
-    final panel = find.byKey(_panelKey);
-    final rulesWidget = find
-        .ancestor(of: panel, matching: find.byType(RunningTournamentRulesPanel))
-        .first;
-    expect(
-      tester.widget<RunningTournamentRulesPanel>(rulesWidget).enabled,
-      isTrue,
-    );
-    final seeding = find.byKey(const ValueKey('running-knockout-seeding-mode'));
-    await tester.ensureVisible(seeding);
-    expect(
-      tester.widget<DropdownButtonFormField<String>>(seeding).onChanged,
-      isNotNull,
-    );
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+      final panel = find.byKey(_panelKey);
+      final rulesWidget = find
+          .ancestor(
+            of: panel,
+            matching: find.byType(RunningTournamentRulesPanel),
+          )
+          .first;
+      expect(
+        tester.widget<RunningTournamentRulesPanel>(rulesWidget).enabled,
+        isTrue,
+      );
+      final seeding = find.byKey(
+        const ValueKey('running-knockout-seeding-mode'),
+      );
+      await tester.ensureVisible(seeding);
+      expect(
+        tester.widget<DropdownButtonFormField<String>>(seeding).onChanged,
+        isNotNull,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   for (final size in [
     const Size(360, 800),

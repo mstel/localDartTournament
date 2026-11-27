@@ -1,3 +1,7 @@
+# 4.1.7+147
+
+- CI-Hotfix: Dart-Format f?r laufende Regel?nderungen korrigiert, damit Analyze-and-Test wieder gr?n l?uft.
+
 # 4.1.6+146
 
 - Laufende Regeln: Automatische Freilos-/Bye-Matches sperren die Phasenregeln nicht mehr f?lschlich. Dadurch bleiben Qualifikations- und Regel?nderungen m?glich, solange keine echte Folgephase begonnen hat.

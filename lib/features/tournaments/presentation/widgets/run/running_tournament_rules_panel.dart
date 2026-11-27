@@ -22,8 +22,8 @@ class RunningRulesDraft {
          text: '${stage.extraQualifierCount ?? 0}',
        ),
        _knockoutAdvancingCount = TextEditingController(
-         text: (knockoutStage ?? stage).knockoutAdvancingCount?.toString() ??
-             '',
+         text:
+             (knockoutStage ?? stage).knockoutAdvancingCount?.toString() ?? '',
        ),
        playsKnockoutFully =
            (knockoutStage ?? stage).knockoutAdvancingCount == null,
@@ -106,9 +106,7 @@ class RunningRulesDraft {
     extraQualifierRank = plan.extraRank;
     extraQualifierCount = plan.extraCount;
     qualificationPlaceStatuses = Map<String, String>.from(
-      plan.placeStatuses.map(
-        (key, value) => MapEntry(key, value.jsonValue),
-      ),
+      plan.placeStatuses.map((key, value) => MapEntry(key, value.jsonValue)),
     );
     _bestOfQualifierCount.text = '${plan.extraCount}';
   }
@@ -171,7 +169,8 @@ class RunningRulesDraft {
       qualifiersByGroup = const [];
       advancementPolicy = QualificationPlanEngine.recommendedAutomaticPolicy(
         groupSizes: groupSizes,
-        totalQualifiers: previous?.totalQualifiers ?? (parsedQualifierCount ?? 0),
+        totalQualifiers:
+            previous?.totalQualifiers ?? (parsedQualifierCount ?? 0),
       );
     }
     _bestOfQualifierCount.text = '${previous?.extraCount ?? 0}';
@@ -291,10 +290,7 @@ class RunningRulesDraft {
           ..sort();
   }
 
-  bool hasChanges(
-    TournamentStage stage, {
-    TournamentStage? knockoutStage,
-  }) {
+  bool hasChanges(TournamentStage stage, {TournamentStage? knockoutStage}) {
     final plan = planFor(stage.groupSizes);
     final messages = autoAdjust || plan == null
         ? const <String>[]
@@ -422,15 +418,15 @@ class _RunningTournamentRulesPanelState
         ? const <String>[]
         : const QualificationPlanEngine().validationMessages(plan);
     final manualMode = widget.draft.isManualMode;
-    final canUseLargerGroup =
-        QualificationPlanEngine.canUseLargerGroupPolicy(groupSizes);
+    final canUseLargerGroup = QualificationPlanEngine.canUseLargerGroupPolicy(
+      groupSizes,
+    );
     final totalQualifiers = widget.draft.parsedQualifierCount ?? 0;
     final canUseBestRank = QualificationPlanEngine.canUseBestRankPolicy(
       groupSizes: groupSizes,
       totalQualifiers: totalQualifiers,
     );
-    final effectiveAutoValue =
-        widget.draft.advancementPolicy == 'automatic'
+    final effectiveAutoValue = widget.draft.advancementPolicy == 'automatic'
         ? QualificationPlanEngine.recommendedAutomaticPolicy(
             groupSizes: groupSizes,
             totalQualifiers: totalQualifiers,
@@ -444,10 +440,7 @@ class _RunningTournamentRulesPanelState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Weiterkommende',
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
+        Text('Weiterkommende', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         TextField(
           key: const ValueKey('group-qualifier-count-field'),
@@ -522,7 +515,9 @@ class _RunningTournamentRulesPanelState
                         if (value == null) return;
                         if (value == 'automatic') {
                           widget.draft.advancementPolicy = 'automatic';
-                          widget.draft.syncQualificationDistribution(groupSizes);
+                          widget.draft.syncQualificationDistribution(
+                            groupSizes,
+                          );
                         } else {
                           widget.draft.setAdvancementPolicy(value, groupSizes);
                         }
@@ -682,10 +677,7 @@ class _RunningTournamentRulesPanelState
           ),
         if ((!widget.draft.playsKnockoutFully || !canPlayFully) &&
             participants > 1) ...[
-          Text(
-            'Weiterkommende',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+          Text('Weiterkommende', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 4),
           TextField(
             key: const ValueKey('knockout-advancing-count-field'),
@@ -784,7 +776,7 @@ class _RunningTournamentRulesPanelState
           widget.enabled
               ? 'Regeln der Phase „${widget.stage.name}“ anpassen'
               : widget.disabledReason ??
-                  'Diese Phase kann nicht mehr geändert werden.',
+                    'Diese Phase kann nicht mehr geändert werden.',
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [

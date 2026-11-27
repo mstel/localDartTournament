@@ -4013,7 +4013,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
 
   bool _runStageHasProgress(TournamentRunStage stage) =>
       _matchesForStage(stage).any((match) {
-        final isAutoBye = match.allowsBye &&
+        final isAutoBye =
+            match.allowsBye &&
             !match.isAnnulled &&
             match.startedAt == null &&
             match.finishedAt == null &&
@@ -4057,7 +4058,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (!stage.isGroupStage && !_isKnockoutStageType(stage.type)) {
       return 'Für diesen Phasentyp sind laufende Regeländerungen nicht verfügbar.';
     }
-    for (var next = index + 1; next < widget.tournament.runStages.length; next++) {
+    for (
+      var next = index + 1;
+      next < widget.tournament.runStages.length;
+      next++
+    ) {
       if (_runStageHasProgress(widget.tournament.runStages[next])) {
         final nextName = widget.tournament.stages[next].name;
         return 'Die Folgephase „$nextName“ hat bereits begonnen. Setze die Folgephase zurück, um diese Regeln wieder zu ändern.';
@@ -4109,9 +4114,9 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     }
     final disabledReason = _runningRulesDisabledReasonForStage(index);
     if (disabledReason != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(disabledReason)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(disabledReason)));
       return;
     }
 
@@ -4172,12 +4177,15 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             followUpStage != null &&
             _isKnockoutStageType(followUpStage.type)
         ? RunningRulesPropagation()
-            .adaptStage(followUpStage, incomingPlayers: followUpPlayers.length)
-            .withKnockoutRunningRules(
-              advancingCount: draft.parsedKnockoutAdvancingCount,
-              seedingMode: draft.knockoutSeedingMode,
-              placementPlaces: List<int>.from(draft.placementPlaces),
-            )
+              .adaptStage(
+                followUpStage,
+                incomingPlayers: followUpPlayers.length,
+              )
+              .withKnockoutRunningRules(
+                advancingCount: draft.parsedKnockoutAdvancingCount,
+                seedingMode: draft.knockoutSeedingMode,
+                placementPlaces: List<int>.from(draft.placementPlaces),
+              )
         : null;
     if (updatedFollowUpStage != null && !draft.playsKnockoutFully) {
       final advancing = draft.parsedKnockoutAdvancingCount;
@@ -4227,7 +4235,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
             stageIndex < widget.tournament.runStages.length &&
             !_completedStageIndexes.contains(stageIndex) &&
             !_runStageHasProgress(widget.tournament.runStages[stageIndex]);
-        if (canRebuildRunStage && (changed || propagatedRunStages.containsKey(stageIndex - 1))) {
+        if (canRebuildRunStage &&
+            (changed || propagatedRunStages.containsKey(stageIndex - 1))) {
           propagatedRunStages[stageIndex] = _buildRunStageFromPlayers(
             adapted,
             incomingPlayersForStage,
@@ -8679,10 +8688,13 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                     widget.tournament.stages[_activeStageIndex],
                                 draft: _runningRulesDraft!,
                                 followUpKnockoutStage:
-                                    _runningRulesDraft!.knockoutStageIndex >= 0 &&
+                                    _runningRulesDraft!.knockoutStageIndex >=
+                                            0 &&
                                         _runningRulesDraft!.knockoutStageIndex <
                                             widget.tournament.stages.length
-                                    ? widget.tournament.stages[_runningRulesDraft!
+                                    ? widget
+                                          .tournament
+                                          .stages[_runningRulesDraft!
                                           .knockoutStageIndex]
                                     : null,
                                 followUpKnockoutStageIndex:
@@ -8692,8 +8704,8 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 ),
                                 disabledReason:
                                     _runningRulesDisabledReasonForStage(
-                                  _activeStageIndex,
-                                ),
+                                      _activeStageIndex,
+                                    ),
                                 saving: _savingRunningRulesSettings,
                                 onSave: _applyRunningRulesDraft,
                                 onChanged: () => setState(() {}),
