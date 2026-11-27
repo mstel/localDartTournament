@@ -37,7 +37,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
   final _groupCountController = TextEditingController(text: '2');
   final _groupQualifierCountController = TextEditingController(text: '8');
   bool _groupQualifierCountEdited = false;
-  final _bestOfQualifierCountController = TextEditingController(text: '0');
+
   final _database = LocalAppDatabase();
   late final Future<List<LocalRanking>> _localRankings = _database
       .loadLocalRankings();
@@ -541,7 +541,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _playerCountController.dispose();
     _groupCountController.dispose();
     _groupQualifierCountController.dispose();
-    _bestOfQualifierCountController.dispose();
+
     _nameParticipantSectionController.dispose();
     _structureSectionController.dispose();
     _summarySectionController.dispose();
@@ -2028,7 +2028,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _manualExtraRank = null;
     _manualExtraCount = null;
     _qualificationPlaceStatuses = const {};
-    _bestOfQualifierCountController.text = '0';
     _autoAdjustQualification = true;
     _qualificationAdvancementPolicy = 'larger_group';
     _allowGroupTieBreakDeciders = false;
@@ -2106,8 +2105,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _qualificationPlaceStatuses = _placeStatusesFromStored(
           stage.qualificationPlaceStatuses,
         );
-        _bestOfQualifierCountController.text =
-            '${stage.extraQualifierCount ?? 0}';
+
         _autoAdjustQualification = stage.qualificationAutoAdjust;
         _qualificationAdvancementPolicy = stage.qualificationAdvancementPolicy;
         _groupDrawOnStart = false;
@@ -2134,8 +2132,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _manualExtraRank = null;
         _manualExtraCount = null;
         _qualificationPlaceStatuses = const {};
-        _bestOfQualifierCountController.text = '0';
-        _autoAdjustQualification = true;
+            _autoAdjustQualification = true;
         _qualificationAdvancementPolicy = 'larger_group';
         _allowGroupTieBreakDeciders = false;
         _tieBreakGameFormat = const TournamentGameFormat(bestOfLegs: 1);
@@ -2986,7 +2983,6 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     final plan = _groupQualificationPlan();
     if (plan == null) return;
     if (_autoAdjustQualification) {
-      _bestOfQualifierCountController.text = '${plan.extraCount}';
     }
   }
 
@@ -3034,8 +3030,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
         _manualExtraRank = plan.extraRank;
         _manualExtraCount = plan.extraCount;
         _qualificationPlaceStatuses = Map.unmodifiable(plan.placeStatuses);
-        _bestOfQualifierCountController.text = '${plan.extraCount}';
-      }
+        }
       if (enabled) {
         _fixedQualifiersByGroup.clear();
         _selectedExtraGroups.clear();
@@ -3072,14 +3067,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     _syncQualificationAfterChange();
   });
 
-  void _setBestOfQualifierCount(String value) {
-    _markDirty();
-    final parsed = int.tryParse(value);
-    setState(() {
-      _autoAdjustQualification = false;
-      _manualExtraCount = parsed == null || parsed < 0 ? 0 : parsed;
-    });
-  }
+
 
   void _cycleQualificationPlace(int groupNumber, int place) {
     _markDirty();
@@ -3248,13 +3236,7 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
     final inheritedQualificationPlan = _storedGroupQualificationPlan(
       latestGroupStage,
     );
-    if (_autoAdjustQualification &&
-        groupQualificationPlan != null &&
-        _bestOfQualifierCountController.text !=
-            '${groupQualificationPlan.extraCount}') {
-      _bestOfQualifierCountController.text =
-          '${groupQualificationPlan.extraCount}';
-    }
+
 
     return Scaffold(
       appBar: AppBar(
@@ -4022,15 +4004,11 @@ class _TournamentCreationPageState extends State<TournamentCreationPage> {
                           qualificationPlan: groupQualificationPlan,
                           autoAdjust: _autoAdjustQualification,
                           advancementPolicy: _qualificationAdvancementPolicy,
-                          bestOfQualifierCountController:
-                              _bestOfQualifierCountController,
                           onSetExtraGroup: _setExtraGroupSelection,
                           onCyclePlace: _cycleQualificationPlace,
                           onAutoAdjustChanged: _setQualificationAutoAdjust,
                           onAdvancementPolicyChanged:
                               _setQualificationAdvancementPolicy,
-                          onBestOfQualifierCountChanged:
-                              _setBestOfQualifierCount,
                         ),
                       ],
                     ),

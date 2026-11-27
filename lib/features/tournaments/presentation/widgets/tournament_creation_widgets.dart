@@ -861,12 +861,10 @@ class _GroupQualificationSetup extends StatelessWidget {
     required this.qualificationPlan,
     required this.autoAdjust,
     required this.advancementPolicy,
-    required this.bestOfQualifierCountController,
     required this.onSetExtraGroup,
     required this.onCyclePlace,
     required this.onAutoAdjustChanged,
     required this.onAdvancementPolicyChanged,
-    required this.onBestOfQualifierCountChanged,
   });
 
   final List<int> groupSizes;
@@ -874,13 +872,11 @@ class _GroupQualificationSetup extends StatelessWidget {
   final QualificationPlan? qualificationPlan;
   final bool autoAdjust;
   final String advancementPolicy;
-  final TextEditingController bestOfQualifierCountController;
   final void Function(int groupNumber, bool selected, List<int> currentGroups)
   onSetExtraGroup;
   final void Function(int groupNumber, int place) onCyclePlace;
   final ValueChanged<bool> onAutoAdjustChanged;
   final ValueChanged<String> onAdvancementPolicyChanged;
-  final ValueChanged<String> onBestOfQualifierCountChanged;
 
   List<String> _validationMessages(QualificationPlan? plan) {
     if (autoAdjust || plan == null) {
@@ -1010,23 +1006,7 @@ class _GroupQualificationSetup extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         QualificationRuleSummary(qualificationPlan: plan),
-        if (plan != null) ...[
-          const SizedBox(height: 8),
-          SizedBox(
-            width: 180,
-            child: TextField(
-              controller: bestOfQualifierCountController,
-              enabled: manualMode,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Beste-N Weiter',
-                prefixIcon: Icon(Icons.workspace_premium_outlined),
-              ),
-              onChanged: onBestOfQualifierCountChanged,
-            ),
-          ),
-        ],
+
         for (final message in _validationMessages(plan)) ...[
           const SizedBox(height: 8),
           QualificationErrorBanner(message: message),

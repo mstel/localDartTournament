@@ -4046,6 +4046,11 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
     if (widget.tournament.players.any((player) => player.isTeam)) {
       return 'Regeln sind in Team-Turnieren hier nicht änderbar.';
     }
+    // 4.1.9: Qualifikations-/Regeländerungen bei 3+ Phasen im laufenden Turnier
+    // ausblenden, da live zu komplex.
+    if (widget.tournament.runStages.length >= 3) {
+      return 'Bei Turnieren mit 3 oder mehr Phasen sind laufende Qualifikations- und Regeländerungen zu komplex und daher nicht verfügbar.';
+    }
     if (index < 0 ||
         index >= widget.tournament.stages.length ||
         index >= widget.tournament.runStages.length) {
@@ -8677,6 +8682,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
                                 !widget.tournament.players.any(
                                   (player) => player.isTeam,
                                 ) &&
+                                widget.tournament.runStages.length < 3 &&
                                 _runningRulesDraft != null &&
                                 _runningRulesDraftStageIndex ==
                                     _activeStageIndex &&

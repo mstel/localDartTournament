@@ -4208,12 +4208,17 @@ class _TournamentSecondScreenViewState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: _buildBracketPreview(
-            context,
-            t,
-            stage,
-            stageIndex,
-            isActiveStage: isViewingKnockout,
+          child: SingleChildScrollView(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height,
+              child: _buildBracketPreview(
+                context,
+                t,
+                stage,
+                stageIndex,
+                isActiveStage: isViewingKnockout,
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 8),

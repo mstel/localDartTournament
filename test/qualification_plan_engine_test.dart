@@ -218,7 +218,7 @@ void main() {
       expect(
         _engine.validationMessages(plan),
         contains(
-          'Es kommen 1 Teilnehmer zu viel weiter. Reduziere "Beste-N Weiter" oder feste Plätze.',
+          'Es kommen 1 Teilnehmer zu viel weiter. Reduziere feste oder Vergleichs-Plätze.',
         ),
       );
     });

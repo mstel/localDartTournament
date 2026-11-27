@@ -1,3 +1,10 @@
+# 4.1.9+149
+
+- Qualifikation (Erstellung & laufend): Feld "Beste-N Weiter" entfernt. Vergleichs-/Fixplaetze werden ueber Platzstatus/Vergleichsauswahl gesteuert; Automatik/Manuell-Logik bleibt erhalten.
+- Laufende Regeln: Bei Turnieren mit 3 oder mehr Phasen werden Qualifikations-/Regelaenderungen ausgeblendet (live zu komplex). Folge-KO blendet "Turnierform vollstaendig ausspielen" und "Weiterkommende" aus; Auslosungsmethode und optionale Platzierungsspiele bleiben editierbar.
+- Vorschau naechste Phase: Inhalt ist scrollbar, damit optionale Platzierungsspiele bei kleiner Hoehe erreichbar bleiben.
+- Validierung: Qualifikations-Fehlermeldungen nennen feste/Vergleichs-Plaetze statt "Beste-N Weiter".
+
 # 4.1.8+148
 
 - CI-Hotfix: Erfolgszustand beim ?bernehmen von Gruppen-Tie-Breakern korrigiert (richtiger Save-Status/Snackbar, Encoding-Fix), damit Analyze-and-Test wieder gr?n l?uft.

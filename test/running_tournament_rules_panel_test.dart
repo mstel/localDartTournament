@@ -417,7 +417,7 @@ void main() {
   });
 
   testWidgets(
-    'group rules edit Weiterkommende and qualification details and persist',
+    'group rules edit qualifier count and qualification details and persist',
     (tester) async {
       final tournament = _groupTournament();
       final storage = _MemoryTournamentStorage();
@@ -432,8 +432,8 @@ void main() {
 
       final panel = find.byKey(_panelKey);
       expect(
-        find.descendant(of: panel, matching: find.text('Weiterkommende')),
-        findsWidgets,
+        find.byKey(const ValueKey('group-qualifier-count-field')),
+        findsOneWidget,
       );
       expect(
         find.descendant(

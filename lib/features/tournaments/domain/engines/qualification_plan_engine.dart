@@ -177,17 +177,17 @@ class QualificationPlanEngine {
     }
     if (plan.lockedComparisonSlots > plan.extraCount) {
       return [
-        'Es sind ${plan.lockedComparisonSlots - plan.extraCount} fixierte Vergleichsplätze zu viel markiert. Reduziere "Beste-N Weiter" oder entferne einen fixierten Vergleichsplatz.',
+        'Es sind ${plan.lockedComparisonSlots - plan.extraCount} fixierte Vergleichsplätze zu viel markiert. Reduziere die Vergleichsplätze oder entferne einen fixierten Vergleichsplatz.',
       ];
     }
     if (advancingCount == plan.totalQualifiers) return const [];
     if (advancingCount < plan.totalQualifiers) {
       return [
-        'Es kommen noch ${plan.totalQualifiers - advancingCount} Teilnehmer zu wenig weiter. Erhöhe "Beste-N Weiter" oder markiere feste Plätze.',
+        'Es kommen noch ${plan.totalQualifiers - advancingCount} Teilnehmer zu wenig weiter. Markiere zusätzliche feste oder Vergleichs-Plätze.',
       ];
     }
     return [
-      'Es kommen ${advancingCount - plan.totalQualifiers} Teilnehmer zu viel weiter. Reduziere "Beste-N Weiter" oder feste Plätze.',
+      'Es kommen ${advancingCount - plan.totalQualifiers} Teilnehmer zu viel weiter. Reduziere feste oder Vergleichs-Plätze.',
     ];
   }
 

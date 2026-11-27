@@ -18,9 +18,6 @@ class RunningRulesDraft {
   }) : _qualifiedParticipantCount = TextEditingController(
          text: '${stage.qualifiedParticipantCount ?? 0}',
        ),
-       _bestOfQualifierCount = TextEditingController(
-         text: '${stage.extraQualifierCount ?? 0}',
-       ),
        _knockoutAdvancingCount = TextEditingController(
          text:
              (knockoutStage ?? stage).knockoutAdvancingCount?.toString() ?? '',
@@ -44,7 +41,6 @@ class RunningRulesDraft {
   final int knockoutStageIndex;
 
   final TextEditingController _qualifiedParticipantCount;
-  final TextEditingController _bestOfQualifierCount;
   final TextEditingController _knockoutAdvancingCount;
 
   bool playsKnockoutFully;
@@ -60,7 +56,6 @@ class RunningRulesDraft {
 
   TextEditingController get qualifiedParticipantCount =>
       _qualifiedParticipantCount;
-  TextEditingController get bestOfQualifierCount => _bestOfQualifierCount;
   TextEditingController get knockoutAdvancingCount => _knockoutAdvancingCount;
 
   int? get parsedQualifierCount =>
@@ -71,7 +66,6 @@ class RunningRulesDraft {
 
   void dispose() {
     _qualifiedParticipantCount.dispose();
-    _bestOfQualifierCount.dispose();
     _knockoutAdvancingCount.dispose();
   }
 
@@ -108,7 +102,7 @@ class RunningRulesDraft {
     qualificationPlaceStatuses = Map<String, String>.from(
       plan.placeStatuses.map((key, value) => MapEntry(key, value.jsonValue)),
     );
-    _bestOfQualifierCount.text = '${plan.extraCount}';
+
   }
 
   void setQualifierCount(String value, List<int> groupSizes) {
@@ -173,7 +167,6 @@ class RunningRulesDraft {
             previous?.totalQualifiers ?? (parsedQualifierCount ?? 0),
       );
     }
-    _bestOfQualifierCount.text = '${previous?.extraCount ?? 0}';
     syncQualificationDistribution(groupSizes);
   }
 
@@ -192,11 +185,7 @@ class RunningRulesDraft {
   /// True when user has made manual place/distribution edits (manual mode).
   bool get isManualMode => !autoAdjust;
 
-  void setBestOfQualifierCount(String value, List<int> groupSizes) {
-    autoAdjust = false;
-    final parsed = int.tryParse(value.trim());
-    extraQualifierCount = parsed == null || parsed < 0 ? 0 : parsed;
-  }
+
 
   void setExtraGroup(
     int groupNumber,
@@ -569,24 +558,7 @@ class _RunningTournamentRulesPanelState
             const SizedBox(height: 12),
             QualificationRuleSummary(qualificationPlan: plan),
             if (plan != null) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: 180,
-                child: TextField(
-                  controller: widget.draft.bestOfQualifierCount,
-                  enabled: widget.enabled && manualMode,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Beste-N Weiter',
-                    prefixIcon: Icon(Icons.workspace_premium_outlined),
-                  ),
-                  onChanged: (value) {
-                    widget.draft.setBestOfQualifierCount(value, groupSizes);
-                    _changed();
-                  },
-                ),
-              ),
+
             ],
             for (final message in messages) ...[
               const SizedBox(height: 8),
@@ -651,6 +623,7 @@ class _RunningTournamentRulesPanelState
     String? heading,
     int? participantCountOverride,
     bool allowPlayFully = true,
+    bool hideAdvancingControls = false,
   }) {
     final participants =
         participantCountOverride ?? stage.knockoutParticipantCount ?? 0;
@@ -662,37 +635,39 @@ class _RunningTournamentRulesPanelState
           Text(heading, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
         ],
-        if (canPlayFully)
-          SwitchListTile(
-            key: const ValueKey('running-knockout-play-fully'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Turnierform vollständig ausspielen'),
-            value: widget.draft.playsKnockoutFully,
-            onChanged: widget.enabled
-                ? (value) {
-                    widget.draft.setPlaysKnockoutFully(value, participants);
-                    _changed();
-                  }
-                : null,
-          ),
-        if ((!widget.draft.playsKnockoutFully || !canPlayFully) &&
-            participants > 1) ...[
-          Text('Weiterkommende', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          TextField(
-            key: const ValueKey('knockout-advancing-count-field'),
-            controller: widget.draft.knockoutAdvancingCount,
-            enabled: widget.enabled,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              helperText: '4 bis ${participants - 1}',
+        if (!hideAdvancingControls) ...[
+          if (canPlayFully)
+            SwitchListTile(
+              key: const ValueKey('running-knockout-play-fully'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Turnierform vollständig ausspielen'),
+              value: widget.draft.playsKnockoutFully,
+              onChanged: widget.enabled
+                  ? (value) {
+                      widget.draft.setPlaysKnockoutFully(value, participants);
+                      _changed();
+                    }
+                  : null,
             ),
-            onChanged: (value) {
-              widget.draft.setKnockoutAdvancingCount(value);
-              _changed();
-            },
-          ),
+          if ((!widget.draft.playsKnockoutFully || !canPlayFully) &&
+              participants > 1) ...[
+            Text('Weiterkommende', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            TextField(
+              key: const ValueKey('knockout-advancing-count-field'),
+              controller: widget.draft.knockoutAdvancingCount,
+              enabled: widget.enabled,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                helperText: '4 bis ${participants - 1}',
+              ),
+              onChanged: (value) {
+                widget.draft.setKnockoutAdvancingCount(value);
+                _changed();
+              },
+            ),
+          ],
         ],
         const SizedBox(height: 12),
         Text(
@@ -795,6 +770,7 @@ class _RunningTournamentRulesPanelState
                     followUp.knockoutParticipantCount ??
                     0,
                 allowPlayFully: false,
+                hideAdvancingControls: true,
               ),
             ],
           ] else
