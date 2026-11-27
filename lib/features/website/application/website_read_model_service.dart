@@ -6,6 +6,7 @@ import '../../rankings/domain/local_ranking.dart';
 import '../../achievements/application/ranking_achievement_service.dart';
 import '../../statistics/domain/local_statistics.dart';
 import '../../statistics/domain/player_monthly_performance.dart';
+import '../../statistics/domain/player_spider_metrics.dart';
 import '../../statistics/domain/tournament_monthly_results.dart';
 import '../../tournaments/application/tournament_phase_views.dart';
 import '../../tournaments/data/app_database.dart';
@@ -59,19 +60,29 @@ class WebsiteReadModelService {
     final playerStatistics = <Map<String, dynamic>>[];
     final bestPerformances = <Map<String, dynamic>>[];
     final currentForms = <Map<String, dynamic>>[];
+    final spiderValuesByPlayer = <String, PlayerSpiderValues>{};
     for (final profile in profiles) {
       final result = await statistics.forPlayersFromTournaments({
         profile.id,
       }, completed);
+      final combinedPerformance = combineMonthlyPlayerPerformances(
+        recorded: await _database.loadPlayerMonthlyPerformance(profile.id),
+        imported: await _database.loadMonthlyPlayerPerformances({profile.id}),
+        tournamentResults: const TournamentMonthlyResultCalculator()
+            .calculate(completed, playerIds: {profile.id}),
+      );
       final currentForm = calculateCurrentFormPerformance(
-        combineMonthlyPlayerPerformances(
-          recorded: await _database.loadPlayerMonthlyPerformance(profile.id),
-          imported: await _database.loadMonthlyPlayerPerformances({profile.id}),
-          tournamentResults: const TournamentMonthlyResultCalculator()
-              .calculate(completed, playerIds: {profile.id}),
-        ),
+        combinedPerformance,
         now: _clock(),
       );
+      final aggregatedPerformance = aggregateMonthlyPlayerPerformances(
+        combinedPerformance,
+      );
+      final spider = PlayerSpiderValues.fromStats(
+        stats: result,
+        performance: aggregatedPerformance,
+      );
+      spiderValuesByPlayer[profile.id] = spider;
       final currentFormJson = currentForm.toJson();
       currentForms.add({'playerId': profile.id, ...currentFormJson});
       playerStatistics.add({
@@ -88,6 +99,7 @@ class WebsiteReadModelService {
         'setsWon': result.setsWon,
         'setsLost': result.setsLost,
         'currentForm': currentFormJson,
+        'spider': spider.toJson(),
       });
       for (final occurrence in result.bestPerformanceOccurrences) {
         bestPerformances.add({
@@ -98,6 +110,25 @@ class WebsiteReadModelService {
         });
       }
     }
+    final spiderCohort = spiderValuesByPlayer.values.toList();
+    final playerSpider = [
+      for (final profile in profiles)
+        {
+          'playerId': profile.id,
+          ...PlayerSpiderComparison.build(
+            player:
+                spiderValuesByPlayer[profile.id] ??
+                const PlayerSpiderValues(
+                  scoring: 0,
+                  average: 0,
+                  checkoutPercent: 0,
+                  bestPerformances: 0,
+                  winRate: 0,
+                ),
+            cohort: spiderCohort,
+          ).toJson(),
+        },
+    ];
 
     final rankingStandings = <Map<String, dynamic>>[];
     final eloHistory = <Map<String, dynamic>>[];
@@ -298,6 +329,7 @@ class WebsiteReadModelService {
       'rankingAchievements': achievementStandings,
       'statistics': playerStatistics,
       'currentForm': currentForms,
+      'playerSpider': playerSpider,
       'bestPerformances': bestPerformances,
       'completedTournaments': [
         for (final tournament in completed)
@@ -490,6 +522,7 @@ class WebsiteReadModelService {
         'statistics': readModel['statistics'],
         'bestPerformances': readModel['bestPerformances'],
         'currentForm': readModel['currentForm'],
+        'playerSpider': readModel['playerSpider'] ?? const [],
       }),
       'achievements': _version2Resource('achievements', generatedAt, {
         'rankingAchievements': readModel['rankingAchievements'] ?? const [],
@@ -514,6 +547,7 @@ class WebsiteReadModelService {
     resources['performance'] = _version2Resource('performance', generatedAt, {
       ...monthlyData,
       'currentForm': readModel['currentForm'],
+      'playerSpider': readModel['playerSpider'] ?? const [],
     });
 
     final tournamentSummaries =

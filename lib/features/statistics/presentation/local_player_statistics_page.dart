@@ -15,9 +15,11 @@ import '../application/player_statistics_image_generator.dart';
 import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
 import '../domain/player_monthly_performance.dart';
+import '../domain/player_spider_metrics.dart';
 import '../domain/tournament_monthly_results.dart';
 import 'widgets/performance_statistics_detail_section.dart';
 import 'widgets/player_performance_section.dart';
+import 'widgets/player_spider_chart.dart';
 import 'widgets/structured_best_performances_view.dart';
 
 class LocalPlayerStatisticsPage extends StatefulWidget {
@@ -52,6 +54,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       List<RankingPosition>,
       List<PlayerMonthlyPerformance>,
       List<RankingAchievementView>,
+      PlayerSpiderComparison?,
     )
   >
   _future = _load();
@@ -63,6 +66,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
       List<RankingPosition>,
       List<PlayerMonthlyPerformance>,
       List<RankingAchievementView>,
+      PlayerSpiderComparison?,
     )
   >
   _load() async {
@@ -122,7 +126,50 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
         );
       }
     }
-    return (stats, rankings, positions, performance, achievementViews);
+
+    PlayerSpiderComparison? spider;
+    final primaryProfileId = widget.profileIds.firstOrNull;
+    if (primaryProfileId != null) {
+      final profiles = await _database.loadPlayerProfiles();
+      final cohort = <PlayerSpiderValues>[];
+      for (final profile in profiles) {
+        final pStats = await LocalStatisticsService(
+          database: _database,
+          storage: _tournamentStorage,
+        ).forPlayersFromTournaments({profile.id}, tournaments);
+        final pRecorded = [
+          if (widget.year == null)
+            ...await _database.loadPlayerMonthlyPerformance(profile.id)
+          else
+            ...await _database.loadPlayerMonthlyPerformance(
+              profile.id,
+              year: widget.year,
+            ),
+        ];
+        final pImported = await _database.loadMonthlyPlayerPerformances({
+          profile.id,
+        }, year: widget.year);
+        final pPerformance = aggregateMonthlyPlayerPerformances(
+          combineMonthlyPlayerPerformances(
+            recorded: pRecorded,
+            imported: pImported,
+            tournamentResults: tournamentResults
+                .where((r) => r.playerId == profile.id),
+          ),
+        );
+        cohort.add(
+          PlayerSpiderValues.fromStats(stats: pStats, performance: pPerformance),
+        );
+      }
+      spider = PlayerSpiderComparison.build(
+        player: PlayerSpiderValues.fromStats(
+          stats: stats,
+          performance: performance,
+        ),
+        cohort: cohort,
+      );
+    }
+    return (stats, rankings, positions, performance, achievementViews, spider);
   }
 
   Future<void> _export(PlayerStatisticsImageOrientation orientation) async {
@@ -232,6 +279,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
             List<RankingPosition>,
             List<PlayerMonthlyPerformance>,
             List<RankingAchievementView>,
+            PlayerSpiderComparison?,
           )
         >(
           future: _future,
@@ -261,6 +309,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                       .where((entry) => entry.year == widget.year)
                       .toList();
             final achievements = data.$5;
+            final spider = data.$6;
             final performanceCounts = {
               for (final type in BestPerformanceType.values.where(
                 (type) => type != BestPerformanceType.score170,
@@ -381,6 +430,33 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                   ],
                 ),
                 PlayerPerformanceSection(performance: profilePerformance),
+                if (spider != null)
+                  Card(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: PlayerSpiderChart(
+                          title: 'Leistungsprofil',
+                          subtitle:
+                              'Außenkante: Ranglisten-Maximum, Mitte: Vereinsdurchschnitt',
+                          metrics: [
+                            for (var i = 0;
+                                i < PlayerSpiderValues.labels.length;
+                                i++)
+                              PlayerSpiderMetric(
+                                label: PlayerSpiderValues.labels[i],
+                                value: spider.player.toList()[i],
+                                maxValue: spider.rankingMax.toList()[i],
+                                averageValue: spider.clubAverage.toList()[i],
+                              ),
+                          ],
+                          playerColor: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
                 PerformanceStatisticsDetailSection(entries: performance),
                 const SizedBox(height: 20),
                 Text(

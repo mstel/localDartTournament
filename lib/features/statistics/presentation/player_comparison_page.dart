@@ -11,6 +11,8 @@ import '../../tournaments/data/tournament_storage.dart';
 import '../domain/best_performance.dart';
 import '../domain/local_statistics.dart';
 import '../domain/player_monthly_performance.dart';
+import '../domain/player_spider_metrics.dart';
+import 'widgets/player_spider_chart.dart';
 
 typedef _PlayerComparisonData = ({
   LocalPlayerStatistics leftStats,
@@ -19,6 +21,8 @@ typedef _PlayerComparisonData = ({
   DirectEncounterSummary directEncounters,
   List<PlayerMonthlyPerformance> leftPerformance,
   List<PlayerMonthlyPerformance> rightPerformance,
+  PlayerSpiderComparison leftSpider,
+  PlayerSpiderComparison rightSpider,
   List<
     ({
       LocalRanking ranking,
@@ -111,6 +115,36 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       rightId,
       year: year,
     )).where((entry) => month == null || entry.month == month).toList();
+
+    final profiles = await _database.loadPlayerProfiles();
+    final spiderCohort = <PlayerSpiderValues>[];
+    for (final profile in profiles) {
+      final playerStats = await statsService.forPlayersFromTournaments({
+        profile.id,
+      }, filteredTournaments);
+      final perf = (await _database.loadPlayerMonthlyPerformance(
+        profile.id,
+        year: year,
+      )).where((entry) => month == null || entry.month == month).toList();
+      spiderCohort.add(
+        PlayerSpiderValues.fromStats(stats: playerStats, performance: perf),
+      );
+    }
+    final leftSpider = PlayerSpiderComparison.build(
+      player: PlayerSpiderValues.fromStats(
+        stats: leftStats,
+        performance: leftPerformance,
+      ),
+      cohort: spiderCohort,
+    );
+    final rightSpider = PlayerSpiderComparison.build(
+      player: PlayerSpiderValues.fromStats(
+        stats: rightStats,
+        performance: rightPerformance,
+      ),
+      cohort: spiderCohort,
+    );
+
     final achievementService = RankingAchievementService(
       database: _database,
       tournamentStorage: _tournamentStorage,
@@ -150,6 +184,8 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       directEncounters: directEncounters,
       leftPerformance: leftPerformance,
       rightPerformance: rightPerformance,
+      leftSpider: leftSpider,
+      rightSpider: rightSpider,
       achievements: achievements,
     );
   }
@@ -547,6 +583,12 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                     right: right,
                     summary: directEncounters,
                   );
+                  final spiderCharts = _spiderComparisonPanel(
+                    left: left,
+                    right: right,
+                    leftSpider: data.leftSpider,
+                    rightSpider: data.rightSpider,
+                  );
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -559,6 +601,8 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                                 statistics,
                                 const SizedBox(height: 20),
                                 encounters,
+                                const SizedBox(height: 20),
+                                spiderCharts,
                               ],
                             );
                           }
@@ -568,7 +612,18 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
                             children: [
                               Expanded(flex: 3, child: statistics),
                               const SizedBox(width: 20),
-                              Expanded(flex: 2, child: encounters),
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    encounters,
+                                    const SizedBox(height: 20),
+                                    spiderCharts,
+                                  ],
+                                ),
+                              ),
                             ],
                           );
                         },
@@ -671,6 +726,64 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
       ),
     ),
   );
+
+  Widget _spiderComparisonPanel({
+    required PlayerProfile left,
+    required PlayerProfile right,
+    required PlayerSpiderComparison leftSpider,
+    required PlayerSpiderComparison rightSpider,
+  }) {
+    List<PlayerSpiderMetric> metrics(PlayerSpiderComparison comparison) => [
+      for (var i = 0; i < PlayerSpiderValues.labels.length; i++)
+        PlayerSpiderMetric(
+          label: PlayerSpiderValues.labels[i],
+          value: comparison.player.toList()[i],
+          maxValue: comparison.rankingMax.toList()[i],
+          averageValue: comparison.clubAverage.toList()[i],
+        ),
+    ];
+    Widget chartFor(
+      PlayerProfile player,
+      PlayerSpiderComparison comparison,
+      Color color,
+    ) => Expanded(
+      child: PlayerSpiderChart(
+        title: player.displayName,
+        subtitle: 'gegen Vereinsdurchschnitt / Ranglisten-Maximum',
+        metrics: metrics(comparison),
+        playerColor: color,
+        size: 220,
+      ),
+    );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Leistungsprofil', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final children = [
+                  chartFor(left, leftSpider, Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 12, height: 12),
+                  chartFor(right, rightSpider, Theme.of(context).colorScheme.tertiary),
+                ];
+                if (constraints.maxWidth < 700) {
+                  return Column(children: children);
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: children,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _achievementComparisonPanel({
     required PlayerProfile left,

@@ -239,6 +239,13 @@ void main() {
             'average': 51.2,
             'checkoutQuote': 38.5,
           },
+          'spider': {
+            'scoring': 72.5,
+            'average': 51.2,
+            'checkoutPercent': 38.5,
+            'bestPerformances': 2.0,
+            'winRate': 100.0,
+          },
         },
       ]);
       expect(model['currentForm'], [
@@ -299,6 +306,7 @@ void main() {
         'statistics',
         'bestPerformances',
         'currentForm',
+        'playerSpider',
       });
       expect((resources['statistics']!['currentForm'] as List).single, {
         'playerId': player.id,
@@ -381,6 +389,33 @@ void main() {
             'scoring': 72.5,
             'average': 51.2,
             'checkoutQuote': 38.5,
+          },
+        ],
+        'playerSpider': [
+          {
+            'playerId': player.id,
+            'player': {
+              'scoring': 72.5,
+              'average': 51.2,
+              'checkoutPercent': 38.5,
+              'bestPerformances': 2.0,
+              'winRate': 100.0,
+            },
+            'clubAverage': {
+              'scoring': 72.5,
+              'average': 51.2,
+              'checkoutPercent': 38.5,
+              'bestPerformances': 2.0,
+              'winRate': 100.0,
+            },
+            'rankingMax': {
+              'scoring': 72.5,
+              'average': 51.2,
+              'checkoutPercent': 38.5,
+              'bestPerformances': 2.0,
+              'winRate': 100.0,
+            },
+            'labels': ['Scoring', 'Average', 'Checkout%', 'Bestleistungen', 'Siegesrate'],
           },
         ],
       });

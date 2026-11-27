@@ -1,3 +1,9 @@
+# 4.2.0+150
+
+- Spielerprofil/Statistiken: Neues 5-Kategorien-Spiderdiagramm (Scoring, Average, Checkout%, Bestleistungen, Siegesrate). Außenkante = stärkster Wert im Ranking, Mitte = Vereinsdurchschnitt, farbig = Spieler. Im Spielerprofil oberhalb der Performance-Statistiken im Detail und im Teilnehmervergleich links/rechts unter den direkten Begegnungen.
+- Website-Read-Model/API: Spieler-Spiderwerte (`playerSpider`) werden im Read Model sowie in den v2-Ressourcen `statistics` und `performance` ausgeliefert, damit die Homepage aktuelle Vergleichsdiagramme anzeigen kann.
+- Homepage Intern: Spielerprofil und Vergleich zeigen das Spiderdiagramm mit aktuellen Daten; Resource-Fallbacks/Validierung kennen `playerSpider`.
+
 # 4.1.9+149
 
 - Qualifikation (Erstellung & laufend): Feld "Beste-N Weiter" entfernt. Vergleichs-/Fixplaetze werden ueber Platzstatus/Vergleichsauswahl gesteuert; Automatik/Manuell-Logik bleibt erhalten.
