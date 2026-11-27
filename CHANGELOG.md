@@ -1,3 +1,7 @@
+# 4.1.8+148
+
+- CI-Hotfix: Erfolgszustand beim ?bernehmen von Gruppen-Tie-Breakern korrigiert (richtiger Save-Status/Snackbar, Encoding-Fix), damit Analyze-and-Test wieder gr?n l?uft.
+
 # 4.1.7+147
 
 - CI-Hotfix: Dart-Format f?r laufende Regel?nderungen korrigiert, damit Analyze-and-Test wieder gr?n l?uft.

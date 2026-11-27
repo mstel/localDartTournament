@@ -4297,7 +4297,7 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
       _ensureRunningRulesDraft();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Regeln ?bernommen. Die Phase wurde neu geplant.'),
+          content: Text('Regeln übernommen. Die Phase wurde neu geplant.'),
         ),
       );
     } catch (error) {
@@ -4419,10 +4419,12 @@ class _TournamentRunPageState extends State<_LiveTournamentRunPage>
           )
           .timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      setState(() => _savingRunningRulesSettings = false);
+      setState(() => _savingTieBreakerSettings = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Regeln übernommen. Die Phase wurde neu geplant.'),
+          content: Text(
+            'Tie-Breaker übernommen. Tabelle und Prognose wurden aktualisiert.',
+          ),
         ),
       );
     } catch (error) {
