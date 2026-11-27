@@ -735,39 +735,41 @@ class _PlayerComparisonPageState extends State<PlayerComparisonPage> {
   }) {
     List<PlayerSpiderMetric> metrics(PlayerSpiderComparison comparison) => [
       for (var i = 0; i < PlayerSpiderValues.labels.length; i++)
-        PlayerSpiderMetric(
-          label: PlayerSpiderValues.labels[i],
-          value: comparison.player.toList()[i],
-          maxValue: comparison.clubMax.toList()[i],
-          averageValue: comparison.clubAverage.toList()[i],
-          normalizedValue: i == 4
-              ? PlayerSpiderComparison.normalizeWinRate(
-                  comparison.player.toList()[i],
-                )
-              : (comparison.clubMax.toList()[i] <= 0
-                    ? 0
-                    : (comparison.player.toList()[i] /
-                              comparison.clubMax.toList()[i])
-                          .clamp(0.0, 1.0)),
-          normalizedAverage: i == 4
-              ? PlayerSpiderComparison.normalizeWinRate(
-                  comparison.clubAverage.toList()[i],
-                )
-              : (comparison.clubMax.toList()[i] <= 0
-                    ? 0
-                    : (comparison.clubAverage.toList()[i] /
-                              comparison.clubMax.toList()[i])
-                          .clamp(0.0, 1.0)),
-          valueText: i == 2 || i == 4
-              ? '${comparison.player.toList()[i].toStringAsFixed(1)} %'
-              : comparison.player.toList()[i].toStringAsFixed(1),
-          averageText: i == 2 || i == 4
-              ? '${comparison.clubAverage.toList()[i].toStringAsFixed(1)} %'
-              : comparison.clubAverage.toList()[i].toStringAsFixed(1),
-          maxText: i == 2 || i == 4
-              ? '${comparison.clubMax.toList()[i].toStringAsFixed(1)} %'
-              : comparison.clubMax.toList()[i].toStringAsFixed(1),
-        ),
+        () {
+          final value = comparison.player.toList()[i];
+          final avg = comparison.clubAverage.toList()[i];
+          final max = comparison.clubMax.toList()[i];
+          final bestCap = PlayerSpiderComparison.bestPerformancesScaleCap(
+            comparison.clubAverage.bestPerformances,
+          );
+          final normalizedValue = i == 4
+              ? PlayerSpiderComparison.normalizeWinRate(value)
+              : i == 3
+              ? (value / bestCap).clamp(0.0, 1.0)
+              : (max <= 0 ? 0.0 : (value / max).clamp(0.0, 1.0));
+          final normalizedAverage = i == 4
+              ? PlayerSpiderComparison.normalizeWinRate(avg)
+              : i == 3
+              ? (avg / bestCap).clamp(0.0, 1.0)
+              : (max <= 0 ? 0.0 : (avg / max).clamp(0.0, 1.0));
+          String fmt(double v) {
+            if (i == 2 || i == 4) return '${v.toStringAsFixed(1)} %';
+            if (i == 3 && v == v.roundToDouble()) return v.toStringAsFixed(0);
+            return v.toStringAsFixed(1);
+          }
+
+          return PlayerSpiderMetric(
+            label: PlayerSpiderValues.labels[i],
+            value: value,
+            maxValue: max,
+            averageValue: avg,
+            normalizedValue: normalizedValue,
+            normalizedAverage: normalizedAverage,
+            valueText: fmt(value),
+            averageText: fmt(avg),
+            maxText: fmt(max),
+          );
+        }(),
     ];
     Widget chartFor(
       PlayerProfile player,

@@ -1,3 +1,11 @@
+# 4.2.2+152
+
+- Spielerprofil/Performance Statistiken im Detail: Reihenfolge im aufgeklappten Bereich ist jetzt Jahr-Auswahl, Leistungsprofil, dann Performance-Entwicklung/Graphen.
+- Leistungsprofil Bestleistungen: Vereinsmaximum zeigt weiterhin das echte beobachtete Vereinsmaximum (z. B. 56), während die Skalierung für den vollen Ausschlag separat `ceil(Vereinsdurchschnitt Bestleistungen) * 2` (mindestens 1) nutzt; Werte darüber bleiben am vollen Ausschlag.
+- Leistungsprofil Siegesrate: 50% liegt auf der zweiten Wabe/Mitte, 100% am vollen Ausschlag, 0% in der Mitte. Werte unter 50% haben jetzt einen proportionalen Ausschlag statt am Zentrum zu stagnieren.
+- Leistungsprofil Interaktion: Vereinsdurchschnitt hat eigene Datenpunkte; Hover/Touch auf Achsen, Punkte oder Labels zeigt konkrete Werte für Spieler, Vereinsdurchschnitt und Vereinsmaximum.
+- Teilnehmervergleich/Homepage-API: Dieselbe Spider-Skalierung/Tooltip-Logik; Homepage-Render nutzt `clubMax`/`rankingMax`-kompatibel und zeigt Vereinsmaximum.
+
 # 4.2.1+151
 
 - Netzdiagramm/Leistungsprofil: „Ranglisten-Maximum“ in „Vereinsmaximum“ umbenannt. Hover/Touch auf Datenpunkte zeigt konkrete Spieler-, Vereinsdurchschnitt- und Vereinsmaximum-Werte.

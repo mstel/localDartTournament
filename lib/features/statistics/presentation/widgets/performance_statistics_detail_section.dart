@@ -114,13 +114,7 @@ class _PerformanceStatisticsDetailSectionState
             ),
           ),
           const SizedBox(height: 8),
-          PlayerPerformanceTrendChart(
-            entries: entries,
-            year: _year,
-            title: 'Performance-Entwicklung',
-          ),
           if (widget.spiderBuilder != null) ...[
-            const SizedBox(height: 12),
             FutureBuilder<PlayerSpiderComparison>(
               future: _spiderFuture,
               builder: (context, snapshot) {
@@ -163,7 +157,13 @@ class _PerformanceStatisticsDetailSectionState
                 );
               },
             ),
+            const SizedBox(height: 12),
           ],
+          PlayerPerformanceTrendChart(
+            entries: entries,
+            year: _year,
+            title: 'Performance-Entwicklung',
+          ),
           if (entries.isEmpty)
             const Align(
               alignment: Alignment.centerLeft,
@@ -272,6 +272,12 @@ class _PerformanceStatisticsDetailSectionState
     final value = spider.player.toList()[index];
     final max = spider.clubMax.toList()[index];
     if (index == 4) return PlayerSpiderComparison.normalizeWinRate(value);
+    if (index == 3) {
+      final cap = PlayerSpiderComparison.bestPerformancesScaleCap(
+        spider.clubAverage.bestPerformances,
+      );
+      return (value / cap).clamp(0.0, 1.0);
+    }
     if (max <= 0) return 0;
     return (value / max).clamp(0.0, 1.0);
   }
@@ -280,13 +286,23 @@ class _PerformanceStatisticsDetailSectionState
     final value = spider.clubAverage.toList()[index];
     final max = spider.clubMax.toList()[index];
     if (index == 4) return PlayerSpiderComparison.normalizeWinRate(value);
+    if (index == 3) {
+      final cap = PlayerSpiderComparison.bestPerformancesScaleCap(
+        spider.clubAverage.bestPerformances,
+      );
+      return (value / cap).clamp(0.0, 1.0);
+    }
     if (max <= 0) return 0;
     return (value / max).clamp(0.0, 1.0);
   }
 
   String _spiderValueText(double value, int index) {
     if (index == 2 || index == 4) return '${value.toStringAsFixed(1)} %';
-    if (index == 3) return value.toStringAsFixed(1);
+    if (index == 3) {
+      return value == value.roundToDouble()
+          ? value.toStringAsFixed(0)
+          : value.toStringAsFixed(1);
+    }
     return value.toStringAsFixed(1);
   }
 

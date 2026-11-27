@@ -222,12 +222,18 @@ class _SpiderChartWithTooltipState extends State<_SpiderChartWithTooltip> {
     final radius = math.min(size.width, size.height) * 0.32;
     final angleStep = (math.pi * 2) / widget.metrics.length;
     final angle = -math.pi / 2 + angleStep * i;
-    final point = center + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
-    final left = (point.dx - 90).clamp(0.0, size.width - 180);
-    final top = (point.dy - 84).clamp(0.0, size.height - 74);
+    final point =
+        center + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+    const tooltipWidth = 190.0;
+    final left = (point.dx - tooltipWidth / 2).clamp(0.0, size.width - tooltipWidth);
+    final placeAbove = point.dy > size.height * 0.45;
+    final top = placeAbove
+        ? (point.dy - 96).clamp(0.0, size.height - 90)
+        : (point.dy + 12).clamp(0.0, size.height - 90);
     return Positioned(
       left: left,
       top: top,
+      width: tooltipWidth,
       child: IgnorePointer(
         child: Material(
           elevation: 4,
@@ -241,7 +247,8 @@ class _SpiderChartWithTooltipState extends State<_SpiderChartWithTooltip> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(metric.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text(metric.label,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
                   Text('Spieler: ${metric.displayValue}'),
                   Text('Vereinsdurchschnitt: ${metric.displayAverage}'),
                   Text('Vereinsmaximum: ${metric.displayMax}'),
@@ -283,17 +290,34 @@ class _PlayerSpiderPainter extends CustomPainter {
     final angleStep = (math.pi * 2) / metricCount;
     const startAngle = -math.pi / 2;
     int? closest;
-    var closestDistance = 26.0;
+    var closestDistance = 34.0;
     for (var i = 0; i < metricCount; i++) {
       final angle = startAngle + angleStep * i;
-      final point = center + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
-      final distance = (point - position).distance;
+      final axisEnd =
+          center + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+      final labelCenter = center +
+          Offset(math.cos(angle) * (radius + 24), math.sin(angle) * (radius + 24));
+      // Hover anywhere near axis/label area, not only endpoint.
+      final axisDist = _distanceToSegment(position, center, axisEnd);
+      final endDist = (axisEnd - position).distance;
+      final labelDist = (labelCenter - position).distance;
+      final distance = [axisDist, endDist, labelDist].reduce(math.min);
       if (distance < closestDistance) {
         closestDistance = distance;
         closest = i;
       }
     }
     return closest;
+  }
+
+  static double _distanceToSegment(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final ap = p - a;
+    final abLen2 = ab.dx * ab.dx + ab.dy * ab.dy;
+    if (abLen2 == 0) return (p - a).distance;
+    final t = ((ap.dx * ab.dx + ap.dy * ab.dy) / abLen2).clamp(0.0, 1.0);
+    final proj = Offset(a.dx + ab.dx * t, a.dy + ab.dy * t);
+    return (p - proj).distance;
   }
 
   @override
@@ -356,7 +380,12 @@ class _PlayerSpiderPainter extends CustomPainter {
       }
     }
 
-    void drawPolygon(List<double> values, Color color, {required bool fill}) {
+    void drawPolygon(
+      List<double> values,
+      Color color, {
+      required bool fill,
+      required bool drawPoints,
+    }) {
       final path = Path();
       for (var i = 0; i < metrics.length; i++) {
         final angle = startAngle + angleStep * i;
@@ -384,12 +413,23 @@ class _PlayerSpiderPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2,
       );
-      if (fill) {
+      if (drawPoints) {
         for (var i = 0; i < metrics.length; i++) {
           final angle = startAngle + angleStep * i;
           final r = radius * values[i].clamp(0.0, 1.0);
           final point = center + Offset(math.cos(angle) * r, math.sin(angle) * r);
-          canvas.drawCircle(point, 3, Paint()..color = color);
+          final isHovered = i == hoveredIndex;
+          canvas.drawCircle(point, isHovered ? 4.5 : 3, Paint()..color = color);
+          if (isHovered) {
+            canvas.drawCircle(
+              point,
+              7,
+              Paint()
+                ..color = color.withValues(alpha: 0.18)
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 2,
+            );
+          }
         }
       }
     }
@@ -398,11 +438,13 @@ class _PlayerSpiderPainter extends CustomPainter {
       metrics.map((m) => m.normalizedAverage).toList(),
       averageColor,
       fill: false,
+      drawPoints: true,
     );
     drawPolygon(
       metrics.map((m) => m.normalizedValue).toList(),
       playerColor,
       fill: true,
+      drawPoints: true,
     );
   }
 

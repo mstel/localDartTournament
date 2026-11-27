@@ -81,10 +81,14 @@ class PlayerSpiderComparison {
 
   static double normalizeWinRate(double winRate) {
     final value = winRate > 1 ? winRate / 100 : winRate;
-    return ((value - 0.5) / 0.5).clamp(0.0, 1.0);
+    // 50% = middle ring (0.5 on 4-ring chart), 100% = full, 0% = center.
+    return value.clamp(0.0, 1.0);
   }
 
-  static double bestPerformancesCap(double clubAverageBestPerformances) {
+  /// Scale cap for normalization: ceil(clubAverage) * 2, min 1.
+  /// Values above this get full deflection; it does NOT change the displayed
+  /// Vereinsmaximum, which remains the actual observed maximum.
+  static double bestPerformancesScaleCap(double clubAverageBestPerformances) {
     final cap = clubAverageBestPerformances.ceil() * 2;
     return cap < 1 ? 1 : cap.toDouble();
   }
@@ -95,7 +99,6 @@ class PlayerSpiderComparison {
   }) {
     final values = cohort.toList();
     if (values.isEmpty) {
-      final bestCap = bestPerformancesCap(player.bestPerformances);
       return PlayerSpiderComparison(
         player: player,
         clubAverage: player,
@@ -103,7 +106,7 @@ class PlayerSpiderComparison {
           scoring: player.scoring,
           average: player.average,
           checkoutPercent: player.checkoutPercent,
-          bestPerformances: bestCap,
+          bestPerformances: player.bestPerformances,
           winRate: 100,
         ),
       );
@@ -126,7 +129,7 @@ class PlayerSpiderComparison {
       scoring: maxValue((v) => v.scoring),
       average: maxValue((v) => v.average),
       checkoutPercent: maxValue((v) => v.checkoutPercent),
-      bestPerformances: bestPerformancesCap(clubAverage.bestPerformances),
+      bestPerformances: maxValue((v) => v.bestPerformances),
       winRate: 100,
     );
     return PlayerSpiderComparison(
