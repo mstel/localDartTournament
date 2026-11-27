@@ -333,7 +333,7 @@ class _LocalPlayerStatisticsPageState extends State<LocalPlayerStatisticsPage> {
                       .where((entry) => entry.year == widget.year)
                       .toList();
             final achievements = data.$5;
-            final spider = data.$6;
+            final spider = data.$6 ?? _spider;
             final performanceCounts = {
               for (final type in BestPerformanceType.values.where(
                 (type) => type != BestPerformanceType.score170,
